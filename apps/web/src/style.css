@@ -60,6 +60,10 @@ h2 {
   margin-bottom: 16px;
 }
 
+.skybridge-self-observation {
+  margin-bottom: 16px;
+}
+
 .skybridge-card,
 .skybridge-panel {
   background: #ffffff;
@@ -98,6 +102,10 @@ h2 {
   gap: 12px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
+}
+
+.skybridge-metrics--compact {
+  grid-template-columns: repeat(4, minmax(96px, 1fr));
 }
 
 .skybridge-metrics div {

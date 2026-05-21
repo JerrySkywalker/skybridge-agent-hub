@@ -9,7 +9,9 @@ import {
   createEvent,
   isNotificationTrigger,
   parseEvent,
+  type RunDetail,
   type RunSummary,
+  type SkyBridgeEventType,
   type SkyBridgeEvent
 } from "@skybridge-agent-hub/event-schema";
 import { send as sendNtfy, type NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
@@ -39,16 +41,26 @@ function summarizeRuns(events: StoredEvent[]): RunSummary[] {
     const failed = runEvents.some((event) => event.type === "run.failed" || event.severity === "error" || event.severity === "critical");
     const completed = runEvents.some((event) => event.type === "run.completed" || event.type === "session.completed");
     const status: RunSummary["status"] = failed ? "failed" : completed ? "completed" : run_id === "unknown" ? "unknown" : "running";
+    const latestPayload = latestObjectPayload(runEvents);
     return {
       run_id,
       session_id: last.correlation?.session_id,
       source_platform: last.source.platform,
       source_adapter: last.source.adapter,
+      source_agent_id: last.source.agent_id,
+      source_node_id: last.source.node_id,
       status,
       event_count: runEvents.length,
+      tool_call_count: runEvents.filter((event) => event.type.startsWith("tool.")).length,
+      failed_tool_count: runEvents.filter((event) => event.type === "tool.failed").length,
+      notification_count: runEvents.filter((event) => event.type.startsWith("notification.")).length,
       first_seen_at: first.receivedAt,
       last_seen_at: last.receivedAt,
-      last_event_type: last.type
+      last_event_type: last.type,
+      title: firstSafeString(runEvents, "title") ?? firstSafeString(runEvents, "goalFile"),
+      lifecycle: safeString(latestPayload.lifecycle),
+      branch: firstSafeString(runEvents, "branch"),
+      goal_id: firstSafeString(runEvents, "goalId")
     };
   }).sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at));
 }
@@ -141,13 +153,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     return reply.code(202).send({ ok: true, id: stored.id });
   });
 
-  app.get("/v1/events", async () => ({
-    events: store.listEvents(200)
+  app.get<{ Querystring: EventListQuery }>("/v1/events", async (request) => ({
+    events: filterEvents(store.listEvents(), request.query).slice(-eventLimit(request.query.limit))
   }));
 
   app.get("/v1/runs", async () => ({
     runs: summarizeRuns(store.listEvents())
   }));
+
+  app.get<{ Params: { runId: string } }>("/v1/runs/:runId", async (request, reply) => {
+    const runId = decodeURIComponent(request.params.runId);
+    const events = store.listEvents().filter((event) => runGroupId(event) === runId);
+    const [summary] = summarizeRuns(events);
+    if (!summary) return reply.code(404).send({ ok: false, error: "run_not_found" });
+    return { summary, events } satisfies RunDetail;
+  });
 
   app.get("/v1/notifications", async () => ({
     notifications: store.listNotifications(200)
@@ -202,6 +222,52 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   });
 
   return app;
+}
+
+interface EventListQuery {
+  run_id?: string;
+  session_id?: string;
+  source_platform?: string;
+  source_adapter?: string;
+  type?: SkyBridgeEventType;
+  limit?: string | number;
+}
+
+function filterEvents(events: StoredEvent[], query: EventListQuery): StoredEvent[] {
+  return events.filter((event) => {
+    if (query.run_id && runGroupId(event) !== query.run_id) return false;
+    if (query.session_id && event.correlation?.session_id !== query.session_id) return false;
+    if (query.source_platform && event.source.platform !== query.source_platform) return false;
+    if (query.source_adapter && event.source.adapter !== query.source_adapter) return false;
+    if (query.type && event.type !== query.type) return false;
+    return true;
+  });
+}
+
+function eventLimit(input: string | number | undefined): number {
+  const parsed = typeof input === "number" ? input : Number(input);
+  if (!Number.isFinite(parsed)) return 200;
+  return Math.min(Math.max(Math.trunc(parsed), 1), 1000);
+}
+
+function runGroupId(event: StoredEvent): string {
+  return event.correlation?.run_id ?? event.correlation?.session_id ?? "unknown";
+}
+
+function latestObjectPayload(events: StoredEvent[]): Record<string, unknown> {
+  return events.at(-1)?.payload ?? {};
+}
+
+function firstSafeString(events: StoredEvent[], key: string): string | undefined {
+  for (const event of events) {
+    const value = safeString(event.payload[key]);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function safeString(input: unknown): string | undefined {
+  return typeof input === "string" && input.length > 0 && input.length <= 200 ? input : undefined;
 }
 
 function resolvePersistence(options: CreateServerOptions): { dbFile?: string; jsonMigrationFile?: string } {

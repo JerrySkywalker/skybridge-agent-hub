@@ -15,7 +15,9 @@ export function normalize(input: unknown): SkyBridgeEvent[] {
       },
       payload: {
         raw_type: messageType,
-        summary: typeof event.summary === "string" ? event.summary : undefined
+        summary_present: typeof event.summary === "string" && event.summary.length > 0,
+        summary_length: typeof event.summary === "string" ? event.summary.length : undefined,
+        redaction: "codex exec free-form summaries and output are omitted by default"
       }
     })
   ];

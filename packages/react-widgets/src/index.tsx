@@ -129,3 +129,77 @@ export function AgentPipelineBar({ apiBase }: WidgetProps) {
     </section>
   );
 }
+
+export interface SelfObservationSummary {
+  status: "idle" | "observing" | "attention";
+  active_runs: number;
+  failed_runs: number;
+  codex_events: number;
+  runner_events: number;
+  smoke_events: number;
+  notification_events: number;
+  latest_lifecycle?: string;
+}
+
+export function summarizeSelfObservation(runs: RunSummary[], events: SkyBridgeEvent[]): SelfObservationSummary {
+  const selfEvents = events.filter((event) => event.source.platform === "codex" || event.source.platform === "skybridge");
+  const latestLifecycle = [...selfEvents].reverse().map((event) => safePayloadString(event.payload.lifecycle)).find(Boolean);
+  const failedRuns = runs.filter((run) => run.status === "failed").length;
+  const activeRuns = runs.filter((run) => run.status === "running").length;
+
+  return {
+    status: failedRuns > 0 ? "attention" : selfEvents.length > 0 || activeRuns > 0 ? "observing" : "idle",
+    active_runs: activeRuns,
+    failed_runs: failedRuns,
+    codex_events: selfEvents.filter((event) => event.source.platform === "codex").length,
+    runner_events: selfEvents.filter((event) => event.source.adapter === "yolo-runner").length,
+    smoke_events: selfEvents.filter((event) => event.source.adapter === "self-observation-smoke").length,
+    notification_events: selfEvents.filter((event) => event.type.startsWith("notification.")).length,
+    latest_lifecycle: latestLifecycle
+  };
+}
+
+export function SelfObservationPanel({ apiBase }: WidgetProps) {
+  const { events, runs, error } = useSkyBridge(apiBase);
+  const summary = summarizeSelfObservation(runs, events);
+
+  return (
+    <section className="skybridge-panel skybridge-self-observation">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Local Loop</p>
+          <h2>Self-Observation</h2>
+        </div>
+        <span className={`skybridge-state ${summary.status === "attention" ? "skybridge-state--bad" : ""}`}>
+          {summary.status}
+        </span>
+      </div>
+      <dl className="skybridge-metrics skybridge-metrics--compact">
+        <div>
+          <dt>Codex</dt>
+          <dd>{summary.codex_events}</dd>
+        </div>
+        <div>
+          <dt>Runner</dt>
+          <dd>{summary.runner_events}</dd>
+        </div>
+        <div>
+          <dt>Smoke</dt>
+          <dd>{summary.smoke_events}</dd>
+        </div>
+        <div>
+          <dt>Notify</dt>
+          <dd>{summary.notification_events}</dd>
+        </div>
+      </dl>
+      <p className="skybridge-runline">
+        {summary.active_runs} active · {summary.failed_runs} failed · {summary.latest_lifecycle ?? "no lifecycle yet"}
+      </p>
+      {error ? <p className="skybridge-error">{error}</p> : null}
+    </section>
+  );
+}
+
+function safePayloadString(input: unknown): string | undefined {
+  return typeof input === "string" && input.length > 0 && input.length <= 120 ? input : undefined;
+}

@@ -88,6 +88,53 @@ describe("server api", () => {
     expect(response.json<{ runs: Array<{ status: string }> }>().runs[0]?.status).toBe("failed");
   });
 
+  it("filters events and returns a detailed run view", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "run.started",
+        source: { platform: "skybridge", adapter: "yolo-runner", agent_id: "runner-agent", node_id: "node-1" },
+        correlation: { session_id: "runner-session", run_id: "runner-001-demo" },
+        payload: { goalId: "001", goalFile: "001-demo.md", branch: "ai/001-demo", lifecycle: "goal.claimed" }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "tool.completed",
+        source: { platform: "skybridge", adapter: "yolo-runner", agent_id: "runner-agent", node_id: "node-1" },
+        correlation: { session_id: "runner-session", run_id: "runner-001-demo", tool_call_id: "check-0" },
+        payload: { lifecycle: "check.finished", command: "corepack pnpm check", exitCode: 0 }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "run.started",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { session_id: "codex-session", run_id: "codex-run" },
+        payload: {}
+      })
+    });
+
+    const filtered = await server.inject({ method: "GET", url: "/v1/events?run_id=runner-001-demo" });
+    expect(filtered.json<{ events: StoredEvent[] }>().events.map((event) => event.source.adapter)).toEqual(["yolo-runner", "yolo-runner"]);
+
+    const detail = await server.inject({ method: "GET", url: "/v1/runs/runner-001-demo" });
+    const body = detail.json<{ summary: { title?: string; branch?: string; tool_call_count: number }; events: StoredEvent[] }>();
+    expect(detail.statusCode).toBe(200);
+    expect(body.summary).toMatchObject({
+      title: "001-demo.md",
+      branch: "ai/001-demo",
+      tool_call_count: 1
+    });
+    expect(body.events).toHaveLength(2);
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");

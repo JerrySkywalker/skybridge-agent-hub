@@ -80,11 +80,25 @@ export interface RunSummary {
   session_id?: string;
   source_platform: SkyBridgeSourcePlatform;
   source_adapter: string;
+  source_agent_id?: string;
+  source_node_id?: string;
   status: "running" | "completed" | "failed" | "unknown";
   event_count: number;
+  tool_call_count: number;
+  failed_tool_count: number;
+  notification_count: number;
   first_seen_at: string;
   last_seen_at: string;
   last_event_type: SkyBridgeEventType;
+  title?: string;
+  lifecycle?: string;
+  branch?: string;
+  goal_id?: string;
+}
+
+export interface RunDetail {
+  summary: RunSummary;
+  events: SkyBridgeEvent[];
 }
 
 export function createEvent(input: SkyBridgeEventInput): SkyBridgeEvent {
