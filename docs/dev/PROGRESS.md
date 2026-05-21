@@ -14,3 +14,11 @@
 - Environment note: `pnpm` and `just` are not directly on PATH here. Commands work through `corepack pnpm`; `just check` could not be run because `just` is not installed.
 - Replaced MVP JSON-first persistence with SQLite-backed server persistence at `.data/skybridge.sqlite`; existing `.data/skybridge-store.json` or `SKYBRIDGE_DATA_FILE` data is imported once and left untouched.
 - Added focused hardening tests for SQLite persistence/restart behavior, JSON migration, notification trigger placeholder recording, SSE replay, Codex hook parsing/redaction, and React widget static rendering.
+
+## v0.2.0-sqlite-mvp verification
+
+- `just check`: passed.
+- Server health: passed.
+- Persistence: sqlite.
+- Local DB file observed at `apps/server/.data/skybridge.sqlite` when running server via pnpm filter.
+- Git tag: `v0.2.0-sqlite-mvp`.
