@@ -439,7 +439,7 @@ describe("server api", () => {
 
     const response = await server.inject({ method: "GET", url: "/v1/audit" });
     expect(response.statusCode).toBe(200);
-    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; immutable_event_id: string; redaction_policy_version: string; raw_payload_included: boolean }> }>().audit;
     expect(audit).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -447,17 +447,67 @@ describe("server api", () => {
           actor: "operator",
           source_adapter: "skybridge/approval-api",
           safety_decision: "operator_denied",
+          redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
           raw_payload_included: false
         }),
         expect.objectContaining({
           action: "approval.requested",
           source_adapter: "opencode/opencode-plugin",
           safety_decision: "approval_required_remote_execution_disabled",
+          immutable_event_id: expect.any(String),
           raw_payload_included: false
         })
       ])
     );
     expect(JSON.stringify(audit)).not.toContain("should stay out");
+  });
+
+  it("persists durable audit records and filters them without raw payloads", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(first);
+
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook", agent_id: "codex-local" },
+        correlation: { run_id: "durable-audit-run", session_id: "durable-audit-session" },
+        payload: {
+          approval_id: "durable-audit-approval",
+          actor: "nightly-guardian",
+          prompt: "raw prompt must not persist in audit",
+          stdout: "raw output must not persist in audit"
+        }
+      })
+    });
+    await first.close();
+    servers.pop();
+
+    const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(second);
+
+    const response = await second.inject({
+      method: "GET",
+      url: "/v1/audit?run_id=durable-audit-run&actor=nightly-guardian&action=approval.requested&from=2026-05-20T00:00:00.000Z&to=2026-05-22T00:00:00.000Z"
+    });
+
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; immutable_event_id: string; redaction_policy_version: string; raw_payload_included: boolean }> }>().audit;
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "approval.requested",
+      actor: "nightly-guardian",
+      immutable_event_id: expect.any(String),
+      redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+      raw_payload_included: false
+    });
+    expect(JSON.stringify(audit)).not.toContain("raw prompt");
+    expect(JSON.stringify(audit)).not.toContain("raw output");
   });
 
   it("persists events and notifications to SQLite across server restarts", async () => {

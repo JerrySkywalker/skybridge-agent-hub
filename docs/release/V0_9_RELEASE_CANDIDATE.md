@@ -13,7 +13,7 @@ Included foundation:
 - Shared redaction rules and payload size limits.
 - Demo dataset, dogfooding smoke and release candidate smoke.
 - Approval queue API skeleton and dashboard panel.
-- Metrics summary endpoint and audit design.
+- Metrics summary endpoint and durable audit skeleton.
 
 Smoke-tested foundation:
 
@@ -26,7 +26,7 @@ Skeleton-only or fixture-backed foundation:
 
 - OpenCode and Hermes adapters are fixture-backed until real runtime compatibility is validated.
 - Sidecar/node registry exists, but real WSS transport and command execution are deferred.
-- `/v1/audit` is a safe derived audit view, not a durable append-only audit table yet.
+- Durable audit persistence is started for approval, node, notification and failed-run events, but the full audit subsystem remains incremental.
 
 ## Known Gaps
 
@@ -36,7 +36,7 @@ Skeleton-only or fixture-backed foundation:
 - Production deployment hardening.
 - Public docs site generation.
 - External contributor onboarding.
-- PowerShell scripts still need direct consumption of the shared redaction JSON.
+- Runner-wide PowerShell redaction parity beyond the Codex hook path.
 
 See `docs/release/V0_9_RELEASE_CANDIDATE_AUDIT.md` for subsystem-level readiness classifications.
 

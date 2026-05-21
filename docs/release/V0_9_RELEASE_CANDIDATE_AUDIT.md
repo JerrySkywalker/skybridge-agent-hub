@@ -7,8 +7,8 @@ This audit classifies v0.9 release-candidate readiness after PR #9 and the night
 | Subsystem | Classification | Evidence | Follow-Up Goal |
 | --- | --- | --- | --- |
 | Event schema | ready | `skybridge.agent_event.v1` packages build and test; adapters normalize into documented event families. | Continue schema compatibility checks as new adapters land. |
-| Server APIs | ready | Event ingestion, run detail, summary, sources, nodes, metrics, notifications, approvals and derived audit APIs pass server tests and smokes. | Durable audit work remains separate in `029-durable-audit-trail`. |
-| SQLite persistence | ready | Server tests cover SQLite-backed local persistence and smokes use temporary SQLite databases. | Add durable audit tables in `029-durable-audit-trail`. |
+| Server APIs | ready | Event ingestion, run detail, summary, sources, nodes, metrics, notifications, approvals and audit APIs pass server tests and smokes. | Durable audit work remains incremental in `029-durable-audit-trail`. |
+| SQLite persistence | ready | Server tests cover SQLite-backed local persistence, durable audit rows and smokes use temporary SQLite databases. | Continue expanding audit emitters in `029-durable-audit-trail`. |
 | Codex integration | ready | Hook fixture smoke, online/offline integration smoke and self-observation smoke pass with redacted normalized events. | Shared PowerShell JSON redaction consolidation in `028-powershell-shared-redaction-rules`. |
 | OpenCode adapter | needs smoke | Fixture-backed adapter normalization exists and multi-agent platform smoke ingests representative OpenCode events. | Real-runtime contract validation remains future work. |
 | Hermes adapter | needs smoke | Fixture-backed adapter normalization exists and multi-agent platform smoke ingests representative Hermes events. | Real-runtime contract validation remains future work. |
@@ -17,7 +17,7 @@ This audit classifies v0.9 release-candidate readiness after PR #9 and the night
 | Operator Console | needs smoke | Build, static widget tests and HTTP smoke pass; no real browser screenshot artifacts yet. | `022-real-browser-visual-qa`. |
 | Web components/embed | needs smoke | Compact embed package builds/tests and is included in Operator Console smoke scope, but lacks browser screenshot QA. | `022-real-browser-visual-qa`. |
 | CI/CD/release | ready | Latest PR #9, main and v0.9 tag workflows are green; local check, compose config, release dry-run and Docker builds passed. | Keep nightly script/log current before release tags. |
-| Security/redaction | ready | Shared TypeScript redaction rules, threat model, hook redaction tests and security docs exist. | `028-powershell-shared-redaction-rules` for direct PowerShell consumption. |
+| Security/redaction | ready | Shared TypeScript redaction rules, direct PowerShell hook consumption, threat model, hook redaction tests and security docs exist. | Runner-wide PowerShell parity can continue in `028-powershell-shared-redaction-rules`. |
 | Docs/demo | ready | README, roadmap, changelog, docs index, release notes and deterministic demo dataset smoke pass. | Public docs site in `026-public-docs-site`; contributor polish in `027-external-contributor-onboarding`. |
 | Smoke scripts | ready | PowerShell parse validation passes and all requested safe smoke scripts passed in temp or dry-run mode. | Nightly orchestration script added for repeatable local validation. |
 

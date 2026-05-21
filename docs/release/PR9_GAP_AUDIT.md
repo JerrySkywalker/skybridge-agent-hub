@@ -154,19 +154,20 @@ Deferral:
 Classification:
 
 - implemented
-- skeleton-only for durable append-only audit storage
+- durable audit skeleton started after PR #9
 - smoke-tested
-- needs follow-up for persistence-grade audit records
+- needs follow-up for full persistence-grade audit coverage
 
 Evidence:
 
 - `/v1/metrics` exposes event, run, notification, node and recent failure counts.
-- `/v1/audit` now derives safe audit entries from already-redacted approval, node, notification and failed-run events.
+- `/v1/audit` now returns durable safe audit entries for newly ingested approval, node, notification and failed-run events, with a derived fallback for older stores.
 - Audit entries do not include raw payloads.
+- Audit rows include immutable event references and the redaction policy source used at write time.
 
 Deferral:
 
-- Durable append-only audit storage is deferred to `goals/backlog/029-durable-audit-trail.md`.
+- Broader durable audit coverage, exports and retention policy remain deferred to `goals/backlog/029-durable-audit-trail.md`.
 
 ## Phase 014: Release Candidate Hardening
 
