@@ -9,6 +9,8 @@ import {
   createEvent,
   isNotificationTrigger,
   parseEvent,
+  SOURCE_CAPABILITIES,
+  SharedRedactionRules,
   type RunDetail,
   type RunSummary,
   type SkyBridgeSeverity,
@@ -107,13 +109,27 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
   };
 
-  const recordNotification = async (message: NotificationMessage, provider: "ntfy" | "placeholder", status: StoredNotification["status"], error?: string) => {
+  const recordNotification = async (
+    message: NotificationMessage,
+    provider: StoredNotification["provider"],
+    status: StoredNotification["status"],
+    error?: string,
+    event?: StoredEvent
+  ) => {
+    const now = new Date().toISOString();
     await store.addNotification({
       id: nanoid(),
+      category: event ? categoryForEvent(event) : "manual",
+      severity: event?.severity,
+      source_event_id: event?.id,
+      target: provider,
       provider,
+      dedupe_key: event ? `${event.type}:${event.correlation?.run_id ?? event.correlation?.session_id ?? event.id}:${provider}` : undefined,
       status,
       message,
-      createdAt: new Date().toISOString(),
+      retry_count: 0,
+      createdAt: now,
+      updatedAt: now,
       error
     });
   };
@@ -122,15 +138,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     if (!isNotificationTrigger(event)) return;
     const message = notificationForEvent(event);
     if (!process.env.NTFY_TOPIC_URL) {
-      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.");
+      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.", event);
       return;
     }
-    try {
-      await sendNtfy(message);
-      await recordNotification(message, "ntfy", "sent");
-    } catch (error) {
-      await recordNotification(message, "ntfy", "failed", error instanceof Error ? error.message : String(error));
-    }
+    const result = await sendNtfy(message);
+    await recordNotification(message, result.provider, result.status, result.error, event);
   };
 
   const healthResponse = () => ({
@@ -144,6 +156,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 
   app.get("/health", async () => healthResponse());
   app.get("/v1/health", async () => healthResponse());
+  app.get("/v1/sources", async () => ({ sources: SOURCE_CAPABILITIES }));
 
   app.post("/v1/events", async (request, reply) => {
     const parsed = parseEventPayload(request.body);
@@ -197,6 +210,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     return { notifications: filterNotifications(store.listNotifications(1000), filters).slice(0, limit) };
   });
 
+  app.get("/v1/notifications/providers", async () => ({ providers: notificationProviders() }));
+  app.get("/v1/notifications/rules", async () => ({ rules: notificationRules() }));
+
+  app.get("/v1/nodes", async () => ({ nodes: summarizeNodes(store.listEvents()) }));
+
   app.get("/v1/summary", async () => {
     const events = store.listEvents();
     const runs = summarizeRuns(events);
@@ -209,6 +227,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
         active_runs: runs.filter((run) => run.status === "running").length,
         failed_runs: runs.filter((run) => run.status === "failed").length,
         notifications: notifications.length,
+        notification_failed: notifications.filter((notification) => notification.status === "failed").length,
+        notification_skipped: notifications.filter((notification) => notification.status === "skipped").length,
+        nodes: summarizeNodes(events).length,
+        node_stale: summarizeNodes(events).filter((node) => node.status === "stale").length,
         attention_items: runs.filter((run) => run.status === "failed").length
           + events.filter((event) => event.type === "approval.requested").length
           + notifications.filter((notification) => notification.status === "failed" || notification.status === "skipped").length
@@ -217,18 +239,49 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     };
   });
 
+  app.get("/v1/metrics", async () => platformMetrics(store.listEvents(), store.listNotifications(1000)));
+  app.get("/v1/audit", async () => ({ audit: summarizeAudit(store.listEvents()).slice(0, 100) }));
+
+  app.get("/v1/approvals", async () => ({ approvals: summarizeApprovals(store.listEvents()).filter((item) => item.status === "pending") }));
+  app.get<{ Params: { approvalId: string } }>("/v1/approvals/:approvalId", async (request, reply) => {
+    const approval = summarizeApprovals(store.listEvents()).find((item) => item.approval_id === decodeURIComponent(request.params.approvalId));
+    if (!approval) return reply.code(404).send({ ok: false, error: "approval_not_found" });
+    return { approval };
+  });
+  app.post<{ Params: { approvalId: string }; Body: { decision?: "accepted" | "denied"; actor?: string; reason?: string } }>("/v1/approvals/:approvalId/resolve", async (request, reply) => {
+    const approvalId = decodeURIComponent(request.params.approvalId);
+    const decision = request.body?.decision;
+    if (decision !== "accepted" && decision !== "denied") return reply.code(400).send({ ok: false, error: "decision must be accepted or denied" });
+    const existing = summarizeApprovals(store.listEvents()).find((item) => item.approval_id === approvalId);
+    if (!existing) return reply.code(404).send({ ok: false, error: "approval_not_found" });
+    const event = createEvent({
+      type: decision === "accepted" ? "approval.resolved" : "approval.denied",
+      severity: decision === "accepted" ? "info" : "warning",
+      source: { platform: "skybridge", adapter: "approval-api" },
+      correlation: { run_id: existing.run_id, session_id: existing.session_id },
+      payload: {
+        approval_id: approvalId,
+        decision,
+        actor: safeString(request.body?.actor) ?? "operator",
+        reason: safeString(request.body?.reason),
+        remote_execution_enabled: false
+      }
+    });
+    const stored: StoredEvent = { ...event, id: event.event_id ?? nanoid(), receivedAt: new Date().toISOString() };
+    await store.addEvent(stored);
+    broadcast(stored);
+    return reply.code(202).send({ ok: true, approval_id: approvalId, decision });
+  });
+
   app.post<{ Body: NotificationMessage }>("/v1/notifications/send", async (request, reply) => {
     const message = request.body;
     if (!message?.title || !message?.body) {
       return reply.code(400).send({ ok: false, error: "title and body are required" });
     }
-    if (!process.env.NTFY_TOPIC_URL) {
-      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.");
-      return reply.code(202).send({ ok: true, provider: "placeholder", skipped: true });
-    }
-    await sendNtfy(message);
-    await recordNotification(message, "ntfy", "sent");
-    return reply.code(202).send({ ok: true, provider: "ntfy" });
+    const result = await sendNtfy(message);
+    const provider = result.status === "skipped" ? "placeholder" : result.provider;
+    await recordNotification(message, provider, result.status, result.error);
+    return reply.code(202).send({ ok: true, provider, status: result.status, skipped: result.status === "skipped" });
   });
 
   app.get("/v1/stream", async (_request, reply) => {
@@ -384,11 +437,11 @@ function parseRunListQuery(query: RunListQuery): ParsedQuery<ParsedRunListQuery>
 function parseNotificationListQuery(query: NotificationListQuery): ParsedQuery<ParsedNotificationListQuery> {
   const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
   if (!limit.ok) return limit;
-  if (query.status && !["sent", "skipped", "failed"].includes(query.status)) {
-    return invalidQuery("status", "Expected one of sent, skipped or failed.");
+  if (query.status && !["pending", "sent", "skipped", "failed"].includes(query.status)) {
+    return invalidQuery("status", "Expected one of pending, sent, skipped or failed.");
   }
-  if (query.provider && !["ntfy", "placeholder"].includes(query.provider)) {
-    return invalidQuery("provider", "Expected ntfy or placeholder.");
+  if (query.provider && !["ntfy", "apprise", "gotify", "bark", "wecom", "fcm", "xiaomi-push", "placeholder"].includes(query.provider)) {
+    return invalidQuery("provider", "Expected a supported notification provider.");
   }
   if (query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
   return { ok: true, query: { ...query, limit: limit.value } };
@@ -457,13 +510,19 @@ function isEventType(input: string): input is SkyBridgeEventType {
     "diff.updated",
     "approval.requested",
     "approval.resolved",
+    "approval.denied",
+    "approval.expired",
     "message.delta",
     "message.completed",
     "agent.idle",
     "agent.error",
     "agent.stale",
+    "node.connected",
+    "node.heartbeat",
+    "node.disconnected",
     "notification.requested",
     "notification.sent",
+    "notification.skipped",
     "notification.failed"
   ].includes(input);
 }
@@ -486,6 +545,169 @@ function summarizeSources(events: StoredEvent[]) {
     if (event.time > existing.latest_event_at) existing.latest_event_at = event.time;
   }
   return [...sources.values()].sort((a, b) => b.latest_event_at.localeCompare(a.latest_event_at));
+}
+
+function notificationProviders() {
+  return [
+    providerStatus("ntfy", Boolean(process.env.NTFY_TOPIC_URL), "NTFY_TOPIC_URL"),
+    providerStatus("apprise", Boolean(process.env.APPRISE_URL), "APPRISE_URL"),
+    providerStatus("gotify", Boolean(process.env.GOTIFY_URL), "GOTIFY_URL"),
+    providerStatus("bark", Boolean(process.env.BARK_URL), "BARK_URL"),
+    providerStatus("wecom", Boolean(process.env.WECOM_WEBHOOK_URL), "WECOM_WEBHOOK_URL"),
+    providerStatus("fcm", Boolean(process.env.FCM_SERVER_KEY), "FCM_SERVER_KEY"),
+    providerStatus("xiaomi-push", Boolean(process.env.XIAOMI_PUSH_SECRET), "XIAOMI_PUSH_SECRET")
+  ];
+}
+
+function providerStatus(provider: string, configured: boolean, required_env: string) {
+  return {
+    provider,
+    configured,
+    status: configured ? "available" : "skipped",
+    required_env,
+    credential_values_exposed: false
+  };
+}
+
+function notificationRules() {
+  return [
+    {
+      id: "critical-failures",
+      event_type_patterns: ["run.failed", "approval.requested", "notification.requested"],
+      severity_threshold: "warning",
+      quiet_hours: "placeholder",
+      providers: ["ntfy"],
+      dedupe: true
+    }
+  ];
+}
+
+function categoryForEvent(event: StoredEvent): string {
+  if (event.type.startsWith("approval.")) return "approval";
+  if (event.type.startsWith("notification.")) return "notification";
+  if (event.type.startsWith("run.")) return "run";
+  return "event";
+}
+
+function summarizeNodes(events: StoredEvent[]) {
+  const nodes = new Map<string, {
+    node_id: string;
+    host?: string;
+    labels: string[];
+    capabilities: string[];
+    sidecar_version?: string;
+    last_seen: string;
+    status: "connected" | "stale" | "disconnected";
+    event_count: number;
+  }>();
+  for (const event of events.filter((item) => item.type.startsWith("node."))) {
+    const nodeId = event.source.node_id ?? safeString(event.payload.node_id) ?? event.correlation?.session_id ?? "unknown-node";
+    const existing = nodes.get(nodeId) ?? {
+      node_id: nodeId,
+      labels: [],
+      capabilities: [],
+      last_seen: event.time,
+      status: "connected" as const,
+      event_count: 0
+    };
+    existing.event_count += 1;
+    existing.last_seen = event.time > existing.last_seen ? event.time : existing.last_seen;
+    existing.host = safeString(event.payload.host) ?? existing.host;
+    existing.sidecar_version = safeString(event.payload.sidecar_version) ?? existing.sidecar_version;
+    existing.labels = safeStringArray(event.payload.labels) ?? existing.labels;
+    existing.capabilities = safeStringArray(event.payload.capabilities) ?? existing.capabilities;
+    existing.status = event.type === "node.disconnected" ? "disconnected" : "connected";
+    nodes.set(nodeId, existing);
+  }
+  const staleBefore = Date.now() - 5 * 60 * 1000;
+  return [...nodes.values()].map((node) => ({
+    ...node,
+    status: node.status === "connected" && Date.parse(node.last_seen) < staleBefore ? "stale" : node.status
+  })).sort((a, b) => b.last_seen.localeCompare(a.last_seen));
+}
+
+function platformMetrics(events: StoredEvent[], notifications: StoredNotification[]) {
+  const runs = summarizeRuns(events);
+  const nodes = summarizeNodes(events);
+  return {
+    total_events: events.length,
+    runs_by_status: countBy(runs, (run) => run.status),
+    runs_by_source: countBy(runs, (run) => run.source_platform),
+    notifications_by_status: countBy(notifications, (notification) => notification.status),
+    notifications_by_severity: countBy(notifications, (notification) => notification.severity ?? "unknown"),
+    node_status_counts: countBy(nodes, (node) => node.status),
+    recent_failures: runs.filter((run) => run.status === "failed").slice(0, 10)
+  };
+}
+
+function summarizeAudit(events: StoredEvent[]) {
+  return events
+    .filter((event) =>
+      event.type.startsWith("approval.")
+      || event.type.startsWith("node.")
+      || event.type.startsWith("notification.")
+      || event.type === "run.failed"
+    )
+    .map((event) => ({
+      audit_id: event.id,
+      time: event.time,
+      action: event.type,
+      actor: safeString(event.payload.actor) ?? safeString(event.payload.operator) ?? event.source.agent_id ?? "system",
+      source_adapter: `${event.source.platform}/${event.source.adapter}`,
+      run_id: event.correlation?.run_id,
+      session_id: event.correlation?.session_id,
+      safety_decision: safetyDecisionForEvent(event),
+      raw_payload_included: false
+    }))
+    .sort((a, b) => b.time.localeCompare(a.time));
+}
+
+function summarizeApprovals(events: StoredEvent[]) {
+  const approvals = new Map<string, {
+    approval_id: string;
+    run_id?: string;
+    session_id?: string;
+    status: "pending" | "accepted" | "denied" | "expired";
+    title?: string;
+    requested_at: string;
+    resolved_at?: string;
+    source: string;
+  }>();
+  for (const event of events.filter((item) => item.type.startsWith("approval."))) {
+    const approvalId = safeString(event.payload.approval_id) ?? event.correlation?.tool_call_id ?? event.id;
+    const existing = approvals.get(approvalId) ?? {
+      approval_id: approvalId,
+      run_id: event.correlation?.run_id,
+      session_id: event.correlation?.session_id,
+      status: "pending" as const,
+      title: safeString(event.payload.title) ?? safeString(event.payload.permission) ?? event.type,
+      requested_at: event.time,
+      source: `${event.source.platform}/${event.source.adapter}`
+    };
+    if (event.type === "approval.resolved") existing.status = "accepted";
+    if (event.type === "approval.denied") existing.status = "denied";
+    if (event.type === "approval.expired") existing.status = "expired";
+    if (event.type !== "approval.requested") existing.resolved_at = event.time;
+    approvals.set(approvalId, existing);
+  }
+  return [...approvals.values()].sort((a, b) => b.requested_at.localeCompare(a.requested_at));
+}
+
+function safetyDecisionForEvent(event: StoredEvent): string {
+  if (event.type === "approval.denied") return "operator_denied";
+  if (event.type === "approval.expired") return "approval_expired";
+  if (event.type === "approval.resolved") return "operator_accepted_local_record_only";
+  if (event.type === "approval.requested") return "approval_required_remote_execution_disabled";
+  if (event.type.startsWith("node.")) return "node_telemetry_only";
+  if (event.type.startsWith("notification.")) return "notification_metadata_only";
+  if (event.type === "run.failed") return "failure_observed";
+  return "recorded";
+}
+
+function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
+  return counts;
 }
 
 function runGroupId(event: StoredEvent): string {
@@ -540,6 +762,10 @@ function safeString(input: unknown): string | undefined {
   return typeof input === "string" && input.length > 0 && input.length <= 200 ? input : undefined;
 }
 
+function safeStringArray(input: unknown): string[] | undefined {
+  return Array.isArray(input) && input.every((item) => typeof item === "string" && item.length <= 80) ? input : undefined;
+}
+
 function resolvePersistence(options: CreateServerOptions): { dbFile?: string; jsonMigrationFile?: string } {
   if (options.dbFile === false || options.dataFile === false) return {};
 
@@ -560,6 +786,18 @@ function resolvePersistence(options: CreateServerOptions): { dbFile?: string; js
 
 function parseEventPayload(input: unknown): { ok: true; event: SkyBridgeEvent } | { ok: false; response: ValidationErrorResponse } {
   try {
+    const payloadBytes = Buffer.byteLength(JSON.stringify(input ?? null), "utf8");
+    if (payloadBytes > SharedRedactionRules.maxPayloadBytes) {
+      return {
+        ok: false,
+        response: {
+          ok: false,
+          error: "invalid_event",
+          message: "Event payload exceeded the safe size limit.",
+          issues: [{ path: "", code: "too_big", message: `Payload must be <= ${SharedRedactionRules.maxPayloadBytes} bytes.` }]
+        }
+      };
+    }
     return { ok: true, event: parseEvent(input) };
   } catch (error) {
     if (!(error instanceof ZodError)) throw error;

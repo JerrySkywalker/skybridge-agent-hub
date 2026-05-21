@@ -1,0 +1,6 @@
+{
+  "type": "approval:request",
+  "permission": "edit",
+  "sessionId": "opencode-session-1",
+  "runId": "opencode-run-1"
+}

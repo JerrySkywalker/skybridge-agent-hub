@@ -1,4 +1,5 @@
 import { z } from "zod";
+import redactionRules from "./redaction-rules.json" with { type: "json" };
 
 export const SKYBRIDGE_EVENT_SCHEMA_VERSION = "skybridge.agent_event.v1" as const;
 
@@ -19,13 +20,19 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "diff.updated",
   "approval.requested",
   "approval.resolved",
+  "approval.denied",
+  "approval.expired",
   "message.delta",
   "message.completed",
   "agent.idle",
   "agent.error",
   "agent.stale",
+  "node.connected",
+  "node.heartbeat",
+  "node.disconnected",
   "notification.requested",
   "notification.sent",
+  "notification.skipped",
   "notification.failed"
 ]);
 
@@ -105,6 +112,66 @@ export interface RunDetail {
   events: SkyBridgeEvent[];
 }
 
+export interface SourceCapability {
+  platform: SkyBridgeSourcePlatform;
+  label: string;
+  adapters: string[];
+  event_families: string[];
+  supports_remote_control: boolean;
+  default_safe: boolean;
+  notes: string;
+}
+
+export const SOURCE_CAPABILITIES: SourceCapability[] = [
+  {
+    platform: "codex",
+    label: "Codex",
+    adapters: ["codex-hook", "codex-exec-json", "codex-appserver"],
+    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "Local hook and exec telemetry with command, prompt and output redaction by default."
+  },
+  {
+    platform: "opencode",
+    label: "OpenCode",
+    adapters: ["opencode-plugin"],
+    event_families: ["session", "run", "tool", "file", "approval", "todo", "message", "agent"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "Plugin event telemetry normalized from status, tool, file, permission and todo events."
+  },
+  {
+    platform: "hermes",
+    label: "Hermes Agent",
+    adapters: ["hermes-api"],
+    event_families: ["run", "tool", "message", "agent"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "API and stream event telemetry normalized from run status and event stream samples."
+  },
+  {
+    platform: "skybridge",
+    label: "SkyBridge",
+    adapters: ["yolo-runner", "self-observation-smoke", "demo-dataset", "sidecar"],
+    event_families: ["run", "tool", "notification", "agent", "node", "approval"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "First-party runner, smoke, node and dogfooding telemetry."
+  },
+  {
+    platform: "custom",
+    label: "Custom Agent",
+    adapters: ["custom"],
+    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    supports_remote_control: false,
+    default_safe: false,
+    notes: "Bring-your-own adapter; events must be normalized and redacted before ingestion."
+  }
+];
+
+export const SharedRedactionRules = redactionRules;
+
 export function createEvent(input: SkyBridgeEventInput): SkyBridgeEvent {
   return SkyBridgeEventSchema.parse({
     schema: SKYBRIDGE_EVENT_SCHEMA_VERSION,
@@ -119,4 +186,49 @@ export function parseEvent(input: unknown): SkyBridgeEvent {
 
 export function isNotificationTrigger(event: Pick<SkyBridgeEvent, "type">): boolean {
   return event.type === "run.failed" || event.type === "approval.requested" || event.type === "notification.requested";
+}
+
+export function redactForTelemetry(input: unknown): unknown {
+  return redactValue(input, 0);
+}
+
+function redactValue(input: unknown, depth: number): unknown {
+  if (depth > 8) return "[REDACTED:depth]";
+  if (typeof input === "string") return redactString(input);
+  if (Array.isArray(input)) return input.slice(0, 100).map((item) => redactValue(item, depth + 1));
+  if (!input || typeof input !== "object") return input;
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (matchesAny(key, redactionRules.secretKeyPatterns)) {
+      output[key] = redactionRules.replacement;
+      continue;
+    }
+    if (matchesAny(key, redactionRules.omitKeyPatterns)) {
+      output[key] = summarizeOmitted(value);
+      continue;
+    }
+    output[key] = redactValue(value, depth + 1);
+  }
+  return output;
+}
+
+function redactString(input: string): string {
+  let output = input;
+  for (const pattern of redactionRules.secretValuePatterns) {
+    output = output.replace(new RegExp(pattern, "gi"), redactionRules.replacement);
+  }
+  return output.length > redactionRules.maxStringLength ? `${output.slice(0, redactionRules.maxStringLength)}...` : output;
+}
+
+function summarizeOmitted(value: unknown): Record<string, unknown> {
+  const text = typeof value === "string" ? value : JSON.stringify(value ?? null);
+  return {
+    omitted: true,
+    length: text.length,
+    reason: "unsafe_raw_payload"
+  };
+}
+
+function matchesAny(input: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => new RegExp(pattern, "i").test(input));
 }

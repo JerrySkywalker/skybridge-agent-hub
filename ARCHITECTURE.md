@@ -73,12 +73,14 @@ GET  /v1/runs/:runId
 GET  /v1/stream
 GET  /v1/notifications
 GET  /v1/summary
+GET  /v1/metrics
+GET  /v1/audit
 POST /v1/notifications/send
 ```
 
 `GET /v1/events` supports scoped local drill-in with `platform`/`source_platform`, `adapter`/`source_adapter`, `run_id`, `session_id`, `type`, `severity`, `from`, `to`, `limit` and `offset` query parameters. `GET /v1/runs` supports platform, adapter, status, lifecycle, branch, goal, time-window and limit filters. Run summaries include safe correlation metadata such as source adapter, agent/node IDs, branch, goal ID, lifecycle, tool counts and notification counts. The server derives these fields from already-redacted event payloads.
 
-`GET /v1/runs/:runId` returns one run summary plus recent events. `GET /v1/notifications` supports provider/status/severity filters. `GET /v1/summary` provides aggregate cards and source counts for the Operator Console.
+`GET /v1/runs/:runId` returns one run summary plus recent events. `GET /v1/notifications` supports provider/status/severity filters. `GET /v1/summary` provides aggregate cards and source counts for the Operator Console. `GET /v1/metrics` exposes operational counters, and `GET /v1/audit` derives safe audit entries from already-redacted approval, node, notification and failure events.
 
 `run.failed`, `approval.requested` and `notification.requested` are notification trigger events. If ntfy is not configured, notification attempts are recorded as skipped placeholders.
 

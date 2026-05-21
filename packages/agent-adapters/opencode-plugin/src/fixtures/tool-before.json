@@ -1,0 +1,7 @@
+{
+  "type": "tool:start",
+  "toolCallId": "tool-1",
+  "toolName": "bash",
+  "sessionId": "opencode-session-1",
+  "runId": "opencode-run-1"
+}

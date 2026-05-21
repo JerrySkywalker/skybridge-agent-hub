@@ -1,4 +1,4 @@
-import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
+import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform, SourceCapability } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
   title: string;
@@ -18,10 +18,17 @@ export interface SkyBridgeHealth {
 
 export interface StoredNotification {
   id: string;
-  provider: "ntfy" | "placeholder";
-  status: "sent" | "skipped" | "failed";
+  category?: string;
+  severity?: string;
+  source_event_id?: string;
+  target?: string;
+  provider: "ntfy" | "apprise" | "gotify" | "bark" | "wecom" | "fcm" | "xiaomi-push" | "placeholder";
+  dedupe_key?: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  retry_count?: number;
   message: NotificationRequest;
   createdAt: string;
+  updatedAt?: string;
   error?: string;
 }
 
@@ -33,6 +40,10 @@ export interface SummaryResponse {
     active_runs: number;
     failed_runs: number;
     notifications: number;
+    notification_failed?: number;
+    notification_skipped?: number;
+    nodes?: number;
+    node_stale?: number;
     attention_items: number;
   };
   sources: Array<{
@@ -41,6 +52,50 @@ export interface SummaryResponse {
     event_count: number;
     latest_event_at: string;
   }>;
+}
+
+export interface NodeSummary {
+  node_id: string;
+  host?: string;
+  labels: string[];
+  capabilities: string[];
+  sidecar_version?: string;
+  last_seen: string;
+  status: "connected" | "stale" | "disconnected";
+  event_count: number;
+}
+
+export interface ApprovalSummary {
+  approval_id: string;
+  run_id?: string;
+  session_id?: string;
+  status: "pending" | "accepted" | "denied" | "expired";
+  title?: string;
+  requested_at: string;
+  resolved_at?: string;
+  source: string;
+}
+
+export interface MetricsResponse {
+  total_events: number;
+  runs_by_status: Record<string, number>;
+  runs_by_source: Record<string, number>;
+  notifications_by_status: Record<string, number>;
+  notifications_by_severity: Record<string, number>;
+  node_status_counts: Record<string, number>;
+  recent_failures: RunSummary[];
+}
+
+export interface AuditEntry {
+  audit_id: string;
+  time: string;
+  action: string;
+  actor: string;
+  source_adapter: string;
+  run_id?: string;
+  session_id?: string;
+  safety_decision: string;
+  raw_payload_included: false;
 }
 
 export interface StreamEventsOptions {
@@ -87,6 +142,35 @@ export class SkyBridgeClient {
 
   async getSummary(): Promise<SummaryResponse> {
     return this.getJson<SummaryResponse>("/v1/summary");
+  }
+
+  async listSources(): Promise<SourceCapability[]> {
+    const json = await this.getJson<{ sources: SourceCapability[] }>("/v1/sources");
+    return json.sources;
+  }
+
+  async listNodes(): Promise<NodeSummary[]> {
+    const json = await this.getJson<{ nodes: NodeSummary[] }>("/v1/nodes");
+    return json.nodes;
+  }
+
+  async listNotificationProviders(): Promise<Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>> {
+    const json = await this.getJson<{ providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }> }>("/v1/notifications/providers");
+    return json.providers;
+  }
+
+  async getMetrics(): Promise<MetricsResponse> {
+    return this.getJson<MetricsResponse>("/v1/metrics");
+  }
+
+  async listAuditEntries(): Promise<AuditEntry[]> {
+    const json = await this.getJson<{ audit: AuditEntry[] }>("/v1/audit");
+    return json.audit;
+  }
+
+  async listApprovals(): Promise<ApprovalSummary[]> {
+    const json = await this.getJson<{ approvals: ApprovalSummary[] }>("/v1/approvals");
+    return json.approvals;
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {

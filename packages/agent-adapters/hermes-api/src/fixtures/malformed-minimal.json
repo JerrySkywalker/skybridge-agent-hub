@@ -1,0 +1,4 @@
+{
+  "status": "failed",
+  "detail": "Bearer abc.def token=abc123"
+}

@@ -2,9 +2,12 @@ import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ActiveRunsPanel,
+  ApprovalQueuePanel,
   CodexIntegrationStatus,
   EventTimeline,
   NotificationList,
+  OperationsSummaryPanel,
+  ProviderStatusPanel,
   RunDetailPanel,
   SelfObservationPanel,
   SkyBridgeHealthCard,
@@ -51,7 +54,10 @@ function App() {
         </div>
         <aside className="dashboard-grid__side">
           <CodexIntegrationStatus apiBase={apiBase} />
+          <OperationsSummaryPanel apiBase={apiBase} />
+          <ApprovalQueuePanel apiBase={apiBase} />
           <NotificationList apiBase={apiBase} />
+          <ProviderStatusPanel apiBase={apiBase} />
           <SelfObservationPanel apiBase={apiBase} />
           <RunDetailPanel apiBase={apiBase} runId={filteredRunId} />
         </aside>

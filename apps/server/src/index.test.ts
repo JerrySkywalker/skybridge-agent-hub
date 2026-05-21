@@ -70,6 +70,22 @@ describe("server api", () => {
     expect(list.json<{ events: StoredEvent[] }>().events).toHaveLength(0);
   });
 
+  it("rejects oversized event payloads before persistence", async () => {
+    const server = await testServer();
+    const response = await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "message.completed",
+        source: { platform: "custom", adapter: "oversized-test" },
+        payload: { summary: "x".repeat(140_000) }
+      })
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ issues: Array<{ code: string }> }>().issues[0]?.code).toBe("too_big");
+  });
+
   it("summarizes runs", async () => {
     const server = await testServer();
     await server.inject({
@@ -271,7 +287,9 @@ describe("server api", () => {
       expect(notifications.statusCode).toBe(200);
       expect(notifications.json<{ notifications: StoredNotification[] }>().notifications[0]).toMatchObject({
         provider: "placeholder",
-        status: "skipped"
+        status: "skipped",
+        category: "run",
+        severity: "error"
       });
 
       const summary = await server.inject({ method: "GET", url: "/v1/summary" });
@@ -283,6 +301,163 @@ describe("server api", () => {
       if (previousTopic === undefined) delete process.env.NTFY_TOPIC_URL;
       else process.env.NTFY_TOPIC_URL = previousTopic;
     }
+  });
+
+  it("exposes notification provider matrix and routing rules without secrets", async () => {
+    const server = await testServer();
+    const providers = await server.inject({ method: "GET", url: "/v1/notifications/providers" });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json<{ providers: Array<{ provider: string; status: string; credential_values_exposed: boolean }> }>().providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "ntfy", status: "skipped", credential_values_exposed: false }),
+        expect.objectContaining({ provider: "gotify", status: "skipped", credential_values_exposed: false })
+      ])
+    );
+
+    const rules = await server.inject({ method: "GET", url: "/v1/notifications/rules" });
+    expect(rules.statusCode).toBe(200);
+    expect(rules.json<{ rules: Array<{ event_type_patterns: string[]; dedupe: boolean }> }>().rules[0]).toMatchObject({
+      event_type_patterns: expect.arrayContaining(["run.failed", "approval.requested"]),
+      dedupe: true
+    });
+  });
+
+  it("exposes source capability metadata", async () => {
+    const server = await testServer();
+    const response = await server.inject({ method: "GET", url: "/v1/sources" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ sources: Array<{ platform: string; adapters: string[] }> }>().sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ platform: "codex", adapters: expect.arrayContaining(["codex-hook"]) }),
+        expect.objectContaining({ platform: "opencode", adapters: expect.arrayContaining(["opencode-plugin"]) }),
+        expect.objectContaining({ platform: "hermes", adapters: expect.arrayContaining(["hermes-api"]) })
+      ])
+    );
+  });
+
+  it("summarizes remote node heartbeat events without command execution", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "node.heartbeat",
+        source: { platform: "skybridge", adapter: "sidecar", node_id: "node-local-1" },
+        correlation: { session_id: "node-local-1" },
+        payload: {
+          node_id: "node-local-1",
+          host: "devbox",
+          labels: ["local", "sidecar"],
+          capabilities: ["event-forwarding", "heartbeat"],
+          sidecar_version: "0.1.0"
+        }
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/nodes" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ nodes: Array<{ node_id: string; status: string; capabilities: string[] }> }>().nodes[0]).toMatchObject({
+      node_id: "node-local-1",
+      status: "stale",
+      capabilities: ["event-forwarding", "heartbeat"]
+    });
+  });
+
+  it("supports approval queue listing and safe local resolution", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { run_id: "approval-run" },
+        payload: { approval_id: "approval-1", title: "Edit file" }
+      })
+    });
+
+    const pending = await server.inject({ method: "GET", url: "/v1/approvals" });
+    expect(pending.json<{ approvals: Array<{ approval_id: string; status: string }> }>().approvals[0]).toMatchObject({
+      approval_id: "approval-1",
+      status: "pending"
+    });
+
+    const resolved = await server.inject({
+      method: "POST",
+      url: "/v1/approvals/approval-1/resolve",
+      payload: { decision: "denied", actor: "operator", reason: "safe test" }
+    });
+    expect(resolved.statusCode).toBe(202);
+
+    const detail = await server.inject({ method: "GET", url: "/v1/approvals/approval-1" });
+    expect(detail.json<{ approval: { status: string } }>().approval.status).toBe("denied");
+  });
+
+  it("returns operational metrics", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "hermes", adapter: "hermes-api" },
+        correlation: { run_id: "metrics-run" },
+        payload: {}
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/metrics" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ total_events: number; runs_by_status: Record<string, number>; runs_by_source: Record<string, number> }>()).toMatchObject({
+      total_events: 1,
+      runs_by_status: { failed: 1 },
+      runs_by_source: { hermes: 1 }
+    });
+  });
+
+  it("returns a safe derived audit trail without raw payloads", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "opencode", adapter: "opencode-plugin", agent_id: "opencode-local" },
+        correlation: { run_id: "audit-run" },
+        payload: { approval_id: "approval-audit-1", title: "Edit file", prompt: "should stay out of audit response" }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/approvals/approval-audit-1/resolve",
+      payload: { decision: "denied", actor: "operator", reason: "safe audit test" }
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "approval.denied",
+          actor: "operator",
+          source_adapter: "skybridge/approval-api",
+          safety_decision: "operator_denied",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "approval.requested",
+          source_adapter: "opencode/opencode-plugin",
+          safety_decision: "approval_required_remote_execution_disabled",
+          raw_payload_included: false
+        })
+      ])
+    );
+    expect(JSON.stringify(audit)).not.toContain("should stay out");
   });
 
   it("persists events and notifications to SQLite across server restarts", async () => {

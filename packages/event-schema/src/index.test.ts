@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEvent, isNotificationTrigger, parseEvent } from "./index.js";
+import { createEvent, isNotificationTrigger, parseEvent, redactForTelemetry, SharedRedactionRules } from "./index.js";
 
 describe("event schema", () => {
   it("creates a normalized event", () => {
@@ -59,5 +59,19 @@ describe("event schema", () => {
 
     expect(summary.run_id).toBe("runner-001-demo");
     expect(summary.tool_call_count).toBe(1);
+  });
+
+  it("redacts secret-like keys and summarizes raw output fields", () => {
+    const redacted = redactForTelemetry({
+      token: "abc123",
+      headers: { Authorization: "Bearer abc.def.ghi" },
+      stdout: "full command output",
+      nested: { api_key: "sk-testsecret123456" }
+    }) as Record<string, unknown>;
+
+    expect(redacted.token).toBe(SharedRedactionRules.replacement);
+    expect(JSON.stringify(redacted)).not.toContain("abc.def.ghi");
+    expect(JSON.stringify(redacted)).not.toContain("sk-testsecret123456");
+    expect(redacted.stdout).toMatchObject({ omitted: true, reason: "unsafe_raw_payload" });
   });
 });

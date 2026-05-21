@@ -1,0 +1,8 @@
+{
+  "type": "tool:end",
+  "toolCallId": "tool-1",
+  "toolName": "bash",
+  "summary": "completed without stdout",
+  "sessionId": "opencode-session-1",
+  "runId": "opencode-run-1"
+}

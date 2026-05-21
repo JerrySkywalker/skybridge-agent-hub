@@ -1,0 +1,6 @@
+{
+  "runId": "hermes-run-3",
+  "event_type": "tool_started",
+  "toolCallId": "tool-1",
+  "toolName": "shell"
+}

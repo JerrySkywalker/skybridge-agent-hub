@@ -74,3 +74,27 @@ CI artifacts must not include:
 - `.agent/runs` logs;
 - tokens, cookies or SSH keys;
 - full agent prompts, command output, patches or raw Codex JSONL.
+
+## Shared Redaction Rules
+
+The canonical redaction rule file is `packages/event-schema/src/redaction-rules.json`. TypeScript adapters can use `redactForTelemetry`; PowerShell hooks should consume the JSON rule file when they are next consolidated.
+
+Current rule families cover:
+
+- token, password, secret, cookie and credential keys;
+- `Authorization` and bearer token values;
+- OpenAI-style API keys;
+- private key and OpenSSH key markers;
+- raw prompt, patch, stdout, stderr and tool result fields;
+- bounded string and payload sizes.
+
+## Additional Threat Notes
+
+- Public repo CI must not use privileged self-hosted runners for untrusted PRs.
+- Codex hook telemetry must remain fail-open and redacted.
+- Sidecar remote control is a future design surface and must remain disabled until approval, audit and auth boundaries exist.
+- Notification providers should receive only concise safe metadata, not raw agent content.
+- Local spool files are operator telemetry and should contain normalized redacted events only.
+- Deployment secrets must stay outside Git and outside public CI logs.
+
+See `docs/security/THREAT_MODEL.md` for the release train threat model.
