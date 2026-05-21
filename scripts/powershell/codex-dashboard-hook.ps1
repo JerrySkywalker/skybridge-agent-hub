@@ -1,86 +1,228 @@
-# Read Codex hook JSON from stdin, normalize minimally, and POST to SkyBridge.
+param(
+  [string]$ApiBase = $env:SKYBRIDGE_API_BASE,
+  [string]$SpoolDirectory = $env:SKYBRIDGE_CODEX_SPOOL_DIR,
+  [int]$TimeoutSeconds = 3,
+  [int]$MaxQueueLines = 1000
+)
+
+# Read Codex hook JSON from stdin, normalize to skybridge.agent_event.v1, and deliver fail-open.
 $ErrorActionPreference = "Stop"
 
-try {
-  $raw = [Console]::In.ReadToEnd()
-  if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
+function Get-RepositoryRoot {
+  $current = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+  while ($true) {
+    if (Test-Path (Join-Path $current "pnpm-workspace.yaml")) { return $current }
+    $parent = Split-Path -Parent $current
+    if ($parent -eq $current) { return (Get-Location).Path }
+    $current = $parent
+  }
+}
 
-  $inputObj = $raw | ConvertFrom-Json -AsHashtable
-  $hookEventName = [string]$inputObj["hook_event_name"]
+function Get-SpoolDirectory {
+  param([string]$Requested)
+  if (-not [string]::IsNullOrWhiteSpace($Requested)) { return $Requested }
+  return (Join-Path (Get-RepositoryRoot) ".agent\spool\codex-hook")
+}
+
+function Redact-String {
+  param([AllowNull()][string]$Value, [int]$MaxLength = 160)
+  if ($null -eq $Value) { return $null }
+  $text = $Value -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+', 'Bearer [REDACTED]'
+  $text = $text -replace '(?i)\b([A-Za-z0-9_.-]*(token|password|passwd|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*[:=]\s*([^\s;&|]+)', '$1=[REDACTED]'
+  if ($text.Length -gt $MaxLength) { return "$($text.Substring(0, $MaxLength))...[truncated $($text.Length - $MaxLength) chars]" }
+  return $text
+}
+
+function ConvertTo-SafeValue {
+  param($Value, [int]$Depth = 0)
+  if ($null -eq $Value) { return $null }
+  if ($Value -is [string]) { return (Redact-String -Value $Value) }
+  if ($Value -is [bool] -or $Value -is [int] -or $Value -is [long] -or $Value -is [double]) { return $Value }
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [hashtable] -and $Value -isnot [string]) {
+    if ($Depth -ge 4) { return @{ bounded = $true; type = "array" } }
+    return @($Value | Select-Object -First 24 | ForEach-Object { ConvertTo-SafeValue -Value $_ -Depth ($Depth + 1) })
+  }
+  if ($Value -is [hashtable]) {
+    if ($Depth -ge 4) { return @{ bounded = $true; type = "object"; keys = @($Value.Keys | Select-Object -First 24) } }
+    $result = @{}
+    foreach ($key in @($Value.Keys | Select-Object -First 24)) {
+      if ([string]$key -match '(?i)authorization|api[_-]?key|token|password|passwd|secret|cookie|credential') {
+        $result[$key] = "[REDACTED]"
+      } elseif ([string]$key -match '(?i)command|stdout|stderr|output|content|patch|prompt') {
+        $item = $Value[$key]
+        $result[$key] = @{ bounded = $true; type = if ($null -eq $item) { "null" } else { $item.GetType().Name }; length = if ($item -is [string]) { $item.Length } else { $null } }
+      } else {
+        $result[$key] = ConvertTo-SafeValue -Value $Value[$key] -Depth ($Depth + 1)
+      }
+    }
+    if ($Value.Keys.Count -gt 24) { $result["__truncated_keys"] = $Value.Keys.Count - 24 }
+    return $result
+  }
+  return (Redact-String -Value ([string]$Value))
+}
+
+function Get-String {
+  param($Value)
+  if ($Value -is [string] -and -not [string]::IsNullOrWhiteSpace($Value)) { return $Value }
+  return $null
+}
+
+function Get-ToolName {
+  param([hashtable]$Event)
+  if ($Event["tool_input"] -is [hashtable] -and $Event["tool_input"].ContainsKey("name")) { return (Get-String $Event["tool_input"]["name"]) }
+  $name = Get-String $Event["tool_name"]
+  if ($name) { return $name }
+  return (Get-String $Event["tool"])
+}
+
+function Get-OutputSummary {
+  param($Text)
+  $value = Get-String $Text
+  if (-not $value) { return $null }
+  return @{
+    present = $true
+    length = $value.Length
+    line_count = @($value -split "`r?`n").Count
+    preview = Redact-String -Value $value -MaxLength 120
+  }
+}
+
+function Get-ToolInputSummary {
+  param($ToolInput)
+  if ($ToolInput -isnot [hashtable]) { return $null }
+  $command = Get-String $ToolInput["command"]
+  $filePath = Get-String $ToolInput["file_path"]
+  if (-not $filePath) { $filePath = Get-String $ToolInput["path"] }
+  $content = Get-String $ToolInput["content"]
+  if (-not $content) { $content = Get-String $ToolInput["patch"] }
+  return @{
+    name = Get-String $ToolInput["name"]
+    command_present = -not [string]::IsNullOrWhiteSpace($command)
+    command_length = if ($command) { $command.Length } else { $null }
+    command_preview = if ($command) { Redact-String -Value $command -MaxLength 120 } else { $null }
+    file_path = if ($filePath) { Redact-String -Value $filePath -MaxLength 160 } else { $null }
+    content_present = -not [string]::IsNullOrWhiteSpace($content)
+    content_length = if ($content) { $content.Length } else { $null }
+    keys = @($ToolInput.Keys | Sort-Object | Select-Object -First 24)
+    bounded_payload = ConvertTo-SafeValue -Value $ToolInput
+  }
+}
+
+function New-SkyBridgeEvents {
+  param([hashtable]$InputObject)
+  $hookEventName = Get-String $InputObject["hook_event_name"]
+  if (-not $hookEventName) { $hookEventName = Get-String $InputObject["event"] }
+  if (-not $hookEventName) { $hookEventName = "Unknown" }
+
+  $exitCode = $InputObject["exit_code"]
+  if ($null -eq $exitCode -and $InputObject["tool_response"] -is [hashtable]) { $exitCode = $InputObject["tool_response"]["exit_code"] }
+  $failedTool = $hookEventName -eq "PostToolUse" -and $null -ne $exitCode -and [int]$exitCode -ne 0
   $eventType = switch ($hookEventName) {
     "SessionStart" { "session.started" }
     "UserPromptSubmit" { "run.started" }
     "PreToolUse" { "tool.started" }
-    "PostToolUse" { "tool.completed" }
+    "PostToolUse" { if ($failedTool) { "tool.failed" } else { "tool.completed" } }
     "PermissionRequest" { "approval.requested" }
     "Stop" { "turn.completed" }
     default { "agent.idle" }
   }
 
-  $toolInput = $inputObj["tool_input"]
-  $toolSummary = @{}
-  if ($toolInput -is [hashtable]) {
-    $command = [string]$toolInput["command"]
-    $toolSummary = @{
-      keys = @($toolInput.Keys | Sort-Object)
-      command_present = -not [string]::IsNullOrWhiteSpace($command)
-      command_length = if ([string]::IsNullOrWhiteSpace($command)) { 0 } else { $command.Length }
-      file_path = $toolInput["file_path"] ?? $toolInput["path"]
-    }
+  $runId = Get-String $InputObject["run_id"]
+  if (-not $runId) { $runId = Get-String $InputObject["conversation_id"] }
+  if (-not $runId) { $runId = Get-String $InputObject["session_id"] }
+
+  $toolResponse = if ($InputObject["tool_response"] -is [hashtable]) { $InputObject["tool_response"] } else { @{} }
+  $source = @{
+    platform = "codex"
+    adapter = "codex-hook"
+    node_id = $env:SKYBRIDGE_NODE_ID
+    agent_id = "codex-cli"
+    cwd = Get-String $InputObject["cwd"]
   }
-
-  $runId = $inputObj["run_id"]
-  if ([string]::IsNullOrWhiteSpace([string]$runId)) { $runId = $inputObj["conversation_id"] }
-  if ([string]::IsNullOrWhiteSpace([string]$runId)) { $runId = $inputObj["session_id"] }
-
-  $payload = @{
+  $correlation = @{
+    session_id = Get-String $InputObject["session_id"]
+    run_id = $runId
+    turn_id = if (Get-String $InputObject["turn_id"]) { Get-String $InputObject["turn_id"] } else { Get-String $InputObject["request_id"] }
+    tool_call_id = if (Get-String $InputObject["tool_use_id"]) { Get-String $InputObject["tool_use_id"] } else { Get-String $InputObject["tool_call_id"] }
+  }
+  $event = @{
     schema = "skybridge.agent_event.v1"
     time = (Get-Date).ToUniversalTime().ToString("o")
     type = $eventType
-    severity = "info"
-    source = @{
-      platform = "codex"
-      adapter = "codex-hook"
-      node_id = $env:SKYBRIDGE_NODE_ID
-      agent_id = "codex-cli"
-      cwd = $inputObj["cwd"]
-    }
-    correlation = @{
-      session_id = $inputObj["session_id"]
-      run_id = $runId
-      turn_id = $inputObj["turn_id"] ?? $inputObj["request_id"]
-      tool_call_id = $inputObj["tool_use_id"] ?? $inputObj["tool_call_id"]
-    }
+    severity = if ($eventType -eq "approval.requested") { "warning" } elseif ($eventType -eq "tool.failed") { "error" } else { "info" }
+    source = $source
+    correlation = $correlation
     payload = @{
       hook_event_name = $hookEventName
-      tool_name = $inputObj["tool_name"] ?? $inputObj["tool"]
-      permission_mode = $inputObj["permission_mode"]
-      tool_input_summary = $toolSummary
-      redaction = "command/stdout/stderr omitted by default"
+      session_start_type = if (Get-String $InputObject["session_start_type"]) { Get-String $InputObject["session_start_type"] } else { Get-String $InputObject["source"] }
+      tool_name = Get-ToolName -Event $InputObject
+      permission_mode = Get-String $InputObject["permission_mode"]
+      exit_code = $exitCode
+      stdout_summary = if ($InputObject.ContainsKey("stdout")) { Get-OutputSummary $InputObject["stdout"] } else { Get-OutputSummary $toolResponse["stdout"] }
+      stderr_summary = if ($InputObject.ContainsKey("stderr")) { Get-OutputSummary $InputObject["stderr"] } else { Get-OutputSummary $toolResponse["stderr"] }
+      tool_input_summary = Get-ToolInputSummary $InputObject["tool_input"]
+      message_summary = if ($InputObject.ContainsKey("prompt")) { Get-OutputSummary $InputObject["prompt"] } else { Get-OutputSummary $InputObject["message"] }
+      redaction = "commands, prompts, stdout and stderr are redacted and bounded by default"
     }
   }
-
-  $body = $payload | ConvertTo-Json -Depth 80 -Compress
-
-  $dir = Join-Path $env:USERPROFILE ".codex\dashboard"
-  New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  Add-Content -Path (Join-Path $dir "events.jsonl") -Value $body -Encoding UTF8
-
-  $api = $env:SKYBRIDGE_API_BASE
-  if ([string]::IsNullOrWhiteSpace($api)) { $api = "http://127.0.0.1:8787" }
-
-  $headers = @{}
-  if ($env:CODEX_DASHBOARD_TOKEN) {
-    $headers["Authorization"] = "Bearer $($env:CODEX_DASHBOARD_TOKEN)"
+  $events = @($event)
+  if ((Get-ToolName -Event $InputObject) -eq "apply_patch") {
+    $path = $null
+    if ($InputObject["tool_input"] -is [hashtable]) {
+      $path = if (Get-String $InputObject["tool_input"]["file_path"]) { Get-String $InputObject["tool_input"]["file_path"] } else { Get-String $InputObject["tool_input"]["path"] }
+    }
+    $events += @{
+      schema = "skybridge.agent_event.v1"; time = (Get-Date).ToUniversalTime().ToString("o"); type = "file.edited"; severity = "info"; source = $source; correlation = $correlation
+      payload = @{ hook_event_name = $hookEventName; file_path = $path; redaction = "patch content omitted by default" }
+    }
+    $events += @{
+      schema = "skybridge.agent_event.v1"; time = (Get-Date).ToUniversalTime().ToString("o"); type = "diff.updated"; severity = "info"; source = $source; correlation = $correlation
+      payload = @{ hook_event_name = $hookEventName; file_path = $path; diff_present = $true; redaction = "diff content omitted by default" }
+    }
   }
+  return $events
+}
 
-  try {
-    Invoke-RestMethod -Method Post -Uri "$api/v1/events" -ContentType "application/json" -Headers $headers -Body $body -TimeoutSec 3 | Out-Null
-  } catch {
-    # fail open
+function Write-JsonLine {
+  param([string]$Path, [string]$Line)
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+  Add-Content -Path $Path -Value $Line -Encoding UTF8
+}
+
+function Limit-JsonLines {
+  param([string]$Path, [int]$MaxLines)
+  if (-not (Test-Path $Path)) { return }
+  $lines = @(Get-Content -Path $Path -ErrorAction SilentlyContinue)
+  if ($lines.Count -le $MaxLines) { return }
+  $lines | Select-Object -Last $MaxLines | Set-Content -Path $Path -Encoding UTF8
+}
+
+try {
+  if ([string]::IsNullOrWhiteSpace($ApiBase)) { $ApiBase = "http://127.0.0.1:8787" }
+  $spoolDir = Get-SpoolDirectory -Requested $SpoolDirectory
+  $queueFile = Join-Path $spoolDir "queue.jsonl"
+  $auditFile = Join-Path $spoolDir "events.jsonl"
+
+  $raw = [Console]::In.ReadToEnd()
+  if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
+  $inputObj = $raw | ConvertFrom-Json -AsHashtable
+  $events = @(New-SkyBridgeEvents -InputObject $inputObj)
+
+  foreach ($event in $events) {
+    $body = $event | ConvertTo-Json -Depth 80 -Compress
+    Write-JsonLine -Path $auditFile -Line $body
+    $headers = @{}
+    if ($env:CODEX_DASHBOARD_TOKEN) { $headers["Authorization"] = "Bearer $($env:CODEX_DASHBOARD_TOKEN)" }
+    try {
+      Invoke-RestMethod -Method Post -Uri "$ApiBase/v1/events" -ContentType "application/json" -Headers $headers -Body $body -TimeoutSec $TimeoutSeconds | Out-Null
+    } catch {
+      Write-JsonLine -Path $queueFile -Line $body
+    }
   }
+  Limit-JsonLines -Path $auditFile -MaxLines $MaxQueueLines
+  Limit-JsonLines -Path $queueFile -MaxLines $MaxQueueLines
 } catch {
-  # fail open
+  # Hooks must never break Codex execution.
 }
 
 exit 0
