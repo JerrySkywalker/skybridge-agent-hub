@@ -26,6 +26,7 @@ SkyBridge provides a shared foundation for:
 - ntfy-first notification provider with skipped placeholder records when credentials are not configured.
 - Codex hook adapter and local sidecar event forwarder.
 - React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
+- Operator Console for local autonomous development health, active runs, event timelines, Codex integration status, notifications and compact embeds.
 - Codex TUI Master Goal workflow for long-horizon autonomous development.
 - PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
@@ -69,6 +70,33 @@ corepack pnpm --filter @skybridge-agent-hub/web dev
 ```
 
 The server listens on `http://127.0.0.1:8787` by default. Events and notification attempts are persisted to `.data/skybridge.sqlite` unless `SKYBRIDGE_DB_FILE` is set.
+
+### Operator Console
+
+The web dashboard is the SkyBridge Operator Console. It shows system health, active/recent runs, a live event timeline, Codex hook/exec integration status, notification attention items, source filters and a safe run detail panel.
+
+Seed a local demo view:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/web build
+corepack pnpm smoke:operator-console
+```
+
+For interactive development, start the server and web app, then optionally seed demo events:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+corepack pnpm --filter @skybridge-agent-hub/web dev
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1
+```
+
+Compact embed route:
+
+```text
+http://127.0.0.1:5173/#/embed/compact
+```
+
+See [docs/ui/OPERATOR_CONSOLE.md](docs/ui/OPERATOR_CONSOLE.md) and [docs/ui/EMBEDDING.md](docs/ui/EMBEDDING.md).
 
 ### Codex Hook Integration
 
@@ -188,6 +216,8 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/events
 Invoke-RestMethod http://127.0.0.1:8787/v1/runs
 Invoke-RestMethod http://127.0.0.1:8787/v1/runs/run_demo_001
 Invoke-RestMethod "http://127.0.0.1:8787/v1/events?run_id=run_demo_001"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/runs?platform=codex&status=failed"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/summary"
 ```
 
 Send a notification request:

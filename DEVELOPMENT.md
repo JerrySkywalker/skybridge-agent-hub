@@ -55,6 +55,28 @@ Or start services with Docker:
 docker compose -f deploy/docker-compose.dev.yml up --build
 ```
 
+## Operator Console workflow
+
+Use the Operator Console while developing telemetry, adapters, notifications or dashboard widgets:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+corepack pnpm --filter @skybridge-agent-hub/web dev
+```
+
+Open the Vite URL and use the console sections for health, runs, timeline, Codex integration, notifications and run detail. The compact iframe-style route is available at `/#/embed/compact`.
+
+Focused checks:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server test
+corepack pnpm --filter @skybridge-agent-hub/client test
+corepack pnpm --filter @skybridge-agent-hub/react-widgets test
+corepack pnpm --filter @skybridge-agent-hub/web-components test
+corepack pnpm --filter @skybridge-agent-hub/web build
+corepack pnpm smoke:operator-console
+```
+
 Check compose without starting services:
 
 ```powershell
