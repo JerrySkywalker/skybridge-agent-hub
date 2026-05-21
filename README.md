@@ -26,7 +26,8 @@ SkyBridge provides a shared foundation for:
 - ntfy-first notification provider with skipped placeholder records when credentials are not configured.
 - Codex hook adapter and local sidecar event forwarder.
 - React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
-- PowerShell goal runner scripts for queue-driven local autonomous development.
+- Codex TUI Master Goal workflow for long-horizon autonomous development.
+- PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
 
 ## Current MVP Status
@@ -38,7 +39,7 @@ SkyBridge is in an MVP foundation stage. The repository already contains:
 - `apps/web` for the local dashboard;
 - `packages/event-schema`, `packages/client`, `packages/agent-adapters`, `packages/react-widgets`, `packages/web-components` and `packages/notification-providers`;
 - Docker dev/test compose files;
-- Codex goal-mode and runner scripts for local autonomous development.
+- Codex TUI Master Goal files plus runner scripts for fallback local batch processing.
 
 The remote-control surface is intentionally not production-ready yet. Current work focuses on local-first telemetry, notification, reviewable AI branches and safe iteration.
 
@@ -203,23 +204,51 @@ docker compose -f deploy/docker-compose.dev.yml config
 docker compose -f deploy/docker-compose.test.yml config
 ```
 
-Run one queued goal with Codex:
+## Autonomous Development Workflows
+
+Recommended primary workflow:
+
+1. Use Codex TUI for long-horizon development.
+2. Read `goals/00_AUTONOMOUS_MASTER_GOAL.md`.
+3. Select one `goals/mega/*.md` goal.
+4. Work staged sub-goals in order, committing each coherent passing stage.
+5. Run `just check` before stopping, or `corepack pnpm check` if `just` is unavailable.
+
+Start Codex TUI:
+
+```powershell
+codex
+```
+
+Then start the first mega goal with:
+
+```text
+/goal Execute Mega Goal 001 from goals/mega/001-self-observable-skybridge-loop.md.
+
+Read AGENTS.md, goals/00_AUTONOMOUS_MASTER_GOAL.md, docs/codex/TUI_MASTER_GOAL.md and the goal file first. Work one staged sub-goal at a time, make coherent commits, run focused checks before commits, run just check before stopping, push the branch, and do not cross the safety boundaries.
+```
+
+Use the local runner for bounded batch/background tasks that are already decomposed into `goals/ready/*.md` files. The runner is intentionally single-worker and must keep `MaxParallel` at `1`.
+
+Run one queued goal with the fallback runner path:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-goal.ps1 `
   -GoalFile .\goals\ready\001-yolo-guardrails.md
 ```
 
-Run the local autonomous goal queue:
+Run the fallback local batch queue:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
   -ConfigFile .\config\runner.example.json
 ```
 
+Use `codex exec` for CI/scripted one-shot tasks, repair loops and non-interactive automation where a TUI session is unnecessary.
+
 ## Roadmap
 
-- Harden the autonomous goal runner with better resumability, richer run metadata and safer branch handling.
+- Execute the Codex TUI mega goals in `goals/mega/`, starting with a self-observable SkyBridge development loop.
 - Add OpenCode and Hermes adapters.
 - Improve dashboard filtering, compact views and notification history.
 - Expand Web Component and React widget integration examples.

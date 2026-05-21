@@ -1,6 +1,8 @@
 # Codex Goal Mode for This Repository
 
-This repository uses Markdown goals as the primary unit of AI work.
+This repository uses Markdown goals as the durable unit of AI work. Codex TUI plus Master Goal files are the recommended primary workflow for multi-hour development. The PowerShell runner remains available for queued batch/background goals.
+
+For the TUI workflow, see `docs/codex/TUI_MASTER_GOAL.md`.
 
 ## Goal locations
 
@@ -10,16 +12,37 @@ goals/doing   tasks currently being processed
 goals/done    completed tasks
 goals/failed  failed tasks
 goals/backlog future tasks
+goals/mega    long-horizon Codex TUI goals
 ```
 
-## Single goal
+`goals/ready`, `goals/doing`, `goals/done` and `goals/failed` are runner queue/state directories. They may be created by the runner when absent.
+
+## Primary Codex TUI workflow
+
+Start Codex TUI from the repository root:
+
+```powershell
+codex
+```
+
+Then execute a mega goal with a prompt such as:
+
+```text
+/goal Execute Mega Goal 001 from goals/mega/001-self-observable-skybridge-loop.md.
+
+Read AGENTS.md, goals/00_AUTONOMOUS_MASTER_GOAL.md, docs/codex/TUI_MASTER_GOAL.md and the goal file first. Work one staged sub-goal at a time, make coherent commits, run focused checks before commits, run just check before stopping, push the branch, and do not cross the safety boundaries.
+```
+
+Use `goals/00_AUTONOMOUS_MASTER_GOAL.md` as the operating source of truth and `goals/00_MASTER_GOAL.md` as the product vision.
+
+## Runner single goal fallback
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-goal.ps1 `
   -GoalFile .\goals\ready\001-yolo-guardrails.md
 ```
 
-## YOLO loop
+## Runner loop fallback
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
@@ -27,7 +50,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
   -MaxRepairRounds 3
 ```
 
-For the full runner lifecycle, configuration and log layout, see `docs/codex/AUTONOMOUS_RUNNER.md`.
+For the full runner lifecycle, configuration and log layout, see `docs/codex/AUTONOMOUS_RUNNER.md`. Keep this path for bounded unattended work rather than primary long-horizon planning.
 
 ## Recommended pattern
 

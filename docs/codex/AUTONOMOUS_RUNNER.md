@@ -1,6 +1,10 @@
 # Autonomous Runner
 
-SkyBridge's autonomous runner is a local, single-worker loop for processing Markdown goal files with Codex. It is meant to create reviewable AI branches, not to deploy production changes.
+SkyBridge's autonomous runner is a local, single-worker loop for processing Markdown goal files with Codex. It is now the fallback batch/background processor. Primary long-horizon development should use Codex TUI with `goals/00_AUTONOMOUS_MASTER_GOAL.md` and `goals/mega/*.md`.
+
+Use the runner when a goal has already been decomposed into a bounded `goals/ready/*.md` task and unattended processing is useful. It is meant to create reviewable AI branches, not to plan multi-hour product work and not to deploy production changes.
+
+For the primary TUI workflow, see `docs/codex/TUI_MASTER_GOAL.md`.
 
 ## Status
 
@@ -28,10 +32,20 @@ It supports:
 
 `MaxParallel` must remain `1`. Parallel execution is intentionally out of scope for this MVP.
 
+## Role In The Workflow
+
+Use these paths for different automation needs:
+
+- Codex TUI: primary development workflow for mega goals and staged multi-commit work.
+- `yolo-runner.ps1`: fallback batch processor for bounded queue goals in `goals/ready`.
+- `codex exec`: non-interactive CI/scripted one-shot tasks and repair loops.
+
+Do not put a full `goals/mega/*.md` file directly into `goals/ready`. Extract a small child goal first.
+
 ## Queue Layout
 
 ```text
-goals/ready    goals available for the runner
+goals/ready    bounded child goals available for the runner
 goals/doing    claimed goals and claim metadata
 goals/done     completed goals
 goals/failed   failed goals
@@ -63,14 +77,16 @@ ai/022-runner-resume-locking
 9. If runner telemetry is enabled, it emits a `run.started` event for the claimed or resumed goal.
 10. It invokes Codex with JSON output:
 
-   ```powershell
-   codex exec --sandbox workspace-write --ask-for-approval never --json --output-last-message <run-dir>\last-message.md <prompt>
-   ```
+```powershell
+codex exec --sandbox workspace-write --ask-for-approval never --json --output-last-message <run-dir>\last-message.md <prompt>
+```
 
 11. It emits `tool.started` and `tool.completed` or `tool.failed` events around Codex, standard checks and repair attempts.
 12. It runs the standard check:
-   - `just check` when `just` is available;
-   - otherwise `corepack pnpm check`.
+
+- `just check` when `just` is available;
+- otherwise `corepack pnpm check`.
+
 13. When checks fail, it asks Codex to repair the failure and retries until `MaxRepairRounds` is exhausted.
 14. On success, it moves the goal, claim and lock metadata to `goals/done`, writes `result.json`, commits any remaining staged work, pushes the branch and emits `run.completed`.
 15. On failure, it moves the goal, claim and lock metadata to `goals/failed` using unique filenames when previous failure context exists, writes `result.json`, emits `run.failed` and sends a high-priority notification.
@@ -163,7 +179,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
   -MaxRepairRounds 3
 ```
 
-Keep this loop on a dedicated local machine or terminal session. It is not a production deployment mechanism.
+Keep this loop on a dedicated local machine or terminal session. It is not the primary development workflow and is not a production deployment mechanism.
 
 ## Dry Run
 
