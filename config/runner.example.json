@@ -1,0 +1,26 @@
+{
+  "mode": "ThesisYOLO",
+  "maxParallel": 1,
+  "maxRepairRounds": 3,
+  "push": true,
+  "autoPR": false,
+  "createPR": false,
+  "sandbox": "workspace-write",
+  "notifications": {
+    "provider": "ntfy",
+    "onlyImportant": true,
+    "environment": {
+      "url": "NTFY_URL",
+      "topic": "NTFY_TOPIC"
+    }
+  },
+  "goals": {
+    "ready": "./goals/ready",
+    "doing": "./goals/doing",
+    "done": "./goals/done",
+    "failed": "./goals/failed"
+  },
+  "runs": {
+    "directory": "./.agent/runs"
+  }
+}
