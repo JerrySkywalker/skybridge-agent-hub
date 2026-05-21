@@ -58,6 +58,21 @@ if (-not $psRedacted[1].stdout.bounded -or -not $psRedacted[1].prompt.bounded -o
   throw "PowerShell shared redaction did not bound raw agent content fields"
 }
 
+$jsonObjectSample = '{"token":"json-token-secret","nested":{"Authorization":"Bearer json.header.secret"},"stdout":"json object output"}' | ConvertFrom-Json
+$jsonObjectRedacted = ConvertTo-SkyBridgeSafeValue -Value $jsonObjectSample -Rules $rules
+$jsonObjectRedactedText = $jsonObjectRedacted | ConvertTo-Json -Depth 20 -Compress
+foreach ($forbidden in @("json-token-secret", "json.header.secret", "json object output")) {
+  if ($jsonObjectRedactedText.Contains($forbidden)) {
+    throw "PowerShell shared redaction leaked '$forbidden' from ConvertFrom-Json object consumption"
+  }
+}
+if ($jsonObjectRedacted.token -ne $rules.replacement) {
+  throw "PowerShell shared redaction did not replace token fields on ConvertFrom-Json objects"
+}
+if (-not $jsonObjectRedacted.stdout.bounded) {
+  throw "PowerShell shared redaction did not bound raw output fields on ConvertFrom-Json objects"
+}
+
 $env:SKYBRIDGE_REDACTION_FIXTURES = ($samples.payload | ConvertTo-Json -Depth 20 -Compress)
 $nodeOutput = @'
 import { redactForTelemetry } from "./packages/event-schema/src/index.ts";
@@ -91,5 +106,6 @@ Write-Output (@{
   replacement = $rules.replacement
   fixtureCount = $samples.Count
   powershellRawFieldsBounded = [bool]($psRedacted[1].stdout.bounded -and $psRedacted[1].prompt.bounded -and $psRedacted[1].patch.bounded)
+  powershellJsonObjectRedacted = [bool]($jsonObjectRedacted.token -eq $rules.replacement -and $jsonObjectRedacted.stdout.bounded)
   typescriptRawFieldsOmitted = [bool]($tsRedacted[1]["stdout"]["omitted"] -and $tsRedacted[1]["prompt"]["omitted"] -and $tsRedacted[1]["patch"]["omitted"])
 } | ConvertTo-Json -Compress)

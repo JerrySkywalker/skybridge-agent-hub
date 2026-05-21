@@ -71,11 +71,7 @@ function ConvertTo-SkyBridgeSafeValue {
   if ($null -eq $Value) { return $null }
   if ($Value -is [string]) { return (Redact-SkyBridgeString -Value $Value -Rules $Rules) }
   if ($Value -is [bool] -or $Value -is [int] -or $Value -is [long] -or $Value -is [double]) { return $Value }
-  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [hashtable] -and $Value -isnot [string]) {
-    if ($Depth -ge 4) { return @{ bounded = $true; type = "array" } }
-    return @($Value | Select-Object -First 24 | ForEach-Object { ConvertTo-SkyBridgeSafeValue -Value $_ -Rules $Rules -Depth ($Depth + 1) })
-  }
-  if ($Value -is [hashtable]) {
+  if ($Value -is [System.Collections.IDictionary]) {
     if ($Depth -ge 4) { return @{ bounded = $true; type = "object"; keys = @($Value.Keys | Select-Object -First 24) } }
     $result = @{}
     foreach ($key in @($Value.Keys | Select-Object -First 24)) {
@@ -94,6 +90,18 @@ function ConvertTo-SkyBridgeSafeValue {
     }
     if ($Value.Keys.Count -gt 24) { $result["__truncated_keys"] = $Value.Keys.Count - 24 }
     return $result
+  }
+  if ($Value -is [pscustomobject]) {
+    $objectAsMap = @{}
+    foreach ($property in @($Value.PSObject.Properties | Select-Object -First 24)) {
+      $objectAsMap[$property.Name] = $property.Value
+    }
+    if ($Value.PSObject.Properties.Count -gt 24) { $objectAsMap["__truncated_keys"] = $Value.PSObject.Properties.Count - 24 }
+    return ConvertTo-SkyBridgeSafeValue -Value $objectAsMap -Rules $Rules -Depth $Depth
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [hashtable] -and $Value -isnot [string]) {
+    if ($Depth -ge 4) { return @{ bounded = $true; type = "array" } }
+    return @($Value | Select-Object -First 24 | ForEach-Object { ConvertTo-SkyBridgeSafeValue -Value $_ -Rules $Rules -Depth ($Depth + 1) })
   }
   return (Redact-SkyBridgeString -Value ([string]$Value) -Rules $Rules)
 }
