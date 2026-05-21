@@ -1,17 +1,34 @@
-name: Deploy Staging Placeholder
+name: Staging Dry Run
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to validate
+        required: false
+        default: main
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  deploy-placeholder:
+  staging-dry-run:
+    name: Staging deployment dry-run
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo "Staging deploy is intentionally a placeholder."
-          echo "Use a private deploy repo, deploy webhook, or restricted self-hosted runner."
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Render staging compose plan
+        run: |
+          mkdir -p .agent/ci
+          SKYBRIDGE_IMAGE_TAG="${{ inputs.image_tag || 'main' }}" bash deploy/scripts/staging-dry-run.sh "${{ inputs.image_tag || 'main' }}" 2>&1 | tee .agent/ci/staging-dry-run.log
+      - name: Upload dry-run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-dry-run-log
+          path: .agent/ci/staging-dry-run.log
+          if-no-files-found: ignore
+          retention-days: 7
