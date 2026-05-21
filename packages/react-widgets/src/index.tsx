@@ -5,6 +5,7 @@ import {
   type NotificationListQuery,
   type RunListQuery,
   type ApprovalSummary,
+  type MetricsResponse,
   type SkyBridgeHealth,
   type StoredNotification
 } from "@skybridge-agent-hub/client";
@@ -306,6 +307,69 @@ export function ApprovalQueuePanel({ apiBase }: WidgetProps) {
               <small>{item.source} · {item.run_id ?? item.session_id ?? "uncorrelated"}</small>
             </span>
             <small>{formatDateTime(item.requested_at)}</small>
+          </li>
+        ))}
+      </ol>
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function OperationsSummaryPanel({ apiBase }: WidgetProps) {
+  const [metrics, setMetrics] = useState<MetricsResponse | undefined>();
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.getMetrics()
+      .then((nextMetrics) => {
+        setMetrics(nextMetrics);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  return (
+    <section className="skybridge-panel">
+      <PanelHeader kicker="Operations" title="Metrics Summary" state={`${metrics?.total_events ?? 0}`} />
+      <dl className="skybridge-metrics skybridge-metrics--compact">
+        <Metric label="Events" value={metrics?.total_events ?? 0} />
+        <Metric label="Running" value={metrics?.runs_by_status.running ?? 0} />
+        <Metric label="Failed" value={metrics?.runs_by_status.failed ?? 0} />
+        <Metric label="Nodes" value={Object.values(metrics?.node_status_counts ?? {}).reduce((sum, count) => sum + count, 0)} />
+      </dl>
+      <p className="skybridge-runline">Sources: {Object.keys(metrics?.runs_by_source ?? {}).join(", ") || "none"}</p>
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function ProviderStatusPanel({ apiBase }: WidgetProps) {
+  const [providers, setProviders] = useState<Array<{ provider: string; configured: boolean; status: string; required_env: string }>>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.listNotificationProviders()
+      .then((items) => {
+        setProviders(items);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  return (
+    <section className="skybridge-panel">
+      <PanelHeader kicker="Providers" title="Notification Matrix" state={`${providers.filter((provider) => provider.configured).length}/${providers.length}`} />
+      {providers.length === 0 ? <EmptyState title="No provider status" detail="Provider configuration status appears when the server is reachable." /> : null}
+      <ol className="skybridge-timeline skybridge-timeline--compact">
+        {providers.map((provider) => (
+          <li key={provider.provider}>
+            <span>
+              <strong>{provider.provider}</strong>
+              <small>{provider.required_env}</small>
+            </span>
+            <span className={`skybridge-state ${provider.configured ? "" : "skybridge-state--bad"}`}>{provider.status}</span>
           </li>
         ))}
       </ol>

@@ -8,7 +8,7 @@ Checked during Super Goal 005-014 continuation:
 - Docs links: new docs are indexed from `docs/index.md`.
 - Package scripts: existing `lint`, `typecheck`, `test`, `build` and `check` scripts remain the validation path.
 - CI workflow names: existing PR, AI branch, image, staging dry-run and release workflows remain unchanged.
-- Smoke scripts: release dry-run, release candidate, self-hosting dry-run, dogfooding, operator console and Codex hook smokes are available.
+- Smoke scripts: multi-agent platform, release dry-run, release candidate, self-hosting dry-run, dogfooding, operator console and Codex hook smokes are available.
 - Public README: updated with platform release-candidate status and new APIs.
 - Security docs: threat model and shared redaction rules are documented.
 

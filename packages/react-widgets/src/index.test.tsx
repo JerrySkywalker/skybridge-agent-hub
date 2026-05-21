@@ -10,6 +10,8 @@ import {
   EmptyState,
   EventTimeline,
   NotificationList,
+  OperationsSummaryPanel,
+  ProviderStatusPanel,
   RunDetailPanel,
   SelfObservationPanel,
   SourceFilterBar,
@@ -153,6 +155,8 @@ describe("react widgets", () => {
     expect(renderToStaticMarkup(<EventTimeline apiBase="http://127.0.0.1:8787" />)).toContain("Timeline");
     expect(renderToStaticMarkup(<RunDetailPanel apiBase="http://127.0.0.1:8787" />)).toContain("Select a run");
     expect(renderToStaticMarkup(<NotificationList apiBase="http://127.0.0.1:8787" />)).toContain("Notifications");
+    expect(renderToStaticMarkup(<OperationsSummaryPanel apiBase="http://127.0.0.1:8787" />)).toContain("Metrics Summary");
+    expect(renderToStaticMarkup(<ProviderStatusPanel apiBase="http://127.0.0.1:8787" />)).toContain("Notification Matrix");
     expect(renderToStaticMarkup(<EmptyState title="Empty" detail="No data" />)).toContain("No data");
   });
 

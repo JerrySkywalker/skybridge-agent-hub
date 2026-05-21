@@ -14,6 +14,7 @@ $requiredFiles = @(
   "docs\observability\METRICS_AND_AUDIT.md",
   "scripts\powershell\generate-demo-dataset.ps1",
   "scripts\powershell\smoke-dogfooding-loop.ps1",
+  "scripts\powershell\smoke-multi-agent-platform.ps1",
   "scripts\powershell\smoke-self-hosting-dry-run.ps1"
 )
 
