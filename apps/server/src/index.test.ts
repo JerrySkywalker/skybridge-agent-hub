@@ -511,36 +511,46 @@ describe("server api", () => {
   });
 
   it("persists events and notifications to SQLite across server restarts", async () => {
+    const previousTopic = process.env.NTFY_TOPIC_URL;
+    delete process.env.NTFY_TOPIC_URL;
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");
     const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
     servers.push(first);
 
-    await first.inject({
-      method: "POST",
-      url: "/v1/events",
-      payload: createEvent({
-        type: "run.completed",
-        source: { platform: "codex", adapter: "codex-hook" },
-        correlation: { session_id: "s1", run_id: "persisted-run" },
-        payload: { summary: "done" }
-      })
-    });
-    await first.inject({
-      method: "POST",
-      url: "/v1/notifications/send",
-      payload: { title: "Saved notification", body: "SQLite should retain this" }
-    });
-    await first.close();
-    servers.pop();
+    try {
+      await first.inject({
+        method: "POST",
+        url: "/v1/events",
+        payload: createEvent({
+          type: "run.completed",
+          source: { platform: "codex", adapter: "codex-hook" },
+          correlation: { session_id: "s1", run_id: "persisted-run" },
+          payload: { summary: "done" }
+        })
+      });
+      await first.inject({
+        method: "POST",
+        url: "/v1/notifications/send",
+        payload: { title: "Saved notification", body: "SQLite should retain this" }
+      });
+      await first.close();
+      servers.pop();
 
-    const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
-    servers.push(second);
-    const events = (await second.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
-    const notifications = (await second.inject({ method: "GET", url: "/v1/notifications" })).json<{ notifications: StoredNotification[] }>().notifications;
+      const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+      servers.push(second);
+      const events = (await second.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
+      const notifications = (await second.inject({ method: "GET", url: "/v1/notifications" })).json<{ notifications: StoredNotification[] }>().notifications;
 
-    expect(events.map((event) => event.correlation?.run_id)).toContain("persisted-run");
-    expect(notifications.map((notification) => notification.message.title)).toContain("Saved notification");
+      expect(events.map((event) => event.correlation?.run_id)).toContain("persisted-run");
+      expect(notifications.map((notification) => notification.message.title)).toContain("Saved notification");
+    } finally {
+      if (previousTopic === undefined) {
+        delete process.env.NTFY_TOPIC_URL;
+      } else {
+        process.env.NTFY_TOPIC_URL = previousTopic;
+      }
+    }
   });
 
   it("migrates an existing local JSON MVP store into SQLite", async () => {
