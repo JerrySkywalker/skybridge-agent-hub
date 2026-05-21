@@ -87,9 +87,17 @@ function Invoke-SelfObservationWithTempServer {
   }
 }
 
+function Invoke-ProjectCheck {
+  if (Get-Command just -ErrorAction SilentlyContinue) {
+    just check
+  } else {
+    corepack pnpm check
+  }
+}
+
 $HadFailure = $false
 
-Invoke-NightlyStep "just check" { just check }
+Invoke-NightlyStep "project check" { Invoke-ProjectCheck }
 Invoke-NightlyStep "docker compose dev config" { docker compose -f deploy/docker-compose.dev.yml config | Out-Null }
 Invoke-NightlyStep "docker compose test config" { docker compose -f deploy/docker-compose.test.yml config | Out-Null }
 Invoke-NightlyStep "docker compose prod config" { docker compose -f deploy/docker-compose.prod.yml config | Out-Null }

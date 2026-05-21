@@ -24,11 +24,46 @@ function Get-SpoolDirectory {
   return (Join-Path (Get-RepositoryRoot) ".agent\spool\codex-hook")
 }
 
+function Get-SharedRedactionRules {
+  $fallback = @{
+    replacement = "[REDACTED]"
+    maxStringLength = 2000
+    secretKeyPatterns = @("token", "password", "passwd", "authorization", "cookie", "secret", "api[_-]?key", "private[_-]?key")
+    secretValuePatterns = @("Bearer\s+[A-Za-z0-9._-]+", "sk-[A-Za-z0-9_-]{12,}", "-----BEGIN [A-Z ]*PRIVATE KEY-----", "-----BEGIN OPENSSH PRIVATE KEY-----")
+    omitKeyPatterns = @("prompt", "patch", "stdout", "stderr", "command_output", "raw_output", "tool_result")
+    source = "fallback"
+  }
+
+  try {
+    $rulesPath = Join-Path (Get-RepositoryRoot) "packages\event-schema\src\redaction-rules.json"
+    if (-not (Test-Path $rulesPath)) { return $fallback }
+    $rules = Get-Content -Raw -Path $rulesPath | ConvertFrom-Json -AsHashtable
+    $rules["source"] = "packages/event-schema/src/redaction-rules.json"
+    return $rules
+  } catch {
+    return $fallback
+  }
+}
+
+$SharedRedactionRules = Get-SharedRedactionRules
+
+function Test-SharedRedactionPattern {
+  param([AllowNull()][string]$Value, [AllowNull()]$Patterns)
+  if ([string]::IsNullOrWhiteSpace($Value) -or $null -eq $Patterns) { return $false }
+  foreach ($pattern in @($Patterns)) {
+    if ($Value -match "(?i)$pattern") { return $true }
+  }
+  return $false
+}
+
 function Redact-String {
   param([AllowNull()][string]$Value, [int]$MaxLength = 160)
   if ($null -eq $Value) { return $null }
-  $text = $Value -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+', 'Bearer [REDACTED]'
-  $text = $text -replace '(?i)\b([A-Za-z0-9_.-]*(token|password|passwd|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*[:=]\s*([^\s;&|]+)', '$1=[REDACTED]'
+  $text = $Value
+  foreach ($pattern in @($SharedRedactionRules.secretValuePatterns)) {
+    $text = [regex]::Replace($text, $pattern, [string]$SharedRedactionRules.replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+  }
+  $text = $text -replace '(?i)\b([A-Za-z0-9_.-]*(token|password|passwd|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*[:=]\s*([^\s;&|]+)', "`$1=$($SharedRedactionRules.replacement)"
   if ($text.Length -gt $MaxLength) { return "$($text.Substring(0, $MaxLength))...[truncated $($text.Length - $MaxLength) chars]" }
   return $text
 }
@@ -46,9 +81,9 @@ function ConvertTo-SafeValue {
     if ($Depth -ge 4) { return @{ bounded = $true; type = "object"; keys = @($Value.Keys | Select-Object -First 24) } }
     $result = @{}
     foreach ($key in @($Value.Keys | Select-Object -First 24)) {
-      if ([string]$key -match '(?i)authorization|api[_-]?key|token|password|passwd|secret|cookie|credential') {
-        $result[$key] = "[REDACTED]"
-      } elseif ([string]$key -match '(?i)command|stdout|stderr|output|content|patch|prompt') {
+      if (Test-SharedRedactionPattern -Value ([string]$key) -Patterns $SharedRedactionRules.secretKeyPatterns) {
+        $result[$key] = $SharedRedactionRules.replacement
+      } elseif ((Test-SharedRedactionPattern -Value ([string]$key) -Patterns $SharedRedactionRules.omitKeyPatterns) -or [string]$key -match '(?i)command|output|content') {
         $item = $Value[$key]
         $result[$key] = @{ bounded = $true; type = if ($null -eq $item) { "null" } else { $item.GetType().Name }; length = if ($item -is [string]) { $item.Length } else { $null } }
       } else {
@@ -163,6 +198,10 @@ function New-SkyBridgeEvents {
       tool_input_summary = Get-ToolInputSummary $InputObject["tool_input"]
       message_summary = if ($InputObject.ContainsKey("prompt")) { Get-OutputSummary $InputObject["prompt"] } else { Get-OutputSummary $InputObject["message"] }
       redaction = "commands, prompts, stdout and stderr are redacted and bounded by default"
+      redaction_policy = @{
+        source = $SharedRedactionRules.source
+        max_string_length = $SharedRedactionRules.maxStringLength
+      }
     }
   }
   $events = @($event)
