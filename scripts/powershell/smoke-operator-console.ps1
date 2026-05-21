@@ -1,7 +1,7 @@
 param(
   [string]$ApiBase = "http://127.0.0.1:8787",
   [switch]$StartServer,
-  [int]$Port = 8799,
+  [int]$Port = 0,
   [switch]$UseTempDatabase,
   [switch]$SkipWebBuildArtifactsCheck
 )
@@ -31,6 +31,9 @@ $dbFile = $null
 try {
   if ($UseTempDatabase) {
     $StartServer = $true
+    if ($Port -le 0) {
+      $Port = Get-Random -Minimum 18000 -Maximum 28000
+    }
     $ApiBase = "http://127.0.0.1:$Port"
     $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-console-smoke-" + [Guid]::NewGuid().ToString("n"))
     New-Item -ItemType Directory -Path $tempDir | Out-Null
@@ -38,6 +41,9 @@ try {
   }
 
   if ($StartServer) {
+    if ($Port -le 0) {
+      $Port = Get-Random -Minimum 18000 -Maximum 28000
+    }
     if (-not $dbFile) {
       $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-console-smoke-" + [Guid]::NewGuid().ToString("n"))
       New-Item -ItemType Directory -Path $tempDir | Out-Null
@@ -91,6 +97,10 @@ try {
   } | Format-List
 } finally {
   if ($serverProcess) {
-    Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+    try {
+      $serverProcess.Kill($true)
+    } catch {
+      Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+    }
   }
 }

@@ -137,6 +137,10 @@ try {
   } | Format-List
 } finally {
   if ($serverProcess) {
-    Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+    try {
+      $serverProcess.Kill($true)
+    } catch {
+      Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+    }
   }
 }
