@@ -22,6 +22,19 @@ body {
   margin-bottom: 20px;
 }
 
+.topbar__meta {
+  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.topbar a {
+  color: #2365a8;
+  font-weight: 650;
+  text-decoration: none;
+}
+
 .topbar code {
   background: #e8eef6;
   border: 1px solid #d4deeb;
@@ -53,9 +66,24 @@ h2 {
   font-size: 18px;
 }
 
-.grid {
+.grid,
+.dashboard-grid {
   display: grid;
   gap: 16px;
+}
+
+.dashboard-grid {
+  align-items: start;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+}
+
+.dashboard-grid__main,
+.dashboard-grid__side {
+  display: grid;
+  gap: 16px;
+}
+
+.grid {
   grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
   margin-bottom: 16px;
 }
@@ -69,12 +97,39 @@ h2 {
 }
 
 .skybridge-card,
-.skybridge-panel {
+.skybridge-panel,
+.skybridge-filterbar {
   background: #ffffff;
   border: 1px solid #dbe4ef;
   border-radius: 8px;
   box-shadow: 0 10px 24px rgba(28, 43, 68, 0.07);
   padding: 18px;
+}
+
+.skybridge-filterbar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+  padding: 12px;
+}
+
+.skybridge-filterbar label {
+  color: #52627a;
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+}
+
+.skybridge-filterbar input,
+.skybridge-filterbar select {
+  background: #f8fbff;
+  border: 1px solid #d4deeb;
+  border-radius: 6px;
+  color: #172033;
+  font: inherit;
+  min-width: 0;
+  padding: 8px 9px;
 }
 
 .skybridge-card__header {
@@ -135,6 +190,27 @@ h2 {
   margin: 14px 0 0;
 }
 
+.skybridge-state-note {
+  color: #52627a;
+  margin: 0 0 12px;
+}
+
+.skybridge-empty {
+  background: #f8fbff;
+  border: 1px dashed #cbd7e6;
+  border-radius: 8px;
+  color: #52627a;
+  padding: 14px;
+}
+
+.skybridge-empty strong {
+  color: #172033;
+}
+
+.skybridge-empty p {
+  margin: 6px 0 0;
+}
+
 .skybridge-pipeline {
   background: #edf2f8;
   border-radius: 6px;
@@ -187,6 +263,8 @@ h2 {
 }
 
 .skybridge-timeline span {
+  display: grid;
+  gap: 3px;
   font-weight: 650;
 }
 
@@ -199,15 +277,67 @@ h2 {
   margin-top: 12px;
 }
 
+.skybridge-run-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.skybridge-run-list button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #edf2f8;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.skybridge-run-list button:hover,
+.skybridge-run-list button.is-selected {
+  background: #f8fbff;
+  border-color: #a9c8ee;
+}
+
+.skybridge-run-list span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.skybridge-run-list small {
+  color: #52627a;
+}
+
+.embed-page {
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 12px;
+}
+
 @media (max-width: 760px) {
   .topbar,
+  .topbar__meta,
   .skybridge-timeline li {
     align-items: stretch;
     flex-direction: column;
   }
 
   .grid,
+  .dashboard-grid,
+  .skybridge-filterbar,
   .skybridge-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .skybridge-run-list button {
     grid-template-columns: 1fr;
   }
 

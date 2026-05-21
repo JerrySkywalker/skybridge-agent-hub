@@ -22,4 +22,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm check
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($script in Get-ChildItem scripts/powershell -Filter *.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) {
+              $failed = $true
+              Write-Error "$($script.Name) failed PowerShell parse validation."
+              $errors | Format-List
+            }
+          }
+          if ($failed) { exit 1 }
+      - run: pnpm smoke:operator-console
       - run: docker compose -f deploy/docker-compose.test.yml config

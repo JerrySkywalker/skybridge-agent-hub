@@ -55,6 +55,28 @@ Or start services with Docker:
 docker compose -f deploy/docker-compose.dev.yml up --build
 ```
 
+## Operator Console workflow
+
+Use the Operator Console while developing telemetry, adapters, notifications or dashboard widgets:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+corepack pnpm --filter @skybridge-agent-hub/web dev
+```
+
+Open the Vite URL and use the console sections for health, runs, timeline, Codex integration, notifications and run detail. The compact iframe-style route is available at `/#/embed/compact`.
+
+Focused checks:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server test
+corepack pnpm --filter @skybridge-agent-hub/client test
+corepack pnpm --filter @skybridge-agent-hub/react-widgets test
+corepack pnpm --filter @skybridge-agent-hub/web-components test
+corepack pnpm --filter @skybridge-agent-hub/web build
+corepack pnpm smoke:operator-console
+```
+
 Check compose without starting services:
 
 ```powershell
@@ -83,6 +105,24 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.p
 ```
 
 The script posts `skybridge.agent_event.v1` events from the `self-observation-smoke` adapter, verifies `/v1/runs/:runId`, verifies `/v1/events?run_id=...` and reports notification placeholder state. Use `-IncludeFailure` to simulate a redacted failed run for dashboard and notification checks.
+
+## Operator Console demo data
+
+With a local server running, seed realistic redacted dashboard data:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+For an isolated demo database, let the script start a temporary SQLite-backed server:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1 `
+  -UseTempDatabase
+```
+
+The fixture includes Codex hook, Codex exec, yolo-runner, failed tool, approval request, notification skipped/sent and offline spool/replay events. Payloads are intentionally fake and redacted.
 
 ## Codex hook integration smoke
 

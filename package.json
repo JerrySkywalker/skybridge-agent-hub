@@ -12,6 +12,7 @@
     "test": "corepack pnpm -r test",
     "build": "corepack pnpm -r build",
     "format": "prettier --write .",
+    "smoke:operator-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-operator-console.ps1 -UseTempDatabase",
     "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build"
   },
   "devDependencies": {

@@ -174,6 +174,117 @@ describe("server api", () => {
     expect(events[0]?.type).toBe("tool.started");
   });
 
+  it("supports console event filters and clean invalid query responses", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { session_id: "session-filtered", run_id: "run-filtered" },
+        payload: {}
+      })
+    });
+
+    const filtered = await server.inject({
+      method: "GET",
+      url: "/v1/events?platform=codex&adapter=codex-hook&session_id=session-filtered&severity=warning&limit=1&offset=0"
+    });
+    expect(filtered.statusCode).toBe(200);
+    expect(filtered.json<{ events: StoredEvent[] }>().events).toHaveLength(1);
+
+    const invalidLimit = await server.inject({ method: "GET", url: "/v1/events?limit=not-a-number" });
+    expect(invalidLimit.statusCode).toBe(400);
+    expect(invalidLimit.json<{ error: string; issues: Array<{ field: string }> }>()).toMatchObject({
+      error: "invalid_query",
+      issues: [{ field: "limit" }]
+    });
+
+    const invalidTime = await server.inject({ method: "GET", url: "/v1/events?from=2026-05-21" });
+    expect(invalidTime.statusCode).toBe(400);
+    expect(invalidTime.json<{ error: string; issues: Array<{ field: string }> }>().issues[0]?.field).toBe("from");
+  });
+
+  it("filters run summaries for dashboard list views", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "run.started",
+        source: { platform: "codex", adapter: "codex-exec-json" },
+        correlation: { run_id: "console-run" },
+        payload: { branch: "ai/console", goal: "Operator console", lifecycle: "running" }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:01:00.000Z",
+        type: "run.completed",
+        source: { platform: "codex", adapter: "codex-exec-json" },
+        correlation: { run_id: "console-run" },
+        payload: { lifecycle: "completed" }
+      })
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/v1/runs?platform=codex&adapter=codex-exec-json&status=completed&branch=ai/console&goal=console"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ runs: Array<{ run_id: string }> }>().runs.map((run) => run.run_id)).toEqual(["console-run"]);
+
+    const invalid = await server.inject({ method: "GET", url: "/v1/runs?status=stuck" });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+  it("returns v1 health, dashboard summary and filtered notifications", async () => {
+    const previousTopic = process.env.NTFY_TOPIC_URL;
+    delete process.env.NTFY_TOPIC_URL;
+    try {
+      const server = await testServer();
+      const health = await server.inject({ method: "GET", url: "/v1/health" });
+      expect(health.statusCode).toBe(200);
+      expect(health.json<{ service: string }>().service).toBe("skybridge-server");
+
+      await server.inject({
+        method: "POST",
+        url: "/v1/events",
+        payload: createEvent({
+          type: "run.failed",
+          severity: "error",
+          source: { platform: "skybridge", adapter: "yolo-runner" },
+          correlation: { run_id: "attention-run" },
+          payload: {}
+        })
+      });
+      await waitForNotifications(server);
+
+      const notifications = await server.inject({ method: "GET", url: "/v1/notifications?status=skipped&provider=placeholder" });
+      expect(notifications.statusCode).toBe(200);
+      expect(notifications.json<{ notifications: StoredNotification[] }>().notifications[0]).toMatchObject({
+        provider: "placeholder",
+        status: "skipped"
+      });
+
+      const summary = await server.inject({ method: "GET", url: "/v1/summary" });
+      expect(summary.json<{ totals: { failed_runs: number; attention_items: number }; sources: Array<{ adapter: string }> }>()).toMatchObject({
+        totals: { failed_runs: 1, attention_items: 2 },
+        sources: [{ adapter: "yolo-runner" }]
+      });
+    } finally {
+      if (previousTopic === undefined) delete process.env.NTFY_TOPIC_URL;
+      else process.env.NTFY_TOPIC_URL = previousTopic;
+    }
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");

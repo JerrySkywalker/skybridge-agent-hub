@@ -2,6 +2,11 @@
 
 ## 2026-05-21
 
+- Mega Goal 003 Stages 1-12: productized the Operator Console across server APIs, demo data, typed client helpers, React widgets, web app layout, SSE-backed timeline behavior, compact Web Component embed, smoke validation, CI wiring and docs.
+- Commits created: `docs(ui): design operator console`, `feat(server): add console query APIs`, `test(data): add demo event seeding`, `feat(client): add typed dashboard API helpers`, `feat(widgets): add operator console widgets`, `feat(web): build operator console overview`, `feat(embed): improve compact status component`, `test(smoke): add operator console smoke script`, `ci: harden dashboard validation`.
+- Checks run so far: server test/typecheck, client test/typecheck, react-widgets test/typecheck, web build, web-components test/typecheck/build, Operator Console smoke with temporary SQLite, Docker dev/test compose config.
+- Operator Console smoke result: temporary local server returned 12 demo events, 3 runs, 1 failed run, 3 notifications, 5 attention items and existing web build artifacts.
+- Known gaps: no browser screenshot artifact was captured in this session; validation used build, static render tests and HTTP smoke scripts. Remote-control UI remains intentionally out of scope.
 - Mega Goal 002 Stage 1: audited the Codex local integration path across hook and exec adapters, PowerShell hook scripts, server ingestion/query behavior, client query helpers, the self-observation panel and Codex docs. Added `docs/codex/CODEX_LOCAL_INTEGRATION.md` to define the production local path, supported Codex event families, hook mappings, spool/replay expectations and redaction defaults.
 - Stage 1 check: documentation-only design change; no code check required before this commit.
 - Mega Goal 002 Stages 2-3: added representative Codex hook stdin JSON fixtures for session startup/resume, prompt submit, Bash pre/post success/failure, apply_patch, permission request, stop and malformed/minimal payloads. Hardened Codex hook normalization for `tool.failed`, `file.edited`, `diff.updated`, bounded nested payloads, command/output summaries and secret-like redaction.
