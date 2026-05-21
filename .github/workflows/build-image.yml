@@ -1,33 +1,76 @@
-name: Build Images
+name: Docker Images
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "deploy/dockerfiles/**"
+      - "deploy/docker-compose*.yml"
+      - "apps/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   push:
-    branches: [ main ]
+    branches: [main]
     tags:
-      - "v*.*.*"
+      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build:
+  docker-build:
+    name: Docker build (${{ matrix.app }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         app: [server, web]
     steps:
-      - uses: actions/checkout@v4
-      - name: Login to GHCR
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/skybridge-agent-hub-${{ matrix.app }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=ref,event=tag
+      - name: Login to GHCR for trusted pushes
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push
+      - name: Build image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/dockerfiles/${{ matrix.app }}.Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/skybridge-agent-hub-${{ matrix.app }}:${{ github.sha }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+      - name: Write build summary
+        run: |
+          mkdir -p .agent/ci
+          {
+            echo "app=${{ matrix.app }}"
+            echo "pushed=${{ github.event_name != 'pull_request' }}"
+            echo "digest=${{ steps.build.outputs.digest }}"
+          } > .agent/ci/docker-${{ matrix.app }}-summary.txt
+      - name: Upload docker build summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-${{ matrix.app }}-summary
+          path: .agent/ci/docker-${{ matrix.app }}-summary.txt
+          if-no-files-found: ignore
+          retention-days: 7

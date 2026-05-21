@@ -1,19 +1,50 @@
 services:
   server:
-    image: ghcr.io/jerry1999-main/skybridge-agent-hub-server:${SKYBRIDGE_VERSION:-latest}
+    image: ${SKYBRIDGE_IMAGE_REGISTRY:-ghcr.io/jerry1999-main}/skybridge-agent-hub-server:${SKYBRIDGE_IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file:
-      - .env
+      - path: ${SKYBRIDGE_ENV_FILE:-.env}
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8787
+      SKYBRIDGE_DB_FILE: /app/data/skybridge.sqlite
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
       - skybridge-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - skybridge
 
   web:
-    image: ghcr.io/jerry1999-main/skybridge-agent-hub-web:${SKYBRIDGE_VERSION:-latest}
+    image: ${SKYBRIDGE_IMAGE_REGISTRY:-ghcr.io/jerry1999-main}/skybridge-agent-hub-web:${SKYBRIDGE_IMAGE_TAG:-latest}
     restart: unless-stopped
+    environment:
+      VITE_SKYBRIDGE_API_BASE: ${SKYBRIDGE_PUBLIC_API_BASE:-http://127.0.0.1:8787}
     ports:
       - "127.0.0.1:3000:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - skybridge
 
 volumes:
   skybridge-data:
+
+networks:
+  skybridge:
+    driver: bridge

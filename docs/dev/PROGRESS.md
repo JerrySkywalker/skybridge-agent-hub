@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-22
+
+- Mega Goal 004 Stages 1-15: completed the release, CI/CD, container, staging dry-run and operations foundation without deploying or touching production secrets.
+- Commits created: `docs(ops): design CI/CD and release plan`, `ci: harden public PR checks`, `ci: harden AI branch validation`, `build(docker): harden production images`, `ci: publish images to GHCR`, `deploy: harden production compose template`, `deploy: add staging dry-run workflow`, `deploy: harden backup and rollback scripts`, `deploy: add notification hooks`, `ci: add release tag workflow`, `deploy: add staging dry-run workflow`, `test(ops): add release dry-run smoke`, `ci: publish smoke artifacts safely`, `security: document CI/CD threat model`.
+- Final checks passed: `corepack pnpm check`, `just check`, Docker dev/test/prod compose config, PowerShell parse validation, release dry-run smoke, Operator Console smoke with temporary SQLite, Codex hook integration smoke with temporary server/spool, server Docker image build and web Docker image build.
+- Staging dry-run result: missing `.env` was reported without printing secrets, compose rendered successfully and no containers were started or changed.
+- Known gaps: release workflows are syntax-reviewed and locally smoke-validated but not executed on GitHub in this session; real staging or production deployment remains intentionally manual and outside this goal.
+
 ## 2026-05-21
 
 - Mega Goal 003 Stages 1-12: productized the Operator Console across server APIs, demo data, typed client helpers, React widgets, web app layout, SSE-backed timeline behavior, compact Web Component embed, smoke validation, CI wiring and docs.

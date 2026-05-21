@@ -30,6 +30,7 @@ SkyBridge provides a shared foundation for:
 - Codex TUI Master Goal workflow for long-horizon autonomous development.
 - PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
+- Reproducible Docker builds, GHCR publishing, release-tag validation, staging dry-run and backup/rollback operator scripts.
 
 ## Current MVP Status
 
@@ -260,7 +261,17 @@ Run Docker checks:
 ```powershell
 docker compose -f deploy/docker-compose.dev.yml config
 docker compose -f deploy/docker-compose.test.yml config
+docker compose -f deploy/docker-compose.prod.yml config
+corepack pnpm smoke:release-dry-run
 ```
+
+## Release And Deployment Scope
+
+SkyBridge has public CI for pull requests, AI branches, Docker image builds, GHCR publishing and tag validation. Public PRs run only on GitHub-hosted runners and do not receive production secrets or privileged deployment access.
+
+Release images publish to GHCR on `main` and `v*` tags. Staging automation is dry-run only: it validates image tags, env file presence and rendered compose config without starting containers or touching real servers. Real deployment remains a separate operator action.
+
+See [docs/operations/CI_CD_RELEASE_PLAN.md](docs/operations/CI_CD_RELEASE_PLAN.md), [docs/operations/RELEASE.md](docs/operations/RELEASE.md), [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) and [docs/operations/BACKUP_ROLLBACK.md](docs/operations/BACKUP_ROLLBACK.md).
 
 ## Autonomous Development Workflows
 
@@ -330,6 +341,7 @@ SkyBridge is built for high-autonomy development, not silent production access.
 - Codex hooks and adapters must redact sensitive payloads by default.
 - Production deployment, server root configuration and secret changes are outside the default autonomous workflow.
 - PR and AI-branch CI use GitHub-hosted runners and should not require production secrets.
+- Public PR automation must not run privileged self-hosted deployment jobs.
 
 See [SECURITY.md](SECURITY.md), [AGENTS.md](AGENTS.md) and [docs/codex/GOAL_MODE.md](docs/codex/GOAL_MODE.md) for the full operating rules.
 
