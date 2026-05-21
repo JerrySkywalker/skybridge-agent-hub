@@ -73,7 +73,15 @@ try {
     }
 
     $serverCommand = "`$env:SKYBRIDGE_DB_FILE = '$DbFile'; `$env:PORT = '8787'; corepack pnpm --filter @skybridge-agent-hub/server dev"
-    $serverProcess = Start-Process -FilePath "pwsh" -ArgumentList @("-NoProfile", "-Command", $serverCommand) -PassThru -WindowStyle Hidden
+    $startProcessParams = @{
+      FilePath = "pwsh"
+      ArgumentList = @("-NoProfile", "-Command", $serverCommand)
+      PassThru = $true
+    }
+    if ($IsWindows) {
+      $startProcessParams.WindowStyle = "Hidden"
+    }
+    $serverProcess = Start-Process @startProcessParams
     Start-Sleep -Seconds 4
   }
 

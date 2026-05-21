@@ -59,7 +59,16 @@ if (-not (Test-ServerHealth -Base $ApiBase)) {
   $hostName = if ([string]::IsNullOrWhiteSpace($uri.Host)) { "127.0.0.1" } else { $uri.Host }
   $dbFile = Join-Path $SpoolDirectory "smoke-skybridge.sqlite"
   $command = "`$env:PORT='$port'; `$env:HOST='$hostName'; `$env:SKYBRIDGE_DB_FILE='$dbFile'; corepack pnpm --filter @skybridge-agent-hub/server dev"
-  $serverProcess = Start-Process -FilePath "pwsh" -ArgumentList @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $command) -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -PassThru
+  $startProcessParams = @{
+    FilePath = "pwsh"
+    ArgumentList = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $command)
+    WorkingDirectory = (Get-Location).Path
+    PassThru = $true
+  }
+  if ($IsWindows) {
+    $startProcessParams.WindowStyle = "Hidden"
+  }
+  $serverProcess = Start-Process @startProcessParams
   if (-not (Wait-ServerHealth -Base $ApiBase -Seconds $ServerStartupSeconds)) { throw "Started server did not become healthy at $ApiBase" }
 }
 
