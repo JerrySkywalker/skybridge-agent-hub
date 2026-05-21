@@ -5,7 +5,13 @@ export interface NotificationMessage {
   url?: string;
 }
 
-export async function send(message: NotificationMessage): Promise<void> {
+export interface NotificationProviderResult {
+  provider: "gotify";
+  status: "sent" | "skipped" | "failed";
+  error?: string;
+}
+
+export async function send(message: NotificationMessage): Promise<NotificationProviderResult> {
   void message;
-  throw new Error("Provider gotify is a placeholder.");
+  return { provider: "gotify", status: "skipped", error: "GOTIFY_URL is not configured." };
 }

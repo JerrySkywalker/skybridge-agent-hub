@@ -5,7 +5,13 @@ export interface NotificationMessage {
   url?: string;
 }
 
-export async function send(message: NotificationMessage): Promise<void> {
+export interface NotificationProviderResult {
+  provider: "bark";
+  status: "sent" | "skipped" | "failed";
+  error?: string;
+}
+
+export async function send(message: NotificationMessage): Promise<NotificationProviderResult> {
   void message;
-  throw new Error("Provider bark is a placeholder.");
+  return { provider: "bark", status: "skipped", error: "BARK_URL is not configured." };
 }

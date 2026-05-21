@@ -8,10 +8,17 @@ export type StoredEvent = SkyBridgeEvent & { id: string; receivedAt: string };
 
 export interface StoredNotification {
   id: string;
-  provider: "ntfy" | "placeholder";
-  status: "sent" | "skipped" | "failed";
+  category?: string;
+  severity?: string;
+  source_event_id?: string;
+  target?: string;
+  provider: "ntfy" | "apprise" | "gotify" | "bark" | "wecom" | "fcm" | "xiaomi-push" | "placeholder";
+  dedupe_key?: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  retry_count?: number;
   message: NotificationMessage;
   createdAt: string;
+  updatedAt?: string;
   error?: string;
 }
 

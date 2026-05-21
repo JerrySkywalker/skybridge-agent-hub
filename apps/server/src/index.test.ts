@@ -271,7 +271,9 @@ describe("server api", () => {
       expect(notifications.statusCode).toBe(200);
       expect(notifications.json<{ notifications: StoredNotification[] }>().notifications[0]).toMatchObject({
         provider: "placeholder",
-        status: "skipped"
+        status: "skipped",
+        category: "run",
+        severity: "error"
       });
 
       const summary = await server.inject({ method: "GET", url: "/v1/summary" });
@@ -283,6 +285,25 @@ describe("server api", () => {
       if (previousTopic === undefined) delete process.env.NTFY_TOPIC_URL;
       else process.env.NTFY_TOPIC_URL = previousTopic;
     }
+  });
+
+  it("exposes notification provider matrix and routing rules without secrets", async () => {
+    const server = await testServer();
+    const providers = await server.inject({ method: "GET", url: "/v1/notifications/providers" });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json<{ providers: Array<{ provider: string; status: string; credential_values_exposed: boolean }> }>().providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "ntfy", status: "skipped", credential_values_exposed: false }),
+        expect.objectContaining({ provider: "gotify", status: "skipped", credential_values_exposed: false })
+      ])
+    );
+
+    const rules = await server.inject({ method: "GET", url: "/v1/notifications/rules" });
+    expect(rules.statusCode).toBe(200);
+    expect(rules.json<{ rules: Array<{ event_type_patterns: string[]; dedupe: boolean }> }>().rules[0]).toMatchObject({
+      event_type_patterns: expect.arrayContaining(["run.failed", "approval.requested"]),
+      dedupe: true
+    });
   });
 
   it("exposes source capability metadata", async () => {

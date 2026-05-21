@@ -18,10 +18,17 @@ export interface SkyBridgeHealth {
 
 export interface StoredNotification {
   id: string;
-  provider: "ntfy" | "placeholder";
-  status: "sent" | "skipped" | "failed";
+  category?: string;
+  severity?: string;
+  source_event_id?: string;
+  target?: string;
+  provider: "ntfy" | "apprise" | "gotify" | "bark" | "wecom" | "fcm" | "xiaomi-push" | "placeholder";
+  dedupe_key?: string;
+  status: "pending" | "sent" | "skipped" | "failed";
+  retry_count?: number;
   message: NotificationRequest;
   createdAt: string;
+  updatedAt?: string;
   error?: string;
 }
 
@@ -33,6 +40,10 @@ export interface SummaryResponse {
     active_runs: number;
     failed_runs: number;
     notifications: number;
+    notification_failed?: number;
+    notification_skipped?: number;
+    nodes?: number;
+    node_stale?: number;
     attention_items: number;
   };
   sources: Array<{
@@ -108,6 +119,11 @@ export class SkyBridgeClient {
   async listNodes(): Promise<NodeSummary[]> {
     const json = await this.getJson<{ nodes: NodeSummary[] }>("/v1/nodes");
     return json.nodes;
+  }
+
+  async listNotificationProviders(): Promise<Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>> {
+    const json = await this.getJson<{ providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }> }>("/v1/notifications/providers");
+    return json.providers;
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {

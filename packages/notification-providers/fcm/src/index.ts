@@ -5,7 +5,13 @@ export interface NotificationMessage {
   url?: string;
 }
 
-export async function send(message: NotificationMessage): Promise<void> {
+export interface NotificationProviderResult {
+  provider: "fcm";
+  status: "sent" | "skipped" | "failed";
+  error?: string;
+}
+
+export async function send(message: NotificationMessage): Promise<NotificationProviderResult> {
   void message;
-  throw new Error("Provider fcm is a placeholder.");
+  return { provider: "fcm", status: "skipped", error: "FCM_SERVER_KEY is not configured." };
 }

@@ -108,13 +108,27 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
   };
 
-  const recordNotification = async (message: NotificationMessage, provider: "ntfy" | "placeholder", status: StoredNotification["status"], error?: string) => {
+  const recordNotification = async (
+    message: NotificationMessage,
+    provider: StoredNotification["provider"],
+    status: StoredNotification["status"],
+    error?: string,
+    event?: StoredEvent
+  ) => {
+    const now = new Date().toISOString();
     await store.addNotification({
       id: nanoid(),
+      category: event ? categoryForEvent(event) : "manual",
+      severity: event?.severity,
+      source_event_id: event?.id,
+      target: provider,
       provider,
+      dedupe_key: event ? `${event.type}:${event.correlation?.run_id ?? event.correlation?.session_id ?? event.id}:${provider}` : undefined,
       status,
       message,
-      createdAt: new Date().toISOString(),
+      retry_count: 0,
+      createdAt: now,
+      updatedAt: now,
       error
     });
   };
@@ -123,15 +137,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     if (!isNotificationTrigger(event)) return;
     const message = notificationForEvent(event);
     if (!process.env.NTFY_TOPIC_URL) {
-      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.");
+      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.", event);
       return;
     }
-    try {
-      await sendNtfy(message);
-      await recordNotification(message, "ntfy", "sent");
-    } catch (error) {
-      await recordNotification(message, "ntfy", "failed", error instanceof Error ? error.message : String(error));
-    }
+    const result = await sendNtfy(message);
+    await recordNotification(message, result.provider, result.status, result.error, event);
   };
 
   const healthResponse = () => ({
@@ -199,6 +209,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     return { notifications: filterNotifications(store.listNotifications(1000), filters).slice(0, limit) };
   });
 
+  app.get("/v1/notifications/providers", async () => ({ providers: notificationProviders() }));
+  app.get("/v1/notifications/rules", async () => ({ rules: notificationRules() }));
+
   app.get("/v1/nodes", async () => ({ nodes: summarizeNodes(store.listEvents()) }));
 
   app.get("/v1/summary", async () => {
@@ -213,6 +226,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
         active_runs: runs.filter((run) => run.status === "running").length,
         failed_runs: runs.filter((run) => run.status === "failed").length,
         notifications: notifications.length,
+        notification_failed: notifications.filter((notification) => notification.status === "failed").length,
+        notification_skipped: notifications.filter((notification) => notification.status === "skipped").length,
+        nodes: summarizeNodes(events).length,
+        node_stale: summarizeNodes(events).filter((node) => node.status === "stale").length,
         attention_items: runs.filter((run) => run.status === "failed").length
           + events.filter((event) => event.type === "approval.requested").length
           + notifications.filter((notification) => notification.status === "failed" || notification.status === "skipped").length
@@ -226,13 +243,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     if (!message?.title || !message?.body) {
       return reply.code(400).send({ ok: false, error: "title and body are required" });
     }
-    if (!process.env.NTFY_TOPIC_URL) {
-      await recordNotification(message, "placeholder", "skipped", "NTFY_TOPIC_URL is not configured.");
-      return reply.code(202).send({ ok: true, provider: "placeholder", skipped: true });
-    }
-    await sendNtfy(message);
-    await recordNotification(message, "ntfy", "sent");
-    return reply.code(202).send({ ok: true, provider: "ntfy" });
+    const result = await sendNtfy(message);
+    const provider = result.status === "skipped" ? "placeholder" : result.provider;
+    await recordNotification(message, provider, result.status, result.error);
+    return reply.code(202).send({ ok: true, provider, status: result.status, skipped: result.status === "skipped" });
   });
 
   app.get("/v1/stream", async (_request, reply) => {
@@ -388,11 +402,11 @@ function parseRunListQuery(query: RunListQuery): ParsedQuery<ParsedRunListQuery>
 function parseNotificationListQuery(query: NotificationListQuery): ParsedQuery<ParsedNotificationListQuery> {
   const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
   if (!limit.ok) return limit;
-  if (query.status && !["sent", "skipped", "failed"].includes(query.status)) {
-    return invalidQuery("status", "Expected one of sent, skipped or failed.");
+  if (query.status && !["pending", "sent", "skipped", "failed"].includes(query.status)) {
+    return invalidQuery("status", "Expected one of pending, sent, skipped or failed.");
   }
-  if (query.provider && !["ntfy", "placeholder"].includes(query.provider)) {
-    return invalidQuery("provider", "Expected ntfy or placeholder.");
+  if (query.provider && !["ntfy", "apprise", "gotify", "bark", "wecom", "fcm", "xiaomi-push", "placeholder"].includes(query.provider)) {
+    return invalidQuery("provider", "Expected a supported notification provider.");
   }
   if (query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
   return { ok: true, query: { ...query, limit: limit.value } };
@@ -496,6 +510,48 @@ function summarizeSources(events: StoredEvent[]) {
     if (event.time > existing.latest_event_at) existing.latest_event_at = event.time;
   }
   return [...sources.values()].sort((a, b) => b.latest_event_at.localeCompare(a.latest_event_at));
+}
+
+function notificationProviders() {
+  return [
+    providerStatus("ntfy", Boolean(process.env.NTFY_TOPIC_URL), "NTFY_TOPIC_URL"),
+    providerStatus("apprise", Boolean(process.env.APPRISE_URL), "APPRISE_URL"),
+    providerStatus("gotify", Boolean(process.env.GOTIFY_URL), "GOTIFY_URL"),
+    providerStatus("bark", Boolean(process.env.BARK_URL), "BARK_URL"),
+    providerStatus("wecom", Boolean(process.env.WECOM_WEBHOOK_URL), "WECOM_WEBHOOK_URL"),
+    providerStatus("fcm", Boolean(process.env.FCM_SERVER_KEY), "FCM_SERVER_KEY"),
+    providerStatus("xiaomi-push", Boolean(process.env.XIAOMI_PUSH_SECRET), "XIAOMI_PUSH_SECRET")
+  ];
+}
+
+function providerStatus(provider: string, configured: boolean, required_env: string) {
+  return {
+    provider,
+    configured,
+    status: configured ? "available" : "skipped",
+    required_env,
+    credential_values_exposed: false
+  };
+}
+
+function notificationRules() {
+  return [
+    {
+      id: "critical-failures",
+      event_type_patterns: ["run.failed", "approval.requested", "notification.requested"],
+      severity_threshold: "warning",
+      quiet_hours: "placeholder",
+      providers: ["ntfy"],
+      dedupe: true
+    }
+  ];
+}
+
+function categoryForEvent(event: StoredEvent): string {
+  if (event.type.startsWith("approval.")) return "approval";
+  if (event.type.startsWith("notification.")) return "notification";
+  if (event.type.startsWith("run.")) return "run";
+  return "event";
 }
 
 function summarizeNodes(events: StoredEvent[]) {

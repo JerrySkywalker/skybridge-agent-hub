@@ -5,15 +5,21 @@ export interface NotificationMessage {
   url?: string;
 }
 
+export interface NotificationProviderResult {
+  provider: "ntfy";
+  status: "sent" | "skipped" | "failed";
+  error?: string;
+}
+
 export interface NtfyConfig {
   topicUrl: string;
   token?: string;
 }
 
-export async function send(message: NotificationMessage, config?: NtfyConfig): Promise<void> {
+export async function send(message: NotificationMessage, config?: Partial<NtfyConfig>): Promise<NotificationProviderResult> {
   const topicUrl = config?.topicUrl ?? process.env.NTFY_TOPIC_URL;
   if (!topicUrl) {
-    throw new Error("NTFY_TOPIC_URL is not configured.");
+    return { provider: "ntfy", status: "skipped", error: "NTFY_TOPIC_URL is not configured." };
   }
 
   const headers: Record<string, string> = {
@@ -32,6 +38,8 @@ export async function send(message: NotificationMessage, config?: NtfyConfig): P
   });
 
   if (!response.ok) {
-    throw new Error(`ntfy request failed with HTTP ${response.status}`);
+    return { provider: "ntfy", status: "failed", error: `ntfy request failed with HTTP ${response.status}` };
   }
+
+  return { provider: "ntfy", status: "sent" };
 }
