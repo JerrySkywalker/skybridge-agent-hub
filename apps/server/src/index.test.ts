@@ -418,6 +418,48 @@ describe("server api", () => {
     });
   });
 
+  it("returns a safe derived audit trail without raw payloads", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "opencode", adapter: "opencode-plugin", agent_id: "opencode-local" },
+        correlation: { run_id: "audit-run" },
+        payload: { approval_id: "approval-audit-1", title: "Edit file", prompt: "should stay out of audit response" }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/approvals/approval-audit-1/resolve",
+      payload: { decision: "denied", actor: "operator", reason: "safe audit test" }
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "approval.denied",
+          actor: "operator",
+          source_adapter: "skybridge/approval-api",
+          safety_decision: "operator_denied",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "approval.requested",
+          source_adapter: "opencode/opencode-plugin",
+          safety_decision: "approval_required_remote_execution_disabled",
+          raw_payload_included: false
+        })
+      ])
+    );
+    expect(JSON.stringify(audit)).not.toContain("should stay out");
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");

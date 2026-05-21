@@ -86,6 +86,18 @@ export interface MetricsResponse {
   recent_failures: RunSummary[];
 }
 
+export interface AuditEntry {
+  audit_id: string;
+  time: string;
+  action: string;
+  actor: string;
+  source_adapter: string;
+  run_id?: string;
+  session_id?: string;
+  safety_decision: string;
+  raw_payload_included: false;
+}
+
 export interface StreamEventsOptions {
   onEvent: (event: SkyBridgeEvent) => void;
   onOpen?: () => void;
@@ -149,6 +161,11 @@ export class SkyBridgeClient {
 
   async getMetrics(): Promise<MetricsResponse> {
     return this.getJson<MetricsResponse>("/v1/metrics");
+  }
+
+  async listAuditEntries(): Promise<AuditEntry[]> {
+    const json = await this.getJson<{ audit: AuditEntry[] }>("/v1/audit");
+    return json.audit;
   }
 
   async listApprovals(): Promise<ApprovalSummary[]> {

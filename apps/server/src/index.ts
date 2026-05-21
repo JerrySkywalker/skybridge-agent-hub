@@ -240,6 +240,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   });
 
   app.get("/v1/metrics", async () => platformMetrics(store.listEvents(), store.listNotifications(1000)));
+  app.get("/v1/audit", async () => ({ audit: summarizeAudit(store.listEvents()).slice(0, 100) }));
 
   app.get("/v1/approvals", async () => ({ approvals: summarizeApprovals(store.listEvents()).filter((item) => item.status === "pending") }));
   app.get<{ Params: { approvalId: string } }>("/v1/approvals/:approvalId", async (request, reply) => {
@@ -639,6 +640,28 @@ function platformMetrics(events: StoredEvent[], notifications: StoredNotificatio
   };
 }
 
+function summarizeAudit(events: StoredEvent[]) {
+  return events
+    .filter((event) =>
+      event.type.startsWith("approval.")
+      || event.type.startsWith("node.")
+      || event.type.startsWith("notification.")
+      || event.type === "run.failed"
+    )
+    .map((event) => ({
+      audit_id: event.id,
+      time: event.time,
+      action: event.type,
+      actor: safeString(event.payload.actor) ?? safeString(event.payload.operator) ?? event.source.agent_id ?? "system",
+      source_adapter: `${event.source.platform}/${event.source.adapter}`,
+      run_id: event.correlation?.run_id,
+      session_id: event.correlation?.session_id,
+      safety_decision: safetyDecisionForEvent(event),
+      raw_payload_included: false
+    }))
+    .sort((a, b) => b.time.localeCompare(a.time));
+}
+
 function summarizeApprovals(events: StoredEvent[]) {
   const approvals = new Map<string, {
     approval_id: string;
@@ -668,6 +691,17 @@ function summarizeApprovals(events: StoredEvent[]) {
     approvals.set(approvalId, existing);
   }
   return [...approvals.values()].sort((a, b) => b.requested_at.localeCompare(a.requested_at));
+}
+
+function safetyDecisionForEvent(event: StoredEvent): string {
+  if (event.type === "approval.denied") return "operator_denied";
+  if (event.type === "approval.expired") return "approval_expired";
+  if (event.type === "approval.resolved") return "operator_accepted_local_record_only";
+  if (event.type === "approval.requested") return "approval_required_remote_execution_disabled";
+  if (event.type.startsWith("node.")) return "node_telemetry_only";
+  if (event.type.startsWith("notification.")) return "notification_metadata_only";
+  if (event.type === "run.failed") return "failure_observed";
+  return "recorded";
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {

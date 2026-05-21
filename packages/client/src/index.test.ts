@@ -64,6 +64,17 @@ describe("SkyBridgeClient", () => {
     await expect(client.getSummary()).resolves.toMatchObject({ sources: [] });
   });
 
+  it("returns derived audit entries", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ audit: [{ audit_id: "audit-1", action: "approval.denied", actor: "operator", source_adapter: "skybridge/approval-api", safety_decision: "operator_denied", raw_payload_included: false }] }));
+    const client = new SkyBridgeClient("http://localhost:8787");
+
+    await expect(client.listAuditEntries()).resolves.toEqual([
+      expect.objectContaining({ audit_id: "audit-1", raw_payload_included: false })
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8787/v1/audit");
+  });
+
   it("throws useful errors for non-2xx responses", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_query" }, 400));

@@ -234,6 +234,7 @@ Invoke-RestMethod "http://127.0.0.1:8787/v1/summary"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/sources"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/nodes"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/metrics"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/audit"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/approvals"
 ```
 
