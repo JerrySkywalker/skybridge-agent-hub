@@ -1,0 +1,39 @@
+* text=auto
+
+# Source, config, docs, and CI files are normalized to LF.
+.gitattributes text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.Dockerfile text eol=lf
+Dockerfile text eol=lf
+dockerfile text eol=lf
+justfile text eol=lf
+
+# PowerShell is intentionally kept CRLF-friendly for Windows-first scripts.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Binary assets should never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.sqlite binary
+*.sqlite3 binary
+*.db binary
