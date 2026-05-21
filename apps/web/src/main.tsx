@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { AgentPipelineBar, AgentStatusCard, AgentTimeline, SelfObservationPanel } from "@skybridge-agent-hub/react-widgets";
+import { AgentPipelineBar, AgentStatusCard, AgentTimeline, CodexIntegrationPanel, SelfObservationPanel } from "@skybridge-agent-hub/react-widgets";
 import "./style.css";
 
 function App() {
@@ -20,6 +20,7 @@ function App() {
         <AgentStatusCard apiBase={apiBase} />
         <AgentPipelineBar apiBase={apiBase} />
       </div>
+      <CodexIntegrationPanel apiBase={apiBase} />
       <SelfObservationPanel apiBase={apiBase} />
       <AgentTimeline apiBase={apiBase} />
     </main>

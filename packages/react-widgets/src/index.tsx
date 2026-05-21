@@ -141,6 +141,84 @@ export interface SelfObservationSummary {
   latest_lifecycle?: string;
 }
 
+export interface CodexIntegrationSummary {
+  status: "idle" | "active" | "attention";
+  recent_runs: RunSummary[];
+  latest_hook_event?: SkyBridgeEvent;
+  hook_event_count: number;
+  failed_tool_count: number;
+  active_tool_count: number;
+  spool_count?: number;
+}
+
+export function summarizeCodexIntegration(runs: RunSummary[], events: SkyBridgeEvent[]): CodexIntegrationSummary {
+  const codexRuns = runs.filter((run) => run.source_platform === "codex");
+  const hookEvents = events.filter((event) => event.source.platform === "codex" && event.source.adapter === "codex-hook");
+  const latestHookEvent = hookEvents.at(-1);
+  const failedToolCount = codexRuns.reduce((sum, run) => sum + run.failed_tool_count, 0);
+  const activeToolCount = codexRuns.reduce((sum, run) => sum + run.active_tool_count, 0);
+  const spoolCount = latestSpoolCount(hookEvents);
+
+  return {
+    status: failedToolCount > 0 ? "attention" : hookEvents.length > 0 || codexRuns.some((run) => run.status === "running") ? "active" : "idle",
+    recent_runs: codexRuns.slice(0, 5),
+    latest_hook_event: latestHookEvent,
+    hook_event_count: hookEvents.length,
+    failed_tool_count: failedToolCount,
+    active_tool_count: activeToolCount,
+    spool_count: spoolCount
+  };
+}
+
+export function CodexIntegrationPanel({ apiBase }: WidgetProps) {
+  const { events, runs, error } = useSkyBridge(apiBase);
+  const summary = summarizeCodexIntegration(runs, events);
+
+  return (
+    <section className="skybridge-panel skybridge-codex-integration">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Codex Local</p>
+          <h2>Hook Integration</h2>
+        </div>
+        <span className={`skybridge-state ${summary.status === "attention" ? "skybridge-state--bad" : ""}`}>
+          {summary.status}
+        </span>
+      </div>
+      <dl className="skybridge-metrics skybridge-metrics--compact">
+        <div>
+          <dt>Runs</dt>
+          <dd>{summary.recent_runs.length}</dd>
+        </div>
+        <div>
+          <dt>Hook events</dt>
+          <dd>{summary.hook_event_count}</dd>
+        </div>
+        <div>
+          <dt>Active tools</dt>
+          <dd>{summary.active_tool_count}</dd>
+        </div>
+        <div>
+          <dt>Failed tools</dt>
+          <dd>{summary.failed_tool_count}</dd>
+        </div>
+      </dl>
+      <p className="skybridge-runline">
+        Last hook: {summary.latest_hook_event?.type ?? "none"} · Spool: {summary.spool_count ?? "local only"}
+      </p>
+      <ol className="skybridge-timeline skybridge-timeline--compact">
+        {summary.recent_runs.map((run) => (
+          <li key={run.run_id}>
+            <span>{run.title ?? run.run_id}</span>
+            <small>{run.status} · tools {run.tool_call_count} · failed {run.failed_tool_count}</small>
+          </li>
+        ))}
+      </ol>
+      {error ? <p className="skybridge-error">{error}</p> : null}
+    </section>
+  );
+}
+
 export function summarizeSelfObservation(runs: RunSummary[], events: SkyBridgeEvent[]): SelfObservationSummary {
   const selfEvents = events.filter((event) => event.source.platform === "codex" || event.source.platform === "skybridge");
   const latestLifecycle = [...selfEvents].reverse().map((event) => safePayloadString(event.payload.lifecycle)).find(Boolean);
@@ -202,4 +280,12 @@ export function SelfObservationPanel({ apiBase }: WidgetProps) {
 
 function safePayloadString(input: unknown): string | undefined {
   return typeof input === "string" && input.length > 0 && input.length <= 120 ? input : undefined;
+}
+
+function latestSpoolCount(events: SkyBridgeEvent[]): number | undefined {
+  for (const event of [...events].reverse()) {
+    const value = event.payload.spool_count ?? event.payload.queued_spool_count;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return undefined;
 }

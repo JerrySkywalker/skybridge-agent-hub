@@ -64,6 +64,10 @@ h2 {
   margin-bottom: 16px;
 }
 
+.skybridge-codex-integration {
+  margin-bottom: 16px;
+}
+
 .skybridge-card,
 .skybridge-panel {
   background: #ffffff;
@@ -189,6 +193,10 @@ h2 {
 .skybridge-timeline small {
   color: #52627a;
   text-align: right;
+}
+
+.skybridge-timeline--compact {
+  margin-top: 12px;
 }
 
 @media (max-width: 760px) {
