@@ -48,6 +48,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -57,3 +58,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+      - name: Write build summary
+        run: |
+          mkdir -p .agent/ci
+          {
+            echo "app=${{ matrix.app }}"
+            echo "pushed=${{ github.event_name != 'pull_request' }}"
+            echo "digest=${{ steps.build.outputs.digest }}"
+          } > .agent/ci/docker-${{ matrix.app }}-summary.txt
+      - name: Upload docker build summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-${{ matrix.app }}-summary
+          path: .agent/ci/docker-${{ matrix.app }}-summary.txt
+          if-no-files-found: ignore
+          retention-days: 7
