@@ -1,14 +1,28 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AgentPipelineBar, AgentStatusCard, AgentTimeline, CodexIntegrationPanel, SelfObservationPanel, summarizeCodexIntegration, summarizeSelfObservation } from "./index.js";
+import {
+  ActiveRunsPanel,
+  AgentPipelineBar,
+  AgentStatusCard,
+  AgentTimeline,
+  CodexIntegrationPanel,
+  EmptyState,
+  EventTimeline,
+  NotificationList,
+  RunDetailPanel,
+  SelfObservationPanel,
+  SourceFilterBar,
+  summarizeCodexIntegration,
+  summarizeSelfObservation
+} from "./index.js";
 
 describe("react widgets", () => {
   it("renders the status card shell without a browser runtime", () => {
     const html = renderToStaticMarkup(<AgentStatusCard apiBase="http://127.0.0.1:8787" />);
 
-    expect(html).toContain("SkyBridge Agent Hub");
-    expect(html).toContain("Agent Status");
+    expect(html).toContain("System Health");
+    expect(html).toContain("SkyBridge");
     expect(html).toContain("idle");
   });
 
@@ -130,7 +144,23 @@ describe("react widgets", () => {
   it("renders the Codex integration panel shell", () => {
     const html = renderToStaticMarkup(<CodexIntegrationPanel apiBase="http://127.0.0.1:8787" />);
 
-    expect(html).toContain("Hook Integration");
+    expect(html).toContain("Integration Status");
     expect(html).toContain("Codex Local");
+  });
+
+  it("renders operator console panels in static markup", () => {
+    expect(renderToStaticMarkup(<ActiveRunsPanel apiBase="http://127.0.0.1:8787" />)).toContain("Active And Recent");
+    expect(renderToStaticMarkup(<EventTimeline apiBase="http://127.0.0.1:8787" />)).toContain("Timeline");
+    expect(renderToStaticMarkup(<RunDetailPanel apiBase="http://127.0.0.1:8787" />)).toContain("Select a run");
+    expect(renderToStaticMarkup(<NotificationList apiBase="http://127.0.0.1:8787" />)).toContain("Notifications");
+    expect(renderToStaticMarkup(<EmptyState title="Empty" detail="No data" />)).toContain("No data");
+  });
+
+  it("renders source filters as controlled inputs", () => {
+    const html = renderToStaticMarkup(<SourceFilterBar filters={{ platform: "codex", status: "failed" }} onChange={() => undefined} />);
+
+    expect(html).toContain("Platform");
+    expect(html).toContain("Run status");
+    expect(html).toContain("Codex");
   });
 });
