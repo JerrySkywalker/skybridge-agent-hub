@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "codex-session-1",
+  "run_id": "codex-run-1",
+  "tool_call_id": "tool-bash-1",
+  "tool_name": "Bash",
+  "exit_code": 0,
+  "stdout": "tests passed\nsecret should not appear as password=hunter2",
+  "stderr": ""
+}

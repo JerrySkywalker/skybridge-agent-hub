@@ -1,0 +1,12 @@
+{
+  "hook_event_name": "PreToolUse",
+  "session_id": "codex-session-1",
+  "run_id": "codex-run-1",
+  "tool_call_id": "tool-bash-1",
+  "tool_name": "Bash",
+  "tool_input": {
+    "name": "Bash",
+    "command": "curl -H \"Authorization: Bearer secret-token\" https://example.test && pnpm test",
+    "cwd": "V:\\src\\skybridge-agent-hub"
+  }
+}
