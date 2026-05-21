@@ -2,6 +2,8 @@
 
 ## 2026-05-21
 
+- Mega Goal 001 Stage 1: mapped the current self-observation loop in `docs/codex/SELF_OBSERVATION_LOOP.md`, including Codex hooks, Codex exec JSON, runner telemetry, manual smoke events, server ingestion/query/SSE, notification placeholders and dashboard consumption.
+- Stage 1 check: documentation-only change; no code check required before this commit.
 - Read the repository instructions, architecture docs and staged goals.
 - Implemented a typed `skybridge.agent_event.v1` schema with validation and tests.
 - Built the server MVP with health, event ingestion, event listing, run summaries, SSE stream, notification endpoints and local JSON persistence.
