@@ -1,8 +1,10 @@
 param(
-  [string]$OutputPath = ".\docs\demo\skybridge-demo-events.json"
+  [string]$OutputPath = ".\docs\demo\skybridge-demo-events.json",
+  [string]$BaseTime = "2026-05-22T00:00:00.000Z"
 )
 
 $ErrorActionPreference = "Stop"
+$script:EventIndex = 0
 
 function New-Event {
   param(
@@ -14,9 +16,12 @@ function New-Event {
     [string]$Severity = "info"
   )
 
+  $time = ([datetimeoffset]::Parse($BaseTime).AddSeconds($script:EventIndex)).UtcDateTime.ToString("o")
+  $script:EventIndex += 1
+
   @{
     schema = "skybridge.agent_event.v1"
-    time = (Get-Date).ToUniversalTime().ToString("o")
+    time = $time
     type = $Type
     severity = $Severity
     source = @{ platform = $Platform; adapter = $Adapter }
