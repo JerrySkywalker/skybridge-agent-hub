@@ -1,4 +1,4 @@
-import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
+import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform, SourceCapability } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
   title: string;
@@ -87,6 +87,11 @@ export class SkyBridgeClient {
 
   async getSummary(): Promise<SummaryResponse> {
     return this.getJson<SummaryResponse>("/v1/summary");
+  }
+
+  async listSources(): Promise<SourceCapability[]> {
+    const json = await this.getJson<{ sources: SourceCapability[] }>("/v1/sources");
+    return json.sources;
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {

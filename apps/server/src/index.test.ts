@@ -285,6 +285,19 @@ describe("server api", () => {
     }
   });
 
+  it("exposes source capability metadata", async () => {
+    const server = await testServer();
+    const response = await server.inject({ method: "GET", url: "/v1/sources" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ sources: Array<{ platform: string; adapters: string[] }> }>().sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ platform: "codex", adapters: expect.arrayContaining(["codex-hook"]) }),
+        expect.objectContaining({ platform: "opencode", adapters: expect.arrayContaining(["opencode-plugin"]) }),
+        expect.objectContaining({ platform: "hermes", adapters: expect.arrayContaining(["hermes-api"]) })
+      ])
+    );
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");

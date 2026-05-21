@@ -19,13 +19,19 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "diff.updated",
   "approval.requested",
   "approval.resolved",
+  "approval.denied",
+  "approval.expired",
   "message.delta",
   "message.completed",
   "agent.idle",
   "agent.error",
   "agent.stale",
+  "node.connected",
+  "node.heartbeat",
+  "node.disconnected",
   "notification.requested",
   "notification.sent",
+  "notification.skipped",
   "notification.failed"
 ]);
 
@@ -104,6 +110,64 @@ export interface RunDetail {
   summary: RunSummary;
   events: SkyBridgeEvent[];
 }
+
+export interface SourceCapability {
+  platform: SkyBridgeSourcePlatform;
+  label: string;
+  adapters: string[];
+  event_families: string[];
+  supports_remote_control: boolean;
+  default_safe: boolean;
+  notes: string;
+}
+
+export const SOURCE_CAPABILITIES: SourceCapability[] = [
+  {
+    platform: "codex",
+    label: "Codex",
+    adapters: ["codex-hook", "codex-exec-json", "codex-appserver"],
+    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "Local hook and exec telemetry with command, prompt and output redaction by default."
+  },
+  {
+    platform: "opencode",
+    label: "OpenCode",
+    adapters: ["opencode-plugin"],
+    event_families: ["session", "run", "tool", "file", "approval", "todo", "message", "agent"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "Plugin event telemetry normalized from status, tool, file, permission and todo events."
+  },
+  {
+    platform: "hermes",
+    label: "Hermes Agent",
+    adapters: ["hermes-api"],
+    event_families: ["run", "tool", "message", "agent"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "API and stream event telemetry normalized from run status and event stream samples."
+  },
+  {
+    platform: "skybridge",
+    label: "SkyBridge",
+    adapters: ["yolo-runner", "self-observation-smoke", "demo-dataset", "sidecar"],
+    event_families: ["run", "tool", "notification", "agent", "node", "approval"],
+    supports_remote_control: false,
+    default_safe: true,
+    notes: "First-party runner, smoke, node and dogfooding telemetry."
+  },
+  {
+    platform: "custom",
+    label: "Custom Agent",
+    adapters: ["custom"],
+    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    supports_remote_control: false,
+    default_safe: false,
+    notes: "Bring-your-own adapter; events must be normalized and redacted before ingestion."
+  }
+];
 
 export function createEvent(input: SkyBridgeEventInput): SkyBridgeEvent {
   return SkyBridgeEventSchema.parse({

@@ -9,6 +9,7 @@ import {
   createEvent,
   isNotificationTrigger,
   parseEvent,
+  SOURCE_CAPABILITIES,
   type RunDetail,
   type RunSummary,
   type SkyBridgeSeverity,
@@ -144,6 +145,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 
   app.get("/health", async () => healthResponse());
   app.get("/v1/health", async () => healthResponse());
+  app.get("/v1/sources", async () => ({ sources: SOURCE_CAPABILITIES }));
 
   app.post("/v1/events", async (request, reply) => {
     const parsed = parseEventPayload(request.body);
@@ -457,13 +459,19 @@ function isEventType(input: string): input is SkyBridgeEventType {
     "diff.updated",
     "approval.requested",
     "approval.resolved",
+    "approval.denied",
+    "approval.expired",
     "message.delta",
     "message.completed",
     "agent.idle",
     "agent.error",
     "agent.stale",
+    "node.connected",
+    "node.heartbeat",
+    "node.disconnected",
     "notification.requested",
     "notification.sent",
+    "notification.skipped",
     "notification.failed"
   ].includes(input);
 }
