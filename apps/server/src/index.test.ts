@@ -510,6 +510,108 @@ describe("server api", () => {
     expect(JSON.stringify(audit)).not.toContain("raw output");
   });
 
+  it("records durable audit fixtures for node, notification and failed-run events", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(first);
+
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "node.heartbeat",
+        source: { platform: "skybridge", adapter: "sidecar", node_id: "audit-node-1" },
+        correlation: { session_id: "audit-node-session" },
+        payload: {
+          node_id: "audit-node-1",
+          host: "local-devbox",
+          private_key: "-----BEGIN OPENSSH PRIVATE KEY----- secret",
+          command_output: "node private output must not persist"
+        }
+      })
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:01:00.000Z",
+        type: "notification.requested",
+        severity: "warning",
+        source: { platform: "skybridge", adapter: "notification-router", agent_id: "router-agent" },
+        correlation: { run_id: "audit-router-run", session_id: "audit-router-session" },
+        payload: {
+          actor: "notification-router",
+          provider: "ntfy",
+          body: "notification body must not persist",
+          token: "secret-token"
+        }
+      })
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:02:00.000Z",
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "codex", adapter: "codex-exec-json", agent_id: "codex-local" },
+        correlation: { run_id: "audit-failed-run", session_id: "audit-failed-session" },
+        payload: {
+          actor: "codex-local",
+          stderr: "failure stderr must not persist",
+          prompt: "failure prompt must not persist"
+        }
+      })
+    });
+    await first.close();
+    servers.pop();
+
+    const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(second);
+
+    const response = await second.inject({ method: "GET", url: "/v1/audit?limit=10" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; run_id?: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "node.heartbeat",
+          actor: "system",
+          source_adapter: "skybridge/sidecar",
+          safety_decision: "node_telemetry_only",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "notification.requested",
+          actor: "notification-router",
+          run_id: "audit-router-run",
+          source_adapter: "skybridge/notification-router",
+          safety_decision: "notification_metadata_only",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "run.failed",
+          actor: "codex-local",
+          run_id: "audit-failed-run",
+          source_adapter: "codex/codex-exec-json",
+          safety_decision: "failure_observed",
+          raw_payload_included: false
+        })
+      ])
+    );
+
+    const auditText = JSON.stringify(audit);
+    expect(auditText).not.toContain("OPENSSH PRIVATE KEY");
+    expect(auditText).not.toContain("node private output");
+    expect(auditText).not.toContain("notification body");
+    expect(auditText).not.toContain("secret-token");
+    expect(auditText).not.toContain("failure stderr");
+    expect(auditText).not.toContain("failure prompt");
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const previousTopic = process.env.NTFY_TOPIC_URL;
     delete process.env.NTFY_TOPIC_URL;

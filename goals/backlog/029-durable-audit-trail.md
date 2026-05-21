@@ -12,7 +12,7 @@ Super Goal 005-014 added `GET /v1/audit` as a safe derived audit summary over al
 - Add retention/export documentation that keeps local operator privacy explicit.
 - Add focused server and migration tests.
 - Keep the existing derived `/v1/audit` behavior compatible until the durable table is fully wired.
-- Add fixture records for approval, node heartbeat, notification routing and failed-run summaries.
+- [x] Add fixture records for approval, node heartbeat, notification routing and failed-run summaries.
 
 ## Completion Criteria
 
