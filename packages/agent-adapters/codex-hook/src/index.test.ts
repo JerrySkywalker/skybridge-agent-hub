@@ -45,4 +45,12 @@ describe("codex hook adapter", () => {
     expect(event?.type).toBe("approval.requested");
     expect(event?.severity).toBe("warning");
   });
+
+  it("falls back to conversation or session identifiers for grouping", () => {
+    const [conversationEvent] = normalize({ hook_event_name: "UserPromptSubmit", conversation_id: "conversation-1" });
+    const [sessionEvent] = normalize({ hook_event_name: "UserPromptSubmit", session_id: "session-1" });
+
+    expect(conversationEvent?.correlation?.run_id).toBe("conversation-1");
+    expect(sessionEvent?.correlation?.run_id).toBe("session-1");
+  });
 });
