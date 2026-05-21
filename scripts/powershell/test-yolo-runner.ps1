@@ -57,6 +57,14 @@ function Invoke-RunnerDryRun {
   }
 }
 
+function Get-FreeTcpPort {
+  $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse("127.0.0.1"), 0)
+  $listener.Start()
+  $port = $listener.LocalEndpoint.Port
+  $listener.Stop()
+  return $port
+}
+
 function Assert-True {
   param(
     [bool]$Condition,
@@ -150,6 +158,83 @@ try {
   }
   Assert-ExitCode -Result $result -Expected 0 -Message "Telemetry dry-run should succeed even when the server is offline."
   Assert-True (Test-Path $telemetryGoal) "Telemetry dry-run should return the goal to goals/ready."
+
+  $queue = New-TestQueue
+  $telemetryGoal = Join-Path $queue.Ready "106-telemetry-redaction-goal.md"
+  "# Goal 106`n" | Set-Content -Path $telemetryGoal -Encoding utf8
+  $port = Get-FreeTcpPort
+  $apiBase = "http://127.0.0.1:$port"
+  $telemetryBodies = Join-Path $queue.Root "telemetry-bodies.jsonl"
+  $listenerJob = Start-Job -ScriptBlock {
+    param([int]$Port, [string]$BodyPath)
+
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse("127.0.0.1"), $Port)
+    $listener.Start()
+    $deadline = (Get-Date).AddSeconds(20)
+    try {
+      while ((Get-Date) -lt $deadline) {
+        $task = $listener.AcceptTcpClientAsync()
+        if (-not $task.Wait(500)) { continue }
+        $client = $task.Result
+        $stream = $client.GetStream()
+        $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8, $false, 1024, $true)
+        $headers = @()
+        while ($true) {
+          $line = $reader.ReadLine()
+          if ($null -eq $line -or $line -eq "") { break }
+          $headers += $line
+        }
+        $contentLength = 0
+        foreach ($header in $headers) {
+          if ($header -match "^\s*Content-Length:\s*(\d+)\s*$") {
+            $contentLength = [int]$Matches[1]
+          }
+        }
+        $buffer = New-Object char[] $contentLength
+        $read = 0
+        while ($read -lt $contentLength) {
+          $count = $reader.Read($buffer, $read, $contentLength - $read)
+          if ($count -le 0) { break }
+          $read += $count
+        }
+        $body = -join $buffer
+        if (-not [string]::IsNullOrWhiteSpace($body)) {
+          Add-Content -LiteralPath $BodyPath -Value $body
+        }
+        $responseBody = '{"ok":true}'
+        $response = "HTTP/1.1 200 OK`r`nContent-Type: application/json`r`nContent-Length: $($responseBody.Length)`r`nConnection: close`r`n`r`n$responseBody"
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($response)
+        $stream.Write($bytes, 0, $bytes.Length)
+        $client.Close()
+        if ((Get-Content -LiteralPath $BodyPath -ErrorAction SilentlyContinue).Count -ge 2) { break }
+      }
+    } finally {
+      $listener.Stop()
+    }
+  } -ArgumentList $port, $telemetryBodies
+
+  try {
+    Start-Sleep -Milliseconds 300
+    $result = Invoke-RunnerDryRun -Queue $queue -Config @{
+      mode = "ThesisYOLO token=abc123"
+      telemetry = @{
+        enabled = $true
+        apiBase = $apiBase
+        timeoutSeconds = 2
+      }
+    }
+    Assert-ExitCode -Result $result -Expected 0 -Message "Telemetry redaction dry-run should succeed."
+    Wait-Job -Job $listenerJob -Timeout 10 | Out-Null
+  } finally {
+    Stop-Job -Job $listenerJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $listenerJob -Force -ErrorAction SilentlyContinue
+  }
+
+  Assert-True (Test-Path $telemetryBodies) "Telemetry redaction test should capture runner events."
+  $capturedTelemetry = Get-Content -Raw -LiteralPath $telemetryBodies
+  Assert-True ($capturedTelemetry -notmatch "abc123") "Runner telemetry payload should not leak token-like text."
+  Assert-True ($capturedTelemetry -match "redaction_policy") "Runner telemetry payload should record the shared redaction policy."
+  Assert-True ($capturedTelemetry -match "packages/event-schema/src/redaction-rules.json") "Runner telemetry should use shared redaction rules."
 
   $queue = New-TestQueue
   $mismatchGoal = Join-Path $queue.Doing "104-mismatch-goal.md"

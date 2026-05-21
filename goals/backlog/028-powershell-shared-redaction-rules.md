@@ -9,7 +9,7 @@ Nightly CI/CD Guardian round 3 started this by adding `scripts/powershell/shared
 ## Tasks
 
 - [x] Load `packages/event-schema/src/redaction-rules.json` from the Codex hook PowerShell path.
-- [ ] Apply key/value omit and replacement rules consistently in runner paths.
+- [x] Apply key/value omit and replacement rules consistently in runner telemetry paths.
 - [x] Add fixture tests proving TypeScript and PowerShell redact the same secret samples.
 - Keep existing fail-open hook behavior.
 - [x] Add a fallback embedded rule set or clear warning if the JSON file is unavailable during local hook execution.
@@ -19,6 +19,7 @@ Nightly CI/CD Guardian round 3 started this by adding `scripts/powershell/shared
 
 - `test-codex-hook-event.ps1 -RequireSpool` passes with shared JSON rules.
 - TypeScript and PowerShell redaction fixture expectations match.
+- Runner dry-run telemetry records the shared redaction policy and redacts token-like payload text.
 - Docs identify the shared rules as canonical.
 - Existing hook redaction coverage does not regress for commands, prompts, patches, stdout or stderr.
 - Offline spool and replay behavior remains fail-open and redacted.

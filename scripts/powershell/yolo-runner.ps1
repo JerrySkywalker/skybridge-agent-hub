@@ -36,9 +36,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "shared-redaction.ps1")
+
 $script:RunnerTelemetry = @{
   Enabled = $false
 }
+$script:RunnerRedactionRules = Get-SkyBridgeSharedRedactionRules
 
 function ConvertTo-PlainObject {
   param([Parameter(Position=0, ValueFromPipeline=$true)]$Value)
@@ -147,6 +150,27 @@ function Initialize-RunnerTelemetry {
     AgentId = $agentId
     NodeId = $nodeId
   }
+  $script:RunnerRedactionRules = Get-SkyBridgeSharedRedactionRules
+}
+
+function ConvertTo-RunnerTelemetryPayload {
+  param([hashtable]$Payload = @{})
+
+  $safePayload = ConvertTo-SkyBridgeSafeValue -Value $Payload -Rules $script:RunnerRedactionRules
+  if ($safePayload -isnot [hashtable]) {
+    $safePayload = @{
+      value = $safePayload
+    }
+  }
+
+  if (-not $safePayload.ContainsKey("redaction_policy")) {
+    $safePayload["redaction_policy"] = @{
+      source = $script:RunnerRedactionRules.source
+      max_string_length = $script:RunnerRedactionRules.maxStringLength
+    }
+  }
+
+  return $safePayload
 }
 
 function New-RunnerEvent {
@@ -158,6 +182,9 @@ function New-RunnerEvent {
     [hashtable]$Payload = @{}
   )
 
+  $safePayload = ConvertTo-RunnerTelemetryPayload -Payload $Payload
+  $safeCorrelation = ConvertTo-SkyBridgeSafeValue -Value $Correlation -Rules $script:RunnerRedactionRules
+
   return @{
     schema = "skybridge.agent_event.v1"
     event_id = "evt_runner_$([Guid]::NewGuid().ToString("N"))"
@@ -167,12 +194,12 @@ function New-RunnerEvent {
     source = @{
       platform = "skybridge"
       adapter = "yolo-runner"
-      node_id = $script:RunnerTelemetry.NodeId
-      agent_id = $script:RunnerTelemetry.AgentId
-      cwd = (Get-Location).Path
+      node_id = Redact-SkyBridgeString -Value $script:RunnerTelemetry.NodeId -Rules $script:RunnerRedactionRules -MaxLength 160
+      agent_id = Redact-SkyBridgeString -Value $script:RunnerTelemetry.AgentId -Rules $script:RunnerRedactionRules -MaxLength 160
+      cwd = Redact-SkyBridgeString -Value (Get-Location).Path -Rules $script:RunnerRedactionRules -MaxLength 240
     }
-    correlation = $Correlation
-    payload = $Payload
+    correlation = $safeCorrelation
+    payload = $safePayload
   }
 }
 
