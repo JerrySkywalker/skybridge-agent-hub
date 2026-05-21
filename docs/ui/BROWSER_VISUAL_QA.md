@@ -11,10 +11,13 @@ Browser visual QA is deferred from v0.9 but now has an optional executable local
 
 ## Intended Coverage
 
-- Operator Console desktop viewport.
-- Operator Console mobile viewport.
-- Compact embed route at `/#/embed/compact`.
-- Approval queue, metrics summary, notification provider matrix and run detail panels.
+| Scenario | Route | Viewport | Required visible panels |
+| --- | --- | ---: | --- |
+| Operator Console desktop | `/` | 1440x1000 | Operator Console, Metrics Summary, Approval Queue, Notifications, Notification Matrix, Run Detail |
+| Operator Console mobile | `/` | 390x900 | Operator Console, Metrics Summary, Approval Queue, Notifications, Notification Matrix, Run Detail |
+| Compact embed | `/#/embed/compact` | 420x420 | SkyBridge Health |
+
+The dashboard scenarios also run primary-panel bounding-box checks across `.skybridge-panel`, `.skybridge-card` and `.skybridge-filterbar` elements to catch obvious overlap. This is a smoke check, not a replacement for human review of the generated screenshots.
 
 ## Safety Rules
 
@@ -39,3 +42,13 @@ The runner intentionally skips when Playwright is unavailable. When Playwright i
 - fails on blank pages, missing primary panels, browser console errors or obvious primary-panel overlap.
 
 By default, screenshots are written under `.agent/tmp/browser-visual-qa`, which is local runtime output and must not contain real agent logs or secrets. Use `-ArtifactDir <path>` to redirect artifacts for a CI upload step that is explicitly limited to fixture data.
+
+## Artifact Expectations
+
+When Playwright is installed, the local runner should produce these screenshot files:
+
+- `operator-console-desktop.png`
+- `operator-console-mobile.png`
+- `compact-embed.png`
+
+Before wiring CI artifact upload, add a small `manifest.json` beside those screenshots with the route, viewport, required text and fixture-only safety metadata. That manifest gives reviewers a stable way to verify that uploaded screenshots came from the expected local fixture matrix instead of a production endpoint.
