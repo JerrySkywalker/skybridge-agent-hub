@@ -39,6 +39,7 @@ The runner intentionally skips when Playwright is unavailable. When Playwright i
 - seeds generated demo events;
 - starts a local Vite preview pointed at that temporary API;
 - captures screenshots for the Operator Console desktop viewport, Operator Console mobile viewport and compact embed route;
+- writes a fixture-only `manifest.json` with the expected routes, viewport sizes, required text and local artifact safety metadata;
 - fails on blank pages, missing primary panels, browser console errors or obvious primary-panel overlap.
 
 By default, screenshots are written under `.agent/tmp/browser-visual-qa`, which is local runtime output and must not contain real agent logs or secrets. Use `-ArtifactDir <path>` to redirect artifacts for a CI upload step that is explicitly limited to fixture data.
@@ -50,5 +51,6 @@ When Playwright is installed, the local runner should produce these screenshot f
 - `operator-console-desktop.png`
 - `operator-console-mobile.png`
 - `compact-embed.png`
+- `manifest.json`
 
-Before wiring CI artifact upload, add a small `manifest.json` beside those screenshots with the route, viewport, required text and fixture-only safety metadata. That manifest gives reviewers a stable way to verify that uploaded screenshots came from the expected local fixture matrix instead of a production endpoint.
+The manifest records the route, viewport, required text, local web origin and fixture-only safety metadata. The browser runner also refuses non-loopback web bases, so future CI upload steps can verify that screenshots came from the expected local fixture matrix instead of a production endpoint.

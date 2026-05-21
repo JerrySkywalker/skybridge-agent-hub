@@ -1,8 +1,13 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const webBase = process.env.SKYBRIDGE_VISUAL_QA_WEB_BASE ?? "http://127.0.0.1:3000";
 const artifactDir = process.env.SKYBRIDGE_VISUAL_QA_ARTIFACT_DIR ?? ".agent/tmp/browser-visual-qa";
+const webBaseUrl = new URL(webBase);
+
+if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(webBaseUrl.hostname)) {
+  throw new Error(`[browser-visual-qa] refusing non-loopback web base: ${webBaseUrl.origin}`);
+}
 
 const { chromium } = await import("playwright");
 
@@ -20,6 +25,25 @@ const viewports = [
   { name: "operator-console-mobile", path: "/", width: 390, height: 900, requiredText: requiredConsoleText },
   { name: "compact-embed", path: "/#/embed/compact", width: 420, height: 420, requiredText: ["SkyBridge Health"] }
 ];
+
+const manifest = {
+  schema_version: 1,
+  generated_at: new Date().toISOString(),
+  fixture_only: true,
+  production_endpoint_used: false,
+  data_source: "temporary SQLite database seeded by scripts/powershell/seed-demo-events.ps1",
+  web_base_origin: webBaseUrl.origin,
+  screenshots: viewports.map((viewport) => ({
+    name: viewport.name,
+    file: `${viewport.name}.png`,
+    route: viewport.path,
+    viewport: {
+      width: viewport.width,
+      height: viewport.height
+    },
+    required_text: viewport.requiredText
+  }))
+};
 
 function fail(message) {
   throw new Error(`[browser-visual-qa] ${message}`);
@@ -121,4 +145,6 @@ if (failures.length > 0) {
   fail(failures.join("\n"));
 }
 
-console.log(`[browser-visual-qa] wrote ${viewports.length} screenshot(s) to ${artifactDir}`);
+await writeFile(path.join(artifactDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+console.log(`[browser-visual-qa] wrote ${viewports.length} screenshot(s) and manifest.json to ${artifactDir}`);
