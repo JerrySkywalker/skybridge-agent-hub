@@ -95,9 +95,9 @@ describe("server api", () => {
       url: "/v1/events",
       payload: createEvent({
         type: "run.started",
-        source: { platform: "skybridge", adapter: "yolo-runner", agent_id: "runner-agent", node_id: "node-1" },
+        source: { platform: "skybridge", adapter: "yolo-runner", agent_id: "runner-agent", node_id: "node-1", cwd: "V:\\src\\skybridge-agent-hub" },
         correlation: { session_id: "runner-session", run_id: "runner-001-demo" },
-        payload: { goalId: "001", goalFile: "001-demo.md", branch: "ai/001-demo", lifecycle: "goal.claimed" }
+        payload: { goalId: "001", goalFile: "001-demo.md", goal: "Demo goal", branch: "ai/001-demo", lifecycle: "goal.claimed" }
       })
     });
     await server.inject({
@@ -107,7 +107,7 @@ describe("server api", () => {
         type: "tool.completed",
         source: { platform: "skybridge", adapter: "yolo-runner", agent_id: "runner-agent", node_id: "node-1" },
         correlation: { session_id: "runner-session", run_id: "runner-001-demo", tool_call_id: "check-0" },
-        payload: { lifecycle: "check.finished", command: "corepack pnpm check", exitCode: 0 }
+        payload: { lifecycle: "check.finished", command: "corepack pnpm check", exitCode: 0, message: "check passed" }
       })
     });
     await server.inject({
@@ -125,14 +125,53 @@ describe("server api", () => {
     expect(filtered.json<{ events: StoredEvent[] }>().events.map((event) => event.source.adapter)).toEqual(["yolo-runner", "yolo-runner"]);
 
     const detail = await server.inject({ method: "GET", url: "/v1/runs/runner-001-demo" });
-    const body = detail.json<{ summary: { title?: string; branch?: string; tool_call_count: number }; events: StoredEvent[] }>();
+    const body = detail.json<{ summary: { title?: string; branch?: string; cwd?: string; goal?: string; tool_call_count: number; active_tool_count: number; latest_message_summary?: string }; events: StoredEvent[] }>();
     expect(detail.statusCode).toBe(200);
     expect(body.summary).toMatchObject({
       title: "001-demo.md",
       branch: "ai/001-demo",
-      tool_call_count: 1
+      cwd: "V:\\src\\skybridge-agent-hub",
+      goal: "Demo goal",
+      tool_call_count: 1,
+      active_tool_count: 0,
+      latest_message_summary: "check passed"
     });
     expect(body.events).toHaveLength(2);
+  });
+
+  it("filters events by source, adapter, type and time window", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "run.started",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { run_id: "codex-filtered" },
+        payload: {}
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T01:00:00.000Z",
+        type: "tool.started",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { run_id: "codex-filtered" },
+        payload: {}
+      })
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/v1/events?source_platform=codex&source_adapter=codex-hook&type=tool.started&from=2026-05-21T00:30:00.000Z&to=2026-05-21T01:30:00.000Z"
+    });
+
+    const events = response.json<{ events: StoredEvent[] }>().events;
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("tool.started");
   });
 
   it("persists events and notifications to SQLite across server restarts", async () => {

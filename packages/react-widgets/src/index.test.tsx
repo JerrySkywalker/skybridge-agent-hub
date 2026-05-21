@@ -32,6 +32,7 @@ describe("react widgets", () => {
           status: "failed",
           event_count: 3,
           tool_call_count: 1,
+          active_tool_count: 0,
           failed_tool_count: 1,
           notification_count: 1,
           first_seen_at: "2026-05-21T00:00:00.000Z",

@@ -85,6 +85,7 @@ export interface RunSummary {
   status: "running" | "completed" | "failed" | "unknown";
   event_count: number;
   tool_call_count: number;
+  active_tool_count: number;
   failed_tool_count: number;
   notification_count: number;
   first_seen_at: string;
@@ -93,7 +94,10 @@ export interface RunSummary {
   title?: string;
   lifecycle?: string;
   branch?: string;
+  cwd?: string;
+  goal?: string;
   goal_id?: string;
+  latest_message_summary?: string;
 }
 
 export interface RunDetail {

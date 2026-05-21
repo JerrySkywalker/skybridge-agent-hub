@@ -52,6 +52,7 @@ function summarizeRuns(events: StoredEvent[]): RunSummary[] {
       status,
       event_count: runEvents.length,
       tool_call_count: runEvents.filter((event) => event.type.startsWith("tool.")).length,
+      active_tool_count: activeToolCount(runEvents),
       failed_tool_count: runEvents.filter((event) => event.type === "tool.failed").length,
       notification_count: runEvents.filter((event) => event.type.startsWith("notification.")).length,
       first_seen_at: first.receivedAt,
@@ -60,7 +61,10 @@ function summarizeRuns(events: StoredEvent[]): RunSummary[] {
       title: firstSafeString(runEvents, "title") ?? firstSafeString(runEvents, "goalFile"),
       lifecycle: safeString(latestPayload.lifecycle),
       branch: firstSafeString(runEvents, "branch"),
-      goal_id: firstSafeString(runEvents, "goalId")
+      cwd: firstSourceCwd(runEvents),
+      goal: firstSafeString(runEvents, "goal") ?? firstSafeString(runEvents, "goalFile"),
+      goal_id: firstSafeString(runEvents, "goalId"),
+      latest_message_summary: latestMessageSummary(runEvents)
     };
   }).sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at));
 }
@@ -230,6 +234,8 @@ interface EventListQuery {
   source_platform?: string;
   source_adapter?: string;
   type?: SkyBridgeEventType;
+  from?: string;
+  to?: string;
   limit?: string | number;
 }
 
@@ -240,6 +246,8 @@ function filterEvents(events: StoredEvent[], query: EventListQuery): StoredEvent
     if (query.source_platform && event.source.platform !== query.source_platform) return false;
     if (query.source_adapter && event.source.adapter !== query.source_adapter) return false;
     if (query.type && event.type !== query.type) return false;
+    if (query.from && event.time < query.from) return false;
+    if (query.to && event.time > query.to) return false;
     return true;
   });
 }
@@ -262,6 +270,38 @@ function firstSafeString(events: StoredEvent[], key: string): string | undefined
   for (const event of events) {
     const value = safeString(event.payload[key]);
     if (value) return value;
+  }
+  return undefined;
+}
+
+function firstSourceCwd(events: StoredEvent[]): string | undefined {
+  for (const event of events) {
+    const value = safeString(event.source.cwd);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function activeToolCount(events: StoredEvent[]): number {
+  const active = new Set<string>();
+  for (const event of events) {
+    const id = event.correlation?.tool_call_id;
+    if (!id) continue;
+    if (event.type === "tool.started") active.add(id);
+    if (event.type === "tool.completed" || event.type === "tool.failed") active.delete(id);
+  }
+  return active.size;
+}
+
+function latestMessageSummary(events: StoredEvent[]): string | undefined {
+  for (const event of [...events].reverse()) {
+    const direct = safeString(event.payload.summary) ?? safeString(event.payload.message);
+    if (direct) return direct;
+    const messageSummary = event.payload.message_summary;
+    if (messageSummary && typeof messageSummary === "object") {
+      const preview = safeString((messageSummary as Record<string, unknown>).preview);
+      if (preview) return preview;
+    }
   }
   return undefined;
 }
