@@ -70,6 +70,32 @@ corepack pnpm --filter @skybridge-agent-hub/web dev
 
 The server listens on `http://127.0.0.1:8787` by default. Events and notification attempts are persisted to `.data/skybridge.sqlite` unless `SKYBRIDGE_DB_FILE` is set.
 
+### Codex Hook Integration
+
+Validate the local Codex hook path without changing user config:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\test-codex-hook-event.ps1 -RequireSpool
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-codex-hook-integration.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+Preview user-level Codex hook installation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\install-codex-hooks.ps1
+```
+
+The installer is dry-run by default and writes `~/.codex/hooks.json` only with `-Apply`, backing up an existing file first. Hook delivery is fail-open: if SkyBridge is offline, normalized redacted events queue under `.agent/spool/codex-hook` or `SKYBRIDGE_CODEX_SPOOL_DIR`.
+
+Replay queued hook events after the server returns:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\replay-codex-hook-spool.ps1
+```
+
+See [docs/codex/CODEX_LOCAL_INTEGRATION.md](docs/codex/CODEX_LOCAL_INTEGRATION.md) and [docs/codex/HOOKS.md](docs/codex/HOOKS.md).
+
 ## Architecture
 
 ```text

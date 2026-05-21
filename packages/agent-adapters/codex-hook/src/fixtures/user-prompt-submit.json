@@ -1,0 +1,7 @@
+{
+  "hook_event_name": "UserPromptSubmit",
+  "session_id": "codex-session-1",
+  "run_id": "codex-run-1",
+  "turn_id": "turn-1",
+  "prompt": "Please run tests with token=abc123"
+}

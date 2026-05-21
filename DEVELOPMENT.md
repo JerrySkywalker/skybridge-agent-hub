@@ -84,6 +84,29 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.p
 
 The script posts `skybridge.agent_event.v1` events from the `self-observation-smoke` adapter, verifies `/v1/runs/:runId`, verifies `/v1/events?run_id=...` and reports notification placeholder state. Use `-IncludeFailure` to simulate a redacted failed run for dashboard and notification checks.
 
+## Codex hook integration smoke
+
+Run the fixture-only hook test without a server. This should create redacted normalized audit and queue JSONL under a temporary spool directory:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\test-codex-hook-event.ps1 -RequireSpool
+```
+
+With the server running, validate online delivery plus offline spool replay:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-codex-hook-integration.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+If no server is running, use an alternate local port and let the smoke script start a temporary server:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-codex-hook-integration.ps1 `
+  -ApiBase http://127.0.0.1:8798 `
+  -StartServer
+```
+
 ## Goal-driven development
 
 Use:

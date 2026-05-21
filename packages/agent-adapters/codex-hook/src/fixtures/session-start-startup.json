@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "SessionStart",
+  "session_start_type": "startup",
+  "session_id": "codex-session-startup",
+  "cwd": "V:\\src\\skybridge-agent-hub"
+}

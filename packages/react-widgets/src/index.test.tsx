@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AgentPipelineBar, AgentStatusCard, AgentTimeline, SelfObservationPanel, summarizeSelfObservation } from "./index.js";
+import { AgentPipelineBar, AgentStatusCard, AgentTimeline, CodexIntegrationPanel, SelfObservationPanel, summarizeCodexIntegration, summarizeSelfObservation } from "./index.js";
 
 describe("react widgets", () => {
   it("renders the status card shell without a browser runtime", () => {
@@ -32,6 +32,7 @@ describe("react widgets", () => {
           status: "failed",
           event_count: 3,
           tool_call_count: 1,
+          active_tool_count: 0,
           failed_tool_count: 1,
           notification_count: 1,
           first_seen_at: "2026-05-21T00:00:00.000Z",
@@ -85,5 +86,51 @@ describe("react widgets", () => {
 
     expect(html).toContain("Self-Observation");
     expect(html).toContain("Local Loop");
+  });
+
+  it("summarizes Codex integration status", () => {
+    const summary = summarizeCodexIntegration(
+      [
+        {
+          run_id: "codex-run",
+          source_platform: "codex",
+          source_adapter: "codex-hook",
+          status: "running",
+          event_count: 2,
+          tool_call_count: 1,
+          active_tool_count: 1,
+          failed_tool_count: 0,
+          notification_count: 0,
+          first_seen_at: "2026-05-21T00:00:00.000Z",
+          last_seen_at: "2026-05-21T00:00:01.000Z",
+          last_event_type: "tool.started"
+        }
+      ],
+      [
+        {
+          schema: "skybridge.agent_event.v1",
+          time: "2026-05-21T00:00:01.000Z",
+          type: "tool.started",
+          severity: "info",
+          source: { platform: "codex", adapter: "codex-hook" },
+          correlation: { run_id: "codex-run" },
+          payload: { spool_count: 3 }
+        }
+      ]
+    );
+
+    expect(summary).toMatchObject({
+      status: "active",
+      hook_event_count: 1,
+      active_tool_count: 1,
+      spool_count: 3
+    });
+  });
+
+  it("renders the Codex integration panel shell", () => {
+    const html = renderToStaticMarkup(<CodexIntegrationPanel apiBase="http://127.0.0.1:8787" />);
+
+    expect(html).toContain("Hook Integration");
+    expect(html).toContain("Codex Local");
   });
 });

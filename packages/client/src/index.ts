@@ -63,6 +63,8 @@ export interface EventListQuery {
   source_platform?: string;
   source_adapter?: string;
   type?: SkyBridgeEventType;
+  from?: string;
+  to?: string;
   limit?: number;
 }
 

@@ -1,0 +1,7 @@
+{
+  "hook_event_name": "SessionStart",
+  "session_start_type": "resume",
+  "session_id": "codex-session-resume",
+  "conversation_id": "codex-conversation-resume",
+  "cwd": "V:\\src\\skybridge-agent-hub"
+}
