@@ -12,6 +12,8 @@ PR #9 adds node identity, heartbeat, node registry and remote-control boundary d
 - Define and validate a typed command envelope.
 - Route any operator action through approval events and audit records.
 - Keep destructive execution disabled unless a future goal explicitly authorizes it.
+- Add local integration tests for auth failure, reconnect and malformed envelopes.
+- Add docs that explain the disabled-by-default execution boundary.
 
 ## Completion Criteria
 
@@ -19,6 +21,8 @@ PR #9 adds node identity, heartbeat, node registry and remote-control boundary d
 - Invalid auth and malformed command envelopes are rejected.
 - No shell command execution is available by default.
 - Docs and smoke scripts cover the local WSS path.
+- Approval and audit records are generated for any simulated operator command.
+- The feature can be disabled completely with configuration.
 
 ## Safety Boundaries
 
@@ -26,3 +30,20 @@ PR #9 adds node identity, heartbeat, node registry and remote-control boundary d
 - No real secrets committed or printed.
 - No destructive remote commands.
 - No privileged public PR runners.
+- Do not add unaudited shell execution.
+- Do not weaken approval, authentication or redaction behavior to make tests pass.
+
+## Validation Commands
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server test
+corepack pnpm --filter @skybridge-agent-hub/sidecar test
+corepack pnpm --filter @skybridge-agent-hub/sidecar typecheck
+corepack pnpm smoke:multi-agent-platform
+```
+
+Add a dedicated WSS smoke command before marking this goal complete.
+
+## CI/CD Impact
+
+This should add local fixture-backed WSS tests and possibly a non-privileged smoke job. Public CI must use fake node tokens and GitHub-hosted runners only; real remote node connectivity belongs in a manually approved private environment.
