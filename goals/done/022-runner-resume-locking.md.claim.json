@@ -1,0 +1,13 @@
+{
+  "goalFile": "022-runner-resume-locking.md",
+  "pid": 5812,
+  "goalId": "022",
+  "maxRepairRounds": 3,
+  "host": "ZENBOOKDUO",
+  "runDir": ".\\.agent\\runs\\20260521-203234-022",
+  "claimedAt": "2026-05-21T12:32:34.4694027Z",
+  "schema": "skybridge.runner.claim.v1",
+  "branch": "ai/022-runner-resume-locking",
+  "mode": "ThesisYOLO",
+  "maxParallel": 1
+}

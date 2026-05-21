@@ -30,6 +30,8 @@ param(
 
   [int]$PollSeconds = 60,
 
+  [int]$LockStaleMinutes = 240,
+
   [switch]$DryRun
 )
 
@@ -121,6 +123,39 @@ function Write-JsonFile {
   $Value | ConvertTo-Json -Depth 20 | Set-Content -Path $Path -Encoding utf8
 }
 
+function Read-JsonFile {
+  param([Parameter(Mandatory=$true)][string]$Path)
+
+  if (-not (Test-Path $Path)) {
+    return $null
+  }
+
+  return ConvertTo-PlainObject (Get-Content $Path -Raw | ConvertFrom-Json)
+}
+
+function Get-UniquePath {
+  param([Parameter(Mandatory=$true)][string]$Path)
+
+  if (-not (Test-Path $Path)) {
+    return $Path
+  }
+
+  $directory = Split-Path $Path -Parent
+  $leaf = Split-Path $Path -Leaf
+  $extension = [IO.Path]::GetExtension($leaf)
+  $stem = [IO.Path]::GetFileNameWithoutExtension($leaf)
+  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $candidate = Join-Path $directory ("{0}.{1}{2}" -f $stem, $timestamp, $extension)
+  $index = 1
+
+  while (Test-Path $candidate) {
+    $candidate = Join-Path $directory ("{0}.{1}.{2}{3}" -f $stem, $timestamp, $index, $extension)
+    $index += 1
+  }
+
+  return $candidate
+}
+
 function Invoke-LoggedNativeCommand {
   param(
     [Parameter(Mandatory=$true)][string]$LogFile,
@@ -207,6 +242,125 @@ function Get-BranchForGoal {
   return "ai/$($GoalParts.Id)-$($GoalParts.Slug)"
 }
 
+function Get-GoalLockPath {
+  param([string]$ClaimPath)
+  return ($ClaimPath -replace "\.claim\.json$", ".lock.json")
+}
+
+function Test-ProcessAlive {
+  param([int]$ProcessId)
+
+  if ($ProcessId -le 0) {
+    return $false
+  }
+
+  return $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+}
+
+function Get-GoalLockState {
+  param(
+    [string]$LockPath,
+    [int]$StaleMinutes
+  )
+
+  $lock = Read-JsonFile $LockPath
+  if ($null -eq $lock) {
+    return @{
+      Status = "missing"
+      Lock = $null
+      Reason = "No lock file exists."
+    }
+  }
+
+  $now = (Get-Date).ToUniversalTime()
+  $updatedAt = $null
+  if ($lock.ContainsKey("updatedAt")) {
+    $updatedAt = [DateTime]::Parse($lock["updatedAt"]).ToUniversalTime()
+  } elseif ($lock.ContainsKey("createdAt")) {
+    $updatedAt = [DateTime]::Parse($lock["createdAt"]).ToUniversalTime()
+  }
+
+  $ageMinutes = 0
+  if ($null -ne $updatedAt) {
+    $ageMinutes = ($now - $updatedAt).TotalMinutes
+  }
+
+  $sameHost = $lock.ContainsKey("host") -and $lock["host"] -eq $env:COMPUTERNAME
+  $processAlive = $false
+  if ($sameHost -and $lock.ContainsKey("pid")) {
+    $processAlive = Test-ProcessAlive ([int]$lock["pid"])
+  }
+
+  if ($sameHost -and -not $processAlive) {
+    return @{
+      Status = "stale"
+      Lock = $lock
+      Reason = "Lock process $($lock["pid"]) is not running on $env:COMPUTERNAME."
+    }
+  }
+
+  if ($ageMinutes -gt $StaleMinutes) {
+    return @{
+      Status = "stale"
+      Lock = $lock
+      Reason = "Lock age $([Math]::Round($ageMinutes, 1)) minutes exceeds stale threshold $StaleMinutes minutes."
+    }
+  }
+
+  return @{
+    Status = "active"
+    Lock = $lock
+    Reason = "Lock is active."
+  }
+}
+
+function New-GoalLock {
+  param(
+    [string]$GoalFile,
+    [string]$Branch,
+    [string]$RunDir,
+    [string]$LockPath,
+    [string]$Reason
+  )
+
+  $now = (Get-Date).ToUniversalTime().ToString("o")
+  $lock = @{
+    schema = "skybridge.runner.lock.v1"
+    goalFile = $GoalFile
+    branch = $Branch
+    runDir = $RunDir
+    createdAt = $now
+    updatedAt = $now
+    host = $env:COMPUTERNAME
+    pid = $PID
+    reason = $Reason
+  }
+
+  Write-JsonFile -Value $lock -Path $LockPath
+  return $lock
+}
+
+function Archive-StaleLock {
+  param(
+    [string]$LockPath,
+    [string]$Reason
+  )
+
+  if (-not (Test-Path $LockPath)) {
+    return
+  }
+
+  $archivePath = Get-UniquePath (Join-Path (Split-Path $LockPath -Parent) ("{0}.{1}.stale.json" -f (Split-Path $LockPath -Leaf), (Get-Date -Format "yyyyMMdd-HHmmss")))
+  $lock = Read-JsonFile $LockPath
+  if ($null -ne $lock) {
+    $lock["staleDetectedAt"] = (Get-Date).ToUniversalTime().ToString("o")
+    $lock["staleReason"] = $Reason
+    Write-JsonFile -Value $lock -Path $archivePath
+    Remove-Item $LockPath -Force
+    Write-Host "[yolo-runner] archived stale lock $LockPath -> $archivePath"
+  }
+}
+
 function Switch-ToGoalBranch {
   param([string]$Branch)
 
@@ -281,18 +435,168 @@ function Complete-GoalState {
   param(
     [string]$DoingPath,
     [string]$ClaimPath,
-    [string]$TargetDir
+    [string]$TargetDir,
+    [string]$LockPath
   )
 
-  $targetGoal = Join-Path $TargetDir (Split-Path $DoingPath -Leaf)
+  $targetGoal = Get-UniquePath (Join-Path $TargetDir (Split-Path $DoingPath -Leaf))
   Move-Item $DoingPath $targetGoal -Force
 
   if (Test-Path $ClaimPath) {
-    $targetClaim = Join-Path $TargetDir (Split-Path $ClaimPath -Leaf)
-    Move-Item $ClaimPath $targetClaim -Force
+    $targetClaim = Get-UniquePath (Join-Path $TargetDir (Split-Path $ClaimPath -Leaf))
+    Move-Item $ClaimPath $targetClaim
+  }
+
+  if ($LockPath -and (Test-Path $LockPath)) {
+    $targetLock = Get-UniquePath (Join-Path $TargetDir (Split-Path $LockPath -Leaf))
+    Move-Item $LockPath $targetLock
   }
 
   return $targetGoal
+}
+
+function Assert-GoalClaimMatches {
+  param(
+    [hashtable]$GoalParts,
+    [string]$GoalFile,
+    [string]$ExpectedBranch,
+    [hashtable]$Claim
+  )
+
+  if ($null -eq $Claim) {
+    throw "Cannot resume $GoalFile because its claim file is missing."
+  }
+
+  if ($Claim.ContainsKey("goalFile") -and $Claim["goalFile"] -ne $GoalFile) {
+    throw "Claim goalFile '$($Claim["goalFile"])' does not match goal '$GoalFile'."
+  }
+
+  if ($Claim.ContainsKey("goalId") -and $Claim["goalId"] -ne $GoalParts.Id) {
+    throw "Claim goalId '$($Claim["goalId"])' does not match goal id '$($GoalParts.Id)'."
+  }
+
+  if ($Claim.ContainsKey("branch") -and $Claim["branch"] -ne $ExpectedBranch) {
+    throw "Claim branch '$($Claim["branch"])' does not match expected branch '$ExpectedBranch'."
+  }
+}
+
+function Select-GoalWorkItem {
+  param(
+    [string]$ReadyDir,
+    [string]$DoingDir,
+    [string]$RunRoot,
+    [int]$StaleMinutes,
+    [int]$EffectiveMaxParallel,
+    [int]$EffectiveMaxRepairRounds,
+    [string]$EffectiveMode,
+    [bool]$DryRunMode
+  )
+
+  $doingGoal = Get-ChildItem $DoingDir -Filter "*.md" | Sort-Object Name | Select-Object -First 1
+  if ($doingGoal) {
+    $goalParts = Get-GoalParts $doingGoal.Name
+    $branch = Get-BranchForGoal $goalParts
+    $doingPath = $doingGoal.FullName
+    $claimPath = Join-Path $DoingDir ("{0}.claim.json" -f $doingGoal.Name)
+    $lockPath = Get-GoalLockPath $claimPath
+    $claim = Read-JsonFile $claimPath
+    Assert-GoalClaimMatches -GoalParts $goalParts -GoalFile $doingGoal.Name -ExpectedBranch $branch -Claim $claim
+
+    $lockState = Get-GoalLockState -LockPath $lockPath -StaleMinutes $StaleMinutes
+    if ($lockState.Status -eq "active") {
+      Write-Host "[yolo-runner] goal $($doingGoal.Name) is locked by pid $($lockState.Lock["pid"]) on $($lockState.Lock["host"]); skipping."
+      return $null
+    }
+
+    if ($lockState.Status -eq "stale") {
+      Write-Host "[yolo-runner] resuming $($doingGoal.Name) after stale lock: $($lockState.Reason)"
+      if (-not $DryRunMode) {
+        Archive-StaleLock -LockPath $lockPath -Reason $lockState.Reason
+      }
+    } else {
+      Write-Host "[yolo-runner] resuming claimed goal $($doingGoal.Name) without an active lock."
+    }
+
+    $runDir = [string]$claim["runDir"]
+    if (-not $runDir) {
+      $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+      $runDir = Join-Path $RunRoot ("{0}-{1}-resume" -f $timestamp, $goalParts.Id)
+    }
+
+    New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+    if (-not $DryRunMode) {
+      Write-JsonFile -Value @{
+        schema = "skybridge.runner.resume.v1"
+        resumedAt = (Get-Date).ToUniversalTime().ToString("o")
+        goalFile = $doingGoal.Name
+        branch = $branch
+        runDir = $runDir
+        previousLock = $lockState.Lock
+        previousLockStatus = $lockState.Status
+        previousLockReason = $lockState.Reason
+        host = $env:COMPUTERNAME
+        pid = $PID
+      } -Path (Join-Path $runDir ("resume-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss")))
+      New-GoalLock -GoalFile $doingGoal.Name -Branch $branch -RunDir $runDir -LockPath $lockPath -Reason "resume" | Out-Null
+    }
+
+    return @{
+      GoalName = $doingGoal.Name
+      GoalParts = $goalParts
+      Branch = $branch
+      RunDir = $runDir
+      DoingPath = $doingPath
+      ClaimPath = $claimPath
+      LockPath = $lockPath
+      IsResume = $true
+    }
+  }
+
+  $goal = Get-ChildItem $ReadyDir -Filter "*.md" | Sort-Object Name | Select-Object -First 1
+  if (-not $goal) {
+    Write-Host "[yolo-runner] no ready goal."
+    return $null
+  }
+
+  $goalParts = Get-GoalParts $goal.Name
+  $branch = Get-BranchForGoal $goalParts
+  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $runDir = Join-Path $RunRoot ("{0}-{1}" -f $timestamp, $goalParts.Id)
+  $doingPath = Join-Path $DoingDir $goal.Name
+  $claimPath = Join-Path $DoingDir ("{0}.claim.json" -f $goal.Name)
+  $lockPath = Get-GoalLockPath $claimPath
+
+  New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+  Copy-Item $goal.FullName (Join-Path $runDir "goal.md")
+  Move-Item $goal.FullName $doingPath
+
+  $claim = @{
+    schema = "skybridge.runner.claim.v1"
+    goalId = $goalParts.Id
+    goalFile = $goal.Name
+    branch = $branch
+    mode = $EffectiveMode
+    maxParallel = $EffectiveMaxParallel
+    maxRepairRounds = $EffectiveMaxRepairRounds
+    runDir = $runDir
+    claimedAt = (Get-Date).ToUniversalTime().ToString("o")
+    host = $env:COMPUTERNAME
+    pid = $PID
+  }
+  Write-JsonFile -Value $claim -Path $claimPath
+  Write-JsonFile -Value $claim -Path (Join-Path $runDir "claim.json")
+  New-GoalLock -GoalFile $goal.Name -Branch $branch -RunDir $runDir -LockPath $lockPath -Reason "claim" | Out-Null
+
+  return @{
+    GoalName = $goal.Name
+    GoalParts = $goalParts
+    Branch = $branch
+    RunDir = $runDir
+    DoingPath = $doingPath
+    ClaimPath = $claimPath
+    LockPath = $lockPath
+    IsResume = $false
+  }
 }
 
 function Invoke-OneGoal {
@@ -300,6 +604,7 @@ function Invoke-OneGoal {
 
   $effectiveMaxRepairRounds = [int](Get-ConfigValue $Config "maxRepairRounds" $MaxRepairRounds)
   $effectiveMaxParallel = [int](Get-ConfigValue $Config "maxParallel" $MaxParallel)
+  $effectiveLockStaleMinutes = [int](Get-ConfigValue $Config "lockStaleMinutes" $LockStaleMinutes)
   $effectiveMode = [string](Get-ConfigValue $Config "mode" $Mode)
   $effectiveAutoPR = [bool](Get-ConfigValue $Config "autoPR" ([bool]$AutoPR))
   $effectivePush = [bool](Get-ConfigValue $Config "push" $true)
@@ -325,52 +630,49 @@ function Invoke-OneGoal {
 
   New-Item -ItemType Directory -Force -Path $effectiveGoalsReady,$effectiveGoalsDoing,$effectiveGoalsDone,$effectiveGoalsFailed,$effectiveRunRoot | Out-Null
 
-  $goal = Get-ChildItem $effectiveGoalsReady -Filter "*.md" | Sort-Object Name | Select-Object -First 1
-  if (-not $goal) {
-    Write-Host "[yolo-runner] no ready goal."
+  $workItem = Select-GoalWorkItem `
+    -ReadyDir $effectiveGoalsReady `
+    -DoingDir $effectiveGoalsDoing `
+    -RunRoot $effectiveRunRoot `
+    -StaleMinutes $effectiveLockStaleMinutes `
+    -EffectiveMaxParallel $effectiveMaxParallel `
+    -EffectiveMaxRepairRounds $effectiveMaxRepairRounds `
+    -EffectiveMode $effectiveMode `
+    -DryRunMode ([bool]$DryRun)
+
+  if (-not $workItem) {
     return $false
   }
 
-  $goalParts = Get-GoalParts $goal.Name
-  $branch = Get-BranchForGoal $goalParts
-  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-  $runDir = Join-Path $effectiveRunRoot ("{0}-{1}" -f $timestamp, $goalParts.Id)
-  $doingPath = Join-Path $effectiveGoalsDoing $goal.Name
-  $claimPath = Join-Path $effectiveGoalsDoing ("{0}.claim.json" -f $goal.Name)
-
-  New-Item -ItemType Directory -Force -Path $runDir | Out-Null
-  Copy-Item $goal.FullName (Join-Path $runDir "goal.md")
-  Move-Item $goal.FullName $doingPath
-
-  $claim = @{
-    schema = "skybridge.runner.claim.v1"
-    goalId = $goalParts.Id
-    goalFile = $goal.Name
-    branch = $branch
-    mode = $effectiveMode
-    maxParallel = $effectiveMaxParallel
-    maxRepairRounds = $effectiveMaxRepairRounds
-    runDir = $runDir
-    claimedAt = (Get-Date).ToUniversalTime().ToString("o")
-    host = $env:COMPUTERNAME
-    pid = $PID
-  }
-  Write-JsonFile -Value $claim -Path $claimPath
-  Write-JsonFile -Value $claim -Path (Join-Path $runDir "claim.json")
+  $goalParts = $workItem.GoalParts
+  $branch = $workItem.Branch
+  $runDir = $workItem.RunDir
+  $doingPath = $workItem.DoingPath
+  $claimPath = $workItem.ClaimPath
+  $lockPath = $workItem.LockPath
 
   Send-AgentNotice -Title "SkyBridge runner started" -Message "Started goal $($goalParts.Base)" -Priority "default"
 
   try {
     if ($DryRun) {
-      Write-Host "[yolo-runner] dry run selected goal $($goal.Name), branch $branch, run dir $runDir"
-      Move-Item $doingPath (Join-Path $effectiveGoalsReady (Split-Path $doingPath -Leaf)) -Force
-      if (Test-Path $claimPath) {
-        Remove-Item $claimPath -Force
+      Write-Host "[yolo-runner] dry run selected goal $($workItem.GoalName), branch $branch, run dir $runDir, resume=$($workItem.IsResume)"
+      if (-not $workItem.IsResume) {
+        Move-Item $doingPath (Join-Path $effectiveGoalsReady (Split-Path $doingPath -Leaf)) -Force
+        if (Test-Path $claimPath) {
+          Remove-Item $claimPath -Force
+        }
+        if (Test-Path $lockPath) {
+          Remove-Item $lockPath -Force
+        }
       }
       return $true
     }
 
     Switch-ToGoalBranch $branch
+    $currentBranch = (git branch --show-current).Trim()
+    if ($currentBranch -ne $branch) {
+      throw "Current branch '$currentBranch' does not match goal branch '$branch'."
+    }
 
     $goalText = Get-Content $doingPath -Raw
     $prompt = @"
@@ -429,7 +731,7 @@ After fixing, stop and summarize the change.
       throw "Checks failed after $effectiveMaxRepairRounds repair rounds."
     }
 
-    $completedGoal = Complete-GoalState -DoingPath $doingPath -ClaimPath $claimPath -TargetDir $effectiveGoalsDone
+    $completedGoal = Complete-GoalState -DoingPath $doingPath -ClaimPath $claimPath -TargetDir $effectiveGoalsDone -LockPath $lockPath
     Write-JsonFile -Value @{
       status = "completed"
       completedAt = (Get-Date).ToUniversalTime().ToString("o")
@@ -461,7 +763,7 @@ After fixing, stop and summarize the change.
     } -Path (Join-Path $runDir "result.json")
 
     if (Test-Path $doingPath) {
-      Complete-GoalState -DoingPath $doingPath -ClaimPath $claimPath -TargetDir $effectiveGoalsFailed | Out-Null
+      Complete-GoalState -DoingPath $doingPath -ClaimPath $claimPath -TargetDir $effectiveGoalsFailed -LockPath $lockPath | Out-Null
     }
 
     Send-AgentNotice -Title "SkyBridge runner failed" -Message "Goal $($goalParts.Base) failed: $err" -Priority "high"

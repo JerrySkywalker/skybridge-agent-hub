@@ -2,6 +2,7 @@
   "mode": "ThesisYOLO",
   "maxParallel": 1,
   "maxRepairRounds": 3,
+  "lockStaleMinutes": 240,
   "push": true,
   "autoPR": false,
   "createPR": false,
