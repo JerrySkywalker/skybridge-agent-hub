@@ -35,4 +35,29 @@ describe("event schema", () => {
     expect(isNotificationTrigger({ type: "approval.requested" })).toBe(true);
     expect(isNotificationTrigger({ type: "tool.completed" })).toBe(false);
   });
+
+  it("allows rich run summary metadata without changing event validation", () => {
+    const summary = {
+      run_id: "runner-001-demo",
+      session_id: "runner-123",
+      source_platform: "skybridge",
+      source_adapter: "yolo-runner",
+      source_agent_id: "skybridge-yolo-runner",
+      status: "running",
+      event_count: 3,
+      tool_call_count: 1,
+      failed_tool_count: 0,
+      notification_count: 1,
+      first_seen_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+      last_event_type: "notification.requested",
+      title: "001-demo.md",
+      lifecycle: "notification.requested",
+      branch: "ai/001-demo",
+      goal_id: "001"
+    };
+
+    expect(summary.run_id).toBe("runner-001-demo");
+    expect(summary.tool_call_count).toBe(1);
+  });
 });
