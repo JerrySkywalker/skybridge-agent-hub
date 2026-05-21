@@ -1,0 +1,11 @@
+{
+  "goalFile": "023-runner-telemetry-events.md",
+  "host": "ZENBOOKDUO",
+  "pid": 87920,
+  "createdAt": "2026-05-21T12:49:26.6195089Z",
+  "runDir": ".\\.agent\\runs\\20260521-204926-023",
+  "updatedAt": "2026-05-21T12:49:26.6195089Z",
+  "schema": "skybridge.runner.lock.v1",
+  "reason": "claim",
+  "branch": "ai/023-runner-telemetry-events"
+}

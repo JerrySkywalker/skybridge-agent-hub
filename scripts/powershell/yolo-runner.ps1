@@ -36,6 +36,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:RunnerTelemetry = @{
+  Enabled = $false
+}
 
 function ConvertTo-PlainObject {
   param([Parameter(Position=0, ValueFromPipeline=$true)]$Value)
@@ -88,6 +91,147 @@ function Get-ConfigValue {
   }
 
   return $Default
+}
+
+function ConvertTo-Boolean {
+  param(
+    $Value,
+    [bool]$Default = $false
+  )
+
+  if ($null -eq $Value) {
+    return $Default
+  }
+
+  if ($Value -is [bool]) {
+    return $Value
+  }
+
+  $text = [string]$Value
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return $Default
+  }
+
+  return $text -in @("1", "true", "yes", "on")
+}
+
+function Initialize-RunnerTelemetry {
+  param([hashtable]$Config)
+
+  $telemetryConfig = @{}
+  if ($Config.ContainsKey("telemetry") -and $Config["telemetry"] -is [hashtable]) {
+    $telemetryConfig = $Config["telemetry"]
+  }
+
+  $enabled = ConvertTo-Boolean `
+    -Value (Get-ConfigValue $telemetryConfig "enabled" $env:SKYBRIDGE_RUNNER_TELEMETRY) `
+    -Default $false
+  $apiBase = [string](Get-ConfigValue $telemetryConfig "apiBase" $env:SKYBRIDGE_API_BASE)
+  if ([string]::IsNullOrWhiteSpace($apiBase)) {
+    $apiBase = "http://127.0.0.1:8787"
+  }
+
+  $timeoutSeconds = [int](Get-ConfigValue $telemetryConfig "timeoutSeconds" 3)
+  $tokenEnvironmentVariable = [string](Get-ConfigValue $telemetryConfig "tokenEnvironmentVariable" "SKYBRIDGE_API_TOKEN")
+  $agentId = [string](Get-ConfigValue $telemetryConfig "agentId" "skybridge-yolo-runner")
+  $nodeId = [string](Get-ConfigValue $telemetryConfig "nodeId" $env:SKYBRIDGE_NODE_ID)
+  if ([string]::IsNullOrWhiteSpace($nodeId)) {
+    $nodeId = $env:COMPUTERNAME
+  }
+
+  $script:RunnerTelemetry = @{
+    Enabled = $enabled
+    ApiBase = $apiBase.TrimEnd("/")
+    TimeoutSeconds = $timeoutSeconds
+    TokenEnvironmentVariable = $tokenEnvironmentVariable
+    AgentId = $agentId
+    NodeId = $nodeId
+  }
+}
+
+function New-RunnerEvent {
+  param(
+    [Parameter(Mandatory=$true)][string]$Type,
+    [ValidateSet("debug", "info", "warning", "error", "critical")]
+    [string]$Severity = "info",
+    [hashtable]$Correlation = @{},
+    [hashtable]$Payload = @{}
+  )
+
+  return @{
+    schema = "skybridge.agent_event.v1"
+    event_id = "evt_runner_$([Guid]::NewGuid().ToString("N"))"
+    time = (Get-Date).ToUniversalTime().ToString("o")
+    type = $Type
+    severity = $Severity
+    source = @{
+      platform = "skybridge"
+      adapter = "yolo-runner"
+      node_id = $script:RunnerTelemetry.NodeId
+      agent_id = $script:RunnerTelemetry.AgentId
+      cwd = (Get-Location).Path
+    }
+    correlation = $Correlation
+    payload = $Payload
+  }
+}
+
+function Send-RunnerEvent {
+  param(
+    [Parameter(Mandatory=$true)][string]$Type,
+    [ValidateSet("debug", "info", "warning", "error", "critical")]
+    [string]$Severity = "info",
+    [hashtable]$Correlation = @{},
+    [hashtable]$Payload = @{}
+  )
+
+  if (-not $script:RunnerTelemetry.Enabled) {
+    return
+  }
+
+  $event = New-RunnerEvent -Type $Type -Severity $Severity -Correlation $Correlation -Payload $Payload
+  $body = $event | ConvertTo-Json -Depth 80 -Compress
+  $headers = @{}
+  $tokenName = [string]$script:RunnerTelemetry.TokenEnvironmentVariable
+  if (-not [string]::IsNullOrWhiteSpace($tokenName)) {
+    $token = [Environment]::GetEnvironmentVariable($tokenName)
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+      $headers["Authorization"] = "Bearer $token"
+    }
+  }
+
+  try {
+    Invoke-RestMethod `
+      -Method Post `
+      -Uri "$($script:RunnerTelemetry.ApiBase)/v1/events" `
+      -ContentType "application/json" `
+      -Headers $headers `
+      -Body $body `
+      -TimeoutSec $script:RunnerTelemetry.TimeoutSeconds | Out-Null
+  } catch {
+    Write-Verbose "[yolo-runner] SkyBridge telemetry delivery failed: $($_.Exception.Message)"
+  }
+}
+
+function Get-RunnerCorrelation {
+  param(
+    [hashtable]$GoalParts = @{},
+    [string]$RunDir = $null
+  )
+
+  $runId = $null
+  if ($GoalParts.ContainsKey("Base")) {
+    $runId = "runner-$($GoalParts.Base)"
+  }
+
+  if ([string]::IsNullOrWhiteSpace($runId) -and -not [string]::IsNullOrWhiteSpace($RunDir)) {
+    $runId = "runner-$([IO.Path]::GetFileName($RunDir))"
+  }
+
+  return @{
+    session_id = "runner-$PID"
+    run_id = $runId
+  }
 }
 
 function Resolve-CommandPath {
@@ -174,8 +318,21 @@ function Send-AgentNotice {
     [string]$Title,
     [string]$Message,
     [ValidateSet("min", "low", "default", "high", "urgent")]
-    [string]$Priority = "default"
+    [string]$Priority = "default",
+    [hashtable]$Correlation = @{}
   )
+
+  Send-RunnerEvent `
+    -Type "notification.requested" `
+    -Severity $(if ($Priority -in @("high", "urgent")) { "warning" } else { "info" }) `
+    -Correlation $Correlation `
+    -Payload @{
+      title = $Title
+      priority = $Priority
+      message_length = if ($null -eq $Message) { 0 } else { $Message.Length }
+      message_omitted = $true
+      redaction = "notification message body omitted by default"
+    }
 
   if ($NotifyOnlyImportant -and $Priority -in @("min", "low", "default")) {
     Write-Host "[$Title] $Message"
@@ -628,6 +785,17 @@ function Invoke-OneGoal {
     throw "MaxParallel must remain 1 for this MVP runner."
   }
 
+  Send-RunnerEvent `
+    -Type "agent.idle" `
+    -Payload @{
+      lifecycle = "runner.started"
+      mode = $effectiveMode
+      maxParallel = $effectiveMaxParallel
+      maxRepairRounds = $effectiveMaxRepairRounds
+      dryRun = [bool]$DryRun
+      redaction = "runner telemetry omits command output, prompts, repair logs and secrets by default"
+    }
+
   New-Item -ItemType Directory -Force -Path $effectiveGoalsReady,$effectiveGoalsDoing,$effectiveGoalsDone,$effectiveGoalsFailed,$effectiveRunRoot | Out-Null
 
   $workItem = Select-GoalWorkItem `
@@ -641,6 +809,13 @@ function Invoke-OneGoal {
     -DryRunMode ([bool]$DryRun)
 
   if (-not $workItem) {
+    Send-RunnerEvent `
+      -Type "agent.idle" `
+      -Payload @{
+        lifecycle = "runner.no_ready_goal"
+        readyDir = $effectiveGoalsReady
+        doingDir = $effectiveGoalsDoing
+      }
     return $false
   }
 
@@ -650,8 +825,23 @@ function Invoke-OneGoal {
   $doingPath = $workItem.DoingPath
   $claimPath = $workItem.ClaimPath
   $lockPath = $workItem.LockPath
+  $correlation = Get-RunnerCorrelation -GoalParts $goalParts -RunDir $runDir
 
-  Send-AgentNotice -Title "SkyBridge runner started" -Message "Started goal $($goalParts.Base)" -Priority "default"
+  Send-RunnerEvent `
+    -Type "run.started" `
+    -Correlation $correlation `
+    -Payload @{
+      lifecycle = if ($workItem.IsResume) { "goal.resumed" } else { "goal.claimed" }
+      goalId = $goalParts.Id
+      goalFile = $workItem.GoalName
+      branch = $branch
+      runDir = $runDir
+      mode = $effectiveMode
+      maxRepairRounds = $effectiveMaxRepairRounds
+      redaction = "goal text and claim internals omitted by default"
+    }
+
+  Send-AgentNotice -Title "SkyBridge runner started" -Message "Started goal $($goalParts.Base)" -Priority "default" -Correlation $correlation
 
   try {
     if ($DryRun) {
@@ -691,14 +881,84 @@ Goal file:
 $goalText
 "@
 
+    Send-RunnerEvent `
+      -Type "tool.started" `
+      -Correlation @{
+        session_id = $correlation.session_id
+        run_id = $correlation.run_id
+        tool_call_id = "codex-main"
+      } `
+      -Payload @{
+        lifecycle = "codex.invocation.started"
+        tool_name = "codex exec"
+        jsonl = "codex.jsonl"
+        lastMessage = "last-message.md"
+        sandbox = $effectiveSandbox
+        prompt_omitted = $true
+        redaction = "codex prompt and JSONL output omitted by default"
+      }
+
     $codexExit = Invoke-CodexJson -RunDir $runDir -JsonlName "codex.jsonl" -LastMessageName "last-message.md" -Prompt $prompt -Sandbox $effectiveSandbox
+    Send-RunnerEvent `
+      -Type $(if ($codexExit -eq 0) { "tool.completed" } else { "tool.failed" }) `
+      -Severity $(if ($codexExit -eq 0) { "info" } else { "error" }) `
+      -Correlation @{
+        session_id = $correlation.session_id
+        run_id = $correlation.run_id
+        tool_call_id = "codex-main"
+      } `
+      -Payload @{
+        lifecycle = "codex.invocation.finished"
+        tool_name = "codex exec"
+        exitCode = $codexExit
+        jsonl = "codex.jsonl"
+        lastMessage = "last-message.md"
+        output_omitted = $true
+        redaction = "codex stdout, stderr and JSONL output omitted by default"
+      }
     if ($codexExit -ne 0) {
       throw "codex exec failed with exit code $codexExit."
     }
 
     $checkOk = $false
     for ($attempt = 0; $attempt -le $effectiveMaxRepairRounds; $attempt++) {
+      $checkToolCallId = "check-$attempt"
+      $checkCommand = if (Resolve-CommandPath "just") { "just check" } else { "corepack pnpm check" }
+      Send-RunnerEvent `
+        -Type "tool.started" `
+        -Correlation @{
+          session_id = $correlation.session_id
+          run_id = $correlation.run_id
+          tool_call_id = $checkToolCallId
+        } `
+        -Payload @{
+          lifecycle = "check.started"
+          tool_name = "standard-check"
+          attempt = $attempt
+          command = $checkCommand
+          log = ("check-{0}.log" -f $attempt)
+          output_omitted = $true
+          redaction = "check stdout and stderr omitted by default"
+        }
       $checkExit = Invoke-StandardCheck -RunDir $runDir -Attempt $attempt
+      Send-RunnerEvent `
+        -Type $(if ($checkExit -eq 0) { "tool.completed" } else { "tool.failed" }) `
+        -Severity $(if ($checkExit -eq 0) { "info" } else { "warning" }) `
+        -Correlation @{
+          session_id = $correlation.session_id
+          run_id = $correlation.run_id
+          tool_call_id = $checkToolCallId
+        } `
+        -Payload @{
+          lifecycle = "check.finished"
+          tool_name = "standard-check"
+          attempt = $attempt
+          command = $checkCommand
+          exitCode = $checkExit
+          log = ("check-{0}.log" -f $attempt)
+          output_omitted = $true
+          redaction = "check stdout and stderr omitted by default"
+        }
       if ($checkExit -eq 0) {
         $checkOk = $true
         break
@@ -721,7 +981,41 @@ Do not modify secrets, production server configuration or global machine configu
 After fixing, stop and summarize the change.
 "@
 
+      Send-RunnerEvent `
+        -Type "tool.started" `
+        -Correlation @{
+          session_id = $correlation.session_id
+          run_id = $correlation.run_id
+          tool_call_id = "repair-$attempt"
+        } `
+        -Payload @{
+          lifecycle = "repair.started"
+          tool_name = "codex exec"
+          attempt = $attempt
+          jsonl = ("repair-{0}.jsonl" -f $attempt)
+          lastMessage = ("repair-{0}-last-message.md" -f $attempt)
+          prompt_omitted = $true
+          redaction = "repair prompt, check log contents and Codex output omitted by default"
+        }
       $repairExit = Invoke-CodexJson -RunDir $runDir -JsonlName ("repair-{0}.jsonl" -f $attempt) -LastMessageName ("repair-{0}-last-message.md" -f $attempt) -Prompt $repairPrompt -Sandbox $effectiveSandbox
+      Send-RunnerEvent `
+        -Type $(if ($repairExit -eq 0) { "tool.completed" } else { "tool.failed" }) `
+        -Severity $(if ($repairExit -eq 0) { "info" } else { "error" }) `
+        -Correlation @{
+          session_id = $correlation.session_id
+          run_id = $correlation.run_id
+          tool_call_id = "repair-$attempt"
+        } `
+        -Payload @{
+          lifecycle = "repair.finished"
+          tool_name = "codex exec"
+          attempt = $attempt
+          exitCode = $repairExit
+          jsonl = ("repair-{0}.jsonl" -f $attempt)
+          lastMessage = ("repair-{0}-last-message.md" -f $attempt)
+          output_omitted = $true
+          redaction = "repair stdout, stderr and JSONL output omitted by default"
+        }
       if ($repairExit -ne 0) {
         throw "codex repair attempt $attempt failed with exit code $repairExit."
       }
@@ -750,7 +1044,18 @@ After fixing, stop and summarize the change.
       New-PullRequestIfAvailable -GoalTitle $goalParts.Base -Branch $branch -RunDir $runDir
     }
 
-    Send-AgentNotice -Title "SkyBridge runner completed" -Message "Completed goal $($goalParts.Base)" -Priority "default"
+    Send-RunnerEvent `
+      -Type "run.completed" `
+      -Correlation $correlation `
+      -Payload @{
+        lifecycle = "goal.completed"
+        goalId = $goalParts.Id
+        goalFile = $workItem.GoalName
+        branch = $branch
+        runDir = $runDir
+        checksPassed = $true
+      }
+    Send-AgentNotice -Title "SkyBridge runner completed" -Message "Completed goal $($goalParts.Base)" -Priority "default" -Correlation $correlation
     return $true
   } catch {
     $err = $_.Exception.Message
@@ -766,12 +1071,27 @@ After fixing, stop and summarize the change.
       Complete-GoalState -DoingPath $doingPath -ClaimPath $claimPath -TargetDir $effectiveGoalsFailed -LockPath $lockPath | Out-Null
     }
 
-    Send-AgentNotice -Title "SkyBridge runner failed" -Message "Goal $($goalParts.Base) failed: $err" -Priority "high"
+    Send-RunnerEvent `
+      -Type "run.failed" `
+      -Severity "error" `
+      -Correlation $correlation `
+      -Payload @{
+        lifecycle = "goal.failed"
+        goalId = $goalParts.Id
+        goalFile = $workItem.GoalName
+        branch = $branch
+        runDir = $runDir
+        error_summary = $err
+        logs_omitted = $true
+        redaction = "full command output and repair logs omitted by default"
+      }
+    Send-AgentNotice -Title "SkyBridge runner failed" -Message "Goal $($goalParts.Base) failed: $err" -Priority "high" -Correlation $correlation
     throw
   }
 }
 
 $config = Import-RunnerConfig $ConfigFile
+Initialize-RunnerTelemetry -Config $config
 
 if ($AutoMergeLowRisk) {
   Write-Warning "AutoMergeLowRisk is intentionally not implemented for this MVP."

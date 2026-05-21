@@ -1,0 +1,13 @@
+{
+  "goalFile": "023-runner-telemetry-events.md",
+  "host": "ZENBOOKDUO",
+  "pid": 87920,
+  "maxRepairRounds": 3,
+  "runDir": ".\\.agent\\runs\\20260521-204926-023",
+  "maxParallel": 1,
+  "mode": "ThesisYOLO",
+  "claimedAt": "2026-05-21T12:49:26.6019357Z",
+  "schema": "skybridge.runner.claim.v1",
+  "goalId": "023",
+  "branch": "ai/023-runner-telemetry-events"
+}
