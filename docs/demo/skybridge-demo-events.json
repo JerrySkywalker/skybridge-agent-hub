@@ -1,13 +1,9 @@
 [
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:00.0000000Z",
     "type": "run.started",
     "severity": "info",
-    "payload": {
-      "title": "Codex demo run",
-      "category": "dogfooding"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "codex",
       "adapter": "codex-hook"
@@ -15,17 +11,17 @@
     "correlation": {
       "run_id": "demo-codex",
       "session_id": "demo-codex-session"
+    },
+    "payload": {
+      "category": "dogfooding",
+      "title": "Codex demo run"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:01.0000000Z",
     "type": "tool.completed",
     "severity": "info",
-    "payload": {
-      "tool_name": "shell",
-      "output_omitted": true
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "codex",
       "adapter": "codex-hook"
@@ -33,16 +29,17 @@
     "correlation": {
       "run_id": "demo-codex",
       "session_id": "demo-codex-session"
+    },
+    "payload": {
+      "output_omitted": true,
+      "tool_name": "shell"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:02.0000000Z",
     "type": "run.completed",
     "severity": "info",
-    "payload": {
-      "title": "OpenCode demo run"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "opencode",
       "adapter": "opencode-plugin"
@@ -50,17 +47,16 @@
     "correlation": {
       "run_id": "demo-opencode",
       "session_id": "demo-opencode-session"
+    },
+    "payload": {
+      "title": "OpenCode demo run"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:03.0000000Z",
     "type": "run.failed",
     "severity": "error",
-    "payload": {
-      "title": "Hermes failed run",
-      "detail": "fixture failure"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "hermes",
       "adapter": "hermes-api"
@@ -68,17 +64,17 @@
     "correlation": {
       "run_id": "demo-hermes-failed",
       "session_id": "demo-hermes-failed-session"
+    },
+    "payload": {
+      "detail": "fixture failure",
+      "title": "Hermes failed run"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:04.0000000Z",
     "type": "approval.requested",
     "severity": "warning",
-    "payload": {
-      "approval_id": "demo-approval-1",
-      "title": "Approve safe fixture action"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "codex",
       "adapter": "codex-hook"
@@ -86,17 +82,17 @@
     "correlation": {
       "run_id": "demo-approval",
       "session_id": "demo-approval-session"
+    },
+    "payload": {
+      "approval_id": "demo-approval-1",
+      "title": "Approve safe fixture action"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:05.0000000Z",
     "type": "notification.sent",
     "severity": "info",
-    "payload": {
-      "provider": "ntfy",
-      "status": "sent"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "skybridge",
       "adapter": "demo-dataset"
@@ -104,17 +100,17 @@
     "correlation": {
       "run_id": "demo-notify-sent",
       "session_id": "demo-notify-sent-session"
+    },
+    "payload": {
+      "provider": "ntfy",
+      "status": "sent"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:06.0000000Z",
     "type": "notification.skipped",
     "severity": "info",
-    "payload": {
-      "provider": "placeholder",
-      "status": "skipped"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "skybridge",
       "adapter": "demo-dataset"
@@ -122,17 +118,17 @@
     "correlation": {
       "run_id": "demo-notify-skipped",
       "session_id": "demo-notify-skipped-session"
+    },
+    "payload": {
+      "provider": "placeholder",
+      "status": "skipped"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:07.0000000Z",
     "type": "notification.failed",
     "severity": "warning",
-    "payload": {
-      "provider": "gotify",
-      "status": "failed"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "skybridge",
       "adapter": "demo-dataset"
@@ -140,25 +136,17 @@
     "correlation": {
       "run_id": "demo-notify-failed",
       "session_id": "demo-notify-failed-session"
+    },
+    "payload": {
+      "provider": "gotify",
+      "status": "failed"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:08.0000000Z",
     "type": "node.heartbeat",
     "severity": "info",
-    "payload": {
-      "host": "demo",
-      "capabilities": [
-        "event-forwarding",
-        "heartbeat"
-      ],
-      "labels": [
-        "local",
-        "demo"
-      ],
-      "node_id": "demo-node"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "skybridge",
       "adapter": "sidecar"
@@ -166,16 +154,25 @@
     "correlation": {
       "run_id": "demo-node",
       "session_id": "demo-node-session"
+    },
+    "payload": {
+      "capabilities": [
+        "event-forwarding",
+        "heartbeat"
+      ],
+      "host": "demo",
+      "labels": [
+        "local",
+        "demo"
+      ],
+      "node_id": "demo-node"
     }
   },
   {
+    "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:09.0000000Z",
     "type": "agent.stale",
     "severity": "warning",
-    "payload": {
-      "title": "Runner stale fixture"
-    },
-    "schema": "skybridge.agent_event.v1",
     "source": {
       "platform": "skybridge",
       "adapter": "yolo-runner"
@@ -183,6 +180,9 @@
     "correlation": {
       "run_id": "demo-runner",
       "session_id": "demo-runner-session"
+    },
+    "payload": {
+      "title": "Runner stale fixture"
     }
   }
 ]

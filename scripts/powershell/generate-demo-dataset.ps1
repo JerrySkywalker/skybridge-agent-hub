@@ -19,15 +19,30 @@ function New-Event {
   $time = ([datetimeoffset]::Parse($BaseTime).AddSeconds($script:EventIndex)).UtcDateTime.ToString("o")
   $script:EventIndex += 1
 
-  @{
+  [ordered]@{
     schema = "skybridge.agent_event.v1"
     time = $time
     type = $Type
     severity = $Severity
-    source = @{ platform = $Platform; adapter = $Adapter }
-    correlation = @{ run_id = $RunId; session_id = "$RunId-session" }
-    payload = $Payload
+    source = [ordered]@{ platform = $Platform; adapter = $Adapter }
+    correlation = [ordered]@{ run_id = $RunId; session_id = "$RunId-session" }
+    payload = ConvertTo-OrderedObject $Payload
   }
+}
+
+function ConvertTo-OrderedObject {
+  param([object]$Value)
+  if ($Value -is [System.Collections.IDictionary]) {
+    $ordered = [ordered]@{}
+    foreach ($key in ($Value.Keys | Sort-Object)) {
+      $ordered[$key] = ConvertTo-OrderedObject $Value[$key]
+    }
+    return $ordered
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+    return @($Value | ForEach-Object { ConvertTo-OrderedObject $_ })
+  }
+  return $Value
 }
 
 $events = @(
