@@ -1,8 +1,10 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
+import { existsSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
+import { ZodError } from "zod";
 import {
   createEvent,
   isNotificationTrigger,
@@ -123,7 +125,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   }));
 
   app.post("/v1/events", async (request, reply) => {
-    const event = parseEvent(request.body);
+    const parsed = parseEventPayload(request.body);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+
+    const event = parsed.event;
     const stored: StoredEvent = {
       ...event,
       id: event.event_id ?? nanoid(),
@@ -202,8 +207,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 function resolvePersistence(options: CreateServerOptions): { dbFile?: string; jsonMigrationFile?: string } {
   if (options.dbFile === false || options.dataFile === false) return {};
 
+  const repositoryRoot = findRepositoryRoot(dirname(fileURLToPath(import.meta.url)));
   const legacyEnvFile = process.env.SKYBRIDGE_DATA_FILE;
-  const defaultJsonFile = join(process.cwd(), ".data", "skybridge-store.json");
+  const defaultJsonFile = join(repositoryRoot, ".data", "skybridge-store.json");
   const jsonMigrationFile = options.jsonMigrationFile === false
     ? undefined
     : options.jsonMigrationFile ?? legacyEnvFile ?? defaultJsonFile;
@@ -211,9 +217,51 @@ function resolvePersistence(options: CreateServerOptions): { dbFile?: string; js
   const dbFile = options.dbFile
     ?? process.env.SKYBRIDGE_DB_FILE
     ?? sqlitePathFromLegacy(options.dataFile || legacyEnvFile)
-    ?? join(process.cwd(), ".data", "skybridge.sqlite");
+    ?? join(repositoryRoot, ".data", "skybridge.sqlite");
 
   return { dbFile, jsonMigrationFile };
+}
+
+function parseEventPayload(input: unknown): { ok: true; event: SkyBridgeEvent } | { ok: false; response: ValidationErrorResponse } {
+  try {
+    return { ok: true, event: parseEvent(input) };
+  } catch (error) {
+    if (!(error instanceof ZodError)) throw error;
+    return {
+      ok: false,
+      response: {
+        ok: false,
+        error: "invalid_event",
+        message: "Event payload failed validation.",
+        issues: error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          code: issue.code,
+          message: issue.message
+        }))
+      }
+    };
+  }
+}
+
+interface ValidationErrorResponse {
+  ok: false;
+  error: "invalid_event";
+  message: string;
+  issues: Array<{
+    path: string;
+    code: string;
+    message: string;
+  }>;
+}
+
+function findRepositoryRoot(startDir: string): string {
+  let current = startDir;
+  while (true) {
+    if (existsSync(join(current, "pnpm-workspace.yaml"))) return current;
+    const parent = dirname(current);
+    if (parent === current) return process.cwd();
+    current = parent;
+  }
 }
 
 function sqlitePathFromLegacy(filePath: string | false | undefined): string | undefined {

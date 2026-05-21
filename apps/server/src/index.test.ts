@@ -46,6 +46,30 @@ describe("server api", () => {
     expect(body.events[0]?.type).toBe("run.started");
   });
 
+  it("returns 400 with validation details for invalid event payloads", async () => {
+    const server = await testServer();
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: {
+        schema: "skybridge.agent_event.v1",
+        time: "not-a-date",
+        type: "unknown.event",
+        source: { platform: "codex", adapter: "codex-hook" },
+        payload: {}
+      }
+    });
+
+    const body = response.json<{ ok: boolean; error: string; issues: Array<{ path: string; message: string }> }>();
+    expect(response.statusCode).toBe(400);
+    expect(body).toMatchObject({ ok: false, error: "invalid_event" });
+    expect(body.issues.map((issue) => issue.path)).toEqual(expect.arrayContaining(["time", "type"]));
+
+    const list = await server.inject({ method: "GET", url: "/v1/events" });
+    expect(list.json<{ events: StoredEvent[] }>().events).toHaveLength(0);
+  });
+
   it("summarizes runs", async () => {
     const server = await testServer();
     await server.inject({
