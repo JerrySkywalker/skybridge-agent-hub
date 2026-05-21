@@ -188,7 +188,7 @@ Evidence:
 
 Deferrals:
 
-- Browser visual QA: `goals/backlog/022-real-browser-visual-qa.md`.
+- Browser visual QA: `goals/backlog/022-real-browser-visual-qa.md`. An optional local Playwright runner now exists for fixture-backed screenshots when Playwright is installed; CI browser install/artifact publishing remains deferred.
 - Mobile readiness: `goals/backlog/024-mobile-app-readiness.md`.
 - Public docs site: `goals/backlog/026-public-docs-site.md`.
 - External contributor onboarding: `goals/backlog/027-external-contributor-onboarding.md`.

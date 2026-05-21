@@ -6,18 +6,18 @@ PR #9 validates the dashboard with React static rendering, Vite builds and HTTP 
 
 ## Tasks
 
-- Add Playwright or the Codex Browser plugin smoke for the Operator Console.
-- Capture desktop and mobile screenshots for the main console and compact embed.
-- Verify the approval queue, metrics summary and provider matrix panels render without overlap.
+- Add Playwright or the Codex Browser plugin smoke for the Operator Console. Initial optional Playwright runner exists in `scripts/browser-visual-qa.mjs`.
+- Capture desktop and mobile screenshots for the main console and compact embed. Local optional artifacts are written by `scripts/powershell/smoke-browser-visual-qa.ps1` when Playwright is installed.
+- Verify the approval queue, metrics summary and provider matrix panels render without overlap. Initial panel presence and bounding-box overlap checks exist; manual visual review and CI artifact review remain pending.
 - Add a CI-safe fallback path when browser automation is unavailable.
 - Store screenshots as short-lived CI artifacts only when they use fixture data.
 - Document the viewport matrix and the expected visible panels for each route.
 
 ## Completion Criteria
 
-- Screenshot artifacts are produced locally or in CI for review.
-- Browser smoke fails on blank page, console errors or missing primary panels.
-- Documentation explains how to run visual QA locally.
+- Screenshot artifacts are produced locally or in CI for review. Local artifact generation is implemented when Playwright is installed; CI upload remains pending.
+- Browser smoke fails on blank page, console errors or missing primary panels. Initial local checks are implemented.
+- Documentation explains how to run visual QA locally. Initial local runner documentation exists in `docs/ui/BROWSER_VISUAL_QA.md`.
 - The smoke uses generated demo events or a temporary SQLite database, not real agent logs.
 - The check is wired into PR CI only if it remains reliable on GitHub-hosted runners.
 
@@ -32,10 +32,11 @@ PR #9 validates the dashboard with React static rendering, Vite builds and HTTP 
 ```powershell
 corepack pnpm --filter @skybridge-agent-hub/web build
 corepack pnpm smoke:operator-console
+corepack pnpm smoke:browser-visual-qa
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\validate-powershell.ps1
 ```
 
-Add the final browser command here when the implementation chooses Playwright or the Codex Browser plugin.
+The default `smoke:browser-visual-qa` command skips successfully when Playwright is unavailable. Install Playwright in a controlled local/CI environment to produce screenshots from fixture data.
 
 ## CI/CD Impact
 

@@ -112,7 +112,7 @@ Invoke-NightlyStep "multi-agent platform smoke" { corepack pnpm smoke:multi-agen
 Invoke-NightlyStep "dogfooding loop smoke" { corepack pnpm smoke:dogfooding-loop }
 Invoke-NightlyStep "release candidate smoke" { corepack pnpm smoke:release-candidate }
 Invoke-NightlyStep "self-observation smoke" { Invoke-SelfObservationWithTempServer }
-Invoke-NightlyStep "browser visual QA scaffold" { corepack pnpm smoke:browser-visual-qa }
+Invoke-NightlyStep "browser visual QA optional runner" { corepack pnpm smoke:browser-visual-qa }
 
 if (-not $SkipDockerBuilds) {
   Invoke-NightlyStep "server Docker build" { docker build -f deploy/dockerfiles/server.Dockerfile -t skybridge-agent-hub-server:nightly-local . }
