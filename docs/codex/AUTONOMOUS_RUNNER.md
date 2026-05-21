@@ -23,6 +23,7 @@ It supports:
 - committing remaining passing changes when the Codex run has not already committed them;
 - pushing the branch;
 - creating a GitHub PR when requested and `gh` is available;
+- optionally emitting summarized `skybridge.agent_event.v1` telemetry to the local SkyBridge server;
 - sending only important ntfy notifications when notification environment variables are configured.
 
 `MaxParallel` must remain `1`. Parallel execution is intentionally out of scope for this MVP.
@@ -59,18 +60,20 @@ ai/022-runner-resume-locking
 6. It copies the original goal into `.agent/runs/<timestamp>-<goal-id>/goal.md`.
 7. It moves the goal into `goals/doing` and writes `<goal>.claim.json` plus `<goal>.lock.json`.
 8. It creates or checks out the goal branch, then verifies the current branch still matches the expected goal branch.
-9. It invokes Codex with JSON output:
+9. If runner telemetry is enabled, it emits a `run.started` event for the claimed or resumed goal.
+10. It invokes Codex with JSON output:
 
    ```powershell
    codex exec --sandbox workspace-write --ask-for-approval never --json --output-last-message <run-dir>\last-message.md <prompt>
    ```
 
-10. It runs the standard check:
+11. It emits `tool.started` and `tool.completed` or `tool.failed` events around Codex, standard checks and repair attempts.
+12. It runs the standard check:
    - `just check` when `just` is available;
    - otherwise `corepack pnpm check`.
-11. When checks fail, it asks Codex to repair the failure and retries until `MaxRepairRounds` is exhausted.
-12. On success, it moves the goal, claim and lock metadata to `goals/done`, writes `result.json`, commits any remaining staged work and pushes the branch.
-13. On failure, it moves the goal, claim and lock metadata to `goals/failed` using unique filenames when previous failure context exists, writes `result.json` and sends a high-priority notification.
+13. When checks fail, it asks Codex to repair the failure and retries until `MaxRepairRounds` is exhausted.
+14. On success, it moves the goal, claim and lock metadata to `goals/done`, writes `result.json`, commits any remaining staged work, pushes the branch and emits `run.completed`.
+15. On failure, it moves the goal, claim and lock metadata to `goals/failed` using unique filenames when previous failure context exists, writes `result.json`, emits `run.failed` and sends a high-priority notification.
 
 ## Resume and Locks
 
@@ -110,9 +113,32 @@ Important fields:
   "push": true,
   "autoPR": false,
   "createPR": false,
-  "sandbox": "workspace-write"
+  "sandbox": "workspace-write",
+  "telemetry": {
+    "enabled": false,
+    "apiBase": "http://127.0.0.1:8787",
+    "timeoutSeconds": 3,
+    "tokenEnvironmentVariable": "SKYBRIDGE_API_TOKEN",
+    "agentId": "skybridge-yolo-runner"
+  }
 }
 ```
+
+Telemetry is disabled by default. Enable it in `config/runner.json` or set `SKYBRIDGE_RUNNER_TELEMETRY=1`; `SKYBRIDGE_API_BASE` can override the API base when the config omits `telemetry.apiBase`. Delivery is fail-open: if the server is offline or rejects a request, the runner continues local queue processing.
+
+Runner telemetry uses the normalized `skybridge.agent_event.v1` schema:
+
+```text
+agent.idle              runner started, no ready goal
+run.started             goal claimed or resumed
+tool.started            Codex invocation, standard check or repair started
+tool.completed/failed   Codex invocation, standard check or repair finished
+run.completed           goal completed
+run.failed              goal failed
+notification.requested  runner notification requested
+```
+
+Payloads include lifecycle names, goal IDs, branch names, run directories, attempt numbers, command names and exit codes. They intentionally omit full prompts, stdout, stderr, Codex JSONL output, check logs, repair logs, tokens and secrets by default.
 
 Use environment variables for ntfy:
 
@@ -190,6 +216,5 @@ If a goal requires one of those actions, move it out of `goals/ready` and requir
 ## Known Limits
 
 - No parallel execution.
-- No structured event ingestion into the SkyBridge server yet.
 - No PR update loop after remote CI fails.
 - No production service wrapper.

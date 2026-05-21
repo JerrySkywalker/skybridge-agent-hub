@@ -31,10 +31,16 @@ function Write-TestJson {
 function Invoke-RunnerDryRun {
   param(
     [hashtable]$Queue,
-    [int]$LockStaleMinutes = 240
+    [int]$LockStaleMinutes = 240,
+    [hashtable]$Config = $null
   )
 
   $configFile = Join-Path $Queue.Root "missing-runner-config.json"
+  if ($null -ne $Config) {
+    $configFile = Join-Path $Queue.Root "runner-config.json"
+    Write-TestJson -Value $Config -Path $configFile
+  }
+
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner `
     -DryRun `
     -ConfigFile $configFile `
@@ -130,6 +136,20 @@ try {
   Assert-ExitCode -Result $result -Expected 0 -Message "Stale-lock dry-run should be recoverable."
   Assert-True ($result.Output -match "stale lock") "Stale-lock dry-run should report the stale lock."
   Assert-True (Test-Path $staleLock) "Stale-lock dry-run should not archive or remove the lock."
+
+  $queue = New-TestQueue
+  $telemetryGoal = Join-Path $queue.Ready "105-telemetry-goal.md"
+  "# Goal 105`n" | Set-Content -Path $telemetryGoal -Encoding utf8
+
+  $result = Invoke-RunnerDryRun -Queue $queue -Config @{
+    telemetry = @{
+      enabled = $true
+      apiBase = "http://127.0.0.1:9"
+      timeoutSeconds = 1
+    }
+  }
+  Assert-ExitCode -Result $result -Expected 0 -Message "Telemetry dry-run should succeed even when the server is offline."
+  Assert-True (Test-Path $telemetryGoal) "Telemetry dry-run should return the goal to goals/ready."
 
   $queue = New-TestQueue
   $mismatchGoal = Join-Path $queue.Doing "104-mismatch-goal.md"

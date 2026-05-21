@@ -7,6 +7,13 @@
   "autoPR": false,
   "createPR": false,
   "sandbox": "workspace-write",
+  "telemetry": {
+    "enabled": false,
+    "apiBase": "http://127.0.0.1:8787",
+    "timeoutSeconds": 3,
+    "tokenEnvironmentVariable": "SKYBRIDGE_API_TOKEN",
+    "agentId": "skybridge-yolo-runner"
+  },
   "notifications": {
     "provider": "ntfy",
     "onlyImportant": true,
