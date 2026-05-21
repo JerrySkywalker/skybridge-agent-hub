@@ -74,10 +74,16 @@ Codex hook payloads can contain secrets, command output, prompts, file paths and
 
 Run summaries should expose safe Codex metadata: branch, cwd, goal, tool counts, failed tool counts and latest safe message summary when present.
 
-## Open Gaps Tracked By Mega Goal 002
+## Mega Goal 002 Status
 
-- Expand hook adapter fixtures and malformed payload tests.
-- Share redaction semantics between TypeScript adapters and PowerShell hook scripts.
-- Add installer, restore, hook event tester and replay scripts.
-- Add smoke coverage for online delivery and offline spool replay.
-- Improve the dashboard Codex operator view without adding remote-control behavior.
+Completed:
+
+- Hook adapter fixtures and malformed payload tests.
+- Redaction semantics in TypeScript adapters and PowerShell hook scripts.
+- Installer, restore, hook event tester and replay scripts.
+- Smoke coverage for online delivery and offline spool replay.
+- Dashboard Codex operator view without remote-control behavior.
+
+Remaining follow-up:
+
+- Share redaction logic from one source package rather than maintaining TypeScript and PowerShell implementations separately.

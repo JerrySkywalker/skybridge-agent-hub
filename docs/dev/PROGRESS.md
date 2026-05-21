@@ -14,6 +14,7 @@
 - Stage 7 checks: script parse passed; smoke passed on `http://127.0.0.1:8798` with 10 fixtures, 12 persisted Codex events, 4 Codex run summaries, 12 offline queued events and 12 replayed events.
 - Mega Goal 002 Stage 8: added a Codex Integration dashboard panel that surfaces recent Codex runs, latest hook event, active/failed tool counts and spool count when available from events.
 - Stage 8 checks: `corepack pnpm --filter @skybridge-agent-hub/react-widgets test`, `corepack pnpm --filter @skybridge-agent-hub/react-widgets typecheck` and `corepack pnpm --filter @skybridge-agent-hub/web build` passed.
+- Mega Goal 002 Stage 9: updated README, DEVELOPMENT, SECURITY, `docs/codex/HOOKS.md` and `docs/codex/CODEX_LOCAL_INTEGRATION.md` with Codex hook install, smoke, replay, redaction, spool cleanup/privacy and troubleshooting guidance.
 - Mega Goal 001 Stage 1: mapped the current self-observation loop in `docs/codex/SELF_OBSERVATION_LOOP.md`, including Codex hooks, Codex exec JSON, runner telemetry, manual smoke events, server ingestion/query/SSE, notification placeholders and dashboard consumption.
 - Stage 1 check: documentation-only change; no code check required before this commit.
 - Mega Goal 001 Stage 2: added scoped event filtering and a run detail API for self-observation drill-in; run summaries now include safe agent/node IDs, tool and notification counts, lifecycle, branch and goal metadata derived from redacted payloads.
