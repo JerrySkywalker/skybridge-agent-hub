@@ -1,4 +1,5 @@
 import { z } from "zod";
+import redactionRules from "./redaction-rules.json" with { type: "json" };
 
 export const SKYBRIDGE_EVENT_SCHEMA_VERSION = "skybridge.agent_event.v1" as const;
 
@@ -169,6 +170,8 @@ export const SOURCE_CAPABILITIES: SourceCapability[] = [
   }
 ];
 
+export const SharedRedactionRules = redactionRules;
+
 export function createEvent(input: SkyBridgeEventInput): SkyBridgeEvent {
   return SkyBridgeEventSchema.parse({
     schema: SKYBRIDGE_EVENT_SCHEMA_VERSION,
@@ -183,4 +186,49 @@ export function parseEvent(input: unknown): SkyBridgeEvent {
 
 export function isNotificationTrigger(event: Pick<SkyBridgeEvent, "type">): boolean {
   return event.type === "run.failed" || event.type === "approval.requested" || event.type === "notification.requested";
+}
+
+export function redactForTelemetry(input: unknown): unknown {
+  return redactValue(input, 0);
+}
+
+function redactValue(input: unknown, depth: number): unknown {
+  if (depth > 8) return "[REDACTED:depth]";
+  if (typeof input === "string") return redactString(input);
+  if (Array.isArray(input)) return input.slice(0, 100).map((item) => redactValue(item, depth + 1));
+  if (!input || typeof input !== "object") return input;
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (matchesAny(key, redactionRules.secretKeyPatterns)) {
+      output[key] = redactionRules.replacement;
+      continue;
+    }
+    if (matchesAny(key, redactionRules.omitKeyPatterns)) {
+      output[key] = summarizeOmitted(value);
+      continue;
+    }
+    output[key] = redactValue(value, depth + 1);
+  }
+  return output;
+}
+
+function redactString(input: string): string {
+  let output = input;
+  for (const pattern of redactionRules.secretValuePatterns) {
+    output = output.replace(new RegExp(pattern, "gi"), redactionRules.replacement);
+  }
+  return output.length > redactionRules.maxStringLength ? `${output.slice(0, redactionRules.maxStringLength)}...` : output;
+}
+
+function summarizeOmitted(value: unknown): Record<string, unknown> {
+  const text = typeof value === "string" ? value : JSON.stringify(value ?? null);
+  return {
+    omitted: true,
+    length: text.length,
+    reason: "unsafe_raw_payload"
+  };
+}
+
+function matchesAny(input: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => new RegExp(pattern, "i").test(input));
 }

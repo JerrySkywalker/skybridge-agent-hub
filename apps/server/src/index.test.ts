@@ -70,6 +70,22 @@ describe("server api", () => {
     expect(list.json<{ events: StoredEvent[] }>().events).toHaveLength(0);
   });
 
+  it("rejects oversized event payloads before persistence", async () => {
+    const server = await testServer();
+    const response = await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "message.completed",
+        source: { platform: "custom", adapter: "oversized-test" },
+        payload: { summary: "x".repeat(140_000) }
+      })
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ issues: Array<{ code: string }> }>().issues[0]?.code).toBe("too_big");
+  });
+
   it("summarizes runs", async () => {
     const server = await testServer();
     await server.inject({

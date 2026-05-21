@@ -10,6 +10,7 @@ import {
   isNotificationTrigger,
   parseEvent,
   SOURCE_CAPABILITIES,
+  SharedRedactionRules,
   type RunDetail,
   type RunSummary,
   type SkyBridgeSeverity,
@@ -667,6 +668,18 @@ function resolvePersistence(options: CreateServerOptions): { dbFile?: string; js
 
 function parseEventPayload(input: unknown): { ok: true; event: SkyBridgeEvent } | { ok: false; response: ValidationErrorResponse } {
   try {
+    const payloadBytes = Buffer.byteLength(JSON.stringify(input ?? null), "utf8");
+    if (payloadBytes > SharedRedactionRules.maxPayloadBytes) {
+      return {
+        ok: false,
+        response: {
+          ok: false,
+          error: "invalid_event",
+          message: "Event payload exceeded the safe size limit.",
+          issues: [{ path: "", code: "too_big", message: `Payload must be <= ${SharedRedactionRules.maxPayloadBytes} bytes.` }]
+        }
+      };
+    }
     return { ok: true, event: parseEvent(input) };
   } catch (error) {
     if (!(error instanceof ZodError)) throw error;
