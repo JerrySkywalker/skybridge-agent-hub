@@ -8,6 +8,8 @@
 - Security hardening, shared redaction rules and threat model.
 - Demo dataset, dogfooding smoke and release candidate checklist.
 
+Status: release-candidate foundation after PR #9. Codex, server, SQLite, notification, CI/CD and smoke foundations are implemented and locally validated. OpenCode/Hermes runtime compatibility, real browser visual QA, WSS remote control, mobile readiness, docs publishing and production deployment hardening remain follow-up work.
+
 ## v1.0
 
 - Real WSS sidecar connection with scoped auth.

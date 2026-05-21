@@ -77,6 +77,14 @@ corepack pnpm --filter @skybridge-agent-hub/web build
 corepack pnpm smoke:operator-console
 ```
 
+Nightly local validation for release-readiness:
+
+```powershell
+corepack pnpm nightly:local-validation
+```
+
+The nightly script runs safe local checks, smoke tests and optional local Docker builds, then writes `docs/dev/NIGHTLY_CICD_LOG.md`. It uses temporary databases and local dry-run paths; it does not deploy or read production secrets.
+
 Check compose without starting services:
 
 ```powershell

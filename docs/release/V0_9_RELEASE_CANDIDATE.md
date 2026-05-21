@@ -15,6 +15,19 @@ Included foundation:
 - Approval queue API skeleton and dashboard panel.
 - Metrics summary endpoint and audit design.
 
+Smoke-tested foundation:
+
+- Full monorepo `check`.
+- Dev/test/prod compose config rendering.
+- Operator Console, release dry-run, self-hosting dry-run, Codex hook integration, multi-agent platform, dogfooding, release-candidate and self-observation smokes.
+- Local server and web Docker image builds.
+
+Skeleton-only or fixture-backed foundation:
+
+- OpenCode and Hermes adapters are fixture-backed until real runtime compatibility is validated.
+- Sidecar/node registry exists, but real WSS transport and command execution are deferred.
+- `/v1/audit` is a safe derived audit view, not a durable append-only audit table yet.
+
 ## Known Gaps
 
 - Real WSS remote node implementation.
@@ -24,6 +37,8 @@ Included foundation:
 - Public docs site generation.
 - External contributor onboarding.
 - PowerShell scripts still need direct consumption of the shared redaction JSON.
+
+See `docs/release/V0_9_RELEASE_CANDIDATE_AUDIT.md` for subsystem-level readiness classifications.
 
 ## Release Checklist
 

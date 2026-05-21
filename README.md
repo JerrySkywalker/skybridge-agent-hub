@@ -32,6 +32,7 @@ SkyBridge provides a shared foundation for:
 - Public GitHub Actions checks for AI branches and pull requests.
 - Reproducible Docker builds, GHCR publishing, release-tag validation, staging dry-run and backup/rollback operator scripts.
 - Approval queue, node registry, metrics endpoint, demo dataset and release candidate smoke foundations.
+- Nightly local validation script and release-candidate audit docs for repeatable v0.9 hardening.
 
 ## Current MVP Status
 
@@ -45,7 +46,7 @@ SkyBridge is in an MVP foundation stage. The repository already contains:
 - Codex TUI Master Goal files plus runner scripts for fallback local batch processing.
 
 The remote-control surface is intentionally not production-ready yet. Current work focuses on local-first telemetry, notification, reviewable AI branches and safe iteration.
-The v0.9 release-candidate track adds multi-agent adapters, sidecar node identity, provider/rule notification records, approval queue APIs and security hardening while keeping remote execution disabled.
+The v0.9 release-candidate track adds multi-agent adapters, sidecar node identity, provider/rule notification records, approval queue APIs and security hardening while keeping remote execution disabled. OpenCode and Hermes compatibility is fixture-backed until real runtime contract tests are added.
 
 ## Quick Start
 
