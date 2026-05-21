@@ -1,0 +1,19 @@
+services:
+  server:
+    image: ghcr.io/jerry1999-main/skybridge-agent-hub-server:${SKYBRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - skybridge-data:/app/data
+
+  web:
+    image: ghcr.io/jerry1999-main/skybridge-agent-hub-web:${SKYBRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  skybridge-data:

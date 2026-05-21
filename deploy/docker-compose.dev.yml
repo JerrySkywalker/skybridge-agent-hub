@@ -1,0 +1,42 @@
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/server.Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - NODE_ENV=development
+      - PORT=8787
+      - SKYBRIDGE_DATA_FILE=/workspace/.data/skybridge-store.json
+    volumes:
+      - ../:/workspace
+    working_dir: /workspace
+    command: pnpm --filter @skybridge-agent-hub/server dev
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/web.Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_SKYBRIDGE_API_BASE=http://127.0.0.1:8787
+    volumes:
+      - ../:/workspace
+    working_dir: /workspace
+    command: pnpm --filter @skybridge-agent-hub/web dev
+
+  sidecar:
+    build:
+      context: ..
+      dockerfile: deploy/dockerfiles/server.Dockerfile
+    ports:
+      - "8789:8789"
+    environment:
+      - SKYBRIDGE_CLOUD_URL=http://server:8787
+      - SIDECAR_PORT=8789
+    volumes:
+      - ../:/workspace
+    working_dir: /workspace
+    command: pnpm --filter @skybridge-agent-hub/sidecar dev

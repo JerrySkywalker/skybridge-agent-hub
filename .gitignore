@@ -1,0 +1,41 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build
+dist/
+dist-ts/
+build/
+.next/
+.vite/
+coverage/
+
+# logs
+*.log
+*.log.err
+logs/
+
+# agent runtime
+.agent/runs/
+.agent/spool/
+.agent/tmp/
+.agent/last-message.md
+.data/
+apps/*/.data/
+
+# local
+.DS_Store
+Thumbs.db
+.vscode/settings.local.json
+
+# sqlite
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm

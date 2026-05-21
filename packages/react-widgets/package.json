@@ -1,0 +1,25 @@
+{
+  "name": "@skybridge-agent-hub/react-widgets",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@skybridge-agent-hub/client": "workspace:*",
+    "@skybridge-agent-hub/event-schema": "workspace:*",
+    "react": "^19.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.4"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@skybridge-agent-hub/notification-gotify",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {},
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

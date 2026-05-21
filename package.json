@@ -1,0 +1,24 @@
+{
+  "name": "skybridge-agent-hub",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source local/cloud agent telemetry, notification, and remote-control foundation for Codex, OpenCode, Hermes, and custom agents.",
+  "type": "module",
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "dev": "corepack pnpm -r --parallel --filter \"./apps/*\" dev",
+    "lint": "corepack pnpm -r lint",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test",
+    "build": "corepack pnpm -r build",
+    "format": "prettier --write .",
+    "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.4",
+    "vitest": "^3.1.4"
+  }
+}

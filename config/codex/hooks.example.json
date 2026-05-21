@@ -1,0 +1,83 @@
+{
+  "env": {
+    "SKYBRIDGE_API_BASE": "http://127.0.0.1:8787",
+    "SKYBRIDGE_NODE_ID": "local-dev"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-guard-hook.ps1",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/powershell/codex-dashboard-hook.ps1",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

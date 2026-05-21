@@ -1,0 +1,17 @@
+{
+  "name": "@skybridge-agent-hub/adapter-opencode-plugin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@skybridge-agent-hub/event-schema": "workspace:*"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@skybridge-agent-hub/client": ["packages/client/src/index.ts"],
+      "@skybridge-agent-hub/event-schema": ["packages/event-schema/src/index.ts"],
+      "@skybridge-agent-hub/notification-ntfy": ["packages/notification-providers/ntfy/src/index.ts"],
+      "@skybridge-agent-hub/react-widgets": ["packages/react-widgets/src/index.tsx"],
+      "@skybridge-agent-hub/web-components": ["packages/web-components/src/index.ts"]
+    },
+    "declaration": true,
+    "sourceMap": true
+  }
+}

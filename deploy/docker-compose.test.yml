@@ -1,0 +1,7 @@
+services:
+  test:
+    image: node:22-bookworm
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace
+    command: bash -lc "corepack enable && pnpm install --frozen-lockfile=false && pnpm check"

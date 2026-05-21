@@ -1,0 +1,17 @@
+name: Deploy Staging Placeholder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Staging deploy is intentionally a placeholder."
+          echo "Use a private deploy repo, deploy webhook, or restricted self-hosted runner."

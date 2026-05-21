@@ -1,0 +1,15 @@
+# Example Codex config profile for this project.
+# Copy relevant parts to ~/.codex/config.toml after review.
+
+[profiles.skybridge-workspace-auto]
+sandbox = "workspace-write"
+ask_for_approval = "never"
+
+[profiles.skybridge-plan]
+sandbox = "read-only"
+ask_for_approval = "on-request"
+
+[profiles.skybridge-container-yolo]
+# Only use inside a disposable container/devcontainer.
+sandbox = "danger-full-access"
+ask_for_approval = "never"
