@@ -1,5 +1,12 @@
 # Progress Log
 
+## 2026-05-22
+
+- Mega Goal 004 Stages 1-13: added a CI/CD and release plan, hardened public PR and AI branch CI, added safe smoke artifacts, hardened Dockerfiles and `.dockerignore`, expanded GHCR publishing, hardened production compose, added staging dry-run, improved backup and rollback scripts, added ntfy deploy notifications, added release tag validation and added a local release dry-run smoke.
+- Commits created so far: `docs(ops): design CI/CD and release plan`, `ci: harden public PR checks`, `ci: harden AI branch validation`, `build(docker): harden production images`, `ci: publish images to GHCR`, `deploy: harden production compose template`, `deploy: add staging dry-run workflow`, `deploy: harden backup and rollback scripts`, `deploy: add notification hooks`, `ci: add release tag workflow`, `deploy: add staging dry-run workflow`, `test(ops): add release dry-run smoke`.
+- Checks run so far: PowerShell parse validation passed; Docker dev/test/prod compose config passed; `smoke-release-dry-run.ps1` passed; staging dry-run passed with missing env file safely reported; server Docker image build passed.
+- Known gap before final validation: web Docker image build timed out locally during the first attempt and needs a rerun after warmed Docker layers.
+
 ## 2026-05-21
 
 - Mega Goal 003 Stages 1-12: productized the Operator Console across server APIs, demo data, typed client helpers, React widgets, web app layout, SSE-backed timeline behavior, compact Web Component embed, smoke validation, CI wiring and docs.
