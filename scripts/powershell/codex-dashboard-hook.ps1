@@ -24,76 +24,25 @@ function Get-SpoolDirectory {
   return (Join-Path (Get-RepositoryRoot) ".agent\spool\codex-hook")
 }
 
-function Get-SharedRedactionRules {
-  $fallback = @{
-    replacement = "[REDACTED]"
-    maxStringLength = 2000
-    secretKeyPatterns = @("token", "password", "passwd", "authorization", "cookie", "secret", "api[_-]?key", "private[_-]?key")
-    secretValuePatterns = @("Bearer\s+[A-Za-z0-9._-]+", "sk-[A-Za-z0-9_-]{12,}", "-----BEGIN [A-Z ]*PRIVATE KEY-----", "-----BEGIN OPENSSH PRIVATE KEY-----")
-    omitKeyPatterns = @("prompt", "patch", "stdout", "stderr", "command_output", "raw_output", "tool_result")
-    source = "fallback"
-  }
+. (Join-Path $PSScriptRoot "shared-redaction.ps1")
 
-  try {
-    $rulesPath = Join-Path (Get-RepositoryRoot) "packages\event-schema\src\redaction-rules.json"
-    if (-not (Test-Path $rulesPath)) { return $fallback }
-    $rules = Get-Content -Raw -Path $rulesPath | ConvertFrom-Json -AsHashtable
-    $rules["source"] = "packages/event-schema/src/redaction-rules.json"
-    return $rules
-  } catch {
-    return $fallback
-  }
-}
+function Get-SharedRedactionRules { Get-SkyBridgeSharedRedactionRules }
 
 $SharedRedactionRules = Get-SharedRedactionRules
 
 function Test-SharedRedactionPattern {
   param([AllowNull()][string]$Value, [AllowNull()]$Patterns)
-  if ([string]::IsNullOrWhiteSpace($Value) -or $null -eq $Patterns) { return $false }
-  foreach ($pattern in @($Patterns)) {
-    if ($Value -match "(?i)$pattern") { return $true }
-  }
-  return $false
+  Test-SkyBridgeRedactionPattern -Value $Value -Patterns $Patterns
 }
 
 function Redact-String {
   param([AllowNull()][string]$Value, [int]$MaxLength = 160)
-  if ($null -eq $Value) { return $null }
-  $text = $Value
-  foreach ($pattern in @($SharedRedactionRules.secretValuePatterns)) {
-    $text = [regex]::Replace($text, $pattern, [string]$SharedRedactionRules.replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-  }
-  $text = $text -replace '(?i)\b([A-Za-z0-9_.-]*(token|password|passwd|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*[:=]\s*([^\s;&|]+)', "`$1=$($SharedRedactionRules.replacement)"
-  if ($text.Length -gt $MaxLength) { return "$($text.Substring(0, $MaxLength))...[truncated $($text.Length - $MaxLength) chars]" }
-  return $text
+  Redact-SkyBridgeString -Value $Value -Rules $SharedRedactionRules -MaxLength $MaxLength
 }
 
 function ConvertTo-SafeValue {
   param($Value, [int]$Depth = 0)
-  if ($null -eq $Value) { return $null }
-  if ($Value -is [string]) { return (Redact-String -Value $Value) }
-  if ($Value -is [bool] -or $Value -is [int] -or $Value -is [long] -or $Value -is [double]) { return $Value }
-  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [hashtable] -and $Value -isnot [string]) {
-    if ($Depth -ge 4) { return @{ bounded = $true; type = "array" } }
-    return @($Value | Select-Object -First 24 | ForEach-Object { ConvertTo-SafeValue -Value $_ -Depth ($Depth + 1) })
-  }
-  if ($Value -is [hashtable]) {
-    if ($Depth -ge 4) { return @{ bounded = $true; type = "object"; keys = @($Value.Keys | Select-Object -First 24) } }
-    $result = @{}
-    foreach ($key in @($Value.Keys | Select-Object -First 24)) {
-      if (Test-SharedRedactionPattern -Value ([string]$key) -Patterns $SharedRedactionRules.secretKeyPatterns) {
-        $result[$key] = $SharedRedactionRules.replacement
-      } elseif ((Test-SharedRedactionPattern -Value ([string]$key) -Patterns $SharedRedactionRules.omitKeyPatterns) -or [string]$key -match '(?i)command|output|content') {
-        $item = $Value[$key]
-        $result[$key] = @{ bounded = $true; type = if ($null -eq $item) { "null" } else { $item.GetType().Name }; length = if ($item -is [string]) { $item.Length } else { $null } }
-      } else {
-        $result[$key] = ConvertTo-SafeValue -Value $Value[$key] -Depth ($Depth + 1)
-      }
-    }
-    if ($Value.Keys.Count -gt 24) { $result["__truncated_keys"] = $Value.Keys.Count - 24 }
-    return $result
-  }
-  return (Redact-String -Value ([string]$Value))
+  ConvertTo-SkyBridgeSafeValue -Value $Value -Rules $SharedRedactionRules -Depth $Depth
 }
 
 function Get-String {

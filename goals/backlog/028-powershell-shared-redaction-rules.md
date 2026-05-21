@@ -4,13 +4,15 @@
 
 PR #9 adds `packages/event-schema/src/redaction-rules.json` and TypeScript redaction helpers. PowerShell scripts still carry their own redaction behavior, so parity must be hardened in a focused follow-up.
 
+Nightly CI/CD Guardian round 3 started this by adding `scripts/powershell/shared-redaction.ps1`, wiring the Codex dashboard hook through it, and adding `scripts/powershell/test-shared-redaction-rules.ps1` for a TypeScript/PowerShell parity smoke. Remaining work should focus on broader runner-path adoption and deeper fixture coverage.
+
 ## Tasks
 
-- Load `packages/event-schema/src/redaction-rules.json` from PowerShell scripts.
-- Apply key/value omit and replacement rules consistently in hook and runner paths.
-- Add fixture tests proving TypeScript and PowerShell redact the same secret samples.
+- [x] Load `packages/event-schema/src/redaction-rules.json` from the Codex hook PowerShell path.
+- [ ] Apply key/value omit and replacement rules consistently in runner paths.
+- [x] Add fixture tests proving TypeScript and PowerShell redact the same secret samples.
 - Keep existing fail-open hook behavior.
-- Add a fallback embedded rule set or clear warning if the JSON file is unavailable during local hook execution.
+- [x] Add a fallback embedded rule set or clear warning if the JSON file is unavailable during local hook execution.
 - Document versioning expectations for the shared redaction policy.
 
 ## Completion Criteria

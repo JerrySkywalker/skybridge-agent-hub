@@ -2,6 +2,7 @@
 
 ## 2026-05-22
 
+- Nightly CI/CD Guardian round 3: refactored Codex PowerShell hook redaction into `scripts/powershell/shared-redaction.ps1`, added a TypeScript/PowerShell shared-rule parity smoke, wired that smoke into nightly local validation, and updated release/security/backlog docs. Validation passed with `corepack pnpm check`, focused event-schema and Codex hook checks, PowerShell parse validation, hook fixture smoke, redaction parity smoke, and `nightly-local-validation.ps1 -SkipDockerBuilds`.
 - Nightly CI/CD Guardian round 2: added a durable audit trail skeleton with SQLite-backed append-only audit rows for auditable events, `/v1/audit` filters, client query support, dogfooding smoke assertions for safe audit metadata, and refreshed release/audit docs. Validation passed with `corepack pnpm check`, focused server/client checks, PowerShell parse validation, multi-agent and dogfooding smokes, and `nightly-local-validation.ps1 -SkipDockerBuilds`.
 - Super Goal 005-014 release train: completed the first platform release train pass across multi-agent adapters, sidecar/node foundation, notification routing/jobs, shared redaction/security docs, demo/dogfooding assets, approval API, metrics endpoint, self-hosting docs, roadmap and v0.9 release candidate notes.
 - Commits created so far: `feat(adapters): add multi-agent adapter foundation`, `feat(sidecar): add safe node registry foundation`, `feat(notifications): add provider routing job foundation`, `security: add shared redaction rules`.

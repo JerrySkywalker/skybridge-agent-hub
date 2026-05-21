@@ -102,6 +102,7 @@ Invoke-NightlyStep "docker compose dev config" { docker compose -f deploy/docker
 Invoke-NightlyStep "docker compose test config" { docker compose -f deploy/docker-compose.test.yml config | Out-Null }
 Invoke-NightlyStep "docker compose prod config" { docker compose -f deploy/docker-compose.prod.yml config | Out-Null }
 Invoke-NightlyStep "PowerShell parse validation" { pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\validate-powershell.ps1 }
+Invoke-NightlyStep "shared redaction parity smoke" { pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\test-shared-redaction-rules.ps1 }
 Invoke-NightlyStep "operator console smoke" { corepack pnpm smoke:operator-console }
 Invoke-NightlyStep "release dry-run smoke" { corepack pnpm smoke:release-dry-run }
 Invoke-NightlyStep "self-hosting dry-run smoke" { corepack pnpm smoke:self-hosting-dry-run }

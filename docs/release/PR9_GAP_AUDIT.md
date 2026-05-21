@@ -66,16 +66,19 @@ Classification:
 - implemented
 - docs updated
 - smoke-tested through hook and release smokes
-- needs follow-up for PowerShell direct JSON rules consumption
+- PowerShell direct JSON rules consumption started after PR #9
+- needs follow-up for broader runner-path adoption
 
 Evidence:
 
 - Shared TypeScript redaction rules and payload-size guards exist.
+- PowerShell Codex hook redaction now uses a shared helper that loads `packages/event-schema/src/redaction-rules.json` with a fail-open fallback.
+- A parity smoke compares PowerShell and TypeScript handling of the same secret sample.
 - Threat model and SECURITY updates cover public CI, self-hosted runner risk, hooks, sidecar remote control, providers and local spool privacy.
 
 Deferral:
 
-- PowerShell direct consumption of shared redaction JSON is deferred to `goals/backlog/028-powershell-shared-redaction-rules.md`.
+- Broader PowerShell runner-path consolidation remains deferred to `goals/backlog/028-powershell-shared-redaction-rules.md`.
 
 ## Phase 009: Docs Site, Demo Dataset And Packaging
 
