@@ -239,6 +239,39 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     };
   });
 
+  app.get("/v1/metrics", async () => platformMetrics(store.listEvents(), store.listNotifications(1000)));
+
+  app.get("/v1/approvals", async () => ({ approvals: summarizeApprovals(store.listEvents()).filter((item) => item.status === "pending") }));
+  app.get<{ Params: { approvalId: string } }>("/v1/approvals/:approvalId", async (request, reply) => {
+    const approval = summarizeApprovals(store.listEvents()).find((item) => item.approval_id === decodeURIComponent(request.params.approvalId));
+    if (!approval) return reply.code(404).send({ ok: false, error: "approval_not_found" });
+    return { approval };
+  });
+  app.post<{ Params: { approvalId: string }; Body: { decision?: "accepted" | "denied"; actor?: string; reason?: string } }>("/v1/approvals/:approvalId/resolve", async (request, reply) => {
+    const approvalId = decodeURIComponent(request.params.approvalId);
+    const decision = request.body?.decision;
+    if (decision !== "accepted" && decision !== "denied") return reply.code(400).send({ ok: false, error: "decision must be accepted or denied" });
+    const existing = summarizeApprovals(store.listEvents()).find((item) => item.approval_id === approvalId);
+    if (!existing) return reply.code(404).send({ ok: false, error: "approval_not_found" });
+    const event = createEvent({
+      type: decision === "accepted" ? "approval.resolved" : "approval.denied",
+      severity: decision === "accepted" ? "info" : "warning",
+      source: { platform: "skybridge", adapter: "approval-api" },
+      correlation: { run_id: existing.run_id, session_id: existing.session_id },
+      payload: {
+        approval_id: approvalId,
+        decision,
+        actor: safeString(request.body?.actor) ?? "operator",
+        reason: safeString(request.body?.reason),
+        remote_execution_enabled: false
+      }
+    });
+    const stored: StoredEvent = { ...event, id: event.event_id ?? nanoid(), receivedAt: new Date().toISOString() };
+    await store.addEvent(stored);
+    broadcast(stored);
+    return reply.code(202).send({ ok: true, approval_id: approvalId, decision });
+  });
+
   app.post<{ Body: NotificationMessage }>("/v1/notifications/send", async (request, reply) => {
     const message = request.body;
     if (!message?.title || !message?.body) {
@@ -590,6 +623,57 @@ function summarizeNodes(events: StoredEvent[]) {
     ...node,
     status: node.status === "connected" && Date.parse(node.last_seen) < staleBefore ? "stale" : node.status
   })).sort((a, b) => b.last_seen.localeCompare(a.last_seen));
+}
+
+function platformMetrics(events: StoredEvent[], notifications: StoredNotification[]) {
+  const runs = summarizeRuns(events);
+  const nodes = summarizeNodes(events);
+  return {
+    total_events: events.length,
+    runs_by_status: countBy(runs, (run) => run.status),
+    runs_by_source: countBy(runs, (run) => run.source_platform),
+    notifications_by_status: countBy(notifications, (notification) => notification.status),
+    notifications_by_severity: countBy(notifications, (notification) => notification.severity ?? "unknown"),
+    node_status_counts: countBy(nodes, (node) => node.status),
+    recent_failures: runs.filter((run) => run.status === "failed").slice(0, 10)
+  };
+}
+
+function summarizeApprovals(events: StoredEvent[]) {
+  const approvals = new Map<string, {
+    approval_id: string;
+    run_id?: string;
+    session_id?: string;
+    status: "pending" | "accepted" | "denied" | "expired";
+    title?: string;
+    requested_at: string;
+    resolved_at?: string;
+    source: string;
+  }>();
+  for (const event of events.filter((item) => item.type.startsWith("approval."))) {
+    const approvalId = safeString(event.payload.approval_id) ?? event.correlation?.tool_call_id ?? event.id;
+    const existing = approvals.get(approvalId) ?? {
+      approval_id: approvalId,
+      run_id: event.correlation?.run_id,
+      session_id: event.correlation?.session_id,
+      status: "pending" as const,
+      title: safeString(event.payload.title) ?? safeString(event.payload.permission) ?? event.type,
+      requested_at: event.time,
+      source: `${event.source.platform}/${event.source.adapter}`
+    };
+    if (event.type === "approval.resolved") existing.status = "accepted";
+    if (event.type === "approval.denied") existing.status = "denied";
+    if (event.type === "approval.expired") existing.status = "expired";
+    if (event.type !== "approval.requested") existing.resolved_at = event.time;
+    approvals.set(approvalId, existing);
+  }
+  return [...approvals.values()].sort((a, b) => b.requested_at.localeCompare(a.requested_at));
+}
+
+function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
+  return counts;
 }
 
 function runGroupId(event: StoredEvent): string {

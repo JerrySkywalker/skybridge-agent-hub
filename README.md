@@ -24,13 +24,14 @@ SkyBridge provides a shared foundation for:
 - Server-sent events stream for live dashboards.
 - SQLite persistence with a one-time import path from the previous local JSON store.
 - ntfy-first notification provider with skipped placeholder records when credentials are not configured.
-- Codex hook adapter and local sidecar event forwarder.
+- Codex hook adapter, OpenCode/Hermes adapter foundations and local sidecar event forwarder.
 - React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
 - Operator Console for local autonomous development health, active runs, event timelines, Codex integration status, notifications and compact embeds.
 - Codex TUI Master Goal workflow for long-horizon autonomous development.
 - PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
 - Reproducible Docker builds, GHCR publishing, release-tag validation, staging dry-run and backup/rollback operator scripts.
+- Approval queue, node registry, metrics endpoint, demo dataset and release candidate smoke foundations.
 
 ## Current MVP Status
 
@@ -44,6 +45,7 @@ SkyBridge is in an MVP foundation stage. The repository already contains:
 - Codex TUI Master Goal files plus runner scripts for fallback local batch processing.
 
 The remote-control surface is intentionally not production-ready yet. Current work focuses on local-first telemetry, notification, reviewable AI branches and safe iteration.
+The v0.9 release-candidate track adds multi-agent adapters, sidecar node identity, provider/rule notification records, approval queue APIs and security hardening while keeping remote execution disabled.
 
 ## Quick Start
 
@@ -98,6 +100,16 @@ http://127.0.0.1:5173/#/embed/compact
 ```
 
 See [docs/ui/OPERATOR_CONSOLE.md](docs/ui/OPERATOR_CONSOLE.md) and [docs/ui/EMBEDDING.md](docs/ui/EMBEDDING.md).
+
+### Demo Dataset
+
+Generate safe multi-agent demo data:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\generate-demo-dataset.ps1
+```
+
+See [docs/demo/DEMO_DATASET.md](docs/demo/DEMO_DATASET.md).
 
 ### Codex Hook Integration
 
@@ -219,6 +231,10 @@ Invoke-RestMethod http://127.0.0.1:8787/v1/runs/run_demo_001
 Invoke-RestMethod "http://127.0.0.1:8787/v1/events?run_id=run_demo_001"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/runs?platform=codex&status=failed"
 Invoke-RestMethod "http://127.0.0.1:8787/v1/summary"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/sources"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/nodes"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/metrics"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/approvals"
 ```
 
 Send a notification request:
@@ -326,12 +342,11 @@ Use `codex exec` for CI/scripted one-shot tasks, repair loops and non-interactiv
 
 ## Roadmap
 
-- Execute the Codex TUI mega goals in `goals/mega/`, starting with a self-observable SkyBridge development loop.
-- Add OpenCode and Hermes adapters.
+- Complete the v0.9 release candidate in [ROADMAP.md](ROADMAP.md).
+- Implement real WSS remote node transport behind auth, approval and audit boundaries.
 - Improve dashboard filtering, compact views and notification history.
 - Expand Web Component and React widget integration examples.
-- Design the local sidecar and reverse connection model for future remote operation.
-- Add remote approval policies without weakening local security defaults.
+- Add browser visual QA and public documentation site packaging.
 
 ## Security Stance
 

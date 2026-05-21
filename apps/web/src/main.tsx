@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ActiveRunsPanel,
+  ApprovalQueuePanel,
   CodexIntegrationStatus,
   EventTimeline,
   NotificationList,
@@ -51,6 +52,7 @@ function App() {
         </div>
         <aside className="dashboard-grid__side">
           <CodexIntegrationStatus apiBase={apiBase} />
+          <ApprovalQueuePanel apiBase={apiBase} />
           <NotificationList apiBase={apiBase} />
           <SelfObservationPanel apiBase={apiBase} />
           <RunDetailPanel apiBase={apiBase} runId={filteredRunId} />

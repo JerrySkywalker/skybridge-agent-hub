@@ -364,6 +364,60 @@ describe("server api", () => {
     });
   });
 
+  it("supports approval queue listing and safe local resolution", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook" },
+        correlation: { run_id: "approval-run" },
+        payload: { approval_id: "approval-1", title: "Edit file" }
+      })
+    });
+
+    const pending = await server.inject({ method: "GET", url: "/v1/approvals" });
+    expect(pending.json<{ approvals: Array<{ approval_id: string; status: string }> }>().approvals[0]).toMatchObject({
+      approval_id: "approval-1",
+      status: "pending"
+    });
+
+    const resolved = await server.inject({
+      method: "POST",
+      url: "/v1/approvals/approval-1/resolve",
+      payload: { decision: "denied", actor: "operator", reason: "safe test" }
+    });
+    expect(resolved.statusCode).toBe(202);
+
+    const detail = await server.inject({ method: "GET", url: "/v1/approvals/approval-1" });
+    expect(detail.json<{ approval: { status: string } }>().approval.status).toBe("denied");
+  });
+
+  it("returns operational metrics", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "hermes", adapter: "hermes-api" },
+        correlation: { run_id: "metrics-run" },
+        payload: {}
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/metrics" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ total_events: number; runs_by_status: Record<string, number>; runs_by_source: Record<string, number> }>()).toMatchObject({
+      total_events: 1,
+      runs_by_status: { failed: 1 },
+      runs_by_source: { hermes: 1 }
+    });
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");

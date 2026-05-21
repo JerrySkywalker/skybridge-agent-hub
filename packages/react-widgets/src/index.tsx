@@ -4,6 +4,7 @@ import {
   type EventListQuery,
   type NotificationListQuery,
   type RunListQuery,
+  type ApprovalSummary,
   type SkyBridgeHealth,
   type StoredNotification
 } from "@skybridge-agent-hub/client";
@@ -271,6 +272,40 @@ export function NotificationList({ apiBase, filters = {} }: WidgetProps & { filt
               <small>{item.provider} · {item.status}{item.error ? ` · ${item.error}` : ""}</small>
             </span>
             <small>{formatDateTime(item.createdAt)}</small>
+          </li>
+        ))}
+      </ol>
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function ApprovalQueuePanel({ apiBase }: WidgetProps) {
+  const [items, setItems] = useState<ApprovalSummary[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.listApprovals()
+      .then((approvals) => {
+        setItems(approvals);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  return (
+    <section className="skybridge-panel">
+      <PanelHeader kicker="Operator" title="Approval Queue" state={`${items.length}`} bad={items.length > 0} />
+      {items.length === 0 ? <EmptyState title="No pending approvals" detail="Remote execution remains disabled; approvals are recorded for operator workflow testing." /> : null}
+      <ol className="skybridge-timeline skybridge-timeline--compact">
+        {items.map((item) => (
+          <li key={item.approval_id}>
+            <span>
+              <strong>{item.title ?? item.approval_id}</strong>
+              <small>{item.source} · {item.run_id ?? item.session_id ?? "uncorrelated"}</small>
+            </span>
+            <small>{formatDateTime(item.requested_at)}</small>
           </li>
         ))}
       </ol>

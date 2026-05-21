@@ -2,6 +2,10 @@
 
 ## 2026-05-22
 
+- Super Goal 005-014 release train: completed the first platform release train pass across multi-agent adapters, sidecar/node foundation, notification routing/jobs, shared redaction/security docs, demo/dogfooding assets, approval API, metrics endpoint, self-hosting docs, roadmap and v0.9 release candidate notes.
+- Commits created so far: `feat(adapters): add multi-agent adapter foundation`, `feat(sidecar): add safe node registry foundation`, `feat(notifications): add provider routing job foundation`, `security: add shared redaction rules`.
+- Checks run so far: focused event-schema, adapter, sidecar, notification provider, server and client tests/typechecks passed for touched areas.
+- Known gaps intentionally deferred to backlog goals: real WSS implementation, browser visual QA, mobile readiness, production deployment hardening, public docs site and external contributor onboarding.
 - Mega Goal 004 Stages 1-15: completed the release, CI/CD, container, staging dry-run and operations foundation without deploying or touching production secrets.
 - Commits created: `docs(ops): design CI/CD and release plan`, `ci: harden public PR checks`, `ci: harden AI branch validation`, `build(docker): harden production images`, `ci: publish images to GHCR`, `deploy: harden production compose template`, `deploy: add staging dry-run workflow`, `deploy: harden backup and rollback scripts`, `deploy: add notification hooks`, `ci: add release tag workflow`, `deploy: add staging dry-run workflow`, `test(ops): add release dry-run smoke`, `ci: publish smoke artifacts safely`, `security: document CI/CD threat model`.
 - Final checks passed: `corepack pnpm check`, `just check`, Docker dev/test/prod compose config, PowerShell parse validation, release dry-run smoke, Operator Console smoke with temporary SQLite, Codex hook integration smoke with temporary server/spool, server Docker image build and web Docker image build.

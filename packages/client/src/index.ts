@@ -65,6 +65,27 @@ export interface NodeSummary {
   event_count: number;
 }
 
+export interface ApprovalSummary {
+  approval_id: string;
+  run_id?: string;
+  session_id?: string;
+  status: "pending" | "accepted" | "denied" | "expired";
+  title?: string;
+  requested_at: string;
+  resolved_at?: string;
+  source: string;
+}
+
+export interface MetricsResponse {
+  total_events: number;
+  runs_by_status: Record<string, number>;
+  runs_by_source: Record<string, number>;
+  notifications_by_status: Record<string, number>;
+  notifications_by_severity: Record<string, number>;
+  node_status_counts: Record<string, number>;
+  recent_failures: RunSummary[];
+}
+
 export interface StreamEventsOptions {
   onEvent: (event: SkyBridgeEvent) => void;
   onOpen?: () => void;
@@ -124,6 +145,15 @@ export class SkyBridgeClient {
   async listNotificationProviders(): Promise<Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>> {
     const json = await this.getJson<{ providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }> }>("/v1/notifications/providers");
     return json.providers;
+  }
+
+  async getMetrics(): Promise<MetricsResponse> {
+    return this.getJson<MetricsResponse>("/v1/metrics");
+  }
+
+  async listApprovals(): Promise<ApprovalSummary[]> {
+    const json = await this.getJson<{ approvals: ApprovalSummary[] }>("/v1/approvals");
+    return json.approvals;
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {
