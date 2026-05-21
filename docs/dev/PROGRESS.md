@@ -37,3 +37,15 @@
 - Added runner claim metadata, per-run logs under `.agent/runs/<timestamp>-<goal-id>/`, Codex JSONL output, standard checks, limited repair rounds, branch push and optional PR creation.
 - Added `config/runner.example.json` and `docs/codex/AUTONOMOUS_RUNNER.md`.
 - Kept autonomous execution intentionally local, non-deploying and single-threaded with `MaxParallel = 1`.
+
+## Codex TUI Master Goal workflow
+
+- Added `goals/00_AUTONOMOUS_MASTER_GOAL.md` as the operating source of truth for long-horizon Codex TUI development.
+- Added `docs/codex/TUI_MASTER_GOAL.md` and updated goal-mode docs to make Codex TUI the recommended primary development workflow.
+- Added `goals/mega/` with five 6-10 hour mega goals:
+  - `001-self-observable-skybridge-loop`
+  - `002-codex-hook-productionization`
+  - `003-dashboard-productization`
+  - `004-ci-cd-staging-foundation`
+  - `005-opencode-hermes-adapters`
+- Repositioned `scripts/powershell/yolo-runner.ps1` as the fallback batch/background processor for bounded `goals/ready/*.md` child goals.
