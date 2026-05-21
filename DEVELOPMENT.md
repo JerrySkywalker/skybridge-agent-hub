@@ -84,6 +84,24 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.p
 
 The script posts `skybridge.agent_event.v1` events from the `self-observation-smoke` adapter, verifies `/v1/runs/:runId`, verifies `/v1/events?run_id=...` and reports notification placeholder state. Use `-IncludeFailure` to simulate a redacted failed run for dashboard and notification checks.
 
+## Operator Console demo data
+
+With a local server running, seed realistic redacted dashboard data:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+For an isolated demo database, let the script start a temporary SQLite-backed server:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1 `
+  -UseTempDatabase
+```
+
+The fixture includes Codex hook, Codex exec, yolo-runner, failed tool, approval request, notification skipped/sent and offline spool/replay events. Payloads are intentionally fake and redacted.
+
 ## Codex hook integration smoke
 
 Run the fixture-only hook test without a server. This should create redacted normalized audit and queue JSONL under a temporary spool directory:
