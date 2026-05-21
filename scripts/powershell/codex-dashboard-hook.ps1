@@ -197,6 +197,22 @@ function Limit-JsonLines {
   $lines | Select-Object -Last $MaxLines | Set-Content -Path $Path -Encoding UTF8
 }
 
+function Remove-NullValues {
+  param($Value)
+  if ($Value -is [hashtable]) {
+    $output = @{}
+    foreach ($key in $Value.Keys) {
+      $clean = Remove-NullValues -Value $Value[$key]
+      if ($null -ne $clean) { $output[$key] = $clean }
+    }
+    return $output
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+    return ,@($Value | ForEach-Object { Remove-NullValues -Value $_ } | Where-Object { $null -ne $_ })
+  }
+  return $Value
+}
+
 try {
   if ([string]::IsNullOrWhiteSpace($ApiBase)) { $ApiBase = "http://127.0.0.1:8787" }
   $spoolDir = Get-SpoolDirectory -Requested $SpoolDirectory
@@ -209,7 +225,7 @@ try {
   $events = @(New-SkyBridgeEvents -InputObject $inputObj)
 
   foreach ($event in $events) {
-    $body = $event | ConvertTo-Json -Depth 80 -Compress
+    $body = (Remove-NullValues -Value $event) | ConvertTo-Json -Depth 80 -Compress
     Write-JsonLine -Path $auditFile -Line $body
     $headers = @{}
     if ($env:CODEX_DASHBOARD_TOKEN) { $headers["Authorization"] = "Bearer $($env:CODEX_DASHBOARD_TOKEN)" }
