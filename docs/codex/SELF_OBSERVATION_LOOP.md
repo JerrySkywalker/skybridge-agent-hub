@@ -20,7 +20,9 @@ POST /v1/events
 SQLite event store
         |
         +-- GET /v1/events
+        +-- GET /v1/events?run_id=<id>
         +-- GET /v1/runs
+        +-- GET /v1/runs/:runId
         +-- GET /v1/stream
         +-- notification placeholder or ntfy send
         |
@@ -55,7 +57,35 @@ Unsafe payloads must stay omitted or summarized before ingestion.
 
 ## Current Gaps
 
-- Server run summaries only expose the aggregate list; a specific run view and scoped event query are needed for dashboard drill-in and smoke assertions.
-- Runner and smoke events should produce stable, useful run/session grouping without requiring any schema-breaking change.
-- Dashboard widgets need a self-observation view that distinguishes Codex, runner, manual smoke and failure-trigger events.
-- A local script should prove the loop without requiring secrets or external services.
+- The current dashboard view is intentionally compact; deeper run drill-in is still a future dashboard productization task.
+- Browser-based visual QA may be unavailable in some Codex sessions. When that happens, use focused React tests, `web build` and local HTTP smoke checks as fallback evidence.
+
+## Validated Smoke Flow
+
+Start the server:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+```
+
+Send and verify local self-observation events:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+Optional failure path:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.ps1 `
+  -ApiBase http://127.0.0.1:8787 `
+  -IncludeFailure
+```
+
+Expected result:
+
+- `/v1/runs/:runId` returns the smoke run summary and redacted events.
+- `/v1/events?run_id=<runId>` returns only the smoke events for that run.
+- `/v1/notifications` includes a skipped placeholder when ntfy is not configured.
+- The dashboard self-observation panel counts Codex, runner, smoke and notification events.

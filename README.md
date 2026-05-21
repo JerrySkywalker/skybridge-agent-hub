@@ -160,6 +160,8 @@ List recent events and run summaries:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8787/v1/events
 Invoke-RestMethod http://127.0.0.1:8787/v1/runs
+Invoke-RestMethod http://127.0.0.1:8787/v1/runs/run_demo_001
+Invoke-RestMethod "http://127.0.0.1:8787/v1/events?run_id=run_demo_001"
 ```
 
 Send a notification request:
@@ -229,6 +231,15 @@ Read AGENTS.md, goals/00_AUTONOMOUS_MASTER_GOAL.md, docs/codex/TUI_MASTER_GOAL.m
 ```
 
 Use the local runner for bounded batch/background tasks that are already decomposed into `goals/ready/*.md` files. The runner is intentionally single-worker and must keep `MaxParallel` at `1`.
+
+Validate the local self-observation loop after starting the server:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+The smoke script sends redacted representative runner events, verifies the run detail API, verifies scoped event queries and records notification placeholder behavior when ntfy is not configured.
 
 Run one queued goal with the fallback runner path:
 

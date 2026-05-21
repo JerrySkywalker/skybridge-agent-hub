@@ -68,9 +68,12 @@ GET  /health
 POST /v1/events
 GET  /v1/events
 GET  /v1/runs
+GET  /v1/runs/:runId
 GET  /v1/stream
 GET  /v1/notifications
 POST /v1/notifications/send
 ```
+
+`GET /v1/events` supports scoped local drill-in with `run_id`, `session_id`, `source_platform`, `source_adapter`, `type` and `limit` query parameters. Run summaries include safe correlation metadata such as source adapter, agent/node IDs, branch, goal ID, lifecycle, tool counts and notification counts. The server derives these fields from already-redacted event payloads.
 
 `run.failed`, `approval.requested` and `notification.requested` are notification trigger events. If ntfy is not configured, notification attempts are recorded as skipped placeholders.

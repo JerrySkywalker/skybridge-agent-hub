@@ -73,3 +73,16 @@ Stop and record progress if:
 - Record demo commands and check results.
 - List any deferred follow-up goals.
 - Keep runtime logs under `.agent/runs` or `.data` out of Git.
+
+## Completion Notes
+
+Completed on 2026-05-21 on branch `ai/mega-001-self-observable-loop`.
+
+- Stage 1: mapped the self-observation loop in `docs/codex/SELF_OBSERVATION_LOOP.md`.
+- Stage 2: added scoped event filtering, `/v1/runs/:runId` and richer safe run summary metadata.
+- Stage 3: added `scripts/powershell/smoke-self-observation.ps1` and validated it against a local temporary SQLite-backed server.
+- Stage 4: added the dashboard self-observation panel and React summary helper.
+- Stage 5: added focused server, widget and adapter tests, including Codex exec redaction coverage and Codex hook correlation fallback coverage.
+- Stage 6: updated README, architecture, development and loop docs with the validated local smoke flow.
+
+Deferred follow-up: deeper dashboard run drill-in belongs to Mega Goal 003. Production deployment remains intentionally out of scope.

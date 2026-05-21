@@ -71,6 +71,19 @@ pnpm test
 pnpm build
 ```
 
+## Self-observation smoke
+
+Start the local server, then send representative local-loop telemetry:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-self-observation.ps1 `
+  -ApiBase http://127.0.0.1:8787
+```
+
+The script posts `skybridge.agent_event.v1` events from the `self-observation-smoke` adapter, verifies `/v1/runs/:runId`, verifies `/v1/events?run_id=...` and reports notification placeholder state. Use `-IncludeFailure` to simulate a redacted failed run for dashboard and notification checks.
+
 ## Goal-driven development
 
 Use:
