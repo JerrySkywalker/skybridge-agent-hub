@@ -1,0 +1,7 @@
+{
+  "runId": "hermes-run-3",
+  "event_type": "tool_completed",
+  "toolCallId": "tool-1",
+  "toolName": "shell",
+  "exitCode": 0
+}

@@ -6,12 +6,15 @@ $requiredFiles = @(
   "ROADMAP.md",
   "CHANGELOG.md",
   "docs\release\V0_9_RELEASE_CANDIDATE.md",
+  "docs\release\RELEASE_TRAIN_AUDIT.md",
   "docs\security\THREAT_MODEL.md",
+  "docs\examples\API_EXAMPLES.md",
   "docs\operations\SELF_HOSTING.md",
   "docs\approval\APPROVAL_MODEL.md",
   "docs\observability\METRICS_AND_AUDIT.md",
   "scripts\powershell\generate-demo-dataset.ps1",
-  "scripts\powershell\smoke-dogfooding-loop.ps1"
+  "scripts\powershell\smoke-dogfooding-loop.ps1",
+  "scripts\powershell\smoke-self-hosting-dry-run.ps1"
 )
 
 foreach ($path in $requiredFiles) {

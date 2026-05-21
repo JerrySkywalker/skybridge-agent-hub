@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { SkyBridgeEventSchema } from "@skybridge-agent-hub/event-schema";
 import { normalize } from "./index.js";
 
-const fixtures = [
-  { id: "hermes-run-1", status: "created", title: "Hermes run created" },
-  { id: "hermes-run-1", status: "queued", queue: "default" },
-  { id: "hermes-run-1", status: "running" },
-  { id: "hermes-run-1", status: "completed", detail: "finished" },
-  { id: "hermes-run-2", status: "failed", detail: "password=abc123 failed" },
-  { runId: "hermes-run-3", event_type: "tool_started", toolCallId: "tool-1", toolName: "shell" },
-  { runId: "hermes-run-3", event_type: "tool_completed", toolCallId: "tool-1", toolName: "shell", exitCode: 0 },
-  { runId: "hermes-run-3", kind: "status", message: "stream status" }
+const fixtureNames = [
+  "run-created",
+  "run-queued",
+  "run-running",
+  "run-completed",
+  "run-failed",
+  "event-stream-tool",
+  "event-stream-tool-completed",
+  "event-stream-status"
 ];
+
+const fixtures = fixtureNames.map((name) => JSON.parse(readFileSync(join("src", "fixtures", `${name}.json`), "utf8")) as unknown);
 
 describe("hermes api adapter", () => {
   it("normalizes Hermes run and stream fixtures", () => {
@@ -31,7 +35,8 @@ describe("hermes api adapter", () => {
 
   it("handles malformed/minimal payloads and redacts obvious secrets", () => {
     expect(normalize(undefined)).toEqual([]);
-    const [event] = normalize({ status: "failed", detail: "Bearer abc.def token=abc123" });
+    const minimal = JSON.parse(readFileSync(join("src", "fixtures", "malformed-minimal.json"), "utf8")) as unknown;
+    const [event] = normalize(minimal);
     expect(event?.type).toBe("run.failed");
     expect(JSON.stringify(event?.payload)).not.toContain("abc.def");
     expect(JSON.stringify(event?.payload)).not.toContain("abc123");

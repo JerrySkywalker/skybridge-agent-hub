@@ -12,5 +12,7 @@
 - [Approval Model](approval/APPROVAL_MODEL.md)
 - [Metrics And Audit](observability/METRICS_AND_AUDIT.md)
 - [Dogfooding Loop](dogfooding/SKYBRIDGE_DOGFOODING.md)
+- [API Examples](examples/API_EXAMPLES.md)
 - [Self Hosting](operations/SELF_HOSTING.md)
 - [Release Candidate](release/V0_9_RELEASE_CANDIDATE.md)
+- [Release Train Audit](release/RELEASE_TRAIN_AUDIT.md)

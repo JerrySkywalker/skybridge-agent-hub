@@ -1,0 +1,6 @@
+{
+  "type": "session:start",
+  "sessionId": "opencode-session-1",
+  "runId": "opencode-run-1",
+  "cwd": "C:\\Users\\jerry\\repo"
+}

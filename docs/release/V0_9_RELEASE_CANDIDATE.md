@@ -23,12 +23,15 @@ Included foundation:
 - Production deployment hardening.
 - Public docs site generation.
 - External contributor onboarding.
+- PowerShell scripts still need direct consumption of the shared redaction JSON.
 
 ## Release Checklist
 
 1. Update version and changelog.
 2. Run `corepack pnpm check`.
 3. Run release dry-run and release candidate smoke.
-4. Validate Docker compose dev/test/prod config.
-5. Build server and web images.
-6. Tag `v0.9.0` only after review.
+4. Run self-hosting dry-run smoke.
+5. Validate Docker compose dev/test/prod config.
+6. Review `docs/release/RELEASE_TRAIN_AUDIT.md`.
+7. Build server and web images.
+8. Tag `v0.9.0` only after review.
