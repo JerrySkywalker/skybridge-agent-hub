@@ -11,12 +11,11 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/cors": "^11.0.1",
     "@skybridge-agent-hub/event-schema": "workspace:*",
     "@skybridge-agent-hub/notification-ntfy": "workspace:*",
     "fastify": "^5.3.3",
-    "@fastify/cors": "^11.0.1",
     "nanoid": "^5.1.5",
     "zod": "^3.25.0"
-  },
-  "devDependencies": {}
+  }
 }

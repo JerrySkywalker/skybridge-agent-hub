@@ -6,7 +6,7 @@ Recommended tools:
 
 - PowerShell 7+
 - Git
-- Node.js LTS
+- Node.js 22.5+ with built-in `node:sqlite` support
 - pnpm via Corepack
 - Docker Desktop
 - GitHub CLI
@@ -39,7 +39,8 @@ Useful environment variables:
 ```text
 PORT=8787
 HOST=0.0.0.0
-SKYBRIDGE_DATA_FILE=.data/skybridge-store.json
+SKYBRIDGE_DB_FILE=.data/skybridge.sqlite
+SKYBRIDGE_DATA_FILE=.data/skybridge-store.json  # optional legacy JSON migration source
 SKYBRIDGE_PUBLIC_URL=http://127.0.0.1:3000
 NTFY_TOPIC_URL=https://ntfy.sh/example-topic
 NTFY_TOKEN=

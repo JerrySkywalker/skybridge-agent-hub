@@ -48,7 +48,7 @@ packages/notification-providers ntfy/Apprise/FCM/etc. adapters
 - ntfy is the first notification outlet, not a permanent lock-in.
 - Codex hooks are treated as telemetry inputs, not as the final remote-control protocol.
 - Future remote control should go through local sidecar + reverse connection + explicit approval policy.
-- MVP persistence uses a local JSON store at `.data/skybridge-store.json`; SQLite remains the next persistence hardening step.
+- MVP persistence uses a local SQLite store at `.data/skybridge.sqlite`, with one-time import from the previous `.data/skybridge-store.json` JSON store when present.
 
 ## Event schema
 

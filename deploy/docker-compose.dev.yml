@@ -8,6 +8,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8787
+      - SKYBRIDGE_DB_FILE=/workspace/.data/skybridge.sqlite
       - SKYBRIDGE_DATA_FILE=/workspace/.data/skybridge-store.json
     volumes:
       - ../:/workspace

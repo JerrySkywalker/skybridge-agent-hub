@@ -1,7 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import {
@@ -12,69 +11,14 @@ import {
   type SkyBridgeEvent
 } from "@skybridge-agent-hub/event-schema";
 import { send as sendNtfy, type NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
+import { MemoryStore, SqliteStore, type EventStore, type StoredEvent, type StoredNotification } from "./store.js";
 
-export type StoredEvent = SkyBridgeEvent & { id: string; receivedAt: string };
-
-interface StoredNotification {
-  id: string;
-  provider: "ntfy" | "placeholder";
-  status: "sent" | "skipped" | "failed";
-  message: NotificationMessage;
-  createdAt: string;
-  error?: string;
-}
-
-interface LocalStoreData {
-  events: StoredEvent[];
-  notifications: StoredNotification[];
-}
-
-class LocalJsonStore {
-  private data: LocalStoreData = { events: [], notifications: [] };
-
-  constructor(private readonly filePath: string | undefined) {}
-
-  async load(): Promise<void> {
-    if (!this.filePath) return;
-    try {
-      const content = await readFile(this.filePath, "utf8");
-      const parsed = JSON.parse(content) as Partial<LocalStoreData>;
-      this.data = {
-        events: parsed.events ?? [],
-        notifications: parsed.notifications ?? []
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-  }
-
-  listEvents(): StoredEvent[] {
-    return [...this.data.events];
-  }
-
-  listNotifications(): StoredNotification[] {
-    return [...this.data.notifications];
-  }
-
-  async addEvent(event: StoredEvent): Promise<void> {
-    this.data.events.push(event);
-    await this.persist();
-  }
-
-  async addNotification(notification: StoredNotification): Promise<void> {
-    this.data.notifications.push(notification);
-    await this.persist();
-  }
-
-  private async persist(): Promise<void> {
-    if (!this.filePath) return;
-    await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(this.data, null, 2), "utf8");
-  }
-}
+export type { StoredEvent, StoredNotification } from "./store.js";
 
 interface CreateServerOptions {
+  dbFile?: string | false;
   dataFile?: string | false;
+  jsonMigrationFile?: string | false;
   logger?: boolean;
 }
 
@@ -121,13 +65,16 @@ function notificationForEvent(event: StoredEvent): NotificationMessage {
 }
 
 export async function createServer(options: CreateServerOptions = {}): Promise<FastifyInstance> {
-  const dataFile = options.dataFile === false ? undefined : options.dataFile ?? process.env.SKYBRIDGE_DATA_FILE ?? join(process.cwd(), ".data", "skybridge-store.json");
-  const store = new LocalJsonStore(dataFile);
+  const persistence = resolvePersistence(options);
+  const store: EventStore = persistence.dbFile ? new SqliteStore({ dbFile: persistence.dbFile, legacyJsonFile: persistence.jsonMigrationFile }) : new MemoryStore();
   const clients = new Set<{ write: (data: string) => void }>();
   const app = Fastify({ logger: options.logger ?? true });
 
   await store.load();
   await app.register(cors, { origin: true });
+  app.addHook("onClose", async () => {
+    await store.close();
+  });
 
   const broadcast = (event: StoredEvent) => {
     const payload = `event: skybridge.event\ndata: ${JSON.stringify(event)}\n\n`;
@@ -169,7 +116,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   app.get("/health", async () => ({
     ok: true,
     service: "skybridge-server",
-    persistence: dataFile ? "local-json" : "memory",
+    persistence: store.kind,
+    dbFile: persistence.dbFile,
+    jsonMigrationFile: persistence.jsonMigrationFile,
     time: new Date().toISOString()
   }));
 
@@ -188,7 +137,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   });
 
   app.get("/v1/events", async () => ({
-    events: store.listEvents().slice(-200)
+    events: store.listEvents(200)
   }));
 
   app.get("/v1/runs", async () => ({
@@ -196,7 +145,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   }));
 
   app.get("/v1/notifications", async () => ({
-    notifications: store.listNotifications().slice(-200)
+    notifications: store.listNotifications(200)
   }));
 
   app.post<{ Body: NotificationMessage }>("/v1/notifications/send", async (request, reply) => {
@@ -224,7 +173,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     const client = { write: (data: string) => reply.raw.write(data) };
     clients.add(client);
     reply.raw.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
-    for (const event of store.listEvents().slice(-20)) {
+    for (const event of store.listEvents(20)) {
       client.write(`event: skybridge.event\ndata: ${JSON.stringify(event)}\n\n`);
     }
 
@@ -248,6 +197,29 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   });
 
   return app;
+}
+
+function resolvePersistence(options: CreateServerOptions): { dbFile?: string; jsonMigrationFile?: string } {
+  if (options.dbFile === false || options.dataFile === false) return {};
+
+  const legacyEnvFile = process.env.SKYBRIDGE_DATA_FILE;
+  const defaultJsonFile = join(process.cwd(), ".data", "skybridge-store.json");
+  const jsonMigrationFile = options.jsonMigrationFile === false
+    ? undefined
+    : options.jsonMigrationFile ?? legacyEnvFile ?? defaultJsonFile;
+
+  const dbFile = options.dbFile
+    ?? process.env.SKYBRIDGE_DB_FILE
+    ?? sqlitePathFromLegacy(options.dataFile || legacyEnvFile)
+    ?? join(process.cwd(), ".data", "skybridge.sqlite");
+
+  return { dbFile, jsonMigrationFile };
+}
+
+function sqlitePathFromLegacy(filePath: string | false | undefined): string | undefined {
+  if (!filePath) return undefined;
+  if (extname(filePath).toLowerCase() !== ".json") return filePath;
+  return join(dirname(filePath), `${basename(filePath, ".json")}.sqlite`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

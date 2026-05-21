@@ -31,6 +31,8 @@ V:\src\skybridge-agent-hub
 
 If this zip creates a top-level folder automatically, extract it under `V:\src`.
 
+SQLite persistence uses Node's built-in `node:sqlite` module. Use Node.js 22.5+ for local server development.
+
 ## First local commands
 
 ```powershell
@@ -48,7 +50,7 @@ pnpm --filter @skybridge-agent-hub/web dev
 
 The server listens on `http://127.0.0.1:8787` by default and exposes `GET /health`, `POST /v1/events`, `GET /v1/events`, `GET /v1/runs`, `GET /v1/stream` and `POST /v1/notifications/send`.
 
-Events are persisted to `.data/skybridge-store.json` unless `SKYBRIDGE_DATA_FILE` is set. ntfy is optional; set `NTFY_TOPIC_URL` and, if required, `NTFY_TOKEN`.
+Events and notification attempts are persisted to `.data/skybridge.sqlite` unless `SKYBRIDGE_DB_FILE` is set. On first SQLite startup, the server safely imports an existing `.data/skybridge-store.json` or `SKYBRIDGE_DATA_FILE` file if present; the JSON file is left in place as a rollback copy. ntfy is optional; set `NTFY_TOPIC_URL` and, if required, `NTFY_TOKEN`.
 
 If `pnpm` or `just` is not ready yet, start with the goal files instead:
 
@@ -104,7 +106,7 @@ The MVP foundation covers the first staged goals and several follow-up slices:
 2. pnpm TypeScript monorepo bootstrap;
 3. `skybridge.agent_event.v1` schema and tests;
 4. server health, event ingestion, event list, run summaries and SSE stream;
-5. local JSON persistence for MVP history;
+5. SQLite persistence for MVP history with one-time local JSON migration;
 6. React dashboard shell and reusable widgets;
 7. Web Component status card;
 8. Codex hook adapter and safety guard scripts;
