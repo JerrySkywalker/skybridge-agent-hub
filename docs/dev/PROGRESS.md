@@ -29,3 +29,11 @@
 - Standardized server default SQLite and legacy JSON migration paths on repository-root `.data/`, while keeping `SKYBRIDGE_DB_FILE` and `SKYBRIDGE_DATA_FILE` overrides.
 - Hardened `/v1/events` so invalid event payloads return HTTP 400 validation details instead of surfacing as server errors.
 - Codified small-step autonomous Git workflow: split goals into logical commits, run the smallest relevant check before each commit, run `just check` before stopping, and push after completed passing goals.
+
+## Open-source homepage and autonomous runner foundation
+
+- Rewrote the top-level README as a public open-source project homepage with quick start, architecture, event model, API examples, development commands, roadmap, security stance and contributing guidance.
+- Hardened `scripts/powershell/yolo-runner.ps1` into a single-worker queue runner MVP for `goals/ready/*.md`.
+- Added runner claim metadata, per-run logs under `.agent/runs/<timestamp>-<goal-id>/`, Codex JSONL output, standard checks, limited repair rounds, branch push and optional PR creation.
+- Added `config/runner.example.json` and `docs/codex/AUTONOMOUS_RUNNER.md`.
+- Kept autonomous execution intentionally local, non-deploying and single-threaded with `MaxParallel = 1`.
