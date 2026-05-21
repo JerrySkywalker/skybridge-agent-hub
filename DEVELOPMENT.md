@@ -47,6 +47,8 @@ NTFY_TOKEN=
 VITE_SKYBRIDGE_API_BASE=http://127.0.0.1:8787
 ```
 
+By default, local server persistence uses repository-root `.data/skybridge.sqlite`, even when the server is started through a package script from `apps/server`. Set `SKYBRIDGE_DB_FILE` to override the SQLite file. `SKYBRIDGE_DATA_FILE` remains an optional legacy JSON migration source and defaults to repository-root `.data/skybridge-store.json`.
+
 Or start services with Docker:
 
 ```powershell

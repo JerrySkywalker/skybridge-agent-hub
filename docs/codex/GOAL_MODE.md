@@ -34,3 +34,12 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
 - Define completion criteria.
 - Define prohibited changes.
 - Let Codex make implementation decisions within that boundary.
+
+## Small-step Git iteration
+
+- Split a goal into logical commits that each leave the repository in a passing state.
+- Run the smallest relevant check before each commit, such as a package test or typecheck for the touched area.
+- Commit after each coherent passing subtask; do not wait until the entire goal is complete.
+- Do not squash the commits from an autonomous goal unless a human explicitly asks for it.
+- Run `just check` before the final stop. If `just` is unavailable, run `corepack pnpm check` and document the fallback.
+- Push the branch or `main` after the completed goal passes checks.

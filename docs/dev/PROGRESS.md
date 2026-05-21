@@ -22,3 +22,10 @@
 - Persistence: sqlite.
 - Local DB file observed at `apps/server/.data/skybridge.sqlite` when running server via pnpm filter.
 - Git tag: `v0.2.0-sqlite-mvp`.
+
+## Engineering discipline update
+
+- Added repository line-ending policy with LF for source/config/docs/CI files and CRLF for Windows-first PowerShell scripts.
+- Standardized server default SQLite and legacy JSON migration paths on repository-root `.data/`, while keeping `SKYBRIDGE_DB_FILE` and `SKYBRIDGE_DATA_FILE` overrides.
+- Hardened `/v1/events` so invalid event payloads return HTTP 400 validation details instead of surfacing as server errors.
+- Codified small-step autonomous Git workflow: split goals into logical commits, run the smallest relevant check before each commit, run `just check` before stopping, and push after completed passing goals.

@@ -50,12 +50,16 @@ just build
 
 1. Read the goal file completely.
 2. Read relevant docs: `README.md`, `ARCHITECTURE.md`, `DEVELOPMENT.md`, `SECURITY.md`.
-3. Make the smallest complete change that satisfies the goal.
-4. Prefer typed, tested, modular code.
-5. Run checks.
-6. Fix failures without expanding scope unnecessarily.
-7. Update docs when behavior changes.
-8. Summarize changed files, test results, risks and follow-up tasks.
+3. Split each goal into logical, reviewable subtasks.
+4. Make the smallest complete change that satisfies the current subtask.
+5. Prefer typed, tested, modular code.
+6. Run the smallest relevant check before each commit.
+7. Commit after each coherent passing subtask; do not squash goal commits.
+8. Fix failures without expanding scope unnecessarily.
+9. Update docs when behavior changes.
+10. Run `just check` before the final stop; if `just` is unavailable, run `corepack pnpm check`.
+11. Push the branch or `main` after a completed goal passes checks.
+12. Summarize commits, commands, check results, working-tree status, risks and follow-up tasks.
 
 ## ThesisYOLO mode
 
@@ -107,6 +111,9 @@ notification.*
 A goal is done only when:
 
 - checks pass or the failure is clearly documented;
+- each coherent passing subtask has its own commit;
+- `just check` has passed before stopping, or the fallback/check failure is documented;
+- the completed goal has been pushed unless blocked by credentials or remote access;
 - the implementation is committed-ready;
 - docs or goals are updated where relevant;
 - no secrets are introduced;
