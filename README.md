@@ -1,130 +1,249 @@
 # SkyBridge Agent Hub
 
-SkyBridge Agent Hub is a long-term, open-source control and telemetry foundation for Jerry's local and cloud AI agents.
+Open-source telemetry, notifications and control foundations for autonomous coding agents.
 
-It is designed to bridge:
+SkyBridge Agent Hub collects normalized events from tools such as Codex, OpenCode, Hermes Agent and future custom agents, then turns them into run state, dashboards, notification jobs and eventually safe remote-control workflows.
 
-- local Codex CLI / Codex exec / Codex app-server workflows;
-- OpenCode plugin events;
-- Hermes Agent runs and status events;
-- a reusable notification center based on ntfy first, extensible to Apprise, FCM, Xiaomi Push, WeCom, Bark and Gotify later;
-- embeddable dashboard widgets for Glance, standalone web dashboards and future remote-control apps.
+## Why SkyBridge Exists
 
-The previous starter name intentionally avoided becoming the long-term identity. This package now uses the long-lived project name:
+Autonomous agents are useful, but their execution state is usually scattered across terminal logs, local hooks, CI output and ad hoc notification scripts. That makes long-running work hard to supervise and hard to recover when a run fails.
+
+SkyBridge provides a shared foundation for:
+
+- ingesting events from multiple agent runtimes;
+- viewing sessions, runs, tool calls and failures in one place;
+- sending low-noise notifications for important state changes;
+- embedding agent status in React apps, web dashboards and Web Components;
+- building toward local sidecars and remote approval/control surfaces without exposing secrets by default.
+
+## Features
+
+- Unified `skybridge.agent_event.v1` event schema.
+- HTTP event ingestion and query APIs.
+- Run/session aggregation for agent work history.
+- Server-sent events stream for live dashboards.
+- SQLite persistence with a one-time import path from the previous local JSON store.
+- ntfy-first notification provider with skipped placeholder records when credentials are not configured.
+- Codex hook adapter and local sidecar event forwarder.
+- React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
+- PowerShell goal runner scripts for queue-driven local autonomous development.
+- Public GitHub Actions checks for AI branches and pull requests.
+
+## Current MVP Status
+
+SkyBridge is in an MVP foundation stage. The repository already contains:
+
+- a pnpm TypeScript monorepo;
+- `apps/server` for event ingestion, run summaries, notifications and SSE;
+- `apps/web` for the local dashboard;
+- `packages/event-schema`, `packages/client`, `packages/agent-adapters`, `packages/react-widgets`, `packages/web-components` and `packages/notification-providers`;
+- Docker dev/test compose files;
+- Codex goal-mode and runner scripts for local autonomous development.
+
+The remote-control surface is intentionally not production-ready yet. Current work focuses on local-first telemetry, notification, reviewable AI branches and safe iteration.
+
+## Quick Start
+
+Requirements:
+
+- PowerShell 7+
+- Git
+- Node.js 22.5+ with `node:sqlite`
+- pnpm via Corepack
+- optional: Docker, GitHub CLI, Codex CLI and `just`
+
+Install and check the workspace:
+
+```powershell
+corepack enable
+corepack pnpm install
+corepack pnpm check
+```
+
+Start the local server and web dashboard:
+
+```powershell
+corepack pnpm --filter @skybridge-agent-hub/server dev
+corepack pnpm --filter @skybridge-agent-hub/web dev
+```
+
+The server listens on `http://127.0.0.1:8787` by default. Events and notification attempts are persisted to `.data/skybridge.sqlite` unless `SKYBRIDGE_DB_FILE` is set.
+
+## Architecture
 
 ```text
-Product: SkyBridge Agent Hub
-Repo/folder: skybridge-agent-hub
-NPM scope: @skybridge-agent-hub/*
-Event schema: skybridge.agent_event.v1
-Default local path: V:\src\skybridge-agent-hub
-Default deploy path: /opt/skybridge-agent-hub
-```
-
-## Extract location
-
-Recommended path:
-
-```powershell
-V:\src\skybridge-agent-hub
-```
-
-If this zip creates a top-level folder automatically, extract it under `V:\src`.
-
-SQLite persistence uses Node's built-in `node:sqlite` module. Use Node.js 22.5+ for local server development.
-
-## First local commands
-
-```powershell
-cd V:\src\skybridge-agent-hub
-pnpm install
-pnpm check
-```
-
-Start the MVP locally:
-
-```powershell
-pnpm --filter @skybridge-agent-hub/server dev
-pnpm --filter @skybridge-agent-hub/web dev
-```
-
-The server listens on `http://127.0.0.1:8787` by default and exposes `GET /health`, `POST /v1/events`, `GET /v1/events`, `GET /v1/runs`, `GET /v1/stream` and `POST /v1/notifications/send`.
-
-Events and notification attempts are persisted to repository-root `.data/skybridge.sqlite` unless `SKYBRIDGE_DB_FILE` is set. On first SQLite startup, the server safely imports an existing repository-root `.data/skybridge-store.json` or `SKYBRIDGE_DATA_FILE` file if present; the JSON file is left in place as a rollback copy. ntfy is optional; set `NTFY_TOPIC_URL` and, if required, `NTFY_TOKEN`.
-
-If `pnpm` or `just` is not ready yet, start with the goal files instead:
-
-```powershell
-Get-Content .\goals\00_MASTER_GOAL.md
-Get-Content .\goals\ready\001-yolo-guardrails.md
-```
-
-## Codex goal-mode entry
-
-Use the prepared one-shot helper:
-
-```powershell
-.\scripts\powershell\run-goal.ps1 -Goal .\goals\ready\001-yolo-guardrails.md
-```
-
-For thesis-defense low-intervention development:
-
-```powershell
-.\scripts\powershell\yolo-runner.ps1 `
-  -Mode ThesisYOLO `
-  -MaxRepairRounds 3 `
-  -AutoPR `
-  -NotifyOnlyImportant
-```
-
-The runner is intentionally a starter scaffold. Let Codex harden it through the staged goal files.
-
-## Current architecture target
-
-```text
-Codex / OpenCode / Hermes
-        │
-        ▼
-Local Sidecar / Hook Adapters
-        │
-        ▼
+Agent Sources
+  Codex hooks / Codex exec JSON / Codex app-server
+  OpenCode plugin events
+  Hermes Agent API/events
+  Custom agents
+        |
+        v
+Adapter Layer
+  Normalize source-specific events
+        |
+        v
 SkyBridge Server
-  - event ingestion
-  - run/session state
-  - SSE stream
-  - notification jobs
-        │
-        ├── Dashboard widgets
-        └── Message Center → ntfy first, more push providers later
+  Event ingestion
+  Run/session aggregation
+  SSE/WebSocket stream
+  Notification job creation
+        |
+        +-- Dashboard widgets
+        +-- Message center
+        +-- Future remote app API
 ```
 
-## What is implemented now
+The server is the durable local/cloud hub. Adapters are responsible for turning source-specific payloads into the normalized event schema before the data reaches server APIs or UI packages.
 
-The MVP foundation covers the first staged goals and several follow-up slices:
+## Event Model
 
-1. YOLO guardrails and project rules;
-2. pnpm TypeScript monorepo bootstrap;
-3. `skybridge.agent_event.v1` schema and tests;
-4. server health, event ingestion, event list, run summaries and SSE stream;
-5. SQLite persistence for MVP history with one-time local JSON migration;
-6. React dashboard shell and reusable widgets;
-7. Web Component status card;
-8. Codex hook adapter and safety guard scripts;
-9. local sidecar forwarder;
-10. ntfy-first notification provider with placeholder behavior when credentials are missing;
-11. Docker dev/test compose files and public PR CI.
-
-After those pass, move files from `goals/backlog` into `goals/ready` as needed.
-
-## Safety stance
-
-SkyBridge is meant to support high-autonomy development, not uncontrolled production access.
-
-Default rule:
+All adapters emit `skybridge.agent_event.v1`. Supported event families include:
 
 ```text
-AI may develop aggressively inside branches, worktrees and containers.
-AI must not silently change secrets, production deployment files or server root-level configuration.
+session.*
+run.*
+turn.*
+plan.*
+todo.*
+tool.*
+file.*
+diff.*
+approval.*
+message.*
+agent.*
+notification.*
 ```
 
-See `AGENTS.md`, `SECURITY.md`, `docs/codex/GOAL_MODE.md` and `docs/operations/DEPLOYMENT.md`.
+Events include source metadata, optional run/session correlation IDs, severity and a redacted payload. Codex hook payloads intentionally summarize tool input and omit full command output by default.
+
+## API Examples
+
+Check server health:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8787/health
+```
+
+Ingest an event:
+
+```powershell
+$event = @{
+  schema = "skybridge.agent_event.v1"
+  id = "evt_demo_001"
+  type = "run.started"
+  source = @{
+    kind = "codex"
+    id = "local-codex"
+  }
+  occurredAt = (Get-Date).ToUniversalTime().ToString("o")
+  severity = "info"
+  run = @{
+    id = "run_demo_001"
+    title = "Demo run"
+  }
+  payload = @{
+    message = "A demo run started."
+  }
+} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8787/v1/events `
+  -ContentType "application/json" `
+  -Body $event
+```
+
+List recent events and run summaries:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8787/v1/events
+Invoke-RestMethod http://127.0.0.1:8787/v1/runs
+```
+
+Send a notification request:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8787/v1/notifications/send `
+  -ContentType "application/json" `
+  -Body (@{
+    title = "SkyBridge"
+    message = "Notification smoke test"
+    priority = "default"
+  } | ConvertTo-Json)
+```
+
+## Local Development
+
+Preferred commands:
+
+```powershell
+just check
+just dev
+just test
+just build
+```
+
+Fallback commands when `just` is not installed:
+
+```powershell
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
+corepack pnpm check
+```
+
+Run Docker checks:
+
+```powershell
+docker compose -f deploy/docker-compose.dev.yml config
+docker compose -f deploy/docker-compose.test.yml config
+```
+
+Run one queued goal with Codex:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-goal.ps1 `
+  -GoalFile .\goals\ready\001-yolo-guardrails.md
+```
+
+Run the local autonomous goal queue:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
+  -ConfigFile .\config\runner.example.json
+```
+
+## Roadmap
+
+- Harden the autonomous goal runner with better resumability, richer run metadata and safer branch handling.
+- Add OpenCode and Hermes adapters.
+- Improve dashboard filtering, compact views and notification history.
+- Expand Web Component and React widget integration examples.
+- Design the local sidecar and reverse connection model for future remote operation.
+- Add remote approval policies without weakening local security defaults.
+
+## Security Stance
+
+SkyBridge is built for high-autonomy development, not silent production access.
+
+- Do not commit `.env` files, tokens, keys, cookies or production credentials.
+- Codex hooks and adapters must redact sensitive payloads by default.
+- Production deployment, server root configuration and secret changes are outside the default autonomous workflow.
+- PR and AI-branch CI use GitHub-hosted runners and should not require production secrets.
+
+See [SECURITY.md](SECURITY.md), [AGENTS.md](AGENTS.md) and [docs/codex/GOAL_MODE.md](docs/codex/GOAL_MODE.md) for the full operating rules.
+
+## Contributing
+
+Contributions are welcome. Keep changes reviewable and include:
+
+- a short summary of the behavior change;
+- tests or a clear explanation when tests are not practical;
+- risk level and rollback notes for PRs;
+- related goal file or issue when applicable.
+
+Use branch names such as `feat/<topic>`, `fix/<topic>` or `ai/<goal-id>-<slug>`. See [CONTRIBUTING.md](CONTRIBUTING.md) for PR conventions and labels.

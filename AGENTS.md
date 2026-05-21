@@ -61,6 +61,8 @@ just build
 11. Push the branch or `main` after a completed goal passes checks.
 12. Summarize commits, commands, check results, working-tree status, risks and follow-up tasks.
 
+The local queue runner is documented in `docs/codex/AUTONOMOUS_RUNNER.md`. It processes one goal at a time from `goals/ready`, writes runtime logs under `.agent/runs`, and must keep `MaxParallel` at `1` until explicit locking and conflict handling exist.
+
 ## ThesisYOLO mode
 
 During thesis-defense YOLO mode:
