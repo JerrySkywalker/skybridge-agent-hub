@@ -199,6 +199,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     return { notifications: filterNotifications(store.listNotifications(1000), filters).slice(0, limit) };
   });
 
+  app.get("/v1/nodes", async () => ({ nodes: summarizeNodes(store.listEvents()) }));
+
   app.get("/v1/summary", async () => {
     const events = store.listEvents();
     const runs = summarizeRuns(events);
@@ -496,6 +498,43 @@ function summarizeSources(events: StoredEvent[]) {
   return [...sources.values()].sort((a, b) => b.latest_event_at.localeCompare(a.latest_event_at));
 }
 
+function summarizeNodes(events: StoredEvent[]) {
+  const nodes = new Map<string, {
+    node_id: string;
+    host?: string;
+    labels: string[];
+    capabilities: string[];
+    sidecar_version?: string;
+    last_seen: string;
+    status: "connected" | "stale" | "disconnected";
+    event_count: number;
+  }>();
+  for (const event of events.filter((item) => item.type.startsWith("node."))) {
+    const nodeId = event.source.node_id ?? safeString(event.payload.node_id) ?? event.correlation?.session_id ?? "unknown-node";
+    const existing = nodes.get(nodeId) ?? {
+      node_id: nodeId,
+      labels: [],
+      capabilities: [],
+      last_seen: event.time,
+      status: "connected" as const,
+      event_count: 0
+    };
+    existing.event_count += 1;
+    existing.last_seen = event.time > existing.last_seen ? event.time : existing.last_seen;
+    existing.host = safeString(event.payload.host) ?? existing.host;
+    existing.sidecar_version = safeString(event.payload.sidecar_version) ?? existing.sidecar_version;
+    existing.labels = safeStringArray(event.payload.labels) ?? existing.labels;
+    existing.capabilities = safeStringArray(event.payload.capabilities) ?? existing.capabilities;
+    existing.status = event.type === "node.disconnected" ? "disconnected" : "connected";
+    nodes.set(nodeId, existing);
+  }
+  const staleBefore = Date.now() - 5 * 60 * 1000;
+  return [...nodes.values()].map((node) => ({
+    ...node,
+    status: node.status === "connected" && Date.parse(node.last_seen) < staleBefore ? "stale" : node.status
+  })).sort((a, b) => b.last_seen.localeCompare(a.last_seen));
+}
+
 function runGroupId(event: StoredEvent): string {
   return event.correlation?.run_id ?? event.correlation?.session_id ?? "unknown";
 }
@@ -546,6 +585,10 @@ function latestMessageSummary(events: StoredEvent[]): string | undefined {
 
 function safeString(input: unknown): string | undefined {
   return typeof input === "string" && input.length > 0 && input.length <= 200 ? input : undefined;
+}
+
+function safeStringArray(input: unknown): string[] | undefined {
+  return Array.isArray(input) && input.every((item) => typeof item === "string" && item.length <= 80) ? input : undefined;
 }
 
 function resolvePersistence(options: CreateServerOptions): { dbFile?: string; jsonMigrationFile?: string } {

@@ -43,6 +43,17 @@ export interface SummaryResponse {
   }>;
 }
 
+export interface NodeSummary {
+  node_id: string;
+  host?: string;
+  labels: string[];
+  capabilities: string[];
+  sidecar_version?: string;
+  last_seen: string;
+  status: "connected" | "stale" | "disconnected";
+  event_count: number;
+}
+
 export interface StreamEventsOptions {
   onEvent: (event: SkyBridgeEvent) => void;
   onOpen?: () => void;
@@ -92,6 +103,11 @@ export class SkyBridgeClient {
   async listSources(): Promise<SourceCapability[]> {
     const json = await this.getJson<{ sources: SourceCapability[] }>("/v1/sources");
     return json.sources;
+  }
+
+  async listNodes(): Promise<NodeSummary[]> {
+    const json = await this.getJson<{ nodes: NodeSummary[] }>("/v1/nodes");
+    return json.nodes;
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {

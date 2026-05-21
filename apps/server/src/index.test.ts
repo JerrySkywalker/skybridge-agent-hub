@@ -298,6 +298,35 @@ describe("server api", () => {
     );
   });
 
+  it("summarizes remote node heartbeat events without command execution", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "node.heartbeat",
+        source: { platform: "skybridge", adapter: "sidecar", node_id: "node-local-1" },
+        correlation: { session_id: "node-local-1" },
+        payload: {
+          node_id: "node-local-1",
+          host: "devbox",
+          labels: ["local", "sidecar"],
+          capabilities: ["event-forwarding", "heartbeat"],
+          sidecar_version: "0.1.0"
+        }
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/nodes" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ nodes: Array<{ node_id: string; status: string; capabilities: string[] }> }>().nodes[0]).toMatchObject({
+      node_id: "node-local-1",
+      status: "stale",
+      capabilities: ["event-forwarding", "heartbeat"]
+    });
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");
