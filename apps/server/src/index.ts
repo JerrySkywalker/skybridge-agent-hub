@@ -11,8 +11,10 @@ import {
   parseEvent,
   type RunDetail,
   type RunSummary,
+  type SkyBridgeSeverity,
   type SkyBridgeEventType,
-  type SkyBridgeEvent
+  type SkyBridgeEvent,
+  type SkyBridgeSourcePlatform
 } from "@skybridge-agent-hub/event-schema";
 import { send as sendNtfy, type NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
 import { MemoryStore, SqliteStore, type EventStore, type StoredEvent, type StoredNotification } from "./store.js";
@@ -131,14 +133,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     }
   };
 
-  app.get("/health", async () => ({
+  const healthResponse = () => ({
     ok: true,
     service: "skybridge-server",
     persistence: store.kind,
     dbFile: persistence.dbFile,
     jsonMigrationFile: persistence.jsonMigrationFile,
     time: new Date().toISOString()
-  }));
+  });
+
+  app.get("/health", async () => healthResponse());
+  app.get("/v1/health", async () => healthResponse());
 
   app.post("/v1/events", async (request, reply) => {
     const parsed = parseEventPayload(request.body);
@@ -157,25 +162,60 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     return reply.code(202).send({ ok: true, id: stored.id });
   });
 
-  app.get<{ Querystring: EventListQuery }>("/v1/events", async (request) => ({
-    events: filterEvents(store.listEvents(), request.query).slice(-eventLimit(request.query.limit))
-  }));
+  app.get<{ Querystring: EventListQuery }>("/v1/events", async (request, reply) => {
+    const parsed = parseEventListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, offset, ...filters } = parsed.query;
+    const filtered = filterEvents(store.listEvents(), filters);
+    const end = Math.max(0, filtered.length - offset);
+    const start = Math.max(0, end - limit);
+    const events = filtered.slice(start, end);
+    return { events };
+  });
 
-  app.get("/v1/runs", async () => ({
-    runs: summarizeRuns(store.listEvents())
-  }));
+  app.get<{ Querystring: RunListQuery }>("/v1/runs", async (request, reply) => {
+    const parsed = parseRunListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    return { runs: filterRuns(summarizeRuns(store.listEvents()), filters).slice(0, limit) };
+  });
 
-  app.get<{ Params: { runId: string } }>("/v1/runs/:runId", async (request, reply) => {
+  app.get<{ Params: { runId: string }; Querystring: { limit?: string | number } }>("/v1/runs/:runId", async (request, reply) => {
     const runId = decodeURIComponent(request.params.runId);
+    const limit = parseBoundedInteger(request.query.limit, "limit", 1, 1000, 200);
+    if (!limit.ok) return reply.code(400).send(limit.response);
     const events = store.listEvents().filter((event) => runGroupId(event) === runId);
     const [summary] = summarizeRuns(events);
     if (!summary) return reply.code(404).send({ ok: false, error: "run_not_found" });
-    return { summary, events } satisfies RunDetail;
+    return { summary, events: events.slice(-limit.value) } satisfies RunDetail;
   });
 
-  app.get("/v1/notifications", async () => ({
-    notifications: store.listNotifications(200)
-  }));
+  app.get<{ Querystring: NotificationListQuery }>("/v1/notifications", async (request, reply) => {
+    const parsed = parseNotificationListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    return { notifications: filterNotifications(store.listNotifications(1000), filters).slice(0, limit) };
+  });
+
+  app.get("/v1/summary", async () => {
+    const events = store.listEvents();
+    const runs = summarizeRuns(events);
+    const notifications = store.listNotifications(1000);
+    return {
+      health: healthResponse(),
+      totals: {
+        events: events.length,
+        runs: runs.length,
+        active_runs: runs.filter((run) => run.status === "running").length,
+        failed_runs: runs.filter((run) => run.status === "failed").length,
+        notifications: notifications.length,
+        attention_items: runs.filter((run) => run.status === "failed").length
+          + events.filter((event) => event.type === "approval.requested").length
+          + notifications.filter((notification) => notification.status === "failed" || notification.status === "skipped").length
+      },
+      sources: summarizeSources(events)
+    };
+  });
 
   app.post<{ Body: NotificationMessage }>("/v1/notifications/send", async (request, reply) => {
     const message = request.body;
@@ -231,31 +271,221 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 interface EventListQuery {
   run_id?: string;
   session_id?: string;
+  platform?: SkyBridgeSourcePlatform;
+  adapter?: string;
   source_platform?: string;
   source_adapter?: string;
   type?: SkyBridgeEventType;
+  severity?: SkyBridgeSeverity;
+  from?: string;
+  to?: string;
+  limit?: string | number;
+  offset?: string | number;
+}
+
+type ParsedEventListQuery = Omit<EventListQuery, "limit" | "offset"> & { limit: number; offset: number };
+
+interface RunListQuery {
+  platform?: SkyBridgeSourcePlatform;
+  adapter?: string;
+  source_platform?: string;
+  source_adapter?: string;
+  status?: RunSummary["status"];
+  lifecycle?: string;
+  branch?: string;
+  goal?: string;
   from?: string;
   to?: string;
   limit?: string | number;
 }
 
-function filterEvents(events: StoredEvent[], query: EventListQuery): StoredEvent[] {
+type ParsedRunListQuery = Omit<RunListQuery, "limit"> & { limit: number };
+
+interface NotificationListQuery {
+  status?: StoredNotification["status"];
+  provider?: StoredNotification["provider"];
+  severity?: SkyBridgeSeverity;
+  limit?: string | number;
+}
+
+type ParsedNotificationListQuery = Omit<NotificationListQuery, "limit"> & { limit: number };
+
+function filterEvents(events: StoredEvent[], query: Omit<ParsedEventListQuery, "limit" | "offset">): StoredEvent[] {
+  const platform = query.platform ?? query.source_platform;
+  const adapter = query.adapter ?? query.source_adapter;
   return events.filter((event) => {
     if (query.run_id && runGroupId(event) !== query.run_id) return false;
     if (query.session_id && event.correlation?.session_id !== query.session_id) return false;
-    if (query.source_platform && event.source.platform !== query.source_platform) return false;
-    if (query.source_adapter && event.source.adapter !== query.source_adapter) return false;
+    if (platform && event.source.platform !== platform) return false;
+    if (adapter && event.source.adapter !== adapter) return false;
     if (query.type && event.type !== query.type) return false;
+    if (query.severity && event.severity !== query.severity) return false;
     if (query.from && event.time < query.from) return false;
     if (query.to && event.time > query.to) return false;
     return true;
   });
 }
 
-function eventLimit(input: string | number | undefined): number {
+function filterRuns(runs: RunSummary[], query: Omit<ParsedRunListQuery, "limit">): RunSummary[] {
+  const platform = query.platform ?? query.source_platform;
+  const adapter = query.adapter ?? query.source_adapter;
+  const goal = query.goal?.toLowerCase();
+  return runs.filter((run) => {
+    if (platform && run.source_platform !== platform) return false;
+    if (adapter && run.source_adapter !== adapter) return false;
+    if (query.status && run.status !== query.status) return false;
+    if (query.lifecycle && run.lifecycle !== query.lifecycle) return false;
+    if (query.branch && run.branch !== query.branch) return false;
+    if (goal && !`${run.goal ?? ""} ${run.goal_id ?? ""} ${run.title ?? ""}`.toLowerCase().includes(goal)) return false;
+    if (query.from && run.last_seen_at < query.from) return false;
+    if (query.to && run.first_seen_at > query.to) return false;
+    return true;
+  });
+}
+
+function filterNotifications(notifications: StoredNotification[], query: Omit<ParsedNotificationListQuery, "limit">): StoredNotification[] {
+  return notifications.filter((notification) => {
+    if (query.status && notification.status !== query.status) return false;
+    if (query.provider && notification.provider !== query.provider) return false;
+    if (query.severity) {
+      const priority = notification.message.priority;
+      const severityMatch =
+        (query.severity === "critical" && priority === "urgent")
+        || (query.severity === "error" && priority === "high")
+        || (query.severity === "warning" && priority === "default")
+        || (query.severity === "info" && (priority === "low" || priority === undefined));
+      if (!severityMatch) return false;
+    }
+    return true;
+  });
+}
+
+function parseEventListQuery(query: EventListQuery): ParsedQuery<ParsedEventListQuery> {
+  const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
+  if (!limit.ok) return limit;
+  const offset = parseBoundedInteger(query.offset, "offset", 0, 100_000, 0);
+  if (!offset.ok) return offset;
+  const validation = validateCommonQuery(query);
+  if (!validation.ok) return validation;
+  return { ok: true, query: { ...query, limit: limit.value, offset: offset.value } };
+}
+
+function parseRunListQuery(query: RunListQuery): ParsedQuery<ParsedRunListQuery> {
+  const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
+  if (!limit.ok) return limit;
+  const validation = validateCommonQuery(query);
+  if (!validation.ok) return validation;
+  if (query.status && !["running", "completed", "failed", "unknown"].includes(query.status)) {
+    return invalidQuery("status", "Expected one of running, completed, failed or unknown.");
+  }
+  return { ok: true, query: { ...query, limit: limit.value } };
+}
+
+function parseNotificationListQuery(query: NotificationListQuery): ParsedQuery<ParsedNotificationListQuery> {
+  const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
+  if (!limit.ok) return limit;
+  if (query.status && !["sent", "skipped", "failed"].includes(query.status)) {
+    return invalidQuery("status", "Expected one of sent, skipped or failed.");
+  }
+  if (query.provider && !["ntfy", "placeholder"].includes(query.provider)) {
+    return invalidQuery("provider", "Expected ntfy or placeholder.");
+  }
+  if (query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
+  return { ok: true, query: { ...query, limit: limit.value } };
+}
+
+function validateCommonQuery(query: EventListQuery | RunListQuery): ParsedQuery<{}> {
+  const platform = query.platform ?? query.source_platform;
+  if (platform && !isPlatform(platform)) return invalidQuery("platform", "Expected one of codex, opencode, hermes, skybridge or custom.");
+  if ("severity" in query && query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
+  if ("type" in query && query.type && !isEventType(query.type)) return invalidQuery("type", "Expected a SkyBridge event type.");
+  if (query.from && !isIsoDate(query.from)) return invalidQuery("from", "Expected an ISO timestamp.");
+  if (query.to && !isIsoDate(query.to)) return invalidQuery("to", "Expected an ISO timestamp.");
+  if (query.from && query.to && query.from > query.to) return invalidQuery("from", "Expected from to be earlier than or equal to to.");
+  return { ok: true, query: {} };
+}
+
+type ParsedQuery<T> = { ok: true; query: T } | { ok: false; response: QueryErrorResponse };
+type ParsedNumber = { ok: true; value: number } | { ok: false; response: QueryErrorResponse };
+
+function parseBoundedInteger(input: string | number | undefined, field: string, min: number, max: number, fallback: number): ParsedNumber {
+  if (input === undefined || input === "") return { ok: true, value: fallback };
   const parsed = typeof input === "number" ? input : Number(input);
-  if (!Number.isFinite(parsed)) return 200;
-  return Math.min(Math.max(Math.trunc(parsed), 1), 1000);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return invalidQuery(field, `Expected an integer from ${min} to ${max}.`);
+  }
+  return { ok: true, value: parsed };
+}
+
+function invalidQuery(field: string, message: string): { ok: false; response: QueryErrorResponse } {
+  return { ok: false, response: { ok: false, error: "invalid_query", issues: [{ field, message }] } };
+}
+
+interface QueryErrorResponse {
+  ok: false;
+  error: "invalid_query";
+  issues: Array<{ field: string; message: string }>;
+}
+
+function isIsoDate(input: string): boolean {
+  return !Number.isNaN(Date.parse(input)) && new Date(input).toISOString() === input;
+}
+
+function isPlatform(input: string): input is SkyBridgeSourcePlatform {
+  return ["codex", "opencode", "hermes", "skybridge", "custom"].includes(input);
+}
+
+function isSeverity(input: string): input is SkyBridgeSeverity {
+  return ["debug", "info", "warning", "error", "critical"].includes(input);
+}
+
+function isEventType(input: string): input is SkyBridgeEventType {
+  return [
+    "session.started",
+    "session.completed",
+    "run.started",
+    "run.completed",
+    "run.failed",
+    "turn.started",
+    "turn.completed",
+    "plan.updated",
+    "todo.updated",
+    "tool.started",
+    "tool.completed",
+    "tool.failed",
+    "file.edited",
+    "diff.updated",
+    "approval.requested",
+    "approval.resolved",
+    "message.delta",
+    "message.completed",
+    "agent.idle",
+    "agent.error",
+    "agent.stale",
+    "notification.requested",
+    "notification.sent",
+    "notification.failed"
+  ].includes(input);
+}
+
+function summarizeSources(events: StoredEvent[]) {
+  const sources = new Map<string, { platform: string; adapter: string; event_count: number; latest_event_at: string }>();
+  for (const event of events) {
+    const key = `${event.source.platform}/${event.source.adapter}`;
+    const existing = sources.get(key);
+    if (!existing) {
+      sources.set(key, {
+        platform: event.source.platform,
+        adapter: event.source.adapter,
+        event_count: 1,
+        latest_event_at: event.time
+      });
+      continue;
+    }
+    existing.event_count += 1;
+    if (event.time > existing.latest_event_at) existing.latest_event_at = event.time;
+  }
+  return [...sources.values()].sort((a, b) => b.latest_event_at.localeCompare(a.latest_event_at));
 }
 
 function runGroupId(event: StoredEvent): string {
