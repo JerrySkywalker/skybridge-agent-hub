@@ -2,10 +2,11 @@
 
 ## 2026-05-22
 
-- Mega Goal 004 Stages 1-13: added a CI/CD and release plan, hardened public PR and AI branch CI, added safe smoke artifacts, hardened Dockerfiles and `.dockerignore`, expanded GHCR publishing, hardened production compose, added staging dry-run, improved backup and rollback scripts, added ntfy deploy notifications, added release tag validation and added a local release dry-run smoke.
-- Commits created so far: `docs(ops): design CI/CD and release plan`, `ci: harden public PR checks`, `ci: harden AI branch validation`, `build(docker): harden production images`, `ci: publish images to GHCR`, `deploy: harden production compose template`, `deploy: add staging dry-run workflow`, `deploy: harden backup and rollback scripts`, `deploy: add notification hooks`, `ci: add release tag workflow`, `deploy: add staging dry-run workflow`, `test(ops): add release dry-run smoke`.
-- Checks run so far: PowerShell parse validation passed; Docker dev/test/prod compose config passed; `smoke-release-dry-run.ps1` passed; staging dry-run passed with missing env file safely reported; server Docker image build passed.
-- Known gap before final validation: web Docker image build timed out locally during the first attempt and needs a rerun after warmed Docker layers.
+- Mega Goal 004 Stages 1-15: completed the release, CI/CD, container, staging dry-run and operations foundation without deploying or touching production secrets.
+- Commits created: `docs(ops): design CI/CD and release plan`, `ci: harden public PR checks`, `ci: harden AI branch validation`, `build(docker): harden production images`, `ci: publish images to GHCR`, `deploy: harden production compose template`, `deploy: add staging dry-run workflow`, `deploy: harden backup and rollback scripts`, `deploy: add notification hooks`, `ci: add release tag workflow`, `deploy: add staging dry-run workflow`, `test(ops): add release dry-run smoke`, `ci: publish smoke artifacts safely`, `security: document CI/CD threat model`.
+- Final checks passed: `corepack pnpm check`, `just check`, Docker dev/test/prod compose config, PowerShell parse validation, release dry-run smoke, Operator Console smoke with temporary SQLite, Codex hook integration smoke with temporary server/spool, server Docker image build and web Docker image build.
+- Staging dry-run result: missing `.env` was reported without printing secrets, compose rendered successfully and no containers were started or changed.
+- Known gaps: release workflows are syntax-reviewed and locally smoke-validated but not executed on GitHub in this session; real staging or production deployment remains intentionally manual and outside this goal.
 
 ## 2026-05-21
 
