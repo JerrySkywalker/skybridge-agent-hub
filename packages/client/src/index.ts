@@ -1,4 +1,4 @@
-import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType } from "@skybridge-agent-hub/event-schema";
+import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
   title: string;
@@ -7,72 +7,172 @@ export interface NotificationRequest {
   url?: string;
 }
 
+export interface SkyBridgeHealth {
+  ok: boolean;
+  service: string;
+  persistence: "memory" | "sqlite";
+  dbFile?: string;
+  jsonMigrationFile?: string;
+  time: string;
+}
+
+export interface StoredNotification {
+  id: string;
+  provider: "ntfy" | "placeholder";
+  status: "sent" | "skipped" | "failed";
+  message: NotificationRequest;
+  createdAt: string;
+  error?: string;
+}
+
+export interface SummaryResponse {
+  health: SkyBridgeHealth;
+  totals: {
+    events: number;
+    runs: number;
+    active_runs: number;
+    failed_runs: number;
+    notifications: number;
+    attention_items: number;
+  };
+  sources: Array<{
+    platform: string;
+    adapter: string;
+    event_count: number;
+    latest_event_at: string;
+  }>;
+}
+
+export interface StreamEventsOptions {
+  onEvent: (event: SkyBridgeEvent) => void;
+  onOpen?: () => void;
+  onError?: (error: Event) => void;
+}
+
 export class SkyBridgeClient {
   constructor(private readonly apiBase: string) {}
 
+  async getHealth(): Promise<SkyBridgeHealth> {
+    return this.getJson<SkyBridgeHealth>("/v1/health");
+  }
+
   async sendEvent(event: SkyBridgeEvent): Promise<{ ok: boolean; id: string }> {
-    const response = await fetch(`${this.apiBase}/v1/events`, {
+    const response = await fetch(this.url("/v1/events"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(event)
     });
-    if (!response.ok) throw new Error(`event ingest failed with HTTP ${response.status}`);
+    await assertOk(response, "event ingest");
     return response.json() as Promise<{ ok: boolean; id: string }>;
   }
 
   async listEvents(query: EventListQuery = {}): Promise<SkyBridgeEvent[]> {
-    const response = await fetch(`${this.apiBase}/v1/events${queryString(query)}`);
-    const json = await response.json() as { events: SkyBridgeEvent[] };
+    const json = await this.getJson<{ events: SkyBridgeEvent[] }>(`/v1/events${queryString(query)}`);
     return json.events;
   }
 
-  async listRuns(): Promise<RunSummary[]> {
-    const response = await fetch(`${this.apiBase}/v1/runs`);
-    const json = await response.json() as { runs: RunSummary[] };
+  async listRuns(query: RunListQuery = {}): Promise<RunSummary[]> {
+    const json = await this.getJson<{ runs: RunSummary[] }>(`/v1/runs${queryString(query)}`);
     return json.runs;
   }
 
-  async getRun(runId: string): Promise<RunDetail> {
-    const response = await fetch(`${this.apiBase}/v1/runs/${encodeURIComponent(runId)}`);
-    if (!response.ok) throw new Error(`run lookup failed with HTTP ${response.status}`);
-    return response.json() as Promise<RunDetail>;
+  async getRun(runId: string, query: { limit?: number } = {}): Promise<RunDetail> {
+    return this.getJson<RunDetail>(`/v1/runs/${encodeURIComponent(runId)}${queryString(query)}`);
+  }
+
+  async listNotifications(query: NotificationListQuery = {}): Promise<StoredNotification[]> {
+    const json = await this.getJson<{ notifications: StoredNotification[] }>(`/v1/notifications${queryString(query)}`);
+    return json.notifications;
+  }
+
+  async getSummary(): Promise<SummaryResponse> {
+    return this.getJson<SummaryResponse>("/v1/summary");
   }
 
   async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {
-    const response = await fetch(`${this.apiBase}/v1/notifications/send`, {
+    const response = await fetch(this.url("/v1/notifications/send"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(message)
     });
-    if (!response.ok) throw new Error(`notification request failed with HTTP ${response.status}`);
+    await assertOk(response, "notification request");
     return response.json() as Promise<{ ok: boolean; provider: string }>;
   }
 
-  streamEvents(onEvent: (event: SkyBridgeEvent) => void): EventSource {
-    const source = new EventSource(`${this.apiBase}/v1/stream`);
+  streamEvents(optionsOrHandler: StreamEventsOptions | ((event: SkyBridgeEvent) => void)): EventSource {
+    const options = typeof optionsOrHandler === "function" ? { onEvent: optionsOrHandler } : optionsOrHandler;
+    const source = new EventSource(this.url("/v1/stream"));
+    if (options.onOpen) source.addEventListener("open", options.onOpen);
+    if (options.onError) source.addEventListener("error", options.onError);
     source.addEventListener("skybridge.event", (message) => {
-      onEvent(JSON.parse((message as MessageEvent).data));
+      options.onEvent(JSON.parse((message as MessageEvent).data) as SkyBridgeEvent);
     });
     return source;
+  }
+
+  private async getJson<T>(path: string): Promise<T> {
+    const response = await fetch(this.url(path));
+    await assertOk(response, "request");
+    return response.json() as Promise<T>;
+  }
+
+  private url(path: string): string {
+    return `${this.apiBase.replace(/\/$/, "")}${path}`;
   }
 }
 
 export interface EventListQuery {
   run_id?: string;
   session_id?: string;
-  source_platform?: string;
+  platform?: SkyBridgeSourcePlatform;
+  adapter?: string;
+  source_platform?: SkyBridgeSourcePlatform;
   source_adapter?: string;
   type?: SkyBridgeEventType;
+  severity?: SkyBridgeSeverity;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RunListQuery {
+  platform?: SkyBridgeSourcePlatform;
+  adapter?: string;
+  source_platform?: SkyBridgeSourcePlatform;
+  source_adapter?: string;
+  status?: RunSummary["status"];
+  lifecycle?: string;
+  branch?: string;
+  goal?: string;
   from?: string;
   to?: string;
   limit?: number;
 }
 
-function queryString(query: EventListQuery): string {
+export interface NotificationListQuery {
+  status?: StoredNotification["status"];
+  provider?: StoredNotification["provider"];
+  severity?: SkyBridgeSeverity;
+  limit?: number;
+}
+
+function queryString(query: object): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined) params.set(key, String(value));
   }
   const text = params.toString();
   return text ? `?${text}` : "";
+}
+
+async function assertOk(response: Response, label: string): Promise<void> {
+  if (response.ok) return;
+  let detail = "";
+  try {
+    detail = `: ${JSON.stringify(await response.json())}`;
+  } catch {
+    detail = "";
+  }
+  throw new Error(`${label} failed with HTTP ${response.status}${detail}`);
 }
