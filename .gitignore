@@ -24,6 +24,7 @@ logs/
 
 # agent runtime
 .agent/runs/
+.agent/iterations/
 .agent/spool/
 .agent/tmp/
 .agent/last-message.md
