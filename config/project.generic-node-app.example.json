@@ -1,0 +1,48 @@
+{
+  "project": {
+    "id": "generic-node-app",
+    "name": "Generic Node App",
+    "repository": "OWNER/REPOSITORY",
+    "localPath": "C:/src/generic-node-app",
+    "baseBranch": "main",
+    "branchPrefix": "ai/"
+  },
+  "codex": {
+    "command": "codex",
+    "args": ["exec", "--json"],
+    "sandbox": "workspace-write",
+    "approvalPolicy": "never",
+    "outputLastMessage": true
+  },
+  "goals": {
+    "queuePath": "goals/ready",
+    "donePath": "goals/done",
+    "failedPath": "goals/failed"
+  },
+  "iteration": {
+    "maxRepairAttempts": 2,
+    "localCheckCommands": ["corepack pnpm check"],
+    "smokeCommands": []
+  },
+  "github": {
+    "requiredChecks": ["Project check"],
+    "createPR": true,
+    "watchCI": true,
+    "autoMerge": false
+  },
+  "notifications": {
+    "bootstrap": true,
+    "ntfyEnv": "NTFY_TOPIC_URL",
+    "wecomUrgentEnv": "WECOM_WEBHOOK_URL"
+  },
+  "skybridge": {
+    "apiBase": "http://127.0.0.1:8787",
+    "telemetryEnabled": false,
+    "failOpen": true
+  },
+  "hermes": {
+    "enabled": false,
+    "supervisorId": "hermes-generic-supervisor",
+    "bridgeScript": "scripts/powershell/skybridge-hermes-supervisor.ps1"
+  }
+}

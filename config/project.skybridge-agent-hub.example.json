@@ -1,0 +1,52 @@
+{
+  "project": {
+    "id": "skybridge-agent-hub",
+    "name": "SkyBridge Agent Hub",
+    "repository": "JerrySkywalker/skybridge-agent-hub",
+    "localPath": "V:/src/skybridge-agent-hub",
+    "baseBranch": "main",
+    "branchPrefix": "ai/"
+  },
+  "codex": {
+    "command": "codex",
+    "args": ["exec", "--json"],
+    "sandbox": "workspace-write",
+    "approvalPolicy": "never",
+    "outputLastMessage": true
+  },
+  "goals": {
+    "queuePath": "goals/ready",
+    "donePath": "goals/done",
+    "failedPath": "goals/failed"
+  },
+  "iteration": {
+    "maxRepairAttempts": 3,
+    "localCheckCommands": ["corepack pnpm check"],
+    "smokeCommands": [
+      "corepack pnpm smoke:iteration-controller",
+      "corepack pnpm smoke:ci-guardian",
+      "corepack pnpm smoke:hermes-supervisor-flow"
+    ]
+  },
+  "github": {
+    "requiredChecks": ["Project check"],
+    "createPR": true,
+    "watchCI": true,
+    "autoMerge": false
+  },
+  "notifications": {
+    "bootstrap": true,
+    "ntfyEnv": "NTFY_TOPIC_URL",
+    "wecomUrgentEnv": "WECOM_WEBHOOK_URL"
+  },
+  "skybridge": {
+    "apiBase": "http://127.0.0.1:8787",
+    "telemetryEnabled": true,
+    "failOpen": true
+  },
+  "hermes": {
+    "enabled": true,
+    "supervisorId": "hermes-skybridge-supervisor",
+    "bridgeScript": "scripts/powershell/skybridge-hermes-supervisor.ps1"
+  }
+}

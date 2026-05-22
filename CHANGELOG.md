@@ -10,3 +10,4 @@
 - Added approval queue API skeleton and dashboard panel.
 - Added metrics endpoint, dogfooding smoke and release candidate smoke.
 - Added nightly local validation orchestration and v0.9 release-candidate audit docs.
+- Added Autonomous Iteration Controller, CI Guardian, Hermes supervisor bridge, bootstrap direct notifications, iteration APIs and Operator Console iteration panels.
