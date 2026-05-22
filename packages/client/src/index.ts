@@ -1,4 +1,4 @@
-import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform, SourceCapability } from "@skybridge-agent-hub/event-schema";
+import type { IterationRun, RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform, SourceCapability } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
   title: string;
@@ -170,6 +170,20 @@ export class SkyBridgeClient {
     return json.audit;
   }
 
+  async listIterations(): Promise<IterationRun[]> {
+    const json = await this.getJson<{ iterations: IterationRun[] }>("/v1/iterations");
+    return json.iterations;
+  }
+
+  async getIteration(iterationId: string): Promise<IterationRun & { events?: Array<{ type: string; time: string; payload: Record<string, unknown> }> }> {
+    const json = await this.getJson<{ iteration: IterationRun & { events?: Array<{ type: string; time: string; payload: Record<string, unknown> }> } }>(`/v1/iterations/${encodeURIComponent(iterationId)}`);
+    return json.iteration;
+  }
+
+  async getSupervisorStatus(): Promise<SupervisorStatus> {
+    return this.getJson<SupervisorStatus>("/v1/supervisor/status");
+  }
+
   async listApprovals(): Promise<ApprovalSummary[]> {
     const json = await this.getJson<{ approvals: ApprovalSummary[] }>("/v1/approvals");
     return json.approvals;
@@ -250,6 +264,19 @@ export interface AuditListQuery {
   from?: string;
   to?: string;
   limit?: number;
+}
+
+export interface SupervisorStatus {
+  ok: boolean;
+  raw_prompts_included: false;
+  raw_logs_included: false;
+  iterations: {
+    total: number;
+    active: number;
+    blocked: number;
+    latest?: IterationRun;
+  };
+  recent_iteration_events: SkyBridgeEvent[];
 }
 
 function queryString(query: object): string {

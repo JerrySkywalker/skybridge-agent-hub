@@ -86,6 +86,19 @@ describe("SkyBridgeClient", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:8787/v1/audit?run_id=run-1&action=approval.denied&limit=10");
   });
 
+  it("returns iteration and supervisor status helpers", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ iterations: [{ iteration_id: "iter-1", state: "ci_pending" }] }))
+      .mockResolvedValueOnce(jsonResponse({ iteration: { iteration_id: "iter-1", state: "ci_pending", events: [] } }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, raw_prompts_included: false, raw_logs_included: false, iterations: { total: 1, active: 1, blocked: 0 }, recent_iteration_events: [] }));
+    const client = new SkyBridgeClient("http://localhost:8787");
+
+    await expect(client.listIterations()).resolves.toEqual([expect.objectContaining({ iteration_id: "iter-1" })]);
+    await expect(client.getIteration("iter-1")).resolves.toMatchObject({ iteration_id: "iter-1", events: [] });
+    await expect(client.getSupervisorStatus()).resolves.toMatchObject({ raw_logs_included: false });
+  });
+
   it("throws useful errors for non-2xx responses", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_query" }, 400));
