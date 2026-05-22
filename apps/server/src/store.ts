@@ -257,6 +257,7 @@ export class SqliteStore implements EventStore {
     const parsed = JSON.parse(content) as Partial<LocalStoreData>;
     const events = parsed.events ?? [];
     const notifications = parsed.notifications ?? [];
+    const audit = parsed.audit ?? [];
 
     const insertEvents = transaction(db, (items: StoredEvent[]) => {
       for (const event of items) {
@@ -268,12 +269,18 @@ export class SqliteStore implements EventStore {
         this.addNotificationSync(notification);
       }
     });
+    const insertAudit = transaction(db, (items: StoredAuditRecord[]) => {
+      for (const record of items) {
+        this.addAuditRecordSync(record);
+      }
+    });
 
     insertEvents(events);
     insertNotifications(notifications);
+    insertAudit(audit);
     db.prepare("INSERT OR REPLACE INTO store_metadata (key, value) VALUES (?, ?)").run(
       migratedKey,
-      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length })
+      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length, audit: audit.length })
     );
   }
 
@@ -296,6 +303,17 @@ export class SqliteStore implements EventStore {
         ?, ?, ?, ?, ?, ?, ?
       )
     `).run(...toNotificationParams(notification));
+  }
+
+  private addAuditRecordSync(record: StoredAuditRecord) {
+    this.requireDb().prepare(`
+      INSERT OR IGNORE INTO audit_records (
+        audit_id, time, action, actor, source_adapter, run_id, session_id,
+        safety_decision, immutable_event_id, redaction_policy_version, audit_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `).run(...toAuditParams(record));
   }
 
   private requireDb(): SqliteDatabase {

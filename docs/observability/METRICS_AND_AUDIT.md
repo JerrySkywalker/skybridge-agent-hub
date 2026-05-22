@@ -16,6 +16,8 @@ SkyBridge exposes lightweight operational metrics at `GET /v1/metrics` and a saf
 
 The audit endpoint returns durable append-only records when SQLite persistence is enabled. If a store has no durable audit rows yet, the endpoint falls back to the older derived summary from already-redacted events for backward compatibility.
 
+When a legacy local JSON store is migrated into SQLite, existing safe audit records under the JSON `audit` array are imported once alongside events and notifications. Migration keeps the same safe audit shape and does not synthesize or persist raw payload fields.
+
 Audit records include:
 
 - who or what triggered an action;

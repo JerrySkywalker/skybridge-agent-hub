@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEvent } from "@skybridge-agent-hub/event-schema";
-import { createServer, type StoredEvent, type StoredNotification } from "./index.js";
+import { createServer, type StoredAuditRecord, type StoredEvent, type StoredNotification } from "./index.js";
 
 const servers: Awaited<ReturnType<typeof createServer>>[] = [];
 const tempDirs: string[] = [];
@@ -726,6 +726,37 @@ describe("server api", () => {
     const events = (await server.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
     expect(events).toHaveLength(1);
     expect(events[0]?.id).toBe("legacy-event-1");
+  });
+
+  it("migrates existing safe audit records from local JSON into SQLite", async () => {
+    const dir = await tempDir();
+    const legacyJsonFile = join(dir, "skybridge-store.json");
+    const dbFile = join(dir, "skybridge.sqlite");
+    const legacyAudit: StoredAuditRecord = {
+      audit_id: "legacy-audit-1",
+      time: "2026-05-21T00:00:00.000Z",
+      action: "approval.denied",
+      actor: "operator",
+      source_adapter: "skybridge/approval-api",
+      run_id: "legacy-audit-run",
+      session_id: "legacy-audit-session",
+      safety_decision: "operator_denied",
+      immutable_event_id: "legacy-event-1",
+      redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+      raw_payload_included: false
+    };
+    await writeFile(legacyJsonFile, JSON.stringify({ events: [], notifications: [], audit: [legacyAudit] }), "utf8");
+
+    const server = await createServer({ dbFile, jsonMigrationFile: legacyJsonFile, logger: false });
+    servers.push(server);
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit?run_id=legacy-audit-run&actor=operator&action=approval.denied" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: StoredAuditRecord[] }>().audit;
+    expect(audit).toEqual([legacyAudit]);
+    expect(JSON.stringify(audit)).not.toContain("prompt");
+    expect(JSON.stringify(audit)).not.toContain("stdout");
+    expect(JSON.stringify(audit)).not.toContain("token");
   });
 
   it("records notification trigger events as skipped placeholders when ntfy is not configured", async () => {

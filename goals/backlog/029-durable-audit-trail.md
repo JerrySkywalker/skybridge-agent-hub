@@ -10,7 +10,7 @@ Super Goal 005-014 added `GET /v1/audit` as a safe derived audit summary over al
 - Persist audit records in SQLite without storing raw prompts, patches, stdout, stderr, private paths or secrets.
 - Emit audit records for approval resolution, future remote-control commands, notification routing decisions and node connection state changes.
 - [x] Add retention/export documentation that keeps local operator privacy explicit.
-- Add focused server and migration tests.
+- [x] Add focused server and migration tests for existing safe JSON audit records.
 - Keep the existing derived `/v1/audit` behavior compatible until the durable table is fully wired.
 - [x] Add fixture records for approval, node heartbeat, notification routing and failed-run summaries.
 
