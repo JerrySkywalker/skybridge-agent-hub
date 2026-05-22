@@ -612,6 +612,55 @@ describe("server api", () => {
     expect(auditText).not.toContain("failure prompt");
   });
 
+  it("exports bounded audit JSONL without raw payloads", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook", agent_id: "codex-local" },
+        correlation: { run_id: "audit-export-run" },
+        payload: {
+          approval_id: "audit-export-approval",
+          actor: "operator",
+          prompt: "raw export prompt must not appear",
+          token: "raw-export-token"
+        }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:01:00.000Z",
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "codex", adapter: "codex-exec-json", agent_id: "codex-local" },
+        correlation: { run_id: "audit-export-run" },
+        payload: {
+          actor: "codex-local",
+          stderr: "raw export stderr must not appear"
+        }
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit/export?run_id=audit-export-run&limit=1" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/x-ndjson");
+    expect(response.headers["x-skybridge-raw-payload-included"]).toBe("false");
+
+    const lines = response.body.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    const exported = JSON.parse(lines[0]!) as { run_id: string; raw_payload_included: boolean };
+    expect(exported).toMatchObject({ run_id: "audit-export-run", raw_payload_included: false });
+    expect(response.body).not.toContain("raw export prompt");
+    expect(response.body).not.toContain("raw-export-token");
+    expect(response.body).not.toContain("raw export stderr");
+  });
+
   it("persists events and notifications to SQLite across server restarts", async () => {
     const previousTopic = process.env.NTFY_TOPIC_URL;
     delete process.env.NTFY_TOPIC_URL;

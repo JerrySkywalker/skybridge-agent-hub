@@ -250,9 +250,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     const parsed = parseAuditListQuery(request.query);
     if (!parsed.ok) return reply.code(400).send(parsed.response);
     const { limit, ...filters } = parsed.query;
-    const durableAudit = store.listAuditRecords(1000);
-    const audit = durableAudit.length > 0 ? durableAudit : summarizeAudit(store.listEvents());
-    return { audit: filterAuditRecords(audit, filters).slice(0, limit) };
+    return { audit: listAuditRecordsForQuery(store, filters).slice(0, limit) };
+  });
+  app.get<{ Querystring: AuditListQuery }>("/v1/audit/export", async (request, reply) => {
+    const parsed = parseAuditListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    const audit = listAuditRecordsForQuery(store, filters).slice(0, limit);
+    reply
+      .header("Content-Type", "application/x-ndjson; charset=utf-8")
+      .header("X-SkyBridge-Audit-Export", "fixture-safe-local-jsonl")
+      .header("X-SkyBridge-Raw-Payload-Included", "false");
+    return audit.map((record) => JSON.stringify(record)).join("\n") + (audit.length > 0 ? "\n" : "");
   });
 
   app.get("/v1/approvals", async () => ({ approvals: summarizeApprovals(store.listEvents()).filter((item) => item.status === "pending") }));
@@ -444,6 +453,12 @@ function filterAuditRecords(records: StoredAuditRecord[], query: Omit<ParsedAudi
     if (query.to && record.time > query.to) return false;
     return true;
   });
+}
+
+function listAuditRecordsForQuery(store: EventStore, filters: Omit<ParsedAuditListQuery, "limit">): StoredAuditRecord[] {
+  const durableAudit = store.listAuditRecords(1000);
+  const audit = durableAudit.length > 0 ? durableAudit : summarizeAudit(store.listEvents());
+  return filterAuditRecords(audit, filters);
 }
 
 function parseEventListQuery(query: EventListQuery): ParsedQuery<ParsedEventListQuery> {

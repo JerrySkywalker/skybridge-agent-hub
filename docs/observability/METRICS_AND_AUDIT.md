@@ -28,6 +28,22 @@ Audit records include:
 
 The endpoint currently covers approval, node, notification and failed-run events. Query filters are available for `action`, `actor`, `run_id`, `from`, `to` and `limit`.
 
+## Audit Export
+
+`GET /v1/audit/export` returns the same safe audit records as newline-delimited JSON for local operator review. It accepts the same filters and bounded `limit` parameter as `/v1/audit`; the server rejects unbounded or oversized limits instead of dumping the full local database.
+
+Export responses include:
+
+- `Content-Type: application/x-ndjson`;
+- `X-SkyBridge-Audit-Export: fixture-safe-local-jsonl`;
+- `X-SkyBridge-Raw-Payload-Included: false`.
+
+Audit export is intentionally pull-only and local. SkyBridge does not upload audit records to external services by default, and CI artifacts must not include exported audit files unless they were generated from temporary fixture data.
+
+## Retention
+
 Durable audit records intentionally omit raw prompts, patches, stdout, stderr, command output, private paths and secrets. They are local operator metadata and are not uploaded to external services by default.
+
+Until a dedicated retention policy command exists, operators should treat the SQLite database as local operational metadata and rotate or delete it according to their workspace privacy policy. Future retention work should prune by timestamp and keep export output bounded.
 
 Remote execution remains disabled until audit, approval and authentication boundaries are complete.

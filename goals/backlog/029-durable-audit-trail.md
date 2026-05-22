@@ -9,7 +9,7 @@ Super Goal 005-014 added `GET /v1/audit` as a safe derived audit summary over al
 - Define an append-only audit record schema with actor, source adapter, correlation IDs, safety decision, redaction policy version and immutable event reference.
 - Persist audit records in SQLite without storing raw prompts, patches, stdout, stderr, private paths or secrets.
 - Emit audit records for approval resolution, future remote-control commands, notification routing decisions and node connection state changes.
-- Add retention/export documentation that keeps local operator privacy explicit.
+- [x] Add retention/export documentation that keeps local operator privacy explicit.
 - Add focused server and migration tests.
 - Keep the existing derived `/v1/audit` behavior compatible until the durable table is fully wired.
 - [x] Add fixture records for approval, node heartbeat, notification routing and failed-run summaries.
@@ -21,7 +21,7 @@ Super Goal 005-014 added `GET /v1/audit` as a safe derived audit summary over al
 - Tests prove raw payload fields are not persisted or returned.
 - Documentation explains which actions are audited and which data is intentionally omitted.
 - The audit schema records the redaction policy version used at write time.
-- Export output is bounded and safe for local operator review.
+- [x] Export output is bounded and safe for local operator review.
 
 ## Safety Boundaries
 
