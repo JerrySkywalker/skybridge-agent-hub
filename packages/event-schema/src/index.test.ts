@@ -74,4 +74,45 @@ describe("event schema", () => {
     expect(JSON.stringify(redacted)).not.toContain("sk-testsecret123456");
     expect(redacted.stdout).toMatchObject({ omitted: true, reason: "unsafe_raw_payload" });
   });
+
+  it("validates iteration lifecycle events and safe metadata payloads", () => {
+    const event = createEvent({
+      type: "iteration.state_changed",
+      source: { platform: "skybridge", adapter: "iteration-controller" },
+      correlation: { run_id: "iter_001" },
+      payload: {
+        iteration_id: "iter_001",
+        project_id: "skybridge-agent-hub",
+        goal_id: "015",
+        repo: "owner/skybridge-agent-hub",
+        branch: "ai/super-015-016",
+        base_branch: "main",
+        state: "local_checking",
+        attempts: 1,
+        max_attempts: 3,
+        checks: [{ name: "corepack pnpm check", status: "pending" }]
+      }
+    });
+
+    expect(event.type).toBe("iteration.state_changed");
+    expect(event.payload).toMatchObject({
+      iteration_id: "iter_001",
+      state: "local_checking"
+    });
+  });
+
+  it("redacts unsafe fields from iteration payloads before telemetry", () => {
+    const redacted = redactForTelemetry({
+      iteration_id: "iter_safe",
+      state: "ci_failed",
+      prompt: "raw prompt must not be sent",
+      stderr: "raw check output must not be sent",
+      token: "secret-token"
+    });
+
+    const text = JSON.stringify(redacted);
+    expect(text).not.toContain("raw prompt must not be sent");
+    expect(text).not.toContain("raw check output must not be sent");
+    expect(text).not.toContain("secret-token");
+  });
 });
