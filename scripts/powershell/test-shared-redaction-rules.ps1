@@ -73,6 +73,37 @@ if (-not $jsonObjectRedacted.stdout.bounded) {
   throw "PowerShell shared redaction did not bound raw output fields on ConvertFrom-Json objects"
 }
 
+$jsonArraySample = @'
+[
+  {
+    "name": "first",
+    "headers": { "Authorization": "Bearer array.header.secret" },
+    "tool_result": { "content": "array tool body with sk-arraysecret123456" }
+  },
+  {
+    "name": "second",
+    "nested": { "api_key": "sk-arrayapikey123456" },
+    "stderr": "array stderr output"
+  }
+]
+'@ | ConvertFrom-Json
+$jsonArrayRedacted = @(ConvertTo-SkyBridgeSafeValue -Value $jsonArraySample -Rules $rules)
+$jsonArrayRedactedText = $jsonArrayRedacted | ConvertTo-Json -Depth 20 -Compress
+foreach ($forbidden in @("array.header.secret", "array tool body", "sk-arrayapikey123456", "array stderr output")) {
+  if ($jsonArrayRedactedText.Contains($forbidden)) {
+    throw "PowerShell shared redaction leaked '$forbidden' from ConvertFrom-Json array consumption"
+  }
+}
+if ($jsonArrayRedacted.Count -ne 2) {
+  throw "PowerShell shared redaction did not preserve ConvertFrom-Json array item count"
+}
+if ($jsonArrayRedacted[0].headers.Authorization -ne $rules.replacement) {
+  throw "PowerShell shared redaction did not replace Authorization fields inside ConvertFrom-Json arrays"
+}
+if (-not $jsonArrayRedacted[0].tool_result.bounded -or -not $jsonArrayRedacted[1].stderr.bounded) {
+  throw "PowerShell shared redaction did not bound raw fields inside ConvertFrom-Json arrays"
+}
+
 $env:SKYBRIDGE_REDACTION_FIXTURES = ($samples.payload | ConvertTo-Json -Depth 20 -Compress)
 $nodeOutput = @'
 import { redactForTelemetry } from "./packages/event-schema/src/index.ts";
@@ -107,5 +138,6 @@ Write-Output (@{
   fixtureCount = $samples.Count
   powershellRawFieldsBounded = [bool]($psRedacted[1].stdout.bounded -and $psRedacted[1].prompt.bounded -and $psRedacted[1].patch.bounded)
   powershellJsonObjectRedacted = [bool]($jsonObjectRedacted.token -eq $rules.replacement -and $jsonObjectRedacted.stdout.bounded)
+  powershellJsonArrayRedacted = [bool]($jsonArrayRedacted.Count -eq 2 -and $jsonArrayRedacted[0].headers.Authorization -eq $rules.replacement -and $jsonArrayRedacted[0].tool_result.bounded -and $jsonArrayRedacted[1].stderr.bounded)
   typescriptRawFieldsOmitted = [bool]($tsRedacted[1]["stdout"]["omitted"] -and $tsRedacted[1]["prompt"]["omitted"] -and $tsRedacted[1]["patch"]["omitted"])
 } | ConvertTo-Json -Compress)

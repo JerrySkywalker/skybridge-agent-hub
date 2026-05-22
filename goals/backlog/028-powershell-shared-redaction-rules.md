@@ -23,6 +23,7 @@ Nightly CI/CD Guardian round 3 started this by adding `scripts/powershell/shared
 - Docs identify the shared rules as canonical.
 - Shared-rule fixture coverage includes secret keys, bearer values, API keys, private-key markers and raw prompt/patch/output fields across TypeScript and PowerShell.
 - PowerShell shared-rule coverage includes `ConvertFrom-Json` object values, not only hashtable literals.
+- PowerShell shared-rule coverage includes `ConvertFrom-Json` arrays containing nested secret headers, raw tool results and raw stderr fields.
 - Existing hook redaction coverage does not regress for commands, prompts, patches, stdout or stderr.
 - Offline spool and replay behavior remains fail-open and redacted.
 
