@@ -518,9 +518,10 @@ describe("server api", () => {
 
     const status = await server.inject({ method: "GET", url: "/v1/supervisor/status" });
     expect(status.statusCode).toBe(200);
-    expect(status.json<{ raw_logs_included: boolean; iterations: { active: number } }>()).toMatchObject({
+    expect(status.json<{ raw_logs_included: boolean; iterations: { active: number }; notification_path: { skybridge_notification_center_required: boolean } }>()).toMatchObject({
       raw_logs_included: false,
-      iterations: { active: 1 }
+      iterations: { active: 1 },
+      notification_path: { skybridge_notification_center_required: false }
     });
 
     const next = await server.inject({ method: "GET", url: "/v1/supervisor/next-action" });

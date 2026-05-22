@@ -1089,6 +1089,11 @@ function supervisorStatus(iterations: StoredIterationRun[], events: StoredEvent[
     ok: true,
     raw_prompts_included: false,
     raw_logs_included: false,
+    notification_path: {
+      primary_for_skybridge_development: "bootstrap-direct",
+      skybridge_notification_center_required: false,
+      migration_stage: "dual-write-ready"
+    },
     iterations: {
       total: iterations.length,
       active: active.length,
