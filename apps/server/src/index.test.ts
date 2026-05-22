@@ -418,6 +418,115 @@ describe("server api", () => {
     });
   });
 
+  it("creates, lists, updates and retrieves iteration records", async () => {
+    const server = await testServer();
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/iterations",
+      payload: {
+        iteration_id: "iter-test-1",
+        project_id: "skybridge-agent-hub",
+        goal_id: "015",
+        repo: "owner/skybridge-agent-hub",
+        branch: "ai/iter-test",
+        base_branch: "main",
+        state: "queued",
+        attempts: 0,
+        max_attempts: 3,
+        checks: []
+      }
+    });
+
+    expect(create.statusCode).toBe(201);
+    const update = await server.inject({
+      method: "PATCH",
+      url: "/v1/iterations/iter-test-1/state",
+      payload: {
+        state: "local_checking",
+        checks: [{ name: "corepack pnpm check", status: "passed", summary: "passed" }]
+      }
+    });
+    expect(update.statusCode).toBe(200);
+
+    const list = await server.inject({ method: "GET", url: "/v1/iterations" });
+    expect(list.json<{ iterations: Array<{ iteration_id: string; state: string }> }>().iterations[0]).toMatchObject({
+      iteration_id: "iter-test-1",
+      state: "local_checking"
+    });
+
+    const detail = await server.inject({ method: "GET", url: "/v1/iterations/iter-test-1" });
+    expect(detail.json<{ iteration: { checks: Array<{ status: string }> } }>().iteration.checks[0]?.status).toBe("passed");
+  });
+
+  it("rejects invalid iteration state and redacts unsafe iteration payloads", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/iterations",
+      payload: {
+        iteration_id: "iter-test-2",
+        project_id: "skybridge-agent-hub",
+        repo: "owner/skybridge-agent-hub",
+        branch: "ai/iter-test",
+        base_branch: "main",
+        state: "queued"
+      }
+    });
+
+    const invalid = await server.inject({
+      method: "PATCH",
+      url: "/v1/iterations/iter-test-2/state",
+      payload: { state: "surprised" }
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const event = await server.inject({
+      method: "POST",
+      url: "/v1/iterations/iter-test-2/events",
+      payload: {
+        type: "iteration.ci_failed",
+        payload: {
+          token: "secret-token",
+          stdout: "raw output should be omitted",
+          safe: "metadata"
+        }
+      }
+    });
+
+    expect(event.statusCode).toBe(202);
+    const body = event.json<{ event: { payload: Record<string, unknown> } }>();
+    expect(JSON.stringify(body)).not.toContain("secret-token");
+    expect(JSON.stringify(body)).not.toContain("raw output should be omitted");
+    expect(body.event.payload.safe).toBe("metadata");
+  });
+
+  it("exposes supervisor status without raw logs", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/iterations",
+      payload: {
+        iteration_id: "iter-test-3",
+        project_id: "skybridge-agent-hub",
+        repo: "owner/skybridge-agent-hub",
+        branch: "ai/iter-test",
+        base_branch: "main",
+        state: "ci_failed",
+        pr_number: 12
+      }
+    });
+
+    const status = await server.inject({ method: "GET", url: "/v1/supervisor/status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json<{ raw_logs_included: boolean; iterations: { active: number } }>()).toMatchObject({
+      raw_logs_included: false,
+      iterations: { active: 1 }
+    });
+
+    const next = await server.inject({ method: "GET", url: "/v1/supervisor/next-action" });
+    expect(next.json<{ action: string; pr_number: number }>()).toMatchObject({ action: "repair_ci", pr_number: 12 });
+  });
+
   it("returns a safe derived audit trail without raw payloads", async () => {
     const server = await testServer();
     await server.inject({
