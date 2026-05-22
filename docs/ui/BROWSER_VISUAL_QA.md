@@ -7,8 +7,8 @@ Browser visual QA is deferred from v0.9 but now has an optional executable local
 - Implemented: Operator Console build, static widget tests and HTTP smoke.
 - Smoke-tested: fixture-backed Operator Console data, compact embed route presence through build artifacts, dashboard API data.
 - Implemented when Playwright is installed: fixture-backed server/web startup, desktop/mobile console screenshots, compact embed screenshot, console-error checks, blank-page checks and simple primary-panel overlap checks.
-- Implemented in CI: PR and AI-branch workflows invoke the optional smoke in skip-safe mode and upload the sanitized smoke log with existing CI logs.
-- Deferred: reliable public CI browser installation, screenshot artifact upload workflow and mobile polish review.
+- Implemented in CI: PR and AI-branch workflows invoke the optional smoke in skip-safe mode, upload the sanitized smoke log with existing CI logs, and upload screenshots only when a fixture-only manifest is present.
+- Deferred: reliable public CI browser installation and mobile polish review.
 
 ## Intended Coverage
 
@@ -45,7 +45,7 @@ The runner intentionally skips when Playwright is unavailable. When Playwright i
 
 By default, screenshots are written under `.agent/tmp/browser-visual-qa`, which is local runtime output and must not contain real agent logs or secrets. Use `-ArtifactDir <path>` to redirect artifacts for a CI upload step that is explicitly limited to fixture data.
 
-PR and AI-branch CI run the same command without installing Playwright. In that default public-runner state the step records a skip-safe log under `.agent/ci/browser-visual-qa.log` and does not produce screenshots. A later reviewed workflow change may install Playwright and upload `.agent/tmp/browser-visual-qa` only after confirming the manifest is fixture-only and loopback-bound.
+PR and AI-branch CI run the same command without installing Playwright. In that default public-runner state the step records a skip-safe log under `.agent/ci/browser-visual-qa.log` and does not produce screenshots. If a future controlled runner installs Playwright and produces `.agent/tmp/browser-visual-qa/manifest.json`, CI first runs `scripts/powershell/assert-browser-visual-qa-artifacts.ps1` and then uploads the artifact directory for seven days.
 
 ## Artifact Expectations
 
@@ -56,4 +56,4 @@ When Playwright is installed, the local runner should produce these screenshot f
 - `compact-embed.png`
 - `manifest.json`
 
-The manifest records the route, viewport, required text, local web origin and fixture-only safety metadata. The browser runner also refuses non-loopback web bases, so future CI upload steps can verify that screenshots came from the expected local fixture matrix instead of a production endpoint.
+The manifest records the route, viewport, required text, local web origin and fixture-only safety metadata. The browser runner refuses non-loopback web bases, and the CI artifact guard checks `fixture_only`, `production_endpoint_used`, loopback origin and screenshot file presence before upload.
