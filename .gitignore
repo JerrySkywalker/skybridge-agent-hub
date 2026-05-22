@@ -7,6 +7,7 @@ node_modules/
 .env.*
 !.env.example
 config/runner.json
+config/iteration-controller.json
 
 # build
 dist/
