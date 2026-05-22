@@ -7,7 +7,8 @@ Browser visual QA is deferred from v0.9 but now has an optional executable local
 - Implemented: Operator Console build, static widget tests and HTTP smoke.
 - Smoke-tested: fixture-backed Operator Console data, compact embed route presence through build artifacts, dashboard API data.
 - Implemented when Playwright is installed: fixture-backed server/web startup, desktop/mobile console screenshots, compact embed screenshot, console-error checks, blank-page checks and simple primary-panel overlap checks.
-- Deferred: reliable public CI browser installation, artifact upload workflow and mobile polish review.
+- Implemented in CI: PR and AI-branch workflows invoke the optional smoke in skip-safe mode and upload the sanitized smoke log with existing CI logs.
+- Deferred: reliable public CI browser installation, screenshot artifact upload workflow and mobile polish review.
 
 ## Intended Coverage
 
@@ -43,6 +44,8 @@ The runner intentionally skips when Playwright is unavailable. When Playwright i
 - fails on blank pages, missing primary panels, browser console errors or obvious primary-panel overlap.
 
 By default, screenshots are written under `.agent/tmp/browser-visual-qa`, which is local runtime output and must not contain real agent logs or secrets. Use `-ArtifactDir <path>` to redirect artifacts for a CI upload step that is explicitly limited to fixture data.
+
+PR and AI-branch CI run the same command without installing Playwright. In that default public-runner state the step records a skip-safe log under `.agent/ci/browser-visual-qa.log` and does not produce screenshots. A later reviewed workflow change may install Playwright and upload `.agent/tmp/browser-visual-qa` only after confirming the manifest is fixture-only and loopback-bound.
 
 ## Artifact Expectations
 

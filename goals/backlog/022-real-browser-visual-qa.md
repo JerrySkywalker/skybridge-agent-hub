@@ -13,10 +13,11 @@ PR #9 validates the dashboard with React static rendering, Vite builds and HTTP 
 - Store screenshots as short-lived CI artifacts only when they use fixture data.
 - [x] Document the viewport matrix and the expected visible panels for each route.
 - [x] Add an artifact manifest beside screenshots before CI upload is enabled.
+- [x] Invoke the optional browser visual QA smoke from PR and AI-branch CI in skip-safe mode.
 
 ## Completion Criteria
 
-- Screenshot artifacts and a fixture-only `manifest.json` are produced locally or in CI for review. Local artifact generation is implemented when Playwright is installed; CI upload remains pending.
+- Screenshot artifacts and a fixture-only `manifest.json` are produced locally or in CI for review. Local artifact generation is implemented when Playwright is installed; CI invokes the skip-safe runner and uploads its sanitized log, while screenshot upload remains pending.
 - Browser smoke fails on blank page, console errors or missing primary panels. Initial local checks are implemented.
 - Documentation explains how to run visual QA locally and identifies the expected desktop, mobile and compact embed screenshot matrix. Initial local runner documentation exists in `docs/ui/BROWSER_VISUAL_QA.md`.
 - The smoke uses generated demo events or a temporary SQLite database, not real agent logs.

@@ -31,6 +31,7 @@ Required checks:
 - Safe line-ending and diff hygiene checks.
 - Docker compose config validation for dev and test compose files.
 - Safe smoke scripts that use temporary files and do not require secrets.
+- Browser visual QA optional smoke in skip-safe mode, uploading only the sanitized log unless fixture screenshots are enabled in a later reviewed change.
 - Upload safe smoke logs or summaries when failures occur.
 
 ### 2. AI Branch CI
@@ -40,6 +41,7 @@ Trigger: pushes to `ai/**`.
 Runs the PR CI baseline plus AI-run-specific local smoke:
 
 - Operator Console smoke in temporary SQLite mode.
+- Browser visual QA optional smoke in skip-safe mode.
 - Codex hook smoke in safe temporary spool/server mode.
 - Release dry-run smoke once available.
 
