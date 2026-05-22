@@ -22,9 +22,24 @@ export interface StoredNotification {
   error?: string;
 }
 
+export interface StoredAuditRecord {
+  audit_id: string;
+  time: string;
+  action: string;
+  actor: string;
+  source_adapter: string;
+  run_id?: string;
+  session_id?: string;
+  safety_decision: string;
+  immutable_event_id: string;
+  redaction_policy_version: string;
+  raw_payload_included: false;
+}
+
 interface LocalStoreData {
   events: StoredEvent[];
   notifications: StoredNotification[];
+  audit: StoredAuditRecord[];
 }
 
 export interface EventStore {
@@ -33,13 +48,15 @@ export interface EventStore {
   close(): Promise<void>;
   listEvents(limit?: number): StoredEvent[];
   listNotifications(limit?: number): StoredNotification[];
+  listAuditRecords(limit?: number): StoredAuditRecord[];
   addEvent(event: StoredEvent): Promise<void>;
   addNotification(notification: StoredNotification): Promise<void>;
+  addAuditRecord(record: StoredAuditRecord): Promise<void>;
 }
 
 export class MemoryStore implements EventStore {
   kind = "memory" as const;
-  private data: LocalStoreData = { events: [], notifications: [] };
+  private data: LocalStoreData = { events: [], notifications: [], audit: [] };
 
   async load(): Promise<void> {}
 
@@ -53,12 +70,21 @@ export class MemoryStore implements EventStore {
     return sliceTail(this.data.notifications, limit);
   }
 
+  listAuditRecords(limit?: number): StoredAuditRecord[] {
+    return sliceTail(this.data.audit, limit);
+  }
+
   async addEvent(event: StoredEvent): Promise<void> {
     this.data.events.push(event);
   }
 
   async addNotification(notification: StoredNotification): Promise<void> {
     this.data.notifications.push(notification);
+  }
+
+  async addAuditRecord(record: StoredAuditRecord): Promise<void> {
+    if (this.data.audit.some((existing) => existing.audit_id === record.audit_id)) return;
+    this.data.audit.push(record);
   }
 }
 
@@ -110,6 +136,17 @@ export class SqliteStore implements EventStore {
     return rows.reverse().map((row) => JSON.parse(row.notification_json) as StoredNotification);
   }
 
+  listAuditRecords(limit?: number): StoredAuditRecord[] {
+    const db = this.requireDb();
+    const rows = db.prepare(`
+      SELECT audit_json
+      FROM audit_records
+      ORDER BY time DESC, rowid DESC
+      ${limit ? "LIMIT ?" : ""}
+    `).all(...(limit ? [limit] : [])) as Array<{ audit_json: string }>;
+    return rows.map((row) => JSON.parse(row.audit_json) as StoredAuditRecord);
+  }
+
   async addEvent(event: StoredEvent): Promise<void> {
     const db = this.requireDb();
     db.prepare(`
@@ -131,6 +168,18 @@ export class SqliteStore implements EventStore {
         ?, ?, ?, ?, ?, ?, ?
       )
     `).run(...toNotificationParams(notification));
+  }
+
+  async addAuditRecord(record: StoredAuditRecord): Promise<void> {
+    const db = this.requireDb();
+    db.prepare(`
+      INSERT OR IGNORE INTO audit_records (
+        audit_id, time, action, actor, source_adapter, run_id, session_id,
+        safety_decision, immutable_event_id, redaction_policy_version, audit_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `).run(...toAuditParams(record));
   }
 
   private createSchema() {
@@ -169,6 +218,25 @@ export class SqliteStore implements EventStore {
 
       CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 
+      CREATE TABLE IF NOT EXISTS audit_records (
+        audit_id TEXT PRIMARY KEY,
+        time TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        source_adapter TEXT NOT NULL,
+        run_id TEXT,
+        session_id TEXT,
+        safety_decision TEXT NOT NULL,
+        immutable_event_id TEXT NOT NULL,
+        redaction_policy_version TEXT NOT NULL,
+        audit_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audit_records_time ON audit_records(time);
+      CREATE INDEX IF NOT EXISTS idx_audit_records_action ON audit_records(action);
+      CREATE INDEX IF NOT EXISTS idx_audit_records_actor ON audit_records(actor);
+      CREATE INDEX IF NOT EXISTS idx_audit_records_run_id ON audit_records(run_id);
+
       CREATE TABLE IF NOT EXISTS store_metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -189,6 +257,7 @@ export class SqliteStore implements EventStore {
     const parsed = JSON.parse(content) as Partial<LocalStoreData>;
     const events = parsed.events ?? [];
     const notifications = parsed.notifications ?? [];
+    const audit = parsed.audit ?? [];
 
     const insertEvents = transaction(db, (items: StoredEvent[]) => {
       for (const event of items) {
@@ -200,12 +269,18 @@ export class SqliteStore implements EventStore {
         this.addNotificationSync(notification);
       }
     });
+    const insertAudit = transaction(db, (items: StoredAuditRecord[]) => {
+      for (const record of items) {
+        this.addAuditRecordSync(record);
+      }
+    });
 
     insertEvents(events);
     insertNotifications(notifications);
+    insertAudit(audit);
     db.prepare("INSERT OR REPLACE INTO store_metadata (key, value) VALUES (?, ?)").run(
       migratedKey,
-      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length })
+      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length, audit: audit.length })
     );
   }
 
@@ -228,6 +303,17 @@ export class SqliteStore implements EventStore {
         ?, ?, ?, ?, ?, ?, ?
       )
     `).run(...toNotificationParams(notification));
+  }
+
+  private addAuditRecordSync(record: StoredAuditRecord) {
+    this.requireDb().prepare(`
+      INSERT OR IGNORE INTO audit_records (
+        audit_id, time, action, actor, source_adapter, run_id, session_id,
+        safety_decision, immutable_event_id, redaction_policy_version, audit_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `).run(...toAuditParams(record));
   }
 
   private requireDb(): SqliteDatabase {
@@ -301,6 +387,22 @@ function toNotificationParams(notification: StoredNotification): unknown[] {
     notification.createdAt,
     notification.error ?? null,
     JSON.stringify(notification)
+  ];
+}
+
+function toAuditParams(record: StoredAuditRecord): unknown[] {
+  return [
+    record.audit_id,
+    record.time,
+    record.action,
+    record.actor,
+    record.source_adapter,
+    record.run_id ?? null,
+    record.session_id ?? null,
+    record.safety_decision,
+    record.immutable_event_id,
+    record.redaction_policy_version,
+    JSON.stringify(record)
   ];
 }
 

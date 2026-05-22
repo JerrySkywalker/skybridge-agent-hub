@@ -38,6 +38,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force .agent/ci | Out-Null
           corepack pnpm smoke:operator-console *>&1 | Tee-Object -FilePath .agent/ci/operator-console-smoke.log
+      - name: Browser visual QA optional smoke
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .agent/ci | Out-Null
+          corepack pnpm smoke:browser-visual-qa *>&1 | Tee-Object -FilePath .agent/ci/browser-visual-qa.log
+      - name: Validate browser visual QA artifacts
+        if: hashFiles('.agent/tmp/browser-visual-qa/manifest.json') != ''
+        shell: pwsh
+        run: ./scripts/powershell/assert-browser-visual-qa-artifacts.ps1
       - name: Codex hook integration smoke
         shell: pwsh
         run: |
@@ -54,4 +63,12 @@ jobs:
           name: ai-branch-smoke-logs
           path: .agent/ci/*.log
           if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload browser visual QA artifacts
+        if: always() && hashFiles('.agent/tmp/browser-visual-qa/manifest.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-branch-browser-visual-qa
+          path: .agent/tmp/browser-visual-qa/
+          if-no-files-found: error
           retention-days: 7

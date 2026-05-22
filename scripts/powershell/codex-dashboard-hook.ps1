@@ -24,41 +24,25 @@ function Get-SpoolDirectory {
   return (Join-Path (Get-RepositoryRoot) ".agent\spool\codex-hook")
 }
 
+. (Join-Path $PSScriptRoot "shared-redaction.ps1")
+
+function Get-SharedRedactionRules { Get-SkyBridgeSharedRedactionRules }
+
+$SharedRedactionRules = Get-SharedRedactionRules
+
+function Test-SharedRedactionPattern {
+  param([AllowNull()][string]$Value, [AllowNull()]$Patterns)
+  Test-SkyBridgeRedactionPattern -Value $Value -Patterns $Patterns
+}
+
 function Redact-String {
   param([AllowNull()][string]$Value, [int]$MaxLength = 160)
-  if ($null -eq $Value) { return $null }
-  $text = $Value -replace '(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+', 'Bearer [REDACTED]'
-  $text = $text -replace '(?i)\b([A-Za-z0-9_.-]*(token|password|passwd|secret|api[_-]?key)[A-Za-z0-9_.-]*)\s*[:=]\s*([^\s;&|]+)', '$1=[REDACTED]'
-  if ($text.Length -gt $MaxLength) { return "$($text.Substring(0, $MaxLength))...[truncated $($text.Length - $MaxLength) chars]" }
-  return $text
+  Redact-SkyBridgeString -Value $Value -Rules $SharedRedactionRules -MaxLength $MaxLength
 }
 
 function ConvertTo-SafeValue {
   param($Value, [int]$Depth = 0)
-  if ($null -eq $Value) { return $null }
-  if ($Value -is [string]) { return (Redact-String -Value $Value) }
-  if ($Value -is [bool] -or $Value -is [int] -or $Value -is [long] -or $Value -is [double]) { return $Value }
-  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [hashtable] -and $Value -isnot [string]) {
-    if ($Depth -ge 4) { return @{ bounded = $true; type = "array" } }
-    return @($Value | Select-Object -First 24 | ForEach-Object { ConvertTo-SafeValue -Value $_ -Depth ($Depth + 1) })
-  }
-  if ($Value -is [hashtable]) {
-    if ($Depth -ge 4) { return @{ bounded = $true; type = "object"; keys = @($Value.Keys | Select-Object -First 24) } }
-    $result = @{}
-    foreach ($key in @($Value.Keys | Select-Object -First 24)) {
-      if ([string]$key -match '(?i)authorization|api[_-]?key|token|password|passwd|secret|cookie|credential') {
-        $result[$key] = "[REDACTED]"
-      } elseif ([string]$key -match '(?i)command|stdout|stderr|output|content|patch|prompt') {
-        $item = $Value[$key]
-        $result[$key] = @{ bounded = $true; type = if ($null -eq $item) { "null" } else { $item.GetType().Name }; length = if ($item -is [string]) { $item.Length } else { $null } }
-      } else {
-        $result[$key] = ConvertTo-SafeValue -Value $Value[$key] -Depth ($Depth + 1)
-      }
-    }
-    if ($Value.Keys.Count -gt 24) { $result["__truncated_keys"] = $Value.Keys.Count - 24 }
-    return $result
-  }
-  return (Redact-String -Value ([string]$Value))
+  ConvertTo-SkyBridgeSafeValue -Value $Value -Rules $SharedRedactionRules -Depth $Depth
 }
 
 function Get-String {
@@ -163,6 +147,10 @@ function New-SkyBridgeEvents {
       tool_input_summary = Get-ToolInputSummary $InputObject["tool_input"]
       message_summary = if ($InputObject.ContainsKey("prompt")) { Get-OutputSummary $InputObject["prompt"] } else { Get-OutputSummary $InputObject["message"] }
       redaction = "commands, prompts, stdout and stderr are redacted and bounded by default"
+      redaction_policy = @{
+        source = $SharedRedactionRules.source
+        max_string_length = $SharedRedactionRules.maxStringLength
+      }
     }
   }
   $events = @($event)

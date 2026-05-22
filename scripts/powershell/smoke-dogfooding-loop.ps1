@@ -71,10 +71,14 @@ try {
 
   $run = Invoke-RestMethod "$ApiBase/v1/runs/$runId"
   $notifications = Invoke-RestMethod "$ApiBase/v1/notifications?limit=20"
-  $audit = Invoke-RestMethod "$ApiBase/v1/audit"
+  $audit = Invoke-RestMethod "$ApiBase/v1/audit?run_id=$runId&action=notification.requested"
 
   if ($run.summary.run_id -ne $runId) { throw "Run detail did not return dogfooding run" }
   if ($audit.audit.Count -lt 1) { throw "Expected dogfooding events to produce audit records." }
+  $auditRecord = $audit.audit[0]
+  if ($auditRecord.raw_payload_included -ne $false) { throw "Audit record unexpectedly includes raw payloads." }
+  if (-not $auditRecord.immutable_event_id) { throw "Audit record is missing immutable_event_id." }
+  if ($auditRecord.redaction_policy_version -ne "packages/event-schema/src/redaction-rules.json") { throw "Audit record is missing shared redaction policy metadata." }
 
   Write-Host "Dogfooding smoke passed for $runId"
   Write-Host "Notifications observed: $($notifications.notifications.Count)"

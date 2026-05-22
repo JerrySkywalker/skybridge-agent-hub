@@ -95,6 +95,8 @@ export interface AuditEntry {
   run_id?: string;
   session_id?: string;
   safety_decision: string;
+  immutable_event_id: string;
+  redaction_policy_version: string;
   raw_payload_included: false;
 }
 
@@ -163,8 +165,8 @@ export class SkyBridgeClient {
     return this.getJson<MetricsResponse>("/v1/metrics");
   }
 
-  async listAuditEntries(): Promise<AuditEntry[]> {
-    const json = await this.getJson<{ audit: AuditEntry[] }>("/v1/audit");
+  async listAuditEntries(query: AuditListQuery = {}): Promise<AuditEntry[]> {
+    const json = await this.getJson<{ audit: AuditEntry[] }>(`/v1/audit${queryString(query)}`);
     return json.audit;
   }
 
@@ -238,6 +240,15 @@ export interface NotificationListQuery {
   status?: StoredNotification["status"];
   provider?: StoredNotification["provider"];
   severity?: SkyBridgeSeverity;
+  limit?: number;
+}
+
+export interface AuditListQuery {
+  action?: string;
+  actor?: string;
+  run_id?: string;
+  from?: string;
+  to?: string;
   limit?: number;
 }
 

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEvent } from "@skybridge-agent-hub/event-schema";
-import { createServer, type StoredEvent, type StoredNotification } from "./index.js";
+import { createServer, type StoredAuditRecord, type StoredEvent, type StoredNotification } from "./index.js";
 
 const servers: Awaited<ReturnType<typeof createServer>>[] = [];
 const tempDirs: string[] = [];
@@ -439,7 +439,7 @@ describe("server api", () => {
 
     const response = await server.inject({ method: "GET", url: "/v1/audit" });
     expect(response.statusCode).toBe(200);
-    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; safety_decision: string; immutable_event_id: string; redaction_policy_version: string; raw_payload_included: boolean }> }>().audit;
     expect(audit).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -447,12 +447,14 @@ describe("server api", () => {
           actor: "operator",
           source_adapter: "skybridge/approval-api",
           safety_decision: "operator_denied",
+          redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
           raw_payload_included: false
         }),
         expect.objectContaining({
           action: "approval.requested",
           source_adapter: "opencode/opencode-plugin",
           safety_decision: "approval_required_remote_execution_disabled",
+          immutable_event_id: expect.any(String),
           raw_payload_included: false
         })
       ])
@@ -460,7 +462,7 @@ describe("server api", () => {
     expect(JSON.stringify(audit)).not.toContain("should stay out");
   });
 
-  it("persists events and notifications to SQLite across server restarts", async () => {
+  it("persists durable audit records and filters them without raw payloads", async () => {
     const dir = await tempDir();
     const dbFile = join(dir, "skybridge.sqlite");
     const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
@@ -470,27 +472,236 @@ describe("server api", () => {
       method: "POST",
       url: "/v1/events",
       payload: createEvent({
-        type: "run.completed",
-        source: { platform: "codex", adapter: "codex-hook" },
-        correlation: { session_id: "s1", run_id: "persisted-run" },
-        payload: { summary: "done" }
+        time: "2026-05-21T00:00:00.000Z",
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook", agent_id: "codex-local" },
+        correlation: { run_id: "durable-audit-run", session_id: "durable-audit-session" },
+        payload: {
+          approval_id: "durable-audit-approval",
+          actor: "nightly-guardian",
+          prompt: "raw prompt must not persist in audit",
+          stdout: "raw output must not persist in audit"
+        }
       })
-    });
-    await first.inject({
-      method: "POST",
-      url: "/v1/notifications/send",
-      payload: { title: "Saved notification", body: "SQLite should retain this" }
     });
     await first.close();
     servers.pop();
 
     const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
     servers.push(second);
-    const events = (await second.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
-    const notifications = (await second.inject({ method: "GET", url: "/v1/notifications" })).json<{ notifications: StoredNotification[] }>().notifications;
 
-    expect(events.map((event) => event.correlation?.run_id)).toContain("persisted-run");
-    expect(notifications.map((notification) => notification.message.title)).toContain("Saved notification");
+    const response = await second.inject({
+      method: "GET",
+      url: "/v1/audit?run_id=durable-audit-run&actor=nightly-guardian&action=approval.requested&from=2026-05-20T00:00:00.000Z&to=2026-05-22T00:00:00.000Z"
+    });
+
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; immutable_event_id: string; redaction_policy_version: string; raw_payload_included: boolean }> }>().audit;
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "approval.requested",
+      actor: "nightly-guardian",
+      immutable_event_id: expect.any(String),
+      redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+      raw_payload_included: false
+    });
+    expect(JSON.stringify(audit)).not.toContain("raw prompt");
+    expect(JSON.stringify(audit)).not.toContain("raw output");
+  });
+
+  it("records durable audit fixtures for node, notification and failed-run events", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(first);
+
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "node.heartbeat",
+        source: { platform: "skybridge", adapter: "sidecar", node_id: "audit-node-1" },
+        correlation: { session_id: "audit-node-session" },
+        payload: {
+          node_id: "audit-node-1",
+          host: "local-devbox",
+          private_key: "-----BEGIN OPENSSH PRIVATE KEY----- secret",
+          command_output: "node private output must not persist"
+        }
+      })
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:01:00.000Z",
+        type: "notification.requested",
+        severity: "warning",
+        source: { platform: "skybridge", adapter: "notification-router", agent_id: "router-agent" },
+        correlation: { run_id: "audit-router-run", session_id: "audit-router-session" },
+        payload: {
+          actor: "notification-router",
+          provider: "ntfy",
+          body: "notification body must not persist",
+          token: "secret-token"
+        }
+      })
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:02:00.000Z",
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "codex", adapter: "codex-exec-json", agent_id: "codex-local" },
+        correlation: { run_id: "audit-failed-run", session_id: "audit-failed-session" },
+        payload: {
+          actor: "codex-local",
+          stderr: "failure stderr must not persist",
+          prompt: "failure prompt must not persist"
+        }
+      })
+    });
+    await first.close();
+    servers.pop();
+
+    const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(second);
+
+    const response = await second.inject({ method: "GET", url: "/v1/audit?limit=10" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: Array<{ action: string; actor: string; source_adapter: string; run_id?: string; safety_decision: string; raw_payload_included: boolean }> }>().audit;
+
+    expect(audit).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "node.heartbeat",
+          actor: "system",
+          source_adapter: "skybridge/sidecar",
+          safety_decision: "node_telemetry_only",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "notification.requested",
+          actor: "notification-router",
+          run_id: "audit-router-run",
+          source_adapter: "skybridge/notification-router",
+          safety_decision: "notification_metadata_only",
+          raw_payload_included: false
+        }),
+        expect.objectContaining({
+          action: "run.failed",
+          actor: "codex-local",
+          run_id: "audit-failed-run",
+          source_adapter: "codex/codex-exec-json",
+          safety_decision: "failure_observed",
+          raw_payload_included: false
+        })
+      ])
+    );
+
+    const auditText = JSON.stringify(audit);
+    expect(auditText).not.toContain("OPENSSH PRIVATE KEY");
+    expect(auditText).not.toContain("node private output");
+    expect(auditText).not.toContain("notification body");
+    expect(auditText).not.toContain("secret-token");
+    expect(auditText).not.toContain("failure stderr");
+    expect(auditText).not.toContain("failure prompt");
+  });
+
+  it("exports bounded audit JSONL without raw payloads", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:00:00.000Z",
+        type: "approval.requested",
+        severity: "warning",
+        source: { platform: "codex", adapter: "codex-hook", agent_id: "codex-local" },
+        correlation: { run_id: "audit-export-run" },
+        payload: {
+          approval_id: "audit-export-approval",
+          actor: "operator",
+          prompt: "raw export prompt must not appear",
+          token: "raw-export-token"
+        }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        time: "2026-05-21T00:01:00.000Z",
+        type: "run.failed",
+        severity: "error",
+        source: { platform: "codex", adapter: "codex-exec-json", agent_id: "codex-local" },
+        correlation: { run_id: "audit-export-run" },
+        payload: {
+          actor: "codex-local",
+          stderr: "raw export stderr must not appear"
+        }
+      })
+    });
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit/export?run_id=audit-export-run&limit=1" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/x-ndjson");
+    expect(response.headers["x-skybridge-raw-payload-included"]).toBe("false");
+
+    const lines = response.body.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    const exported = JSON.parse(lines[0]!) as { run_id: string; raw_payload_included: boolean };
+    expect(exported).toMatchObject({ run_id: "audit-export-run", raw_payload_included: false });
+    expect(response.body).not.toContain("raw export prompt");
+    expect(response.body).not.toContain("raw-export-token");
+    expect(response.body).not.toContain("raw export stderr");
+  });
+
+  it("persists events and notifications to SQLite across server restarts", async () => {
+    const previousTopic = process.env.NTFY_TOPIC_URL;
+    delete process.env.NTFY_TOPIC_URL;
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(first);
+
+    try {
+      await first.inject({
+        method: "POST",
+        url: "/v1/events",
+        payload: createEvent({
+          type: "run.completed",
+          source: { platform: "codex", adapter: "codex-hook" },
+          correlation: { session_id: "s1", run_id: "persisted-run" },
+          payload: { summary: "done" }
+        })
+      });
+      await first.inject({
+        method: "POST",
+        url: "/v1/notifications/send",
+        payload: { title: "Saved notification", body: "SQLite should retain this" }
+      });
+      await first.close();
+      servers.pop();
+
+      const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+      servers.push(second);
+      const events = (await second.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
+      const notifications = (await second.inject({ method: "GET", url: "/v1/notifications" })).json<{ notifications: StoredNotification[] }>().notifications;
+
+      expect(events.map((event) => event.correlation?.run_id)).toContain("persisted-run");
+      expect(notifications.map((notification) => notification.message.title)).toContain("Saved notification");
+    } finally {
+      if (previousTopic === undefined) {
+        delete process.env.NTFY_TOPIC_URL;
+      } else {
+        process.env.NTFY_TOPIC_URL = previousTopic;
+      }
+    }
   });
 
   it("migrates an existing local JSON MVP store into SQLite", async () => {
@@ -515,6 +726,37 @@ describe("server api", () => {
     const events = (await server.inject({ method: "GET", url: "/v1/events" })).json<{ events: StoredEvent[] }>().events;
     expect(events).toHaveLength(1);
     expect(events[0]?.id).toBe("legacy-event-1");
+  });
+
+  it("migrates existing safe audit records from local JSON into SQLite", async () => {
+    const dir = await tempDir();
+    const legacyJsonFile = join(dir, "skybridge-store.json");
+    const dbFile = join(dir, "skybridge.sqlite");
+    const legacyAudit: StoredAuditRecord = {
+      audit_id: "legacy-audit-1",
+      time: "2026-05-21T00:00:00.000Z",
+      action: "approval.denied",
+      actor: "operator",
+      source_adapter: "skybridge/approval-api",
+      run_id: "legacy-audit-run",
+      session_id: "legacy-audit-session",
+      safety_decision: "operator_denied",
+      immutable_event_id: "legacy-event-1",
+      redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+      raw_payload_included: false
+    };
+    await writeFile(legacyJsonFile, JSON.stringify({ events: [], notifications: [], audit: [legacyAudit] }), "utf8");
+
+    const server = await createServer({ dbFile, jsonMigrationFile: legacyJsonFile, logger: false });
+    servers.push(server);
+
+    const response = await server.inject({ method: "GET", url: "/v1/audit?run_id=legacy-audit-run&actor=operator&action=approval.denied" });
+    expect(response.statusCode).toBe(200);
+    const audit = response.json<{ audit: StoredAuditRecord[] }>().audit;
+    expect(audit).toEqual([legacyAudit]);
+    expect(JSON.stringify(audit)).not.toContain("prompt");
+    expect(JSON.stringify(audit)).not.toContain("stdout");
+    expect(JSON.stringify(audit)).not.toContain("token");
   });
 
   it("records notification trigger events as skipped placeholders when ntfy is not configured", async () => {

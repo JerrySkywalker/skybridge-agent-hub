@@ -77,7 +77,7 @@ CI artifacts must not include:
 
 ## Shared Redaction Rules
 
-The canonical redaction rule file is `packages/event-schema/src/redaction-rules.json`. TypeScript adapters can use `redactForTelemetry`; PowerShell hooks should consume the JSON rule file when they are next consolidated.
+The canonical redaction rule file is `packages/event-schema/src/redaction-rules.json`. TypeScript adapters can use `redactForTelemetry`; PowerShell hooks consume the same JSON rule file through a shared helper.
 
 Current rule families cover:
 
@@ -87,6 +87,12 @@ Current rule families cover:
 - private key and OpenSSH key markers;
 - raw prompt, patch, stdout, stderr and tool result fields;
 - bounded string and payload sizes.
+
+PowerShell hook scripts consume the same JSON through `scripts/powershell/shared-redaction.ps1`, with a fail-open embedded fallback for local hook execution when the repository rule file is unavailable. Validate parity with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\test-shared-redaction-rules.ps1
+```
 
 ## Additional Threat Notes
 

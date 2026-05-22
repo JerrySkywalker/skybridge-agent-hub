@@ -19,9 +19,9 @@ import {
   type SkyBridgeSourcePlatform
 } from "@skybridge-agent-hub/event-schema";
 import { send as sendNtfy, type NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
-import { MemoryStore, SqliteStore, type EventStore, type StoredEvent, type StoredNotification } from "./store.js";
+import { MemoryStore, SqliteStore, type EventStore, type StoredAuditRecord, type StoredEvent, type StoredNotification } from "./store.js";
 
-export type { StoredEvent, StoredNotification } from "./store.js";
+export type { StoredAuditRecord, StoredEvent, StoredNotification } from "./store.js";
 
 interface CreateServerOptions {
   dbFile?: string | false;
@@ -145,6 +145,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     await recordNotification(message, result.provider, result.status, result.error, event);
   };
 
+  const addStoredEvent = async (event: StoredEvent) => {
+    await store.addEvent(event);
+    const auditRecord = auditRecordForEvent(event);
+    if (auditRecord) await store.addAuditRecord(auditRecord);
+    broadcast(event);
+    void maybeNotify(event);
+  };
+
   const healthResponse = () => ({
     ok: true,
     service: "skybridge-server",
@@ -169,9 +177,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       event_id: event.event_id ?? undefined,
       receivedAt: new Date().toISOString()
     };
-    await store.addEvent(stored);
-    broadcast(stored);
-    void maybeNotify(stored);
+    await addStoredEvent(stored);
     return reply.code(202).send({ ok: true, id: stored.id });
   });
 
@@ -240,7 +246,23 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   });
 
   app.get("/v1/metrics", async () => platformMetrics(store.listEvents(), store.listNotifications(1000)));
-  app.get("/v1/audit", async () => ({ audit: summarizeAudit(store.listEvents()).slice(0, 100) }));
+  app.get<{ Querystring: AuditListQuery }>("/v1/audit", async (request, reply) => {
+    const parsed = parseAuditListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    return { audit: listAuditRecordsForQuery(store, filters).slice(0, limit) };
+  });
+  app.get<{ Querystring: AuditListQuery }>("/v1/audit/export", async (request, reply) => {
+    const parsed = parseAuditListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    const audit = listAuditRecordsForQuery(store, filters).slice(0, limit);
+    reply
+      .header("Content-Type", "application/x-ndjson; charset=utf-8")
+      .header("X-SkyBridge-Audit-Export", "fixture-safe-local-jsonl")
+      .header("X-SkyBridge-Raw-Payload-Included", "false");
+    return audit.map((record) => JSON.stringify(record)).join("\n") + (audit.length > 0 ? "\n" : "");
+  });
 
   app.get("/v1/approvals", async () => ({ approvals: summarizeApprovals(store.listEvents()).filter((item) => item.status === "pending") }));
   app.get<{ Params: { approvalId: string } }>("/v1/approvals/:approvalId", async (request, reply) => {
@@ -268,8 +290,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       }
     });
     const stored: StoredEvent = { ...event, id: event.event_id ?? nanoid(), receivedAt: new Date().toISOString() };
-    await store.addEvent(stored);
-    broadcast(stored);
+    await addStoredEvent(stored);
     return reply.code(202).send({ ok: true, approval_id: approvalId, decision });
   });
 
@@ -313,8 +334,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
       payload: { message: "Seed event" }
     });
     const stored: StoredEvent = { ...event, id: nanoid(), receivedAt: new Date().toISOString() };
-    await store.addEvent(stored);
-    broadcast(stored);
+    await addStoredEvent(stored);
     return reply.code(202).send({ ok: true, id: stored.id });
   });
 
@@ -362,6 +382,17 @@ interface NotificationListQuery {
 }
 
 type ParsedNotificationListQuery = Omit<NotificationListQuery, "limit"> & { limit: number };
+
+interface AuditListQuery {
+  action?: string;
+  actor?: string;
+  run_id?: string;
+  from?: string;
+  to?: string;
+  limit?: string | number;
+}
+
+type ParsedAuditListQuery = Omit<AuditListQuery, "limit"> & { limit: number };
 
 function filterEvents(events: StoredEvent[], query: Omit<ParsedEventListQuery, "limit" | "offset">): StoredEvent[] {
   const platform = query.platform ?? query.source_platform;
@@ -413,6 +444,23 @@ function filterNotifications(notifications: StoredNotification[], query: Omit<Pa
   });
 }
 
+function filterAuditRecords(records: StoredAuditRecord[], query: Omit<ParsedAuditListQuery, "limit">): StoredAuditRecord[] {
+  return records.filter((record) => {
+    if (query.action && record.action !== query.action) return false;
+    if (query.actor && record.actor !== query.actor) return false;
+    if (query.run_id && record.run_id !== query.run_id) return false;
+    if (query.from && record.time < query.from) return false;
+    if (query.to && record.time > query.to) return false;
+    return true;
+  });
+}
+
+function listAuditRecordsForQuery(store: EventStore, filters: Omit<ParsedAuditListQuery, "limit">): StoredAuditRecord[] {
+  const durableAudit = store.listAuditRecords(1000);
+  const audit = durableAudit.length > 0 ? durableAudit : summarizeAudit(store.listEvents());
+  return filterAuditRecords(audit, filters);
+}
+
 function parseEventListQuery(query: EventListQuery): ParsedQuery<ParsedEventListQuery> {
   const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 200);
   if (!limit.ok) return limit;
@@ -444,6 +492,15 @@ function parseNotificationListQuery(query: NotificationListQuery): ParsedQuery<P
     return invalidQuery("provider", "Expected a supported notification provider.");
   }
   if (query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
+  return { ok: true, query: { ...query, limit: limit.value } };
+}
+
+function parseAuditListQuery(query: AuditListQuery): ParsedQuery<ParsedAuditListQuery> {
+  const limit = parseBoundedInteger(query.limit, "limit", 1, 1000, 100);
+  if (!limit.ok) return limit;
+  if (query.from && !isIsoDate(query.from)) return invalidQuery("from", "Expected an ISO timestamp.");
+  if (query.to && !isIsoDate(query.to)) return invalidQuery("to", "Expected an ISO timestamp.");
+  if (query.from && query.to && query.from > query.to) return invalidQuery("from", "Expected from to be earlier than or equal to to.");
   return { ok: true, query: { ...query, limit: limit.value } };
 }
 
@@ -648,18 +705,34 @@ function summarizeAudit(events: StoredEvent[]) {
       || event.type.startsWith("notification.")
       || event.type === "run.failed"
     )
-    .map((event) => ({
-      audit_id: event.id,
-      time: event.time,
-      action: event.type,
-      actor: safeString(event.payload.actor) ?? safeString(event.payload.operator) ?? event.source.agent_id ?? "system",
-      source_adapter: `${event.source.platform}/${event.source.adapter}`,
-      run_id: event.correlation?.run_id,
-      session_id: event.correlation?.session_id,
-      safety_decision: safetyDecisionForEvent(event),
-      raw_payload_included: false
-    }))
+    .map((event) => auditRecordForEvent(event))
+    .filter((record): record is StoredAuditRecord => Boolean(record))
     .sort((a, b) => b.time.localeCompare(a.time));
+}
+
+function auditRecordForEvent(event: StoredEvent): StoredAuditRecord | undefined {
+  if (
+    !event.type.startsWith("approval.")
+    && !event.type.startsWith("node.")
+    && !event.type.startsWith("notification.")
+    && event.type !== "run.failed"
+  ) {
+    return undefined;
+  }
+
+  return {
+    audit_id: `audit_${event.id}`,
+    time: event.time,
+    action: event.type,
+    actor: safeString(event.payload.actor) ?? safeString(event.payload.operator) ?? event.source.agent_id ?? "system",
+    source_adapter: `${event.source.platform}/${event.source.adapter}`,
+    run_id: event.correlation?.run_id,
+    session_id: event.correlation?.session_id,
+    safety_decision: safetyDecisionForEvent(event),
+    immutable_event_id: event.id,
+    redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+    raw_payload_included: false
+  };
 }
 
 function summarizeApprovals(events: StoredEvent[]) {

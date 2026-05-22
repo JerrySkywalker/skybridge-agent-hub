@@ -66,13 +66,24 @@ describe("SkyBridgeClient", () => {
 
   it("returns derived audit entries", async () => {
     vi.stubGlobal("fetch", fetchMock);
-    fetchMock.mockResolvedValueOnce(jsonResponse({ audit: [{ audit_id: "audit-1", action: "approval.denied", actor: "operator", source_adapter: "skybridge/approval-api", safety_decision: "operator_denied", raw_payload_included: false }] }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      audit: [{
+        audit_id: "audit-1",
+        action: "approval.denied",
+        actor: "operator",
+        source_adapter: "skybridge/approval-api",
+        safety_decision: "operator_denied",
+        immutable_event_id: "event-1",
+        redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+        raw_payload_included: false
+      }]
+    }));
     const client = new SkyBridgeClient("http://localhost:8787");
 
-    await expect(client.listAuditEntries()).resolves.toEqual([
+    await expect(client.listAuditEntries({ run_id: "run-1", action: "approval.denied", limit: 10 })).resolves.toEqual([
       expect.objectContaining({ audit_id: "audit-1", raw_payload_included: false })
     ]);
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8787/v1/audit");
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8787/v1/audit?run_id=run-1&action=approval.denied&limit=10");
   });
 
   it("throws useful errors for non-2xx responses", async () => {

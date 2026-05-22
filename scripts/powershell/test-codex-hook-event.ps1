@@ -30,6 +30,15 @@ if ($RequireSpool -and $queueLines.Count -lt $fixtures.Count) { throw "Expected 
 $combined = ($auditLines -join "`n")
 if ($combined -match 'secret-token|hunter2|sk-test-secret|OPENAI_API_KEY=secret|abc123') { throw "Unsafe fixture secret leaked into hook output" }
 
+$events = @($auditLines | ForEach-Object { $_ | ConvertFrom-Json -AsHashtable })
+$eventsWithPolicy = @($events | Where-Object {
+  $_.ContainsKey("payload") -and
+  $_["payload"] -is [hashtable] -and
+  $_["payload"].ContainsKey("redaction_policy") -and
+  $_["payload"]["redaction_policy"]["source"] -eq "packages/event-schema/src/redaction-rules.json"
+})
+if ($eventsWithPolicy.Count -eq 0) { throw "Expected hook output to record the shared redaction policy source" }
+
 Write-Output (@{
   ok = $true
   fixtureCount = $fixtures.Count

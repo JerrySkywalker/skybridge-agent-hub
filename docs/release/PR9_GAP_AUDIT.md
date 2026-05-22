@@ -66,16 +66,19 @@ Classification:
 - implemented
 - docs updated
 - smoke-tested through hook and release smokes
-- needs follow-up for PowerShell direct JSON rules consumption
+- PowerShell direct JSON rules consumption started after PR #9
+- needs follow-up for broader runner-path adoption
 
 Evidence:
 
 - Shared TypeScript redaction rules and payload-size guards exist.
+- PowerShell Codex hook redaction now uses a shared helper that loads `packages/event-schema/src/redaction-rules.json` with a fail-open fallback.
+- A parity smoke compares PowerShell and TypeScript handling of the same secret sample.
 - Threat model and SECURITY updates cover public CI, self-hosted runner risk, hooks, sidecar remote control, providers and local spool privacy.
 
 Deferral:
 
-- PowerShell direct consumption of shared redaction JSON is deferred to `goals/backlog/028-powershell-shared-redaction-rules.md`.
+- Broader PowerShell runner-path consolidation remains deferred to `goals/backlog/028-powershell-shared-redaction-rules.md`.
 
 ## Phase 009: Docs Site, Demo Dataset And Packaging
 
@@ -154,19 +157,20 @@ Deferral:
 Classification:
 
 - implemented
-- skeleton-only for durable append-only audit storage
+- durable audit skeleton started after PR #9
 - smoke-tested
-- needs follow-up for persistence-grade audit records
+- needs follow-up for full persistence-grade audit coverage
 
 Evidence:
 
 - `/v1/metrics` exposes event, run, notification, node and recent failure counts.
-- `/v1/audit` now derives safe audit entries from already-redacted approval, node, notification and failed-run events.
+- `/v1/audit` now returns durable safe audit entries for newly ingested approval, node, notification and failed-run events, with a derived fallback for older stores.
 - Audit entries do not include raw payloads.
+- Audit rows include immutable event references and the redaction policy source used at write time.
 
 Deferral:
 
-- Durable append-only audit storage is deferred to `goals/backlog/029-durable-audit-trail.md`.
+- Broader durable audit coverage, exports and retention policy remain deferred to `goals/backlog/029-durable-audit-trail.md`.
 
 ## Phase 014: Release Candidate Hardening
 
@@ -184,7 +188,7 @@ Evidence:
 
 Deferrals:
 
-- Browser visual QA: `goals/backlog/022-real-browser-visual-qa.md`.
+- Browser visual QA: `goals/backlog/022-real-browser-visual-qa.md`. An optional local Playwright runner now exists for fixture-backed screenshots when Playwright is installed; CI browser install/artifact publishing remains deferred.
 - Mobile readiness: `goals/backlog/024-mobile-app-readiness.md`.
 - Public docs site: `goals/backlog/026-public-docs-site.md`.
 - External contributor onboarding: `goals/backlog/027-external-contributor-onboarding.md`.
