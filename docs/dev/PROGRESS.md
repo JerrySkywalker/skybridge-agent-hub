@@ -6,7 +6,10 @@
 - Added bootstrap direct notifications after correcting the assumption that SkyBridge Notification Center is available for SkyBridge's own development alerts. `notify-bootstrap.ps1` supports direct ntfy and urgent WeCom/WeChat webhook delivery through environment variables, with dry-run smoke coverage.
 - Completed phases 016-A through 016-F: Hermes supervisor design, prompt templates, bridge script, supervisor status refinement, escalation notification model and local Hermes flow smoke.
 - Validation run so far: event-schema tests/typecheck, server tests/typecheck, client tests/typecheck, react-widgets tests/typecheck, web build, PowerShell parse validation, bootstrap notification smoke, iteration controller smoke, CI Guardian smoke and Hermes supervisor flow smoke.
-- Remaining for this goal: final reusable packaging validation, full check suite, Docker compose config validation, progress/PR body update, push and draft PR creation.
+- Completed phase 016-G: reusable project integration docs, SkyBridge/generic project config examples, README, roadmap and changelog updates.
+- Final local validation passed: PowerShell parse validation; bootstrap notification smoke; iteration controller smoke; CI Guardian smoke; Hermes supervisor flow smoke; release dry-run smoke; Operator Console smoke; multi-agent platform smoke; dogfooding loop smoke; Docker compose dev/test/prod config rendering; `corepack pnpm check`; and `just check`.
+- Safety notes: no production deployment, branch protection mutation, auto-merge enablement, real secrets, `.env`, `/opt`, OpenResty, Authelia, 1Panel or Docker daemon configuration changes were performed. SkyBridge event delivery remains fail-open, and bootstrap phone notification does not require the SkyBridge server.
+- Remaining for this goal: push branch, create draft PR and update PR body.
 
 ## 2026-05-22
 
