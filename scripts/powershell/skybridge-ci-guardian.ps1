@@ -41,6 +41,47 @@ function Get-CurrentPrNumber {
   return [int](($json | ConvertFrom-Json).number)
 }
 
+function Save-FailedWorkflowEvidence {
+  param(
+    [int]$PrNumber,
+    [string]$RunDir,
+    [int]$Attempt
+  )
+
+  $metadataPath = Join-Path $RunDir "failed-runs-$Attempt.json"
+  $logPath = Join-Path $RunDir "failed-workflow-logs-$Attempt.log"
+
+  try {
+    $runsJson = gh run list --json databaseId,displayTitle,conclusion,status,event,headBranch,createdAt,url --limit 10 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($runsJson)) {
+      return @{ fetched = $false; reason = "gh_run_list_failed" }
+    }
+
+    $runsJson | Set-Content -LiteralPath $metadataPath -Encoding UTF8
+    $runs = @($runsJson | ConvertFrom-Json)
+    $failedRun = $runs | Where-Object { $_.conclusion -in @("failure", "cancelled", "timed_out", "action_required") } | Select-Object -First 1
+    if (-not $failedRun) {
+      return @{ fetched = $false; reason = "no_failed_run_found"; metadata_path = $metadataPath }
+    }
+
+    gh run view $failedRun.databaseId --log-failed *> $logPath
+    if ($LASTEXITCODE -ne 0) {
+      return @{ fetched = $false; reason = "gh_run_view_failed"; metadata_path = $metadataPath; log_path = $logPath }
+    }
+
+    return @{
+      fetched = $true
+      pr_number = $PrNumber
+      run_id = $failedRun.databaseId
+      metadata_path = $metadataPath
+      log_path = $logPath
+      raw_logs_local_only = $true
+    }
+  } catch {
+    return @{ fetched = $false; reason = $_.Exception.Message }
+  }
+}
+
 $prNumber = Get-CurrentPrNumber
 if ($prNumber -le 0) {
   Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI Guardian" -Message "No pull request could be identified."
@@ -69,7 +110,8 @@ while ($attempt -le $MaxRepairAttempts) {
 
   if ($checksText -match "fail|cancel|timed_out|action_required") {
     Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI failed" -Message "PR #$prNumber failed checks; repair attempt $attempt of $MaxRepairAttempts."
-    Send-GuardianEvent -Type "iteration.ci_failed" -Payload @{ pr_number = $prNumber; attempt = $attempt }
+    $workflowEvidence = Save-FailedWorkflowEvidence -PrNumber $prNumber -RunDir $runDir -Attempt $attempt
+    Send-GuardianEvent -Type "iteration.ci_failed" -Payload @{ pr_number = $prNumber; attempt = $attempt; workflow_logs_fetched = [bool]$workflowEvidence.fetched; raw_logs_local_only = $true }
     if ($attempt -gt $MaxRepairAttempts) { break }
 
     $repairPrompt = @"
