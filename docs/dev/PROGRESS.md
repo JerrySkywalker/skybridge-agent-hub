@@ -1,5 +1,11 @@
 # Progress Log
 
+## 2026-05-23 Codex Phone Notification Smoke
+
+- Added a Codex full-chain phone notification smoke wrapper that launches `codex exec`, instructs the nested Codex run to call `notify-bootstrap.ps1`, stores Codex JSONL/last-message artifacts under `.agent/codex-phone-smoke/<timestamp>/` and reports whether the output showed ntfy dry-run configured or real sent status.
+- Documented the full chain `Codex exec -> notify-bootstrap.ps1 -> local bootstrap env -> ntfy -> phone`, including safe dry-run and manual `-Send` commands, CI warning and secret handling requirements.
+- Added `smoke:codex-phone-notification` as a dry-run-only package script; real phone send remains manual and outside default checks.
+
 ## 2026-05-23 Super Goal 017-023
 
 - Completed durable iteration persistence: `/v1/iterations` now uses the server store abstraction with SQLite-backed iteration runs and state events, bounded filters, restart coverage and redacted payload persistence.
