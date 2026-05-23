@@ -1,5 +1,12 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 039-041 Auto-Merge Sweep Pilot
+
+- Started controlled sweep pilot on `ai/super-039-041-auto-merge-sweep-pilot` after confirming `main` contains PR #21 via merge commit `098b4b2`.
+- Preflight passed with no blockers and no remote mutation: `check-github-automation-readiness.ps1 -Json`, `smoke-auto-merge-policy.ps1`, dry-run `skybridge-auto-merge-sweep.ps1`, `smoke-bootstrap-notification.ps1 -DryRun` and `validate-powershell.ps1`.
+- The readiness checker still reported manual setup required for branch-protection proof and repository auto-merge inspection, matching the known local checker limitation. It reported zero open PRs before candidate creation.
+- Initial dry-run sweep used blocked-notification suppression to preserve the requirement for exactly one real non-urgent bootstrap phone notification after the pilot result.
+
 ## 2026-05-23 Super Goal 034 Auto-Merge Rerun
 
 - Confirmed `origin/main` Docker Images workflow no longer has `pull_request` path filtering, so docs-only PRs now create the required `Docker build (server)` and `Docker build (web)` contexts.
