@@ -131,7 +131,7 @@ Safety boundaries:
 Failed check metadata is in $runDir/checks-$attempt.log. Do not upload raw logs to SkyBridge.
 "@
     Send-GuardianEvent -Type "iteration.ci_repair_started" -Payload @{ pr_number = $prNumber; attempt = $attempt }
-    & $CodexCommand exec --sandbox workspace-write --ask-for-approval never --json --output-last-message (Join-Path $runDir "repair-$attempt-last-message.md") $repairPrompt *> (Join-Path $runDir "repair-$attempt.jsonl")
+    & $CodexCommand exec --sandbox workspace-write --json --output-last-message (Join-Path $runDir "repair-$attempt-last-message.md") $repairPrompt *> (Join-Path $runDir "repair-$attempt.jsonl")
     if ($LASTEXITCODE -ne 0) {
       Invoke-BootstrapNotification -Severity "urgent" -Title "SkyBridge CI repair failed" -Message "Codex repair failed for PR #$prNumber."
       Send-GuardianEvent -Type "iteration.failed" -Payload @{ pr_number = $prNumber; attempt = $attempt; reason = "codex_repair_failed" }
