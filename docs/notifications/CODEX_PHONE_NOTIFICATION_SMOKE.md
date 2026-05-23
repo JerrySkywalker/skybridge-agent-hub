@@ -49,6 +49,23 @@ The summary reports whether Codex appeared to run `notify-bootstrap.ps1` and whe
 
 The wrapper uses `codex exec --sandbox danger-full-access` so the nested Codex process can spawn local PowerShell reliably on Windows. The nested prompt still instructs Codex to run only the notifier command, avoid environment values, avoid file edits and avoid deployment. Default dry-run mode cannot send a phone notification.
 
+## Troubleshooting
+
+Missing env:
+Dry-run success for this smoke expects the nested Codex output to show ntfy as configured. If it reports skipped or missing env, verify `$HOME\.skybridge\bootstrap-notify.env.ps1` exists on the local machine or point `SKYBRIDGE_BOOTSTRAP_ENV_FILE` at a local env loader. Do not commit that file.
+
+Missing `-Send`:
+The default and package-script path use `-DryRun`; they prove command routing without delivering to the phone. A real phone notification requires the wrapper `-Send` switch, which causes the nested notifier call to include `notify-bootstrap.ps1 -Send`.
+
+Wrong topic:
+Check the subscribed phone topic against the severity-specific topic selection. `urgent` can route to `SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC`; `info` and `warning` use the normal topic. Keep real topic names out of prompts, logs, commits and PR text.
+
+ACL denied:
+If the nested notifier reports an auth or ACL failure, fix the local ntfy token or basic-auth settings outside the repo and retry dry-run first. The smoke should report failure without exposing credential values.
+
+Sandbox mode:
+If Codex does not appear to run `notify-bootstrap.ps1`, run the wrapper from the repository root and keep its `--sandbox danger-full-access` behavior. This is for local PowerShell process spawning on Windows; it does not authorize production deployment, file edits or secret disclosure.
+
 ## Real Phone Send
 
 Real delivery is a manual operator test. Do not run `-Send` in CI or default checks.

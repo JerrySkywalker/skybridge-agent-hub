@@ -80,3 +80,20 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\notify-bootstrap.ps1 `
 ```
 
 See `docs/notifications/BOOTSTRAP_SETUP_WINDOWS.md` and `docs/notifications/BOOTSTRAP_SETUP_SERVER.md` for operator setup.
+
+## Troubleshooting
+
+Missing local env:
+If dry-run output reports `missing_ntfy_env`, the notifier did not find a usable topic URL. Set either the preferred `SKYBRIDGE_BOOTSTRAP_NTFY_URL` plus `SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC` pair, or the legacy `NTFY_TOPIC_URL`. On a local workstation, keep these values in `$HOME\.skybridge\bootstrap-notify.env.ps1` or another local secret store, not in repository files.
+
+Configured but not sent:
+If output reports `send_flag_required`, the notifier found configuration but intentionally did not deliver because `-Send` was omitted. This is the expected default for smoke tests, controller dry-runs and CI. Add `-Send` only for a deliberate operator phone test.
+
+Wrong topic or phone does not alert:
+Confirm the phone is subscribed to the exact ntfy topic selected by severity. `urgent` may use `SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC`; other severities use `SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC`. Do not paste real topic names into issues, PRs or docs when debugging.
+
+ACL or auth denied:
+HTTP 401 or 403 errors usually mean the ntfy server requires a token or basic auth, the token lacks publish permission for the topic, or the topic ACL denies the configured user. Rotate or update credentials outside the repository and rerun a dry-run before trying `-Send`.
+
+Sandbox mode:
+When the notification path is invoked through nested `codex exec` on Windows, use the documented smoke wrapper or run Codex with `--sandbox danger-full-access` so it can spawn local PowerShell reliably. The nested prompt must still call only `notify-bootstrap.ps1`, avoid printing environment values and avoid file edits.
