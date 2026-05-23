@@ -1,0 +1,47 @@
+{
+  "enabled": false,
+  "allowed_branch_prefixes": ["ai/"],
+  "allowed_paths": [
+    "docs/**",
+    "goals/ready/**",
+    "goals/backlog/**",
+    "goals/done/**",
+    "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "CONTRIBUTING.md"
+  ],
+  "blocked_paths": [
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+    "**/*secret*",
+    "**/*secrets*",
+    "**/*credential*",
+    "**/*credentials*",
+    "**/*token*",
+    ".github/workflows/**",
+    "deploy/**",
+    "production/**",
+    "**/production/**",
+    "**/*prod*",
+    "**/openresty/**",
+    "**/authelia/**",
+    "**/1panel/**",
+    "**/docker-daemon/**",
+    "**/daemon.json"
+  ],
+  "required_checks": [
+    "AI branch validation",
+    "Project check",
+    "Docker build (server)",
+    "Docker build (web)"
+  ],
+  "max_repair_attempts": 3,
+  "notifications": {
+    "bootstrap_on_blocked": true,
+    "bootstrap_on_high_risk": true,
+    "bootstrap_on_dry_run": false
+  }
+}
