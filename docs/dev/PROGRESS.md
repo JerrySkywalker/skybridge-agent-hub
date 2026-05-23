@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 034 Auto-Merge Rerun
+
+- Confirmed `origin/main` Docker Images workflow no longer has `pull_request` path filtering, so docs-only PRs now create the required `Docker build (server)` and `Docker build (web)` contexts.
+- Confirmed `scripts/powershell/skybridge-iterate.ps1` and `scripts/powershell/skybridge-ci-guardian.ps1` no longer use the obsolete Codex CLI `--ask-for-approval` flag.
+- `check-github-automation-readiness.ps1` completed with no blockers and no remote settings mutation. It still reported manual setup required for branch-protection proof because the local checker cannot fully inspect or mutate those GitHub settings.
+- Created child goal `goals/ready/034-real-auto-merge-rerun-docs-smoke.md` and processed it with `skybridge-iterate.ps1`, producing branch `ai/034-real-auto-merge-rerun-docs-smoke` and PR #19: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/19.
+- Marked PR #19 ready for review after confirming it changed only Markdown files: `docs/dev/REAL_AUTO_MERGE_RERUN.md` and `goals/ready/034-real-auto-merge-rerun-docs-smoke.md`.
+- GitHub reported the required checks as present and green: `Project check`, `Docker build (server)` and `Docker build (web)`. `AI branch validation` also passed.
+- Ran `skybridge-ci-guardian.ps1 -CurrentBranch -EnableAutoMerge` only after the PR was verified as docs-only, on an `ai/` branch, green, and free of production/secrets/deploy/root config changes. The Guardian returned `state=ci_green` for PR #19.
+- Did not manually merge the child PR. GitHub reported PR #19 merged, and pulling `main` fast-forwarded to the merged docs-only change.
+- Sent exactly one real non-urgent bootstrap notification after merge. ntfy reported `sent: ok`; WeCom skipped as expected for non-urgent severity.
+- Final validation passed: bootstrap notification dry-run smoke, Codex phone notification dry-run smoke, iteration controller dry-run smoke, CI Guardian dry-run smoke, PowerShell parse validation and `just check`.
+- Remaining blocker before always-on AI auto-merge: the local readiness checker still cannot independently prove branch-protection and repository auto-merge settings, so those controls remain operator-reviewed even though this PR proved the end-to-end safe docs-only loop.
+
 ## 2026-05-23 Super Goal 032 Preflight
 
 - Started the first real AI auto-merge trial on `ai/super-032-first-real-auto-merge` with a docs-only safety boundary: no production deployment, secrets, `.env`, deploy scripts, GitHub settings mutation, branch protection mutation, WSS remote execution or privileged runners.
