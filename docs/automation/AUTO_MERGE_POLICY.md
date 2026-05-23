@@ -72,6 +72,23 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-ci-guardian.ps
   -PolicyFile .\config\auto-merge-policy.example.json
 ```
 
+Dry-run a sweep across open PRs:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-auto-merge-sweep.ps1 `
+  -PolicyFile .\config\auto-merge-policy.example.json
+```
+
+Run a real sweep that enables GitHub auto-merge for eligible PRs only:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-auto-merge-sweep.ps1 `
+  -PolicyFile .\config\auto-merge-policy.example.json `
+  -EnableAutoMerge
+```
+
+The sweep is dry-run by default. `-EnableAutoMerge` is the explicit mutation flag; it calls `gh pr merge --auto --squash` only for PRs that pass the local policy classifier.
+
 ## Safety Notes
 
 This policy does not mutate GitHub settings, branch protection, production files, secrets or deployment configuration. GitHub repository auto-merge and branch protection are manual repository settings.

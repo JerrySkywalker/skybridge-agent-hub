@@ -74,7 +74,14 @@ function Read-SkyBridgeAutoMergePolicy {
 
 function ConvertTo-SkyBridgePolicyPath {
   param([Parameter(Mandatory = $true)][string]$Path)
-  return ($Path -replace "\\", "/").TrimStart("./")
+  $normalized = $Path -replace "\\", "/"
+  while ($normalized.StartsWith("./", [System.StringComparison]::Ordinal)) {
+    $normalized = $normalized.Substring(2)
+  }
+  while ($normalized.StartsWith("/", [System.StringComparison]::Ordinal)) {
+    $normalized = $normalized.Substring(1)
+  }
+  return $normalized
 }
 
 function Test-SkyBridgePathPattern {
