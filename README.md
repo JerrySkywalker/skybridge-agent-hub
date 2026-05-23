@@ -351,6 +351,7 @@ SkyBridge now includes a reusable Agent CI/CD Control Plane foundation:
 - `skybridge-ci-guardian.ps1` watches and repairs PR CI without merging by default.
 - `skybridge-hermes-supervisor.ps1` gives Hermes a JSON bridge for status, start-next, repair and nightly reports.
 - `notify-bootstrap.ps1` sends direct ntfy or urgent WeCom/WeChat notifications without depending on the SkyBridge server.
+- Hermes cloud supervision can be validated through a local SSH tunnel with redacted API, run, supervisor and phone-notification smokes.
 
 Start with dry runs:
 
@@ -358,9 +359,11 @@ Start with dry runs:
 corepack pnpm smoke:iteration-controller
 corepack pnpm smoke:ci-guardian
 corepack pnpm smoke:hermes-supervisor-flow
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-cloud-api.ps1 -DryRun -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-supervised-sweep.ps1 -DryRun -Json
 ```
 
-See [docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md](docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md), [docs/hermes/SUPERVISOR.md](docs/hermes/SUPERVISOR.md) and [docs/automation/REUSABLE_PROJECT_INTEGRATION.md](docs/automation/REUSABLE_PROJECT_INTEGRATION.md).
+See [docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md](docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md), [docs/hermes/SUPERVISOR.md](docs/hermes/SUPERVISOR.md), [docs/hermes/CLOUD_SUPERVISOR_RUNBOOK.md](docs/hermes/CLOUD_SUPERVISOR_RUNBOOK.md) and [docs/automation/REUSABLE_PROJECT_INTEGRATION.md](docs/automation/REUSABLE_PROJECT_INTEGRATION.md).
 
 ## Roadmap
 
