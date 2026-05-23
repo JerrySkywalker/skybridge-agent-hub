@@ -7,6 +7,8 @@ param(
   [switch]$DryRun,
   [switch]$UpdatePRBody,
   [switch]$EnableAutoMerge,
+  [switch]$AllowPendingRequiredChecks,
+  [string]$PolicyFile,
   [string]$SkyBridgeApiBase,
   [string]$CodexCommand = "codex"
 )
@@ -17,6 +19,9 @@ $bootstrapEnvLoader = Join-Path $PSScriptRoot "load-bootstrap-env.ps1"
 if (Test-Path -LiteralPath $bootstrapEnvLoader -PathType Leaf) {
   . $bootstrapEnvLoader
 }
+
+$autoMergePolicyHelper = Join-Path $PSScriptRoot "auto-merge-policy.ps1"
+. $autoMergePolicyHelper
 
 function Invoke-BootstrapNotification {
   param([string]$Severity, [string]$Title, [string]$Message)
@@ -87,6 +92,39 @@ function Save-FailedWorkflowEvidence {
   }
 }
 
+function Get-PrAutoMergeEligibility {
+  param(
+    [int]$PrNumber,
+    [object]$Policy
+  )
+
+  $prJson = gh pr view $PrNumber --json number,headRefName,isDraft,statusCheckRollup 2>$null
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($prJson)) {
+    throw "failed to read PR #$PrNumber metadata"
+  }
+  $prInfo = $prJson | ConvertFrom-Json
+
+  $changedFiles = @(gh pr diff $PrNumber --name-only 2>$null)
+  if ($LASTEXITCODE -ne 0 -or $changedFiles.Count -eq 0) {
+    throw "failed to read changed files for PR #$PrNumber"
+  }
+
+  $checks = @($prInfo.statusCheckRollup | ForEach-Object {
+    [pscustomobject]@{
+      name = $_.name
+      status = $_.status
+      conclusion = $_.conclusion
+    }
+  })
+
+  return Test-SkyBridgeAutoMergeEligibility `
+    -PrInfo $prInfo `
+    -ChangedFiles $changedFiles `
+    -Checks $checks `
+    -Policy $Policy `
+    -AllowPendingChecks:$AllowPendingRequiredChecks
+}
+
 $prNumber = Get-CurrentPrNumber
 if ($prNumber -le 0) {
   Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI Guardian" -Message "No pull request could be identified."
@@ -97,12 +135,13 @@ if ($prNumber -le 0) {
 $script:IterationId = "iter_pr_$prNumber"
 $runDir = Join-Path ".\.agent\iterations" $script:IterationId
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+$autoMergePolicy = Read-SkyBridgeAutoMergePolicy -PolicyFile $PolicyFile
 
 Invoke-BootstrapNotification -Severity "info" -Title "SkyBridge CI Guardian started" -Message "Inspecting PR #$prNumber"
 Send-GuardianEvent -Type "iteration.ci_pending" -Payload @{ pr_number = $prNumber; dry_run = [bool]$DryRun }
 
 if ($DryRun) {
-  @{ ok = $true; pr_number = $prNumber; dry_run = $true; auto_merge = [bool]$EnableAutoMerge; max_repair_attempts = $MaxRepairAttempts } | ConvertTo-Json -Depth 8
+  @{ ok = $true; pr_number = $prNumber; dry_run = $true; auto_merge = [bool]$EnableAutoMerge; max_repair_attempts = $MaxRepairAttempts; policy_required_checks = @($autoMergePolicy.required_checks) } | ConvertTo-Json -Depth 8
   exit 0
 }
 
@@ -161,6 +200,15 @@ Failed check metadata is in $runDir/checks-$attempt.log. Do not upload raw logs 
     gh pr edit $prNumber --body-file (Join-Path $runDir "checks-$attempt.log") | Out-Null
   }
   if ($EnableAutoMerge) {
+    $eligibility = Get-PrAutoMergeEligibility -PrNumber $prNumber -Policy $autoMergePolicy
+    $eligibility | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $runDir "auto-merge-eligibility-$attempt.json") -Encoding UTF8
+    if (-not $eligibility.eligible) {
+      $reasonText = ($eligibility.reasons -join ", ")
+      Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge auto-merge blocked" -Message "PR #$prNumber is not eligible for auto-merge: $reasonText"
+      Send-GuardianEvent -Type "iteration.blocked" -Payload @{ pr_number = $prNumber; reason = "auto_merge_policy_blocked"; policy_reasons = @($eligibility.reasons) }
+      @{ ok = $false; pr_number = $prNumber; state = "auto_merge_blocked"; reasons = @($eligibility.reasons); eligibility = $eligibility } | ConvertTo-Json -Depth 12
+      exit 1
+    }
     gh pr merge $prNumber --auto --squash
     Send-GuardianEvent -Type "iteration.auto_merge_enabled" -Payload @{ pr_number = $prNumber }
   }

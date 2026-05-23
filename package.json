@@ -26,6 +26,7 @@
     "smoke:codex-phone-notification": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-codex-phone-notification.ps1 -DryRun",
     "smoke:iteration-controller": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-iteration-controller.ps1",
     "smoke:ci-guardian": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-ci-guardian.ps1",
+    "smoke:auto-merge-policy": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-auto-merge-policy.ps1",
     "smoke:github-automation-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-github-automation-readiness.ps1",
     "smoke:hermes-supervisor-flow": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-supervisor-flow.ps1",
     "smoke:hermes-supervisor-operational": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-supervisor-operational.ps1",
