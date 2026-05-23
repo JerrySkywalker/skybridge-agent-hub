@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 028-031
+
+- Completed notification readiness audit for the Codex phone path. `BOOTSTRAP_NOTIFICATIONS.md` and `CODEX_PHONE_NOTIFICATION_SMOKE.md` now cover missing local env, missing `-Send`, wrong ntfy topic, ACL/auth denied and Windows Codex sandbox troubleshooting without documenting real secrets.
+- Queued `goals/ready/032-first-real-ai-cycle-docs-smoke.md` as a safe docs-only child goal. It explicitly forbids production deployment, secrets, remote control, branch protection mutation, auto-merge and force-push.
+- Exercised `skybridge-iterate.ps1` against the child goal with a local ignored config using `danger-full-access` for Windows Codex process spawning. The first attempt exposed a Codex CLI compatibility issue with the removed `--ask-for-approval` flag; `skybridge-iterate.ps1` and `skybridge-ci-guardian.ps1` were updated to use the current `codex exec` invocation.
+- The real child iteration created commit `9717873 docs: record first real AI cycle smoke`, pushed branch `ai/032-first-real-ai-cycle-docs-smoke` and opened draft PR #15: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/15`.
+- `skybridge-ci-guardian.ps1 -PR 15 -MaxRepairAttempts 0` reported `ci_green`; auto-merge remained disabled.
+- Sent exactly one non-urgent bootstrap phone notification through `notify-bootstrap.ps1 -Send`; ntfy returned `sent`, and WeCom was skipped as `urgent_only`.
+- Safety notes: no production deployment, real secrets, GitHub branch protection mutation, auto-merge enabling, force-push, urgent notification or remote-control change was performed. SkyBridge API event delivery was intentionally tested against offline loopback and remained fail-open.
+
 ## 2026-05-23 Codex Phone Notification Smoke
 
 - Added a Codex full-chain phone notification smoke wrapper that launches `codex exec`, instructs the nested Codex run to call `notify-bootstrap.ps1`, stores Codex JSONL/last-message artifacts under `.agent/codex-phone-smoke/<timestamp>/` and reports whether the output showed ntfy dry-run configured or real sent status.
