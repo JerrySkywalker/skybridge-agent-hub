@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 042-048 Hermes Cloud Supervisor Integration
+
+- Added safe local Hermes env loading from `$HOME\.skybridge\hermes.env.ps1` or `HERMES_ENV_FILE`, with JSON presence reporting and no secret values included.
+- Added Hermes cloud API and harmless run smokes for the local SSH tunnel path. Real validation connected through `http://127.0.0.1:18642`; `/health`, `/health/detailed`, `/v1/capabilities` and `/v1/models` responded, and the safe `/v1/responses` prompt matched the expected health sentence without printing the response text.
+- Hardened `skybridge-hermes-supervisor.ps1` with `HermesHealth`, `HermesRunSmoke`, `AutoMergeSweepDryRun`, `NotifyTest`, `-UseHermesApi`, redacted Hermes key handling and explicit `-Send` gating for phone notification.
+- Added the Hermes-supervised auto-merge sweep smoke. The validated path ran supervisor status, auto-merge sweep dry-run and bootstrap notification dry-run without enabling auto-merge.
+- Sent exactly one real non-urgent bootstrap ntfy notification through `skybridge-hermes-supervisor.ps1 -Mode NotifyTest -UseHermesApi -Send`; ntfy reported `sent: ok` and WeCom skipped as expected for `info`.
+- Added Hermes cloud run, environment, phone notification and cloud supervisor runbook docs.
+- Safety notes: no Hermes API key, bootstrap credential, `.env`, local secret file, production deploy, GitHub settings mutation, branch-protection change, server root config edit, public API exposure or real auto-merge enablement was introduced.
+
 ## 2026-05-23 Super Goal 039-041 Auto-Merge Sweep Pilot
 
 - Started controlled sweep pilot on `ai/super-039-041-auto-merge-sweep-pilot` after confirming `main` contains PR #21 via merge commit `098b4b2`.
