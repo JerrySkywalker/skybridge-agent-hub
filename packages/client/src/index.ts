@@ -184,6 +184,10 @@ export class SkyBridgeClient {
     return this.getJson<SupervisorStatus>("/v1/supervisor/status");
   }
 
+  async getSupervisorNextAction(): Promise<SupervisorNextAction> {
+    return this.getJson<SupervisorNextAction>("/v1/supervisor/next-action");
+  }
+
   async listApprovals(): Promise<ApprovalSummary[]> {
     const json = await this.getJson<{ approvals: ApprovalSummary[] }>("/v1/approvals");
     return json.approvals;
@@ -270,6 +274,11 @@ export interface SupervisorStatus {
   ok: boolean;
   raw_prompts_included: false;
   raw_logs_included: false;
+  notification_path?: {
+    primary_for_skybridge_development: string;
+    skybridge_notification_center_required: boolean;
+    migration_stage: string;
+  };
   iterations: {
     total: number;
     active: number;
@@ -277,6 +286,14 @@ export interface SupervisorStatus {
     latest?: IterationRun;
   };
   recent_iteration_events: SkyBridgeEvent[];
+}
+
+export interface SupervisorNextAction {
+  action: string;
+  reason?: string;
+  iteration_id?: string;
+  pr_number?: number;
+  state?: string;
 }
 
 function queryString(query: object): string {

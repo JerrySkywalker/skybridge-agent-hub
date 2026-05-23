@@ -91,12 +91,14 @@ describe("SkyBridgeClient", () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ iterations: [{ iteration_id: "iter-1", state: "ci_pending" }] }))
       .mockResolvedValueOnce(jsonResponse({ iteration: { iteration_id: "iter-1", state: "ci_pending", events: [] } }))
-      .mockResolvedValueOnce(jsonResponse({ ok: true, raw_prompts_included: false, raw_logs_included: false, iterations: { total: 1, active: 1, blocked: 0 }, recent_iteration_events: [] }));
+      .mockResolvedValueOnce(jsonResponse({ ok: true, raw_prompts_included: false, raw_logs_included: false, iterations: { total: 1, active: 1, blocked: 0 }, recent_iteration_events: [] }))
+      .mockResolvedValueOnce(jsonResponse({ action: "repair_ci", iteration_id: "iter-1", pr_number: 12 }));
     const client = new SkyBridgeClient("http://localhost:8787");
 
     await expect(client.listIterations()).resolves.toEqual([expect.objectContaining({ iteration_id: "iter-1" })]);
     await expect(client.getIteration("iter-1")).resolves.toMatchObject({ iteration_id: "iter-1", events: [] });
     await expect(client.getSupervisorStatus()).resolves.toMatchObject({ raw_logs_included: false });
+    await expect(client.getSupervisorNextAction()).resolves.toMatchObject({ action: "repair_ci", pr_number: 12 });
   });
 
   it("throws useful errors for non-2xx responses", async () => {

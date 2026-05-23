@@ -7,6 +7,8 @@ import {
   type ApprovalSummary,
   type MetricsResponse,
   type SkyBridgeHealth,
+  type SupervisorNextAction,
+  type SupervisorStatus,
   type StoredNotification
 } from "@skybridge-agent-hub/client";
 import type { IterationRun, RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
@@ -482,6 +484,64 @@ export function CIGuardianPanel({ apiBase }: WidgetProps) {
           <Metric label="Blocked" value={current.last_error ?? "no"} />
         </dl>
       ) : <EmptyState title="No PR state" detail="CI Guardian state appears after PR checks are observed." />}
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function AutonomousIterationOperatorPanel({ apiBase }: WidgetProps) {
+  const [iterations, setIterations] = useState<IterationRun[]>([]);
+  const [supervisor, setSupervisor] = useState<SupervisorStatus | undefined>();
+  const [nextAction, setNextAction] = useState<SupervisorNextAction | undefined>();
+  const [providers, setProviders] = useState<Array<{ provider: string; configured: boolean; status: string }>>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void Promise.all([
+      client.listIterations(),
+      client.getSupervisorStatus(),
+      client.getSupervisorNextAction(),
+      client.listNotificationProviders()
+    ])
+      .then(([nextIterations, nextSupervisor, action, nextProviders]) => {
+        setIterations(nextIterations);
+        setSupervisor(nextSupervisor);
+        setNextAction(action);
+        setProviders(nextProviders);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  const latest = supervisor?.iterations.latest ?? iterations[0];
+  const ciStatus = latest?.state?.startsWith("ci_") ? latest.state : latest?.pr_number ? "pr_opened" : "idle";
+  const hermesStatus = supervisor?.ok ? (supervisor.iterations.blocked > 0 ? "attention" : "observing") : "offline";
+  const bootstrapStatus = supervisor?.notification_path?.skybridge_notification_center_required === false ? "bootstrap-direct" : "check setup";
+  const ntfy = providers.find((provider) => provider.provider === "ntfy");
+  const blockedReason = latest?.last_error ?? (latest?.state === "blocked" || latest?.state === "failed" ? "blocked without reason" : "none");
+  const bad = latest?.state === "blocked" || latest?.state === "failed" || latest?.state === "ci_failed";
+
+  return (
+    <section className="skybridge-panel skybridge-autonomy-panel">
+      <PanelHeader kicker="Autonomous Operations" title="Iteration Control" state={latest?.state ?? "idle"} bad={bad} />
+      {latest ? (
+        <>
+          <dl className="skybridge-metrics skybridge-metrics--compact">
+            <Metric label="Latest" value={latest.state} />
+            <Metric label="Open PR" value={latest.pr_number ? `#${latest.pr_number}` : "none"} />
+            <Metric label="CI Guardian" value={ciStatus} />
+            <Metric label="Hermes" value={hermesStatus} />
+            <Metric label="Bootstrap" value={bootstrapStatus} />
+            <Metric label="ntfy" value={ntfy?.configured ? "configured" : ntfy?.status ?? "unknown"} />
+            <Metric label="Blocked" value={blockedReason} />
+            <Metric label="Next" value={nextAction?.action ?? "observe"} />
+          </dl>
+          <p className="skybridge-runline">
+            {latest.branch} · attempts {latest.attempts}/{latest.max_attempts} · {nextAction?.reason ?? nextAction?.state ?? "metadata only"}
+          </p>
+        </>
+      ) : <EmptyState title="No autonomous iteration" detail="Run the controller smoke or a dry-run iteration to populate operator state." />}
       {error ? <ErrorState message={error} /> : null}
     </section>
   );

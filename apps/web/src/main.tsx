@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import {
   ActiveRunsPanel,
   ApprovalQueuePanel,
+  AutonomousIterationOperatorPanel,
   CIGuardianPanel,
   CodexIntegrationStatus,
   EventTimeline,
@@ -57,6 +58,7 @@ function App() {
         </div>
         <aside className="dashboard-grid__side">
           <CodexIntegrationStatus apiBase={apiBase} />
+          <AutonomousIterationOperatorPanel apiBase={apiBase} />
           <IterationStatusCard apiBase={apiBase} />
           <IterationTimeline apiBase={apiBase} />
           <CIGuardianPanel apiBase={apiBase} />
