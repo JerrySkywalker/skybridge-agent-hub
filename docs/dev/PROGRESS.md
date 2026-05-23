@@ -1,5 +1,12 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 032 Preflight
+
+- Started the first real AI auto-merge trial on `ai/super-032-first-real-auto-merge` with a docs-only safety boundary: no production deployment, secrets, `.env`, deploy scripts, GitHub settings mutation, branch protection mutation, WSS remote execution or privileged runners.
+- Preflight passed locally with a clean worktree before edits. `check-github-automation-readiness.ps1 -Json` reported no blockers, active local and remote workflows, authenticated `gh`, visible open PRs and no remote settings or branch protection mutation.
+- Repository auto-merge was verified separately with `gh api repos/JerrySkywalker/skybridge-agent-hub --jq '{allow_auto_merge}'`, which returned `allow_auto_merge=true`. The readiness script could not inspect `autoMergeAllowed` through `gh repo view` because that JSON field is unavailable in this local GitHub CLI, so branch protection remains proven by the generated PR's GitHub checks rather than by local mutation or settings inspection.
+- Dry-run validation passed for bootstrap phone notification, Codex phone notification, iteration controller, CI Guardian and PowerShell parse validation. Bootstrap ntfy reported configured in dry-run mode; WeCom remained skipped.
+
 ## 2026-05-23 Codex Phone Notification Smoke
 
 - Added a Codex full-chain phone notification smoke wrapper that launches `codex exec`, instructs the nested Codex run to call `notify-bootstrap.ps1`, stores Codex JSONL/last-message artifacts under `.agent/codex-phone-smoke/<timestamp>/` and reports whether the output showed ntfy dry-run configured or real sent status.
