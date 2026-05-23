@@ -12,6 +12,7 @@
 - GitHub did not merge PR #17. `main` branch protection also requires `Docker build (server)` and `Docker build (web)`, but the Docker Images PR workflow is path-filtered and did not run for the docs-only PR, leaving `mergeStateStatus=BLOCKED` with auto-merge enabled.
 - Sent one real bootstrap phone notification with warning severity for the blocked auto-merge state. ntfy reported `sent`; WeCom remained skipped because warning notifications are ntfy-only.
 - Remaining blocker before always-on AI auto-merge: required branch-protection checks must align with workflows that run for every auto-merge-eligible PR, or docs-only PRs need a safe non-publishing required-check path that satisfies `Docker build (server)` and `Docker build (web)` without production deployment or package publishing.
+- Follow-up parent-branch fix: removed the Docker Images pull-request path filter so the required `Docker build (server)` and `Docker build (web)` contexts are created for every PR. Pull-request Docker builds still do not push images because `push` remains disabled for `pull_request` events.
 
 ## 2026-05-23 Codex Phone Notification Smoke
 

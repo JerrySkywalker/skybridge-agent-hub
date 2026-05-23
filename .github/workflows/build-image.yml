@@ -3,14 +3,6 @@ name: Docker Images
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "deploy/dockerfiles/**"
-      - "deploy/docker-compose*.yml"
-      - "apps/**"
-      - "packages/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
   push:
     branches: [main]
     tags:
