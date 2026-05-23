@@ -11,6 +11,8 @@ param(
 
   [switch]$DryRun,
 
+  [switch]$Send,
+
   [switch]$Json,
 
   [int]$TimeoutSeconds = 8
@@ -19,6 +21,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Join-NtfyTopicUrl {
+  if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC)) {
+    $base = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_URL)) { $env:SKYBRIDGE_BOOTSTRAP_NTFY_URL } else { "https://ntfy.sh" }
+    $topic = if ($Severity -eq "urgent" -and -not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC)) {
+      $env:SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC
+    } else {
+      $env:SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC
+    }
+    return "$($base.TrimEnd('/'))/$($topic.TrimStart('/'))"
+  }
+
   if (-not [string]::IsNullOrWhiteSpace($env:NTFY_TOPIC_URL)) {
     return $env:NTFY_TOPIC_URL
   }
@@ -61,10 +73,14 @@ function Send-NtfyBootstrap {
     "Tags" = "robot"
   }
 
-  if (-not [string]::IsNullOrWhiteSpace($env:NTFY_TOKEN)) {
-    $headers["Authorization"] = "Bearer $($env:NTFY_TOKEN)"
-  } elseif (-not [string]::IsNullOrWhiteSpace($env:NTFY_USER) -and -not [string]::IsNullOrWhiteSpace($env:NTFY_PASSWORD)) {
-    $pair = "$($env:NTFY_USER):$($env:NTFY_PASSWORD)"
+  $token = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_TOKEN)) { $env:SKYBRIDGE_BOOTSTRAP_NTFY_TOKEN } else { $env:NTFY_TOKEN }
+  $user = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_USER)) { $env:SKYBRIDGE_BOOTSTRAP_NTFY_USER } else { $env:NTFY_USER }
+  $password = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_PASS)) { $env:SKYBRIDGE_BOOTSTRAP_NTFY_PASS } else { $env:NTFY_PASSWORD }
+
+  if (-not [string]::IsNullOrWhiteSpace($token)) {
+    $headers["Authorization"] = "Bearer $token"
+  } elseif (-not [string]::IsNullOrWhiteSpace($user) -and -not [string]::IsNullOrWhiteSpace($password)) {
+    $pair = "$($user):$($password)"
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($pair)
     $headers["Authorization"] = "Basic " + [Convert]::ToBase64String($bytes)
   }
@@ -93,19 +109,20 @@ function Send-WeComBootstrap {
 }
 
 $ntfyTopicUrl = Join-NtfyTopicUrl
-$wecomWebhookUrl = $env:WECOM_WEBHOOK_URL
+$wecomWebhookUrl = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_WECOM_WEBHOOK)) { $env:SKYBRIDGE_BOOTSTRAP_WECOM_WEBHOOK } else { $env:WECOM_WEBHOOK_URL }
 $results = @()
+$sendRequested = [bool]$Send -and -not [bool]$DryRun
 
-if ($DryRun) {
+if (-not $sendRequested) {
   $results += @{
     provider = "ntfy"
     status = if ($ntfyTopicUrl) { "configured" } else { "skipped" }
-    reason = if ($ntfyTopicUrl) { "dry_run" } else { "missing_ntfy_env" }
+    reason = if ($DryRun) { "dry_run" } elseif ($ntfyTopicUrl) { "send_flag_required" } else { "missing_ntfy_env" }
   }
   $results += @{
     provider = "wecom"
     status = if ($Severity -eq "urgent" -and -not [string]::IsNullOrWhiteSpace($wecomWebhookUrl)) { "configured" } else { "skipped" }
-    reason = if ($Severity -eq "urgent") { "dry_run_or_missing_webhook" } else { "urgent_only" }
+    reason = if ($DryRun) { "dry_run_or_missing_webhook" } elseif ($Severity -eq "urgent") { "send_flag_required_or_missing_webhook" } else { "urgent_only" }
   }
 } else {
   if ($ntfyTopicUrl) {
@@ -137,7 +154,8 @@ if ($DryRun) {
 
 $summary = @{
   ok = -not ($results | Where-Object { $_.status -eq "failed" })
-  dry_run = [bool]$DryRun
+  dry_run = [bool](-not $sendRequested)
+  send_requested = $sendRequested
   severity = $Severity
   title = $Title
   direct_notification_dependency = "none"

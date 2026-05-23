@@ -27,8 +27,9 @@ $status = Invoke-Hermes -Mode "Status" -DryRun
 $startNext = Invoke-Hermes -Mode "StartNext" -DryRun
 $repair = Invoke-Hermes -Mode "RepairPR" -DryRun -PR 999999
 $report = Invoke-Hermes -Mode "NightlyReport" -DryRun
+$notify = Invoke-Hermes -Mode "NotifyTest" -DryRun
 
-foreach ($result in @($status, $startNext, $repair, $report)) {
+foreach ($result in @($status, $startNext, $repair, $report, $notify)) {
   if ($result.raw_logs_included -ne $false -or $result.raw_prompts_included -ne $false) {
     throw "Hermes smoke result exposed raw logs or prompts"
   }
@@ -43,5 +44,6 @@ foreach ($result in @($status, $startNext, $repair, $report)) {
   start_next_actions = $startNext.actions.Count
   repair_actions = $repair.actions.Count
   nightly_mode = $report.mode
+  notify_mode = $notify.mode
   operator_summary = "Hermes dry-run flow validated without SkyBridge server, credentials or real Hermes runtime."
 } | ConvertTo-Json -Depth 8

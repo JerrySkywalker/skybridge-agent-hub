@@ -186,7 +186,17 @@ Send-IterationEvent -ApiBase $apiBase -IterationId $iterationId -Type "iteration
 
 if ($DryRun) {
   $codexPrompt | Set-Content -LiteralPath (Join-Path $runDir "prompt-preview.md") -Encoding UTF8
-  @{ ok = $true; state = "dry_run"; iteration_id = $iterationId; branch = $branch; run_dir = $runDir; codex_command = $metadata.codex_command } | ConvertTo-Json -Depth 8
+  @{
+    ok = $true
+    state = "dry_run"
+    iteration_id = $iterationId
+    branch = $branch
+    run_dir = $runDir
+    codex_command = $metadata.codex_command
+    auto_merge = [bool]$autoMerge
+    skybridge_fail_open = $true
+    notification_dry_run_path = $true
+  } | ConvertTo-Json -Depth 8
   exit 0
 }
 

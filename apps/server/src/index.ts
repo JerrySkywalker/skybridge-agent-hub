@@ -21,7 +21,7 @@ import {
   type SkyBridgeSourcePlatform
 } from "@skybridge-agent-hub/event-schema";
 import { send as sendNtfy, type NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
-import { MemoryStore, SqliteStore, type EventStore, type StoredAuditRecord, type StoredEvent, type StoredNotification } from "./store.js";
+import { MemoryStore, SqliteStore, type EventStore, type StoredAuditRecord, type StoredEvent, type StoredIterationRun, type StoredNotification } from "./store.js";
 
 export type { StoredAuditRecord, StoredEvent, StoredNotification } from "./store.js";
 
@@ -31,8 +31,6 @@ interface CreateServerOptions {
   jsonMigrationFile?: string | false;
   logger?: boolean;
 }
-
-type StoredIterationRun = IterationRun & { events: Array<{ type: string; time: string; payload: Record<string, unknown> }> };
 
 const ITERATION_STATES: IterationState[] = [
   "idle",
@@ -111,7 +109,6 @@ function notificationForEvent(event: StoredEvent): NotificationMessage {
 export async function createServer(options: CreateServerOptions = {}): Promise<FastifyInstance> {
   const persistence = resolvePersistence(options);
   const store: EventStore = persistence.dbFile ? new SqliteStore({ dbFile: persistence.dbFile, legacyJsonFile: persistence.jsonMigrationFile }) : new MemoryStore();
-  const iterationStore = new Map<string, StoredIterationRun>();
   const clients = new Set<{ write: (data: string) => void }>();
   const app = Fastify({ logger: options.logger ?? true });
 
@@ -189,13 +186,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   app.get("/v1/health", async () => healthResponse());
   app.get("/v1/sources", async () => ({ sources: SOURCE_CAPABILITIES }));
 
-  app.get("/v1/iterations", async () => ({
-    iterations: [...iterationStore.values()].map(({ events: _events, ...iteration }) => iteration)
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-  }));
+  app.get<{ Querystring: IterationListQuery }>("/v1/iterations", async (request, reply) => {
+    const parsed = parseIterationListQuery(request.query);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    const { limit, ...filters } = parsed.query;
+    return {
+      iterations: filterIterations(store.listIterations().sort((a, b) => b.updated_at.localeCompare(a.updated_at)), filters)
+        .slice(0, limit)
+        .map(({ events: _events, ...iteration }) => iteration)
+    };
+  });
 
   app.get<{ Params: { iterationId: string } }>("/v1/iterations/:iterationId", async (request, reply) => {
-    const iteration = iterationStore.get(decodeURIComponent(request.params.iterationId));
+    const iteration = store.getIteration(decodeURIComponent(request.params.iterationId));
     if (!iteration) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
     return { iteration };
   });
@@ -203,7 +206,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   app.post<{ Body: Partial<IterationRun> }>("/v1/iterations", async (request, reply) => {
     const parsed = parseIterationInput(request.body);
     if (!parsed.ok) return reply.code(400).send(parsed.response);
-    iterationStore.set(parsed.iteration.iteration_id, { ...parsed.iteration, events: [] });
+    await store.upsertIteration({ ...parsed.iteration, events: [] });
     return reply.code(201).send({ ok: true, iteration: parsed.iteration });
   });
 
@@ -211,7 +214,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     "/v1/iterations/:iterationId/state",
     async (request, reply) => {
       const iterationId = decodeURIComponent(request.params.iterationId);
-      const existing = iterationStore.get(iterationId);
+      const existing = store.getIteration(iterationId);
       if (!existing) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
       if (!request.body?.state || !isIterationState(request.body.state)) {
         return reply.code(400).send({ ok: false, error: "invalid_state" });
@@ -225,28 +228,26 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
         checks: Array.isArray(request.body.checks) ? sanitizeChecks(request.body.checks) : existing.checks,
         updated_at: new Date().toISOString()
       };
-      iterationStore.set(iterationId, updated);
+      await store.upsertIteration(updated);
       return { ok: true, iteration: updated };
     }
   );
 
   app.post<{ Params: { iterationId: string }; Body: { type?: string; payload?: unknown } }>("/v1/iterations/:iterationId/events", async (request, reply) => {
     const iterationId = decodeURIComponent(request.params.iterationId);
-    const existing = iterationStore.get(iterationId);
+    const existing = store.getIteration(iterationId);
     if (!existing) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
     const type = safeString(request.body?.type);
     if (!type || !type.startsWith("iteration.")) return reply.code(400).send({ ok: false, error: "invalid_iteration_event" });
     const payload = sanitizeIterationPayload(request.body?.payload);
     if (!payload.ok) return reply.code(400).send(payload.response);
-    const event = { type, time: new Date().toISOString(), payload: payload.payload };
-    existing.events.push(event);
-    existing.updated_at = event.time;
-    iterationStore.set(iterationId, existing);
+    const event = { iteration_id: iterationId, type, time: new Date().toISOString(), payload: payload.payload };
+    await store.addIterationEvent(event);
     return reply.code(202).send({ ok: true, event });
   });
 
   app.get<{ Params: { iterationId: string } }>("/v1/iterations/:iterationId/logs", async (request, reply) => {
-    const iteration = iterationStore.get(decodeURIComponent(request.params.iterationId));
+    const iteration = store.getIteration(decodeURIComponent(request.params.iterationId));
     if (!iteration) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
     return {
       iteration_id: iteration.iteration_id,
@@ -256,8 +257,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     };
   });
 
-  app.get("/v1/supervisor/status", async () => supervisorStatus([...iterationStore.values()], store.listEvents()));
-  app.get("/v1/supervisor/next-action", async () => supervisorNextAction([...iterationStore.values()]));
+  app.get("/v1/supervisor/status", async () => supervisorStatus(store.listIterations(), store.listEvents()));
+  app.get("/v1/supervisor/next-action", async () => supervisorNextAction(store.listIterations()));
 
   app.post("/v1/events", async (request, reply) => {
     const parsed = parseEventPayload(request.body);
@@ -476,6 +477,16 @@ interface NotificationListQuery {
 
 type ParsedNotificationListQuery = Omit<NotificationListQuery, "limit"> & { limit: number };
 
+interface IterationListQuery {
+  state?: IterationState;
+  project_id?: string;
+  branch?: string;
+  pr_number?: string | number;
+  limit?: string | number;
+}
+
+type ParsedIterationListQuery = Omit<IterationListQuery, "limit" | "pr_number"> & { limit: number; pr_number?: number };
+
 interface AuditListQuery {
   action?: string;
   actor?: string;
@@ -537,6 +548,16 @@ function filterNotifications(notifications: StoredNotification[], query: Omit<Pa
   });
 }
 
+function filterIterations(iterations: StoredIterationRun[], query: Omit<ParsedIterationListQuery, "limit">): StoredIterationRun[] {
+  return iterations.filter((iteration) => {
+    if (query.state && iteration.state !== query.state) return false;
+    if (query.project_id && iteration.project_id !== query.project_id) return false;
+    if (query.branch && iteration.branch !== query.branch) return false;
+    if (query.pr_number !== undefined && iteration.pr_number !== query.pr_number) return false;
+    return true;
+  });
+}
+
 function filterAuditRecords(records: StoredAuditRecord[], query: Omit<ParsedAuditListQuery, "limit">): StoredAuditRecord[] {
   return records.filter((record) => {
     if (query.action && record.action !== query.action) return false;
@@ -586,6 +607,17 @@ function parseNotificationListQuery(query: NotificationListQuery): ParsedQuery<P
   }
   if (query.severity && !isSeverity(query.severity)) return invalidQuery("severity", "Expected a SkyBridge severity.");
   return { ok: true, query: { ...query, limit: limit.value } };
+}
+
+function parseIterationListQuery(query: IterationListQuery): ParsedQuery<ParsedIterationListQuery> {
+  const limit = parseBoundedInteger(query.limit, "limit", 1, 200, 50);
+  if (!limit.ok) return limit;
+  if (query.state && !isIterationState(query.state)) return invalidQuery("state", "Expected a valid iteration state.");
+  if (query.project_id && !safeString(query.project_id)) return invalidQuery("project_id", "Expected a bounded project id.");
+  if (query.branch && !safeString(query.branch)) return invalidQuery("branch", "Expected a bounded branch.");
+  const prNumber = query.pr_number === undefined ? undefined : parseBoundedInteger(query.pr_number, "pr_number", 1, 999999999, 1);
+  if (prNumber && !prNumber.ok) return prNumber;
+  return { ok: true, query: { ...query, pr_number: prNumber?.value, limit: limit.value } };
 }
 
 function parseAuditListQuery(query: AuditListQuery): ParsedQuery<ParsedAuditListQuery> {

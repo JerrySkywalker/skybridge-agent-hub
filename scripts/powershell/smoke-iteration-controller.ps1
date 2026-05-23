@@ -5,14 +5,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$tempRoot = Join-Path ".\.agent\tmp" ("iteration-smoke-" + [Guid]::NewGuid().ToString("N"))
-$goalFile = Join-Path $tempRoot "001-smoke-goal.md"
-New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-Set-Content -LiteralPath $goalFile -Encoding UTF8 -Value @"
-# Smoke Goal
-
-Dry-run only. Do not edit repository files.
-"@
+$goalFile = ".\goals\backlog\030-controller-dry-run-validation.md"
+if (-not (Test-Path -LiteralPath $goalFile)) {
+  throw "missing controller dry-run validation goal: $goalFile"
+}
+$parsed = $null
 
 try {
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\skybridge-iterate.ps1" `
@@ -39,8 +36,17 @@ try {
   if ($parsed.auto_merge -eq $true) {
     throw "auto-merge must not be enabled by default"
   }
+  if ($parsed.skybridge_fail_open -ne $true) {
+    throw "SkyBridge offline fail-open flag missing"
+  }
+  if ($parsed.notification_dry_run_path -ne $true) {
+    throw "notification dry-run path flag missing"
+  }
   if ($parsed.codex_command -notmatch "codex exec") {
     throw "codex command shape missing"
+  }
+  if ($parsed.branch -ne "ai/030-controller-dry-run-validation") {
+    throw "unexpected branch calculation: $($parsed.branch)"
   }
 
   $metadataPath = Join-Path $parsed.run_dir "metadata.json"
@@ -51,9 +57,19 @@ try {
   if ($metadataText -match "token|secret|password|cookie") {
     throw "metadata contains secret-like keys"
   }
+  $metadata = $metadataText | ConvertFrom-Json
+  if ($metadata.auto_merge -ne $false) {
+    throw "metadata auto-merge must be disabled"
+  }
+  $promptPreview = Join-Path $parsed.run_dir "prompt-preview.md"
+  if (-not (Test-Path -LiteralPath $promptPreview)) {
+    throw "prompt preview missing: $promptPreview"
+  }
 
   Write-Host "[iteration-smoke] dry-run state=$($parsed.state) branch=$($parsed.branch)"
   Write-Host "[iteration-smoke] SkyBridge offline fail-open path validated"
 } finally {
-  Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+  if ($parsed -and $parsed.run_dir -and (Test-Path -LiteralPath $parsed.run_dir)) {
+    Remove-Item -LiteralPath $parsed.run_dir -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
