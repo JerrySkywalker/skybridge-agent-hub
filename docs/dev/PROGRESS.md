@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 039-041 Auto-Merge Sweep Pilot
+
+- Started controlled sweep pilot on `ai/super-039-041-auto-merge-sweep-pilot` after confirming `main` contains PR #21 via merge commit `098b4b2`.
+- Preflight passed with no blockers and no remote mutation: `check-github-automation-readiness.ps1 -Json`, `smoke-auto-merge-policy.ps1`, dry-run `skybridge-auto-merge-sweep.ps1`, `smoke-bootstrap-notification.ps1 -DryRun` and `validate-powershell.ps1`.
+- The readiness checker still reported manual setup required for branch-protection proof and repository auto-merge inspection, matching the known local checker limitation. It reported zero open PRs before candidate creation.
+- Initial dry-run sweep used blocked-notification suppression to preserve the requirement for exactly one real non-urgent bootstrap phone notification after the pilot result.
+- Created two safe candidate PRs from `origin/main`: PR #22 (`ai/039-sweep-pilot-docs-a`) added `goals/ready/039-auto-merge-sweep-pilot-candidate-a.md`, and PR #23 (`ai/040-sweep-pilot-docs-b`) added `goals/ready/040-auto-merge-sweep-pilot-candidate-b.md`.
+- Both PRs were ready for review, not draft, and GitHub reported the required checks as present and green: `Project check`, `Docker build (server)` and `Docker build (web)`. `AI branch validation` also passed.
+- Dry-run sweep selected exactly PR #23 and PR #22 as eligible, both with `file_risk=low`, empty reasons and `dry_run_eligible` actions.
+- Real sweep with `-EnableAutoMerge` selected the same two PRs and enabled GitHub auto-merge for both. PR #23 merged first at `f700b8d`; PR #22 then needed a safe branch update after becoming behind `main`, reran checks, and GitHub auto-merged it at `3936f3a`.
+- Pulled `main` and verified both docs-only goal files are present. No candidate PR was manually merged.
+- Sent exactly one real non-urgent bootstrap phone notification summarizing the two merged PRs. ntfy reported `sent: ok`; WeCom skipped as expected for non-urgent severity.
+- Final validation passed: auto-merge policy smoke, bootstrap notification dry-run smoke, Codex phone notification dry-run smoke, CI Guardian dry-run smoke, PowerShell parse validation, `just check`, `gh pr checks` for PR #22 and PR #23, and explicit merged-state verification for both candidate PRs.
+
 ## 2026-05-23 Super Goal 034 Auto-Merge Rerun
 
 - Confirmed `origin/main` Docker Images workflow no longer has `pull_request` path filtering, so docs-only PRs now create the required `Docker build (server)` and `Docker build (web)` contexts.
