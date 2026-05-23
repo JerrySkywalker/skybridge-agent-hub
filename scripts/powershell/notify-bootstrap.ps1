@@ -20,6 +20,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$bootstrapEnvLoader = Join-Path $PSScriptRoot "load-bootstrap-env.ps1"
+if (Test-Path -LiteralPath $bootstrapEnvLoader -PathType Leaf) {
+  . $bootstrapEnvLoader
+}
+
 function Join-NtfyTopicUrl {
   if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC)) {
     $base = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_BOOTSTRAP_NTFY_URL)) { $env:SKYBRIDGE_BOOTSTRAP_NTFY_URL } else { "https://ntfy.sh" }

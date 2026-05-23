@@ -13,6 +13,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$bootstrapEnvLoader = Join-Path $PSScriptRoot "load-bootstrap-env.ps1"
+if (Test-Path -LiteralPath $bootstrapEnvLoader -PathType Leaf) {
+  . $bootstrapEnvLoader
+}
+
 function Invoke-BootstrapNotification {
   param([string]$Severity, [string]$Title, [string]$Message)
   & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\notify-bootstrap.ps1" `

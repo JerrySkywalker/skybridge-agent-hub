@@ -22,6 +22,7 @@
     "smoke:self-observation": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-observation.ps1",
     "smoke:browser-visual-qa": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-browser-visual-qa.ps1 -SkipWhenUnavailable",
     "smoke:bootstrap-notification": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-notification.ps1",
+    "smoke:bootstrap-env-loading": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-env-loading.ps1",
     "smoke:iteration-controller": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-iteration-controller.ps1",
     "smoke:ci-guardian": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-ci-guardian.ps1",
     "smoke:github-automation-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-github-automation-readiness.ps1",

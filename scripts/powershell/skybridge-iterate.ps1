@@ -15,6 +15,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$bootstrapEnvLoader = Join-Path $PSScriptRoot "load-bootstrap-env.ps1"
+if (Test-Path -LiteralPath $bootstrapEnvLoader -PathType Leaf) {
+  . $bootstrapEnvLoader
+}
+
 function ConvertTo-PlainObject {
   param([Parameter(Position=0, ValueFromPipeline=$true)]$Value)
   process {
