@@ -132,3 +132,10 @@
   - `004-ci-cd-staging-foundation`
   - `005-opencode-hermes-adapters`
 - Repositioned `scripts/powershell/yolo-runner.ps1` as the fallback batch/background processor for bounded `goals/ready/*.md` child goals.
+
+## Bootstrap notification verified
+
+- Windows local bootstrap notification path verified.
+- `notify-bootstrap.ps1 -Send` can deliver info and urgent messages to ntfy topics.
+- Phone-side ntfy subscription and permissions confirmed.
+- Bootstrap notification is currently the out-of-band fallback path for SkyBridge/Hermes/Codex development supervision.
