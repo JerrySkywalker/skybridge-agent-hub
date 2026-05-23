@@ -6,18 +6,21 @@ SkyBridge's own development automation cannot assume the SkyBridge Notification 
 
 ## Environment Variables
 
-ntfy options:
+Preferred SkyBridge bootstrap ntfy options:
 
-- `NTFY_TOPIC_URL`: full topic URL, for example `https://ntfy.sh/example-topic`.
-- or `NTFY_URL` plus `NTFY_TOPIC`.
-- optional `NTFY_TOKEN`.
-- optional `NTFY_USER` and `NTFY_PASSWORD` when token auth is not used.
+- `SKYBRIDGE_BOOTSTRAP_NTFY_URL`: ntfy server base URL, for example `https://ntfy.sh`.
+- `SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC`: normal-priority topic.
+- `SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC`: optional urgent topic used for `urgent` severity.
+- `SKYBRIDGE_BOOTSTRAP_NTFY_TOKEN`: optional token auth.
+- `SKYBRIDGE_BOOTSTRAP_NTFY_USER` and `SKYBRIDGE_BOOTSTRAP_NTFY_PASS`: optional basic auth when token auth is not used.
 
 WeCom/WeChat option:
 
-- `WECOM_WEBHOOK_URL`: used only for `urgent` severity.
+- `SKYBRIDGE_BOOTSTRAP_WECOM_WEBHOOK`: optional urgent-only webhook.
 
 Do not commit real values. Keep them in the local shell, OS secret store or CI secret store.
+
+Legacy variables remain supported for local compatibility: `NTFY_TOPIC_URL`, `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN`, `NTFY_USER`, `NTFY_PASSWORD` and `WECOM_WEBHOOK_URL`.
 
 ## Severities
 
@@ -54,3 +57,26 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\notify-bootstrap.ps1 `
   -DryRun `
   -Json
 ```
+
+Configured dry run without sending:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\notify-bootstrap.ps1 `
+  -Title "SkyBridge" `
+  -Message "Configured no-send check" `
+  -Severity warning `
+  -Json
+```
+
+Real delivery requires `-Send` and configured environment variables:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\notify-bootstrap.ps1 `
+  -Title "SkyBridge" `
+  -Message "Explicit bootstrap send" `
+  -Severity urgent `
+  -Send `
+  -Json
+```
+
+See `docs/notifications/BOOTSTRAP_SETUP_WINDOWS.md` and `docs/notifications/BOOTSTRAP_SETUP_SERVER.md` for operator setup.
