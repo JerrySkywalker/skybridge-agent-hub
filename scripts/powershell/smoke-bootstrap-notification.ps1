@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+  [switch]$DryRun
+)
 
 $ErrorActionPreference = "Stop"
 

@@ -2,6 +2,7 @@
 
 ## 2026-05-22 Super Goal 015-016
 
+- Follow-up PR prep: smoke validation wrappers now accept a `-DryRun` switch consistently while preserving their safe dry-run-only behavior, and the development docs record the convention for future `smoke-*` wrappers.
 - Completed phases 015-A through 015-I: controller architecture, iteration event model, reusable config, server iteration/supervisor APIs, one-shot controller, CI Guardian, AI-only CI/CD docs, dashboard panels and dry-run smoke validation.
 - Added bootstrap direct notifications after correcting the assumption that SkyBridge Notification Center is available for SkyBridge's own development alerts. `notify-bootstrap.ps1` supports direct ntfy and urgent WeCom/WeChat webhook delivery through environment variables, with dry-run smoke coverage.
 - Completed phases 016-A through 016-F: Hermes supervisor design, prompt templates, bridge script, supervisor status refinement, escalation notification model and local Hermes flow smoke.
