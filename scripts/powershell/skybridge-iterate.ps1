@@ -151,7 +151,7 @@ Goal file: $goalPath
 
 $goalText
 "@
-$codexArgs = @("exec", "--sandbox", $sandbox, "--ask-for-approval", "never", "--json", "--output-last-message", $lastMessage, $codexPrompt)
+$codexArgs = @("exec", "--sandbox", $sandbox, "--json", "--output-last-message", $lastMessage, $codexPrompt)
 
 $metadata = @{
   iteration_id = $iterationId
@@ -161,7 +161,7 @@ $metadata = @{
   base_branch = $baseBranch
   goal_file = $goalPath
   dry_run = [bool]$DryRun
-  codex_command = "$codexCommand $($codexArgs[0..6] -join ' ') <prompt>"
+  codex_command = "$codexCommand $($codexArgs[0..4] -join ' ') <prompt>"
   auto_merge = [bool]$autoMerge
 }
 $metadata | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $runDir "metadata.json") -Encoding UTF8

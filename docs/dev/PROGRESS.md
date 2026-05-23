@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 032 Preflight
+
+- Started the first real AI auto-merge trial on `ai/super-032-first-real-auto-merge` with a docs-only safety boundary: no production deployment, secrets, `.env`, deploy scripts, GitHub settings mutation, branch protection mutation, WSS remote execution or privileged runners.
+- Preflight passed locally with a clean worktree before edits. `check-github-automation-readiness.ps1 -Json` reported no blockers, active local and remote workflows, authenticated `gh`, visible open PRs and no remote settings or branch protection mutation.
+- Repository auto-merge was verified separately with `gh api repos/JerrySkywalker/skybridge-agent-hub --jq '{allow_auto_merge}'`, which returned `allow_auto_merge=true`. The readiness script could not inspect `autoMergeAllowed` through `gh repo view` because that JSON field is unavailable in this local GitHub CLI, so branch protection remains proven by the generated PR's GitHub checks rather than by local mutation or settings inspection.
+- Dry-run validation passed for bootstrap phone notification, Codex phone notification, iteration controller, CI Guardian and PowerShell parse validation. Bootstrap ntfy reported configured in dry-run mode; WeCom remained skipped.
+- Child goal `goals/ready/033-first-real-auto-merge-docs-smoke.md` was processed by the controller on `ai/033-first-real-auto-merge-docs-smoke`, producing PR #17: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/17.
+- The first controller attempt exposed a local Codex CLI compatibility issue: this installed `codex exec` no longer accepts `--ask-for-approval`. The controller and CI Guardian worker command shapes were updated to use the supported non-interactive flags, then PowerShell parse, iteration-controller dry-run and CI Guardian dry-run smokes passed.
+- PR #17 changed only `docs/dev/FIRST_AUTO_MERGE_TRIAL.md`. GitHub checks passed for `Project check` and `AI branch validation`, and CI Guardian enabled GitHub auto-merge with squash merge.
+- GitHub did not merge PR #17. `main` branch protection also requires `Docker build (server)` and `Docker build (web)`, but the Docker Images PR workflow is path-filtered and did not run for the docs-only PR, leaving `mergeStateStatus=BLOCKED` with auto-merge enabled.
+- Sent one real bootstrap phone notification with warning severity for the blocked auto-merge state. ntfy reported `sent`; WeCom remained skipped because warning notifications are ntfy-only.
+- Remaining blocker before always-on AI auto-merge: required branch-protection checks must align with workflows that run for every auto-merge-eligible PR, or docs-only PRs need a safe non-publishing required-check path that satisfies `Docker build (server)` and `Docker build (web)` without production deployment or package publishing.
+- Follow-up parent-branch fix: removed the Docker Images pull-request path filter so the required `Docker build (server)` and `Docker build (web)` contexts are created for every PR. Pull-request Docker builds still do not push images because `push` remains disabled for `pull_request` events.
+
 ## 2026-05-23 Codex Phone Notification Smoke
 
 - Added a Codex full-chain phone notification smoke wrapper that launches `codex exec`, instructs the nested Codex run to call `notify-bootstrap.ps1`, stores Codex JSONL/last-message artifacts under `.agent/codex-phone-smoke/<timestamp>/` and reports whether the output showed ntfy dry-run configured or real sent status.
