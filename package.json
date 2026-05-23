@@ -26,6 +26,7 @@
     "smoke:ci-guardian": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-ci-guardian.ps1",
     "smoke:github-automation-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-github-automation-readiness.ps1",
     "smoke:hermes-supervisor-flow": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-supervisor-flow.ps1",
+    "smoke:hermes-supervisor-operational": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-supervisor-operational.ps1",
     "nightly:local-validation": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/nightly-local-validation.ps1",
     "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build"
   },

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)]
-  [ValidateSet("Status", "StartNext", "RepairPR", "NightlyReport")]
+  [ValidateSet("Status", "StartNext", "RepairPR", "NightlyReport", "NotifyTest")]
   [string]$Mode,
 
   [switch]$DryRun,
@@ -43,6 +43,7 @@ function Invoke-SafeJsonCommand {
     label = $Label
     exit_code = $exitCode
     json = $parsed
+    command_preview = "pwsh " + (($Arguments | Where-Object { $_ -notmatch "^-NoLogo$|^-NoProfile$" }) -join " ")
     raw_output_included = $false
   }
 }
@@ -98,24 +99,43 @@ switch ($Mode) {
     $actions += Invoke-SafeJsonCommand -Label "start_next" -Arguments $args
   }
   "RepairPR" {
-    $args = @(
-      "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
-      "-File", ".\scripts\powershell\skybridge-ci-guardian.ps1",
-      "-MaxRepairAttempts", "3",
-      "-SkyBridgeApiBase", $SkyBridgeApiBase
-    )
-    if ($PR -gt 0) {
-      $args += @("-PR", [string]$PR)
+    if ($DryRun -and $PR -le 0) {
+      $actions += @{
+        label = "repair_pr"
+        exit_code = 0
+        json = @{
+          ok = $true
+          dry_run = $true
+          action = "repair_pr_preview"
+          reason = "no_pr_supplied"
+          skybridge_server_required = $false
+        }
+        command_preview = "pwsh -File .\scripts\powershell\skybridge-ci-guardian.ps1 -PR <number> -DryRun"
+        raw_output_included = $false
+      }
     } else {
-      $args += "-CurrentBranch"
+      $args = @(
+        "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", ".\scripts\powershell\skybridge-ci-guardian.ps1",
+        "-MaxRepairAttempts", "3",
+        "-SkyBridgeApiBase", $SkyBridgeApiBase
+      )
+      if ($PR -gt 0) {
+        $args += @("-PR", [string]$PR)
+      } else {
+        $args += "-CurrentBranch"
+      }
+      if ($DryRun) { $args += "-DryRun" }
+      $actions += Invoke-SafeJsonCommand -Label "repair_pr" -Arguments $args
     }
-    if ($DryRun) { $args += "-DryRun" }
-    $actions += Invoke-SafeJsonCommand -Label "repair_pr" -Arguments $args
   }
   "NightlyReport" {
     if ($status.ok -eq $false) {
       $notification = Invoke-Bootstrap -Severity "warning" -Title "SkyBridge nightly degraded" -Message "SkyBridge status endpoint is unavailable during nightly report."
     }
+  }
+  "NotifyTest" {
+    $notification = Invoke-Bootstrap -Severity "warning" -Title "SkyBridge Hermes notify test" -Message "Hermes supervisor bootstrap notification dry-run."
   }
 }
 
@@ -143,5 +163,7 @@ if ($blocked -and -not $notification) {
     production_deploy = $false
     branch_protection_mutated = $false
     auto_merge_enabled_by_default = $false
+    skybridge_server_required_for_dry_run = $false
+    notification_center_required = $false
   }
 } | ConvertTo-Json -Depth 20
