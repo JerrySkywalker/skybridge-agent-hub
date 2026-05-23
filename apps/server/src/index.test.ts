@@ -458,6 +458,74 @@ describe("server api", () => {
     expect(detail.json<{ iteration: { checks: Array<{ status: string }> } }>().iteration.checks[0]?.status).toBe("passed");
   });
 
+  it("persists iteration state and events to SQLite across server restarts", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(first);
+
+    await first.inject({
+      method: "POST",
+      url: "/v1/iterations",
+      payload: {
+        iteration_id: "iter-durable-1",
+        project_id: "skybridge-agent-hub",
+        goal_id: "017",
+        repo: "owner/skybridge-agent-hub",
+        branch: "ai/iter-durable",
+        base_branch: "main",
+        state: "queued",
+        attempts: 0,
+        max_attempts: 3,
+        checks: []
+      }
+    });
+    await first.inject({
+      method: "PATCH",
+      url: "/v1/iterations/iter-durable-1/state",
+      payload: {
+        state: "ci_pending",
+        pr_number: 77,
+        attempts: 1,
+        checks: [{ name: "server test", status: "passed", summary: "ok" }]
+      }
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/iterations/iter-durable-1/events",
+      payload: {
+        type: "iteration.ci_pending",
+        payload: {
+          state: "ci_pending",
+          raw_prompt: "do not expose this prompt",
+          stdout: "do not expose this output",
+          token: "secret-token"
+        }
+      }
+    });
+    await first.close();
+    servers.pop();
+
+    const second = await createServer({ dbFile, logger: false, jsonMigrationFile: false });
+    servers.push(second);
+
+    const list = await second.inject({ method: "GET", url: "/v1/iterations?state=ci_pending&project_id=skybridge-agent-hub&branch=ai/iter-durable&pr_number=77" });
+    expect(list.statusCode).toBe(200);
+    expect(list.json<{ iterations: Array<{ iteration_id: string; state: string; pr_number: number }> }>().iterations).toEqual([
+      expect.objectContaining({ iteration_id: "iter-durable-1", state: "ci_pending", pr_number: 77 })
+    ]);
+
+    const detail = await second.inject({ method: "GET", url: "/v1/iterations/iter-durable-1" });
+    expect(detail.statusCode).toBe(200);
+    const iteration = detail.json<{ iteration: { state: string; checks: Array<{ name: string }>; events: Array<{ payload: Record<string, unknown> }> } }>().iteration;
+    expect(iteration.state).toBe("ci_pending");
+    expect(iteration.checks[0]?.name).toBe("server test");
+    const text = JSON.stringify(iteration);
+    expect(text).not.toContain("do not expose this prompt");
+    expect(text).not.toContain("do not expose this output");
+    expect(text).not.toContain("secret-token");
+  });
+
   it("rejects invalid iteration state and redacts unsafe iteration payloads", async () => {
     const server = await testServer();
     await server.inject({

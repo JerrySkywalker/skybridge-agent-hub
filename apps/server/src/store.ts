@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { SkyBridgeEvent } from "@skybridge-agent-hub/event-schema";
+import type { IterationRun, SkyBridgeEvent } from "@skybridge-agent-hub/event-schema";
 import type { NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
 
 export type StoredEvent = SkyBridgeEvent & { id: string; receivedAt: string };
@@ -36,10 +36,20 @@ export interface StoredAuditRecord {
   raw_payload_included: false;
 }
 
+export interface StoredIterationEvent {
+  iteration_id: string;
+  type: string;
+  time: string;
+  payload: Record<string, unknown>;
+}
+
+export type StoredIterationRun = IterationRun & { events: StoredIterationEvent[] };
+
 interface LocalStoreData {
   events: StoredEvent[];
   notifications: StoredNotification[];
   audit: StoredAuditRecord[];
+  iterations?: StoredIterationRun[];
 }
 
 export interface EventStore {
@@ -49,14 +59,18 @@ export interface EventStore {
   listEvents(limit?: number): StoredEvent[];
   listNotifications(limit?: number): StoredNotification[];
   listAuditRecords(limit?: number): StoredAuditRecord[];
+  listIterations(limit?: number): StoredIterationRun[];
+  getIteration(iterationId: string): StoredIterationRun | undefined;
   addEvent(event: StoredEvent): Promise<void>;
   addNotification(notification: StoredNotification): Promise<void>;
   addAuditRecord(record: StoredAuditRecord): Promise<void>;
+  upsertIteration(iteration: StoredIterationRun): Promise<void>;
+  addIterationEvent(event: StoredIterationEvent): Promise<void>;
 }
 
 export class MemoryStore implements EventStore {
   kind = "memory" as const;
-  private data: LocalStoreData = { events: [], notifications: [], audit: [] };
+  private data: Required<LocalStoreData> = { events: [], notifications: [], audit: [], iterations: [] };
 
   async load(): Promise<void> {}
 
@@ -74,6 +88,17 @@ export class MemoryStore implements EventStore {
     return sliceTail(this.data.audit, limit);
   }
 
+  listIterations(limit?: number): StoredIterationRun[] {
+    return sliceTail(
+      [...this.data.iterations].sort((a, b) => a.updated_at.localeCompare(b.updated_at)),
+      limit
+    );
+  }
+
+  getIteration(iterationId: string): StoredIterationRun | undefined {
+    return this.data.iterations.find((iteration) => iteration.iteration_id === iterationId);
+  }
+
   async addEvent(event: StoredEvent): Promise<void> {
     this.data.events.push(event);
   }
@@ -85,6 +110,19 @@ export class MemoryStore implements EventStore {
   async addAuditRecord(record: StoredAuditRecord): Promise<void> {
     if (this.data.audit.some((existing) => existing.audit_id === record.audit_id)) return;
     this.data.audit.push(record);
+  }
+
+  async upsertIteration(iteration: StoredIterationRun): Promise<void> {
+    const index = this.data.iterations.findIndex((existing) => existing.iteration_id === iteration.iteration_id);
+    if (index >= 0) this.data.iterations[index] = iteration;
+    else this.data.iterations.push(iteration);
+  }
+
+  async addIterationEvent(event: StoredIterationEvent): Promise<void> {
+    const existing = this.getIteration(event.iteration_id);
+    if (!existing) return;
+    existing.events.push(event);
+    existing.updated_at = event.time;
   }
 }
 
@@ -147,6 +185,27 @@ export class SqliteStore implements EventStore {
     return rows.map((row) => JSON.parse(row.audit_json) as StoredAuditRecord);
   }
 
+  listIterations(limit?: number): StoredIterationRun[] {
+    const db = this.requireDb();
+    const rows = db.prepare(`
+      SELECT iteration_json
+      FROM iterations
+      ORDER BY updated_at DESC, rowid DESC
+      ${limit ? "LIMIT ?" : ""}
+    `).all(...(limit ? [limit] : [])) as Array<{ iteration_json: string }>;
+    return rows.map((row) => JSON.parse(row.iteration_json) as StoredIterationRun);
+  }
+
+  getIteration(iterationId: string): StoredIterationRun | undefined {
+    const db = this.requireDb();
+    const row = db.prepare(`
+      SELECT iteration_json
+      FROM iterations
+      WHERE iteration_id = ?
+    `).get(iterationId) as { iteration_json: string } | undefined;
+    return row ? JSON.parse(row.iteration_json) as StoredIterationRun : undefined;
+  }
+
   async addEvent(event: StoredEvent): Promise<void> {
     const db = this.requireDb();
     db.prepare(`
@@ -180,6 +239,44 @@ export class SqliteStore implements EventStore {
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `).run(...toAuditParams(record));
+  }
+
+  async upsertIteration(iteration: StoredIterationRun): Promise<void> {
+    const db = this.requireDb();
+    db.prepare(`
+      INSERT OR REPLACE INTO iterations (
+        iteration_id, project_id, repo, branch, base_branch, pr_number, state,
+        attempts, max_attempts, created_at, updated_at, iteration_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `).run(...toIterationParams(iteration));
+  }
+
+  async addIterationEvent(event: StoredIterationEvent): Promise<void> {
+    const db = this.requireDb();
+    const existing = this.getIteration(event.iteration_id);
+    if (!existing) return;
+    const updated: StoredIterationRun = {
+      ...existing,
+      events: [...existing.events, event],
+      updated_at: event.time
+    };
+    const addEvent = transaction(db, () => {
+      db.prepare(`
+        INSERT INTO iteration_events (
+          iteration_id, type, time, event_json
+        ) VALUES (
+          ?, ?, ?, ?
+        )
+      `).run(...toIterationEventParams(event));
+      db.prepare(`
+        UPDATE iterations
+        SET updated_at = ?, iteration_json = ?
+        WHERE iteration_id = ?
+      `).run(updated.updated_at, JSON.stringify(updated), updated.iteration_id);
+    });
+    addEvent();
   }
 
   private createSchema() {
@@ -237,6 +334,39 @@ export class SqliteStore implements EventStore {
       CREATE INDEX IF NOT EXISTS idx_audit_records_actor ON audit_records(actor);
       CREATE INDEX IF NOT EXISTS idx_audit_records_run_id ON audit_records(run_id);
 
+      CREATE TABLE IF NOT EXISTS iterations (
+        iteration_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        branch TEXT NOT NULL,
+        base_branch TEXT NOT NULL,
+        pr_number INTEGER,
+        state TEXT NOT NULL,
+        attempts INTEGER NOT NULL,
+        max_attempts INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        iteration_json TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iterations_updated_at ON iterations(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_iterations_state ON iterations(state);
+      CREATE INDEX IF NOT EXISTS idx_iterations_project_id ON iterations(project_id);
+      CREATE INDEX IF NOT EXISTS idx_iterations_branch ON iterations(branch);
+      CREATE INDEX IF NOT EXISTS idx_iterations_pr_number ON iterations(pr_number);
+
+      CREATE TABLE IF NOT EXISTS iteration_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        iteration_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        time TEXT NOT NULL,
+        event_json TEXT NOT NULL,
+        FOREIGN KEY(iteration_id) REFERENCES iterations(iteration_id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iteration_events_iteration_id ON iteration_events(iteration_id);
+      CREATE INDEX IF NOT EXISTS idx_iteration_events_time ON iteration_events(time);
+
       CREATE TABLE IF NOT EXISTS store_metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -258,6 +388,7 @@ export class SqliteStore implements EventStore {
     const events = parsed.events ?? [];
     const notifications = parsed.notifications ?? [];
     const audit = parsed.audit ?? [];
+    const iterations = parsed.iterations ?? [];
 
     const insertEvents = transaction(db, (items: StoredEvent[]) => {
       for (const event of items) {
@@ -274,13 +405,20 @@ export class SqliteStore implements EventStore {
         this.addAuditRecordSync(record);
       }
     });
+    const insertIterations = transaction(db, (items: StoredIterationRun[]) => {
+      for (const iteration of items) {
+        this.upsertIterationSync(iteration);
+        for (const event of iteration.events ?? []) this.addIterationEventSync(event);
+      }
+    });
 
     insertEvents(events);
     insertNotifications(notifications);
     insertAudit(audit);
+    insertIterations(iterations);
     db.prepare("INSERT OR REPLACE INTO store_metadata (key, value) VALUES (?, ?)").run(
       migratedKey,
-      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length, audit: audit.length })
+      JSON.stringify({ migratedAt: new Date().toISOString(), events: events.length, notifications: notifications.length, audit: audit.length, iterations: iterations.length })
     );
   }
 
@@ -314,6 +452,27 @@ export class SqliteStore implements EventStore {
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `).run(...toAuditParams(record));
+  }
+
+  private upsertIterationSync(iteration: StoredIterationRun) {
+    this.requireDb().prepare(`
+      INSERT OR REPLACE INTO iterations (
+        iteration_id, project_id, repo, branch, base_branch, pr_number, state,
+        attempts, max_attempts, created_at, updated_at, iteration_json
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `).run(...toIterationParams(iteration));
+  }
+
+  private addIterationEventSync(event: StoredIterationEvent) {
+    this.requireDb().prepare(`
+      INSERT INTO iteration_events (
+        iteration_id, type, time, event_json
+      ) VALUES (
+        ?, ?, ?, ?
+      )
+    `).run(...toIterationEventParams(event));
   }
 
   private requireDb(): SqliteDatabase {
@@ -403,6 +562,32 @@ function toAuditParams(record: StoredAuditRecord): unknown[] {
     record.immutable_event_id,
     record.redaction_policy_version,
     JSON.stringify(record)
+  ];
+}
+
+function toIterationParams(iteration: StoredIterationRun): unknown[] {
+  return [
+    iteration.iteration_id,
+    iteration.project_id,
+    iteration.repo,
+    iteration.branch,
+    iteration.base_branch,
+    iteration.pr_number ?? null,
+    iteration.state,
+    iteration.attempts,
+    iteration.max_attempts,
+    iteration.created_at,
+    iteration.updated_at,
+    JSON.stringify(iteration)
+  ];
+}
+
+function toIterationEventParams(event: StoredIterationEvent): unknown[] {
+  return [
+    event.iteration_id,
+    event.type,
+    event.time,
+    JSON.stringify(event)
   ];
 }
 

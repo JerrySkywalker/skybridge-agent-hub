@@ -85,6 +85,30 @@ any state -> blocked
 any state -> failed
 ```
 
+## Durable State
+
+Iteration records are persisted by the SkyBridge server store. Local development uses the same SQLite database as the event and notification APIs unless `SKYBRIDGE_DB_FILE` is overridden.
+
+Persisted records include:
+
+- iteration metadata: project, repository, branch, base branch, PR number, state, attempts, checks and timestamps;
+- bounded state events from `/v1/iterations/:iterationId/events`;
+- safe local log hints, not raw local logs.
+
+The API intentionally excludes raw prompts, Codex JSONL, patches, stdout, stderr, tool results, tokens and credentials. State-event payloads are redacted and bounded before persistence. If a payload includes prompt/log/output-like keys, the value is replaced with omitted metadata.
+
+Useful API calls:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8787/v1/iterations?state=ci_pending&project_id=skybridge-agent-hub"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/iterations/<iteration-id>"
+Invoke-RestMethod "http://127.0.0.1:8787/v1/iterations/<iteration-id>/logs"
+```
+
+`GET /v1/iterations` supports `state`, `project_id`, `branch`, `pr_number` and bounded `limit` filters. Detail responses include safe state events so a server restart can still reconstruct the controller timeline.
+
+SQLite migration creates iteration tables automatically on startup. Existing event, notification and audit tables are left intact.
+
 ## Safety Boundaries
 
 The controller must not:
