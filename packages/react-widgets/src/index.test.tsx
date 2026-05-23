@@ -7,8 +7,11 @@ import {
   AgentStatusCard,
   AgentTimeline,
   CodexIntegrationPanel,
+  CIGuardianPanel,
   EmptyState,
   EventTimeline,
+  IterationStatusCard,
+  IterationTimeline,
   NotificationList,
   OperationsSummaryPanel,
   ProviderStatusPanel,
@@ -157,6 +160,9 @@ describe("react widgets", () => {
     expect(renderToStaticMarkup(<NotificationList apiBase="http://127.0.0.1:8787" />)).toContain("Notifications");
     expect(renderToStaticMarkup(<OperationsSummaryPanel apiBase="http://127.0.0.1:8787" />)).toContain("Metrics Summary");
     expect(renderToStaticMarkup(<ProviderStatusPanel apiBase="http://127.0.0.1:8787" />)).toContain("Notification Matrix");
+    expect(renderToStaticMarkup(<IterationStatusCard apiBase="http://127.0.0.1:8787" />)).toContain("Current Iteration");
+    expect(renderToStaticMarkup(<IterationTimeline apiBase="http://127.0.0.1:8787" />)).toContain("State Timeline");
+    expect(renderToStaticMarkup(<CIGuardianPanel apiBase="http://127.0.0.1:8787" />)).toContain("PR Review Loop");
     expect(renderToStaticMarkup(<EmptyState title="Empty" detail="No data" />)).toContain("No data");
   });
 

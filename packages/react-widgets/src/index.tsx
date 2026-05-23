@@ -9,7 +9,7 @@ import {
   type SkyBridgeHealth,
   type StoredNotification
 } from "@skybridge-agent-hub/client";
-import type { RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
+import type { IterationRun, RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
 
 export interface WidgetProps {
   apiBase: string;
@@ -373,6 +373,115 @@ export function ProviderStatusPanel({ apiBase }: WidgetProps) {
           </li>
         ))}
       </ol>
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function IterationStatusCard({ apiBase }: WidgetProps) {
+  const [iterations, setIterations] = useState<IterationRun[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.listIterations()
+      .then((items) => {
+        setIterations(items);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  const current = iterations[0];
+  const bad = current?.state === "blocked" || current?.state === "failed" || current?.state === "ci_failed";
+
+  return (
+    <section className="skybridge-panel skybridge-iteration-status">
+      <PanelHeader kicker="Autonomous Iteration" title="Current Iteration" state={current?.state ?? "idle"} bad={bad} />
+      {current ? (
+        <>
+          <dl className="skybridge-metrics skybridge-metrics--compact">
+            <Metric label="Attempts" value={`${current.attempts}/${current.max_attempts}`} />
+            <Metric label="PR" value={current.pr_number ? `#${current.pr_number}` : "none"} />
+            <Metric label="Branch" value={current.branch} />
+            <Metric label="Auto-merge" value={current.auto_merge_enabled ? "enabled" : "off"} />
+          </dl>
+          <p className="skybridge-runline">{current.project_id} · {current.goal_id ?? "manual goal"} · {current.last_error ?? "no blocked reason"}</p>
+        </>
+      ) : <EmptyState title="No iteration" detail="Controller state appears after a dry run or one-shot iteration is recorded." />}
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function IterationTimeline({ apiBase }: WidgetProps) {
+  const [events, setEvents] = useState<Array<{ type: string; time: string; payload: Record<string, unknown> }>>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.listIterations()
+      .then(async (items) => {
+        const latest = items[0];
+        if (!latest) {
+          setEvents([]);
+          return;
+        }
+        const detail = await client.getIteration(latest.iteration_id);
+        setEvents(detail.events ?? []);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  return (
+    <section className="skybridge-panel">
+      <PanelHeader kicker="Iteration" title="State Timeline" state={`${events.length}`} />
+      {events.length === 0 ? <EmptyState title="No timeline" detail="Iteration events appear when controller scripts emit state changes." /> : null}
+      <ol className="skybridge-timeline skybridge-timeline--compact">
+        {events.slice(-8).map((event, index) => (
+          <li key={`${event.type}-${event.time}-${index}`}>
+            <span>
+              <strong>{event.type}</strong>
+              <small>{safePayloadString(event.payload.state) ?? safePayloadString(event.payload.reason) ?? "metadata only"}</small>
+            </span>
+            <small>{formatDateTime(event.time)}</small>
+          </li>
+        ))}
+      </ol>
+      {error ? <ErrorState message={error} /> : null}
+    </section>
+  );
+}
+
+export function CIGuardianPanel({ apiBase }: WidgetProps) {
+  const [iterations, setIterations] = useState<IterationRun[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+
+  useEffect(() => {
+    void client.listIterations()
+      .then((items) => {
+        setIterations(items);
+        setError(undefined);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [client]);
+
+  const current = iterations.find((item) => item.state.startsWith("ci_") || item.pr_number) ?? iterations[0];
+  const ciState = current?.state.startsWith("ci_") ? current.state : current ? "pr_opened" : "idle";
+
+  return (
+    <section className="skybridge-panel">
+      <PanelHeader kicker="CI Guardian" title="PR Review Loop" state={ciState} bad={ciState === "ci_failed"} />
+      {current ? (
+        <dl className="skybridge-metrics skybridge-metrics--compact">
+          <Metric label="PR" value={current.pr_number ? `#${current.pr_number}` : "none"} />
+          <Metric label="Repairs" value={`${current.attempts}/${current.max_attempts}`} />
+          <Metric label="Checks" value={current.checks.length} />
+          <Metric label="Blocked" value={current.last_error ?? "no"} />
+        </dl>
+      ) : <EmptyState title="No PR state" detail="CI Guardian state appears after PR checks are observed." />}
       {error ? <ErrorState message={error} /> : null}
     </section>
   );

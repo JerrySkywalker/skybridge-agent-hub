@@ -30,6 +30,21 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "node.connected",
   "node.heartbeat",
   "node.disconnected",
+  "iteration.started",
+  "iteration.state_changed",
+  "iteration.local_check_started",
+  "iteration.local_check_passed",
+  "iteration.local_check_failed",
+  "iteration.pr_opened",
+  "iteration.ci_pending",
+  "iteration.ci_failed",
+  "iteration.ci_repair_started",
+  "iteration.ci_green",
+  "iteration.auto_merge_enabled",
+  "iteration.merged",
+  "iteration.blocked",
+  "iteration.failed",
+  "iteration.completed",
   "notification.requested",
   "notification.sent",
   "notification.skipped",
@@ -81,6 +96,53 @@ export type SkyBridgeEventInput = {
   correlation?: SkyBridgeCorrelation;
   payload?: Record<string, unknown>;
 };
+
+export const IterationStateSchema = z.enum([
+  "idle",
+  "queued",
+  "planning",
+  "coding",
+  "local_checking",
+  "pushing",
+  "pr_opened",
+  "ci_pending",
+  "ci_failed",
+  "ci_repairing",
+  "ci_green",
+  "auto_merge_enabled",
+  "merged",
+  "blocked",
+  "failed"
+]);
+
+export type IterationState = z.infer<typeof IterationStateSchema>;
+
+export interface IterationCheck {
+  name: string;
+  status: "pending" | "passed" | "failed" | "skipped";
+  started_at?: string;
+  completed_at?: string;
+  exit_code?: number;
+  summary?: string;
+}
+
+export interface IterationRun {
+  iteration_id: string;
+  project_id: string;
+  goal_id?: string;
+  repo: string;
+  branch: string;
+  base_branch: string;
+  pr_number?: number;
+  state: IterationState;
+  attempts: number;
+  max_attempts: number;
+  last_error?: string;
+  checks: IterationCheck[];
+  auto_merge_enabled?: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface RunSummary {
   run_id: string;
@@ -154,7 +216,7 @@ export const SOURCE_CAPABILITIES: SourceCapability[] = [
     platform: "skybridge",
     label: "SkyBridge",
     adapters: ["yolo-runner", "self-observation-smoke", "demo-dataset", "sidecar"],
-    event_families: ["run", "tool", "notification", "agent", "node", "approval"],
+    event_families: ["run", "tool", "notification", "agent", "node", "approval", "iteration"],
     supports_remote_control: false,
     default_safe: true,
     notes: "First-party runner, smoke, node and dogfooding telemetry."

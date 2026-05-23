@@ -33,6 +33,7 @@ SkyBridge provides a shared foundation for:
 - Reproducible Docker builds, GHCR publishing, release-tag validation, staging dry-run and backup/rollback operator scripts.
 - Approval queue, node registry, metrics endpoint, demo dataset and release candidate smoke foundations.
 - Nightly local validation script and release-candidate audit docs for repeatable v0.9 hardening.
+- Agent CI/CD Control Plane foundations: Autonomous Iteration Controller, CI Guardian, Hermes supervisor bridge, bootstrap direct notifications and iteration dashboard panels.
 
 ## Current MVP Status
 
@@ -341,6 +342,25 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\yolo-runner.ps1 `
 ```
 
 Use `codex exec` for CI/scripted one-shot tasks, repair loops and non-interactive automation where a TUI session is unnecessary.
+
+### Agent CI/CD Control Plane
+
+SkyBridge now includes a reusable Agent CI/CD Control Plane foundation:
+
+- `skybridge-iterate.ps1` runs one bounded autonomous iteration from a goal file or queue.
+- `skybridge-ci-guardian.ps1` watches and repairs PR CI without merging by default.
+- `skybridge-hermes-supervisor.ps1` gives Hermes a JSON bridge for status, start-next, repair and nightly reports.
+- `notify-bootstrap.ps1` sends direct ntfy or urgent WeCom/WeChat notifications without depending on the SkyBridge server.
+
+Start with dry runs:
+
+```powershell
+corepack pnpm smoke:iteration-controller
+corepack pnpm smoke:ci-guardian
+corepack pnpm smoke:hermes-supervisor-flow
+```
+
+See [docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md](docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md), [docs/hermes/SUPERVISOR.md](docs/hermes/SUPERVISOR.md) and [docs/automation/REUSABLE_PROJECT_INTEGRATION.md](docs/automation/REUSABLE_PROJECT_INTEGRATION.md).
 
 ## Roadmap
 

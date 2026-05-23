@@ -13,6 +13,8 @@ import {
   SharedRedactionRules,
   type RunDetail,
   type RunSummary,
+  type IterationRun,
+  type IterationState,
   type SkyBridgeSeverity,
   type SkyBridgeEventType,
   type SkyBridgeEvent,
@@ -29,6 +31,26 @@ interface CreateServerOptions {
   jsonMigrationFile?: string | false;
   logger?: boolean;
 }
+
+type StoredIterationRun = IterationRun & { events: Array<{ type: string; time: string; payload: Record<string, unknown> }> };
+
+const ITERATION_STATES: IterationState[] = [
+  "idle",
+  "queued",
+  "planning",
+  "coding",
+  "local_checking",
+  "pushing",
+  "pr_opened",
+  "ci_pending",
+  "ci_failed",
+  "ci_repairing",
+  "ci_green",
+  "auto_merge_enabled",
+  "merged",
+  "blocked",
+  "failed"
+];
 
 function summarizeRuns(events: StoredEvent[]): RunSummary[] {
   const grouped = new Map<string, StoredEvent[]>();
@@ -89,6 +111,7 @@ function notificationForEvent(event: StoredEvent): NotificationMessage {
 export async function createServer(options: CreateServerOptions = {}): Promise<FastifyInstance> {
   const persistence = resolvePersistence(options);
   const store: EventStore = persistence.dbFile ? new SqliteStore({ dbFile: persistence.dbFile, legacyJsonFile: persistence.jsonMigrationFile }) : new MemoryStore();
+  const iterationStore = new Map<string, StoredIterationRun>();
   const clients = new Set<{ write: (data: string) => void }>();
   const app = Fastify({ logger: options.logger ?? true });
 
@@ -165,6 +188,76 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
   app.get("/health", async () => healthResponse());
   app.get("/v1/health", async () => healthResponse());
   app.get("/v1/sources", async () => ({ sources: SOURCE_CAPABILITIES }));
+
+  app.get("/v1/iterations", async () => ({
+    iterations: [...iterationStore.values()].map(({ events: _events, ...iteration }) => iteration)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  }));
+
+  app.get<{ Params: { iterationId: string } }>("/v1/iterations/:iterationId", async (request, reply) => {
+    const iteration = iterationStore.get(decodeURIComponent(request.params.iterationId));
+    if (!iteration) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
+    return { iteration };
+  });
+
+  app.post<{ Body: Partial<IterationRun> }>("/v1/iterations", async (request, reply) => {
+    const parsed = parseIterationInput(request.body);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    iterationStore.set(parsed.iteration.iteration_id, { ...parsed.iteration, events: [] });
+    return reply.code(201).send({ ok: true, iteration: parsed.iteration });
+  });
+
+  app.patch<{ Params: { iterationId: string }; Body: { state?: string; last_error?: unknown; pr_number?: unknown; attempts?: unknown; checks?: unknown } }>(
+    "/v1/iterations/:iterationId/state",
+    async (request, reply) => {
+      const iterationId = decodeURIComponent(request.params.iterationId);
+      const existing = iterationStore.get(iterationId);
+      if (!existing) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
+      if (!request.body?.state || !isIterationState(request.body.state)) {
+        return reply.code(400).send({ ok: false, error: "invalid_state" });
+      }
+      const updated: StoredIterationRun = {
+        ...existing,
+        state: request.body.state,
+        attempts: typeof request.body.attempts === "number" && Number.isInteger(request.body.attempts) ? request.body.attempts : existing.attempts,
+        pr_number: typeof request.body.pr_number === "number" && Number.isInteger(request.body.pr_number) ? request.body.pr_number : existing.pr_number,
+        last_error: safeString(request.body.last_error),
+        checks: Array.isArray(request.body.checks) ? sanitizeChecks(request.body.checks) : existing.checks,
+        updated_at: new Date().toISOString()
+      };
+      iterationStore.set(iterationId, updated);
+      return { ok: true, iteration: updated };
+    }
+  );
+
+  app.post<{ Params: { iterationId: string }; Body: { type?: string; payload?: unknown } }>("/v1/iterations/:iterationId/events", async (request, reply) => {
+    const iterationId = decodeURIComponent(request.params.iterationId);
+    const existing = iterationStore.get(iterationId);
+    if (!existing) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
+    const type = safeString(request.body?.type);
+    if (!type || !type.startsWith("iteration.")) return reply.code(400).send({ ok: false, error: "invalid_iteration_event" });
+    const payload = sanitizeIterationPayload(request.body?.payload);
+    if (!payload.ok) return reply.code(400).send(payload.response);
+    const event = { type, time: new Date().toISOString(), payload: payload.payload };
+    existing.events.push(event);
+    existing.updated_at = event.time;
+    iterationStore.set(iterationId, existing);
+    return reply.code(202).send({ ok: true, event });
+  });
+
+  app.get<{ Params: { iterationId: string } }>("/v1/iterations/:iterationId/logs", async (request, reply) => {
+    const iteration = iterationStore.get(decodeURIComponent(request.params.iterationId));
+    if (!iteration) return reply.code(404).send({ ok: false, error: "iteration_not_found" });
+    return {
+      iteration_id: iteration.iteration_id,
+      raw_logs_included: false,
+      metadata_only: true,
+      local_log_hint: `.agent/iterations/${iteration.iteration_id}/`
+    };
+  });
+
+  app.get("/v1/supervisor/status", async () => supervisorStatus([...iterationStore.values()], store.listEvents()));
+  app.get("/v1/supervisor/next-action", async () => supervisorNextAction([...iterationStore.values()]));
 
   app.post("/v1/events", async (request, reply) => {
     const parsed = parseEventPayload(request.body);
@@ -577,6 +670,21 @@ function isEventType(input: string): input is SkyBridgeEventType {
     "node.connected",
     "node.heartbeat",
     "node.disconnected",
+    "iteration.started",
+    "iteration.state_changed",
+    "iteration.local_check_started",
+    "iteration.local_check_passed",
+    "iteration.local_check_failed",
+    "iteration.pr_opened",
+    "iteration.ci_pending",
+    "iteration.ci_failed",
+    "iteration.ci_repair_started",
+    "iteration.ci_green",
+    "iteration.auto_merge_enabled",
+    "iteration.merged",
+    "iteration.blocked",
+    "iteration.failed",
+    "iteration.completed",
     "notification.requested",
     "notification.sent",
     "notification.skipped",
@@ -888,6 +996,121 @@ function parseEventPayload(input: unknown): { ok: true; event: SkyBridgeEvent } 
       }
     };
   }
+}
+
+function parseIterationInput(input: Partial<IterationRun> | undefined): { ok: true; iteration: IterationRun } | { ok: false; response: QueryErrorResponse & { message?: string } } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return invalidQuery("body", "Expected an iteration object.");
+  if (!safeString(input.iteration_id)) return invalidQuery("iteration_id", "Expected a stable iteration id.");
+  if (!safeString(input.project_id)) return invalidQuery("project_id", "Expected a project id.");
+  if (!safeString(input.repo)) return invalidQuery("repo", "Expected a repository full name.");
+  if (!safeString(input.branch)) return invalidQuery("branch", "Expected a branch.");
+  if (!safeString(input.base_branch)) return invalidQuery("base_branch", "Expected a base branch.");
+  if (!isIterationState(input.state ?? "")) return invalidQuery("state", "Expected a valid iteration state.");
+  const iterationId = input.iteration_id!;
+  const projectId = input.project_id!;
+  const repo = input.repo!;
+  const branch = input.branch!;
+  const baseBranch = input.base_branch!;
+  const state = input.state!;
+
+  return {
+    ok: true,
+    iteration: {
+      iteration_id: iterationId,
+      project_id: projectId,
+      goal_id: safeString(input.goal_id),
+      repo,
+      branch,
+      base_branch: baseBranch,
+      pr_number: typeof input.pr_number === "number" && Number.isInteger(input.pr_number) ? input.pr_number : undefined,
+      state,
+      attempts: typeof input.attempts === "number" && Number.isInteger(input.attempts) ? input.attempts : 0,
+      max_attempts: typeof input.max_attempts === "number" && Number.isInteger(input.max_attempts) ? input.max_attempts : 3,
+      last_error: safeString(input.last_error),
+      checks: sanitizeChecks(input.checks ?? []),
+      auto_merge_enabled: input.auto_merge_enabled === true,
+      created_at: safeString(input.created_at) ?? now,
+      updated_at: safeString(input.updated_at) ?? now
+    }
+  };
+}
+
+function isIterationState(input: string): input is IterationState {
+  return (ITERATION_STATES as string[]).includes(input);
+}
+
+function sanitizeChecks(input: unknown): IterationRun["checks"] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 50).map((item) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const status = safeString(record.status);
+    return {
+      name: safeString(record.name) ?? "check",
+      status: status === "pending" || status === "passed" || status === "failed" || status === "skipped" ? status : "pending",
+      started_at: safeString(record.started_at),
+      completed_at: safeString(record.completed_at),
+      exit_code: typeof record.exit_code === "number" && Number.isInteger(record.exit_code) ? record.exit_code : undefined,
+      summary: safeString(record.summary)
+    };
+  });
+}
+
+function sanitizeIterationPayload(input: unknown): { ok: true; payload: Record<string, unknown> } | { ok: false; response: QueryErrorResponse } {
+  const redacted = redactUnsafePayload(input);
+  const payload = redacted && typeof redacted === "object" && !Array.isArray(redacted) ? redacted as Record<string, unknown> : { value: redacted };
+  const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  if (bytes > SharedRedactionRules.maxPayloadBytes) return invalidQuery("payload", `Payload must be <= ${SharedRedactionRules.maxPayloadBytes} bytes.`);
+  return { ok: true, payload };
+}
+
+function redactUnsafePayload(input: unknown): unknown {
+  if (typeof input === "string") return input.length > 200 ? `${input.slice(0, 200)}...` : input;
+  if (Array.isArray(input)) return input.slice(0, 50).map(redactUnsafePayload);
+  if (!input || typeof input !== "object") return input;
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (/token|secret|password|cookie|credential|authorization/i.test(key)) {
+      output[key] = SharedRedactionRules.replacement;
+    } else if (/prompt|patch|stdout|stderr|output|command_output|tool_result/i.test(key)) {
+      output[key] = { omitted: true, reason: "unsafe_raw_payload" };
+    } else {
+      output[key] = redactUnsafePayload(value);
+    }
+  }
+  return output;
+}
+
+function supervisorStatus(iterations: StoredIterationRun[], events: StoredEvent[]) {
+  const sorted = iterations.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  const blocked = sorted.filter((iteration) => iteration.state === "blocked" || iteration.state === "failed");
+  const active = sorted.filter((iteration) => !["merged", "blocked", "failed"].includes(iteration.state));
+  return {
+    ok: true,
+    raw_prompts_included: false,
+    raw_logs_included: false,
+    notification_path: {
+      primary_for_skybridge_development: "bootstrap-direct",
+      skybridge_notification_center_required: false,
+      migration_stage: "dual-write-ready"
+    },
+    iterations: {
+      total: iterations.length,
+      active: active.length,
+      blocked: blocked.length,
+      latest: sorted[0]
+    },
+    recent_iteration_events: events.filter((event) => event.type.startsWith("iteration.")).slice(-20)
+  };
+}
+
+function supervisorNextAction(iterations: StoredIterationRun[]) {
+  const latest = iterations.sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+  if (!latest) return { action: "start_next_iteration", reason: "no_iterations_recorded" };
+  if (latest.state === "ci_failed") return { action: "repair_ci", iteration_id: latest.iteration_id, pr_number: latest.pr_number };
+  if (latest.state === "blocked" || latest.state === "failed") return { action: "notify_human", iteration_id: latest.iteration_id, reason: latest.last_error };
+  if (latest.state === "ci_green") return { action: latest.auto_merge_enabled ? "wait_for_merge" : "review_green_pr", iteration_id: latest.iteration_id, pr_number: latest.pr_number };
+  return { action: "observe", iteration_id: latest.iteration_id, state: latest.state };
 }
 
 interface ValidationErrorResponse {

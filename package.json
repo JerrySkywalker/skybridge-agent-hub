@@ -21,6 +21,10 @@
     "smoke:release-candidate": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-release-candidate.ps1",
     "smoke:self-observation": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-observation.ps1",
     "smoke:browser-visual-qa": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-browser-visual-qa.ps1 -SkipWhenUnavailable",
+    "smoke:bootstrap-notification": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-notification.ps1",
+    "smoke:iteration-controller": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-iteration-controller.ps1",
+    "smoke:ci-guardian": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-ci-guardian.ps1",
+    "smoke:hermes-supervisor-flow": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-supervisor-flow.ps1",
     "nightly:local-validation": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/nightly-local-validation.ps1",
     "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build"
   },

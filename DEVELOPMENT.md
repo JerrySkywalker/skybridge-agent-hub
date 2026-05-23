@@ -101,6 +101,10 @@ pnpm test
 pnpm build
 ```
 
+## Smoke script safety
+
+Validation wrapper scripts named `smoke-*` should be safe by default and must not perform production actions unless an operator explicitly configures that behavior. Wrappers that validate dry-run capable automation should accept `-DryRun` even when their default behavior is already dry-run-only, so direct CLI use and package scripts stay consistent.
+
 ## Self-observation smoke
 
 Start the local server, then send representative local-loop telemetry:

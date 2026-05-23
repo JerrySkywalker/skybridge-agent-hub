@@ -7,6 +7,7 @@ node_modules/
 .env.*
 !.env.example
 config/runner.json
+config/iteration-controller.json
 
 # build
 dist/
@@ -23,6 +24,7 @@ logs/
 
 # agent runtime
 .agent/runs/
+.agent/iterations/
 .agent/spool/
 .agent/tmp/
 .agent/last-message.md

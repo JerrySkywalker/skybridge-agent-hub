@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-05-22 Super Goal 015-016
+
+- Follow-up PR prep: smoke validation wrappers now accept a `-DryRun` switch consistently while preserving their safe dry-run-only behavior, and the development docs record the convention for future `smoke-*` wrappers.
+- Completed phases 015-A through 015-I: controller architecture, iteration event model, reusable config, server iteration/supervisor APIs, one-shot controller, CI Guardian, AI-only CI/CD docs, dashboard panels and dry-run smoke validation.
+- Added bootstrap direct notifications after correcting the assumption that SkyBridge Notification Center is available for SkyBridge's own development alerts. `notify-bootstrap.ps1` supports direct ntfy and urgent WeCom/WeChat webhook delivery through environment variables, with dry-run smoke coverage.
+- Completed phases 016-A through 016-F: Hermes supervisor design, prompt templates, bridge script, supervisor status refinement, escalation notification model and local Hermes flow smoke.
+- Validation run so far: event-schema tests/typecheck, server tests/typecheck, client tests/typecheck, react-widgets tests/typecheck, web build, PowerShell parse validation, bootstrap notification smoke, iteration controller smoke, CI Guardian smoke and Hermes supervisor flow smoke.
+- Completed phase 016-G: reusable project integration docs, SkyBridge/generic project config examples, README, roadmap and changelog updates.
+- Final local validation passed: PowerShell parse validation; bootstrap notification smoke; iteration controller smoke; CI Guardian smoke; Hermes supervisor flow smoke; release dry-run smoke; Operator Console smoke; multi-agent platform smoke; dogfooding loop smoke; Docker compose dev/test/prod config rendering; `corepack pnpm check`; and `just check`.
+- Safety notes: no production deployment, branch protection mutation, auto-merge enablement, real secrets, `.env`, `/opt`, OpenResty, Authelia, 1Panel or Docker daemon configuration changes were performed. SkyBridge event delivery remains fail-open, and bootstrap phone notification does not require the SkyBridge server.
+- Remaining for this goal: push branch, create draft PR and update PR body.
+
 ## 2026-05-22
 
 - Nightly CI/CD Guardian round 15: inspected draft PR #10 and confirmed latest GitHub checks were green, reran `corepack pnpm check`, then added manifest-gated browser visual QA artifact upload to PR and AI-branch CI. The default public-runner path still skips when Playwright is unavailable, while controlled runners that produce `.agent/tmp/browser-visual-qa/manifest.json` must pass a fixture-only, non-production, loopback-origin PowerShell guard before screenshots are uploaded for seven days.

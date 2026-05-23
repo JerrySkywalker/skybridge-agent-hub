@@ -1,0 +1,51 @@
+{
+  "project": {
+    "id": "skybridge-agent-hub",
+    "name": "SkyBridge Agent Hub",
+    "repository": "OWNER/skybridge-agent-hub",
+    "localPath": "V:/src/skybridge-agent-hub",
+    "baseBranch": "main",
+    "branchPrefix": "ai/"
+  },
+  "codex": {
+    "command": "codex",
+    "args": ["exec", "--json"],
+    "sandbox": "workspace-write",
+    "approvalPolicy": "never",
+    "outputLastMessage": true
+  },
+  "goals": {
+    "queuePath": "goals/ready",
+    "donePath": "goals/done",
+    "failedPath": "goals/failed"
+  },
+  "iteration": {
+    "maxRepairAttempts": 3,
+    "localCheckCommands": ["corepack pnpm check"],
+    "smokeCommands": [
+      "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-operator-console.ps1 -UseTempDatabase"
+    ]
+  },
+  "github": {
+    "requiredChecks": ["Project check"],
+    "createPR": true,
+    "watchCI": true,
+    "autoMerge": false
+  },
+  "notifications": {
+    "enabled": false,
+    "provider": "ntfy",
+    "importantOnly": true
+  },
+  "skybridge": {
+    "apiBase": "http://127.0.0.1:8787",
+    "telemetryEnabled": false,
+    "failOpen": true
+  },
+  "hermes": {
+    "enabled": false,
+    "supervisorId": "hermes-local-supervisor",
+    "schedule": "nightly",
+    "statusPrompt": "config/hermes/supervisor-check.md"
+  }
+}

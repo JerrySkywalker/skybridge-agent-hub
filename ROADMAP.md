@@ -7,6 +7,7 @@
 - Notification provider matrix and routing rules.
 - Security hardening, shared redaction rules and threat model.
 - Demo dataset, dogfooding smoke and release candidate checklist.
+- Agent CI/CD Control Plane foundation for bounded iteration, PR CI repair, Hermes supervision and bootstrap notifications.
 
 Status: release-candidate foundation after PR #9. Codex, server, SQLite, notification, CI/CD and smoke foundations are implemented and locally validated. OpenCode/Hermes runtime compatibility, real browser visual QA, WSS remote control, mobile readiness, docs publishing and production deployment hardening remain follow-up work.
 
@@ -18,6 +19,8 @@ Status: release-candidate foundation after PR #9. Codex, server, SQLite, notific
 - Public docs site.
 - Production deployment hardening with manual operator gates.
 - External contributor onboarding.
+- Durable iteration persistence beyond the current server memory store.
+- Mature SkyBridge Notification Center self-supervision with bootstrap direct fallback.
 
 ## Later
 
