@@ -6,6 +6,10 @@ node_modules/
 .env
 .env.*
 !.env.example
+.skybridge/
+*.local.env.ps1
+bootstrap-notify.env.ps1
+config/bootstrap-notify.env.ps1
 config/runner.json
 config/iteration-controller.json
 

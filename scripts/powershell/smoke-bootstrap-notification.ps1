@@ -5,6 +5,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$bootstrapEnvLoader = Join-Path $PSScriptRoot "load-bootstrap-env.ps1"
+if (Test-Path -LiteralPath $bootstrapEnvLoader -PathType Leaf) {
+  . $bootstrapEnvLoader
+}
+
 function Invoke-BootstrapDryRun {
   param([string]$Severity)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\notify-bootstrap.ps1" `
@@ -29,6 +34,7 @@ function Invoke-BootstrapDryRun {
 }
 
 $savedEnv = @{
+  SKYBRIDGE_BOOTSTRAP_ENV_FILE = $env:SKYBRIDGE_BOOTSTRAP_ENV_FILE
   SKYBRIDGE_BOOTSTRAP_NTFY_URL = $env:SKYBRIDGE_BOOTSTRAP_NTFY_URL
   SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC = $env:SKYBRIDGE_BOOTSTRAP_NTFY_TOPIC
   SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC = $env:SKYBRIDGE_BOOTSTRAP_NTFY_URGENT_TOPIC
@@ -49,6 +55,7 @@ try {
   foreach ($key in $savedEnv.Keys) {
     Remove-Item -Path "Env:$key" -ErrorAction SilentlyContinue
   }
+  $env:SKYBRIDGE_BOOTSTRAP_ENV_FILE = Join-Path ([IO.Path]::GetTempPath()) ("skybridge-bootstrap-notify-missing-" + [guid]::NewGuid().ToString("N") + ".ps1")
 
   $missing = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\notify-bootstrap.ps1" `
     -Title "SkyBridge bootstrap smoke" `
