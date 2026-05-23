@@ -60,6 +60,13 @@ Invoke-Checked -Label "docker compose test config" -FilePath "docker" -Arguments
 Invoke-Checked -Label "docker compose prod config" -FilePath "docker" -Arguments @("compose", "-f", "deploy/docker-compose.prod.yml", "config")
 
 if (Get-Command bash -ErrorAction SilentlyContinue) {
+  bash -lc "command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1" *> $null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[release-dry-run] bash is available but Docker Compose is unavailable from bash; skipped staging dry-run shell script"
+    Write-Host "[release-dry-run] PowerShell docker compose config checks already passed"
+    Write-Host "[release-dry-run] complete"
+    exit 0
+  }
   Invoke-Checked -Label "staging dry-run" -FilePath "bash" -Arguments @("deploy/scripts/staging-dry-run.sh", $ImageTag)
 } else {
   Write-Host "[release-dry-run] bash unavailable; skipped staging dry-run shell script"

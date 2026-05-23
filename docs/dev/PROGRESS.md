@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-23 Super Goal 017-023
+
+- Completed durable iteration persistence: `/v1/iterations` now uses the server store abstraction with SQLite-backed iteration runs and state events, bounded filters, restart coverage and redacted payload persistence.
+- Added read-only GitHub automation readiness reporting with `ready`, `warning`, `blocker` and `manual_setup_required` findings plus a safe smoke wrapper. Latest local report had no blockers, one warning and manual setup still required for branch protection/auto-merge review.
+- Hardened bootstrap notifications for direct local/server supervision: new `SKYBRIDGE_BOOTSTRAP_*` environment variables, Windows/server setup docs, phone setup notes and explicit `-Send` requirement for real delivery.
+- Hardened Hermes supervisor dry-runs across `Status`, `StartNext`, `RepairPR`, `NightlyReport` and `NotifyTest`, including offline SkyBridge behavior and no-PR repair previews.
+- Added `goals/backlog/030-controller-dry-run-validation.md` and documented the first controlled controller dry-run. The dry-run validated branch calculation, Codex command shape, local metadata/prompt paths, SkyBridge offline fail-open, auto-merge disabled and notification no-send behavior.
+- Improved the Operator Console autonomous iteration panel to show latest iteration state, open PR, CI Guardian state, Hermes status, bootstrap notification path, blocked reason and next recommended action.
+- Final validation passed: PowerShell parse validation; bootstrap notification smoke; iteration controller smoke; CI Guardian smoke; Hermes supervisor flow smoke; GitHub automation readiness smoke; Hermes operational smoke; release dry-run smoke; Operator Console smoke; Docker compose dev/test/prod config rendering; `corepack pnpm check`; and `just check`.
+- Safety notes: no production deployment, real secrets, branch protection mutation, auto-merge enabling, WSS remote execution, privileged runner setup, force-push or merge was performed. Release dry-run skipped the optional bash staging script only when Docker Compose was unavailable from bash; PowerShell Docker compose config checks passed.
+
 ## 2026-05-22 Super Goal 015-016
 
 - Follow-up PR prep: smoke validation wrappers now accept a `-DryRun` switch consistently while preserving their safe dry-run-only behavior, and the development docs record the convention for future `smoke-*` wrappers.
