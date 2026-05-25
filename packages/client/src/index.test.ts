@@ -101,6 +101,32 @@ describe("SkyBridgeClient", () => {
     await expect(client.getSupervisorNextAction()).resolves.toMatchObject({ action: "repair_ci", pr_number: 12 });
   });
 
+  it("returns product dashboard summaries with stable URLs", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ projects: [{ project_id: "skybridge-agent-hub" }] }))
+      .mockResolvedValueOnce(jsonResponse({ total: 1, active: 1, blocked: 0, failed: 0, repair_attempts: 0, recent: [] }))
+      .mockResolvedValueOnce(jsonResponse({ total: 1, open: 1, merged: 0, blocked: 0, eligible: 1, ci_failed: 0, latest_ci_state: "ci_green", prs: [] }))
+      .mockResolvedValueOnce(jsonResponse({ total: 1, sent: 1, skipped: 0, failed: 0, pending: 0, by_severity: {}, providers: [], bootstrap_fallback: { status: "available-manual", script: "notify-bootstrap.ps1", real_send_requires_explicit_send: true }, recent: [] }))
+      .mockResolvedValueOnce(jsonResponse({ status: "placeholder", tunnel: { status: "unknown", public_exposure: false }, api: { health: "placeholder", base_publicly_exposed: false }, capabilities: [], related_iterations: [] }))
+      .mockResolvedValueOnce(jsonResponse({ enabled_by_default: false, dry_run_default: true, total_prs: 1, eligible: 1, blocked: 0, pending: 0, merged_history: [], decisions: [] }));
+    const client = new SkyBridgeClient("http://localhost:8787/");
+
+    await expect(client.listProjects()).resolves.toEqual([expect.objectContaining({ project_id: "skybridge-agent-hub" })]);
+    await expect(client.getIterationsSummary()).resolves.toMatchObject({ total: 1 });
+    await expect(client.getPrsSummary()).resolves.toMatchObject({ latest_ci_state: "ci_green" });
+    await expect(client.getNotificationsSummary()).resolves.toMatchObject({ sent: 1 });
+    await expect(client.getHermesSummary()).resolves.toMatchObject({ status: "placeholder" });
+    await expect(client.getAutoMergeSummary()).resolves.toMatchObject({ dry_run_default: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://localhost:8787/v1/projects");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://localhost:8787/v1/iterations/summary");
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:8787/v1/prs/summary");
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "http://localhost:8787/v1/notifications/summary");
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:8787/v1/hermes/summary");
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "http://localhost:8787/v1/automerge/summary");
+  });
+
   it("throws useful errors for non-2xx responses", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_query" }, 400));
