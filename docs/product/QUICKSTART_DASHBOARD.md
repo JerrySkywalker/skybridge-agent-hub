@@ -1,6 +1,6 @@
 # Dashboard Quickstart
 
-Use this path for a safe local product demo. It uses a temporary or local SQLite database, fake events and no production services.
+Use this path for a safe local product demo of the agent-agnostic control plane. It uses a temporary or local SQLite database, fake events and no production services.
 
 ## Start The Console
 
@@ -22,7 +22,7 @@ http://127.0.0.1:3000/#/overview
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1
 ```
 
-The seeded state includes Codex, OpenCode and Hermes runs, PR/CI records, an auto-merge dry-run, failed CI, sent/failed notification events, audit records and a blocked high-risk PR.
+The seeded state includes Hermes and rule-based planner examples, Codex and manual executor examples, GitHub and generic SCM/CI provider examples, ntfy and generic notification provider examples, PR/CI records, an auto-merge dry-run, failed CI, notification events, audit records and a blocked high-risk PR.
 
 ## Smoke Validate
 
@@ -39,8 +39,7 @@ The smoke starts a temporary SQLite-backed server, seeds demo data, queries prod
 - `#/iterations`
 - `#/pr-ci`
 - `#/notifications`
-- `#/hermes`
+- `#/hermes` optional Hermes adapter detail
 - `#/sources`
 - `#/settings`
 - `#/embed/compact`
-

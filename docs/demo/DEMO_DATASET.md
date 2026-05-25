@@ -11,6 +11,12 @@ The dataset includes:
 - Codex run and tool completion;
 - OpenCode completed run;
 - Hermes failed run;
+- rule-based planner work-order fixture;
+- manual executor completion fixture;
+- GitHub SCM/CI provider fixture;
+- generic SCM provider placeholder;
+- ntfy notification provider fixture;
+- generic notification provider placeholder;
 - runner stale state;
 - approval request;
 - notification sent, skipped and failed samples;

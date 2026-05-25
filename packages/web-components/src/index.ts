@@ -31,7 +31,11 @@ interface ProductSummaryResponse {
   };
   latest?: {
     hermes_status?: string;
-    notification?: { status: string; provider: string; message?: { title?: string } };
+    notification?: {
+      status: string;
+      provider: string;
+      message?: { title?: string };
+    };
   };
 }
 
@@ -60,7 +64,14 @@ export class AgentStatusElement extends HTMLElementBase {
   private timer: number | undefined;
 
   connectedCallback() {
-    this.render({ state: "loading", events: 0, runs: 0, activeRuns: 0, failedRuns: 0, compact: this.compact });
+    this.render({
+      state: "loading",
+      events: 0,
+      runs: 0,
+      activeRuns: 0,
+      failedRuns: 0,
+      compact: this.compact,
+    });
     void this.refresh();
     this.timer = window.setInterval(() => void this.refresh(), this.refreshMs);
   }
@@ -74,7 +85,9 @@ export class AgentStatusElement extends HTMLElementBase {
   }
 
   private get compact() {
-    return this.hasAttribute("compact") || this.getAttribute("mode") === "compact";
+    return (
+      this.hasAttribute("compact") || this.getAttribute("mode") === "compact"
+    );
   }
 
   private get refreshMs() {
@@ -85,16 +98,30 @@ export class AgentStatusElement extends HTMLElementBase {
   private async refresh() {
     try {
       const [health, eventJson, runJson] = await Promise.all([
-        fetch(`${this.apiBase}/v1/health`).then((response) => response.json() as Promise<HealthResponse>),
-        fetch(`${this.apiBase}/v1/events?limit=25`).then((response) => response.json() as Promise<EventsResponse>),
-        fetch(`${this.apiBase}/v1/runs?limit=25`).then((response) => response.json() as Promise<RunsResponse>)
+        fetch(`${this.apiBase}/v1/health`).then(
+          (response) => response.json() as Promise<HealthResponse>,
+        ),
+        fetch(`${this.apiBase}/v1/events?limit=25`).then(
+          (response) => response.json() as Promise<EventsResponse>,
+        ),
+        fetch(`${this.apiBase}/v1/runs?limit=25`).then(
+          (response) => response.json() as Promise<RunsResponse>,
+        ),
       ]);
       const productSummary = await fetch(`${this.apiBase}/v1/summary`)
-        .then((response) => response.ok ? response.json() as Promise<ProductSummaryResponse> : undefined)
+        .then((response) =>
+          response.ok
+            ? (response.json() as Promise<ProductSummaryResponse>)
+            : undefined,
+        )
         .catch(() => undefined);
       const latest = eventJson.events.at(-1);
-      const failedRuns = runJson.runs.filter((run) => run.status === "failed").length;
-      const activeRuns = runJson.runs.filter((run) => run.status === "running").length;
+      const failedRuns = runJson.runs.filter(
+        (run) => run.status === "failed",
+      ).length;
+      const activeRuns = runJson.runs.filter(
+        (run) => run.status === "running",
+      ).length;
       this.render({
         state: failedRuns ? "attention" : latest ? "active" : "idle",
         service: health.service,
@@ -106,10 +133,14 @@ export class AgentStatusElement extends HTMLElementBase {
         openPrs: productSummary?.totals.open_prs,
         ciFailed: productSummary?.totals.ci_failed,
         hermesStatus: productSummary?.latest?.hermes_status,
-        lastNotification: productSummary?.latest?.notification ? `${productSummary.latest.notification.provider}/${productSummary.latest.notification.status}` : undefined,
-        source: latest ? `${latest.source.platform}/${latest.source.adapter}` : "none",
+        lastNotification: productSummary?.latest?.notification
+          ? `${productSummary.latest.notification.provider}/${productSummary.latest.notification.status}`
+          : undefined,
+        source: latest
+          ? `${latest.source.platform}/${latest.source.adapter}`
+          : "none",
         lastSeen: latest ? new Date(latest.time).toLocaleString() : "not yet",
-        compact: this.compact
+        compact: this.compact,
       });
     } catch (error) {
       this.render({
@@ -120,7 +151,7 @@ export class AgentStatusElement extends HTMLElementBase {
         failedRuns: 0,
         source: "unavailable",
         error: error instanceof Error ? error.message : String(error),
-        compact: this.compact
+        compact: this.compact,
       });
     }
   }
@@ -131,8 +162,14 @@ export class AgentStatusElement extends HTMLElementBase {
 }
 
 export function renderAgentStatusHtml(data: AgentStatusViewModel): string {
-  const statusColor = data.state === "offline" || data.state === "attention" ? "#a83225" : "#1f6b3d";
-  const statusBg = data.state === "offline" || data.state === "attention" ? "#fff0ef" : "#e9f7ef";
+  const statusColor =
+    data.state === "offline" || data.state === "attention"
+      ? "#a83225"
+      : "#1f6b3d";
+  const statusBg =
+    data.state === "offline" || data.state === "attention"
+      ? "#fff0ef"
+      : "#e9f7ef";
   const compactStyle = data.compact ? "max-width:360px;" : "";
   const metrics = data.compact
     ? `<div><dt>Runs</dt><dd>${data.runs}</dd></div><div><dt>PR/CI</dt><dd>${data.openPrs ?? 0}/${data.ciFailed ?? 0}</dd></div>`
@@ -148,7 +185,7 @@ export function renderAgentStatusHtml(data: AgentStatusViewModel): string {
     </div>
     <dl style="display:grid; grid-template-columns:repeat(${data.compact ? 2 : 4},minmax(0,1fr)); gap:10px; margin:12px 0 0;">
       ${metrics}
-      <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Hermes</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.hermesStatus ?? "unknown")}</dd></div>
+      <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Planner adapter</dt><dd style="margin:0; font-weight:650;">Hermes ${escapeHtml(data.hermesStatus ?? "unknown")}</dd></div>
       <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last notification</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.lastNotification ?? "none")}</dd></div>
       <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last source</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.source ?? "none")}</dd></div>
       <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last seen</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.lastSeen ?? "not yet")}</dd></div>
@@ -158,9 +195,16 @@ export function renderAgentStatusHtml(data: AgentStatusViewModel): string {
 }
 
 function escapeHtml(input: string): string {
-  return input.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 if (globalThis.customElements && !customElements.get("agent-status-card")) {
-  customElements.define("agent-status-card", AgentStatusElement as CustomElementConstructor);
+  customElements.define(
+    "agent-status-card",
+    AgentStatusElement as CustomElementConstructor,
+  );
 }

@@ -1,6 +1,6 @@
 # Operator Console Product Spec
 
-SkyBridge Operator Console is the daily control surface for local and cloud-assisted agent development operations. It is not a production deployment panel and does not expose raw prompts, command output, patches, secrets or public Hermes access.
+SkyBridge Operator Console is the daily control surface for the agent-agnostic SkyBridge control plane. It is not a production deployment panel and does not expose raw prompts, command output, patches, secrets or public Hermes access.
 
 ## Product Surfaces
 
@@ -12,7 +12,7 @@ Shows system health, active and failed runs, open PR count, latest CI state, lat
 
 ### Runs
 
-Purpose: inspect agent work across Codex, OpenCode, Hermes and custom sources.
+Purpose: inspect agent work across planner, executor and runtime adapters such as Codex, OpenCode, Hermes and custom sources.
 
 Shows run list, source, status, branch/goal metadata, tool counts, failed tools, latest safe summary and a run detail timeline.
 
@@ -40,11 +40,17 @@ Purpose: verify operator alerting health.
 
 Shows provider status, sent/skipped/failed/pending counts, severity distribution, bootstrap fallback status and troubleshooting links. Real delivery remains explicit and manual unless a future approved goal changes that boundary.
 
-### Hermes
+### Hermes Adapter
 
-Purpose: summarize private Hermes supervision.
+Purpose: summarize the optional private Hermes planner/supervisor adapter.
 
 Shows local tunnel status, API health, capabilities, last safe run, nightly report summary, sweep dry-run summary and degraded reason. The UI must keep `public_exposure=false` and never publish Hermes.
+
+### Adapter Registry
+
+Purpose: show the Core + Adapter Ring boundary.
+
+Shows planner adapters, executor adapters, SCM/CI providers, notification providers and runtime providers with stability, dogfooding and optionality metadata. Hermes, Codex, GitHub and ntfy appear as adapters/providers, not core services.
 
 ### Sources/Adapters
 
@@ -75,6 +81,7 @@ The console consumes safe server APIs:
 - `GET /v1/notifications/summary`
 - `GET /v1/hermes/summary`
 - `GET /v1/automerge/summary`
+- `GET /v1/adapters`
 - existing run, event, notification, audit, sources and node APIs
 
 All derived summaries use already normalized `skybridge.agent_event.v1` events, durable iteration records, notification records and audit metadata.
@@ -85,6 +92,6 @@ All derived summaries use already normalized `skybridge.agent_event.v1` events, 
 - No GitHub settings mutation.
 - No always-on unattended auto-merge by default.
 - No public Hermes exposure.
+- No Hermes, Codex, GitHub or ntfy hard dependency in core product flows.
 - No raw prompts, stdout, stderr, patches, tokens, cookies or secrets.
 - Notification real sends stay behind explicit manual commands.
-

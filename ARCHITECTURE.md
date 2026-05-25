@@ -1,27 +1,28 @@
 # Architecture
 
-SkyBridge Agent Hub is a modular monorepo for local/cloud agent telemetry, notifications and future remote control.
+SkyBridge Agent Hub is a modular monorepo for an agent-agnostic local/cloud control plane for AI-assisted software development.
 
 ## Logical layers
 
 ```text
-Agent Sources
-  Codex hooks / Codex exec JSON / Codex app-server
-  OpenCode plugin events
-  Hermes Agent API/events
-  Custom agents
+Adapter Ring
+  PlannerAdapter: Hermes, rule-based planner, future planners
+  ExecutorAdapter: Codex, OpenCode, manual executor, future executors
+  SCMProvider: GitHub, generic SCM/CI providers
+  NotificationProvider: ntfy, generic notification providers
+  RuntimeProvider: local sidecar and future worker runtimes
         │
         ▼
-Adapter Layer
-  Normalize source-specific events
-        │
-        ▼
-SkyBridge Server
-  Event ingestion
+SkyBridge Core
+  Project/goal/task orchestration
+  Normalized event ingestion
   Run/session aggregation
-  SSE/WebSocket stream
-  Notification job creation
+  Audit trail and approval queue
+  CI/PR/auto-merge policy records
+  Notification routing
+  SSE/API read model
         │
+        ├── Operator Console
         ├── Dashboard widgets
         ├── Message Center
         └── Future Remote App API
@@ -33,7 +34,7 @@ SkyBridge Server
 apps/server              API server and event stream
 apps/web                 standalone dashboard shell
 apps/sidecar             future local node agent
-packages/event-schema    skybridge.agent_event.v1
+packages/event-schema    skybridge.agent_event.v1 plus neutral planner/executor/provider contracts
 packages/client          API/SSE client
 packages/react-widgets   embeddable React widgets
 packages/web-components  framework-neutral custom elements
@@ -45,8 +46,10 @@ packages/notification-providers ntfy/Apprise/FCM/etc. adapters
 
 - The notification system is not the real-time progress stream.
 - Real-time progress uses SSE/WebSocket from the SkyBridge server.
-- ntfy is the first notification outlet, not a permanent lock-in.
-- Codex hooks are treated as telemetry inputs, not as the final remote-control protocol.
+- ntfy is the first notification outlet adapter, not a permanent lock-in.
+- Codex hooks are treated as executor telemetry inputs, not as the final remote-control protocol.
+- Hermes supervision is a dogfooding planner/supervisor adapter, not a core dependency.
+- GitHub is the current SCM/CI provider adapter, not the only possible policy backend.
 - Future remote control should go through local sidecar + reverse connection + explicit approval policy.
 - MVP persistence uses a local SQLite store at `.data/skybridge.sqlite`, with one-time import from the previous `.data/skybridge-store.json` JSON store when present.
 
@@ -84,6 +87,21 @@ POST /v1/notifications/send
 
 `run.failed`, `approval.requested` and `notification.requested` are notification trigger events. If ntfy is not configured, notification attempts are recorded as skipped placeholders.
 
+## Core Boundary
+
+SkyBridge Core may know neutral concepts:
+
+- `PlannerDecision`
+- `WorkOrder`
+- `ExecutionResult`
+- `NotificationJob`
+- `ProviderStatus`
+- `AdapterCapability`
+
+SkyBridge Core must not require Hermes, Codex, OpenCode, GitHub, ntfy, SSH tunnels, local Codex hook files, GitHub branch settings or phone notification credentials. Those belong in the adapter ring and should be optional, documented and redacted by default.
+
+See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md).
+
 ## Operator Console data flow
 
 ```text
@@ -95,7 +113,7 @@ packages/client typed helpers
         v
 packages/react-widgets
   health card, filters, run list, timeline,
-  run detail, notifications, Codex status
+  run detail, notifications, adapter status
         |
         +--> apps/web Operator Console
         +--> packages/web-components compact status card

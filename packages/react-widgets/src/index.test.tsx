@@ -105,7 +105,7 @@ describe("react widgets", () => {
     const html = renderToStaticMarkup(<SelfObservationPanel apiBase="http://127.0.0.1:8787" />);
 
     expect(html).toContain("Self-Observation");
-    expect(html).toContain("Local Loop");
+    expect(html).toContain("Dogfooding Loop");
   });
 
   it("summarizes Codex integration status", () => {
@@ -150,8 +150,8 @@ describe("react widgets", () => {
   it("renders the Codex integration panel shell", () => {
     const html = renderToStaticMarkup(<CodexIntegrationPanel apiBase="http://127.0.0.1:8787" />);
 
-    expect(html).toContain("Integration Status");
-    expect(html).toContain("Codex Local");
+    expect(html).toContain("Codex Status");
+    expect(html).toContain("Executor Adapter");
   });
 
   it("renders operator console panels in static markup", () => {

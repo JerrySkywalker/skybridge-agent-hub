@@ -7,13 +7,13 @@ The SkyBridge Operator Console is the local-first dashboard for supervising auto
 - Is SkyBridge receiving telemetry?
 - What agents and runs are active or recently failed?
 - What needs attention now?
-- Is the Codex local integration healthy enough to trust during long unattended work?
+- Are the active planner/executor adapters healthy enough to trust during long unattended work?
 
 The console is not a marketing page and is not a remote-control surface yet. It is an operational view over already-redacted `skybridge.agent_event.v1` events, run summaries, notification records and the live SSE stream.
 
 ## Target Users
 
-- Jerry during thesis-defense YOLO mode, supervising long-running Codex and runner work with minimal interruptions.
+- Jerry during thesis-defense YOLO mode, supervising long-running planner/executor and runner work with minimal interruptions.
 - Future maintainers reviewing local development health before opening or reviewing AI-generated pull requests.
 - Integrators embedding a compact SkyBridge status card in local dashboards such as Glance.
 
@@ -24,7 +24,7 @@ The minimum usable console contains these sections:
 1. **System health**: API availability, persistence mode, server time and live stream state.
 2. **Active/recent runs**: scan-friendly run rows with status, source, branch, goal, tool counts and latest activity.
 3. **Event timeline**: recent normalized events with source/platform filters, severity, type and correlation IDs.
-4. **Codex integration status**: Codex hook and exec activity, active/failed tools, spool/replay hints when events include spool metadata.
+4. **Executor adapter status**: Codex hook and exec activity, active/failed tools, spool/replay hints when events include spool metadata.
 5. **Notifications/attention queue**: failed runs, approval requests and notification send/skipped/failed records.
 6. **Source/platform filters**: platform, adapter, severity, type and free text/correlation filters shared across panels where practical.
 7. **Run detail view**: summary plus recent events for one run, using only safe metadata returned by the API.
@@ -72,12 +72,12 @@ States:
 - Live: connected and appending incoming SSE events.
 - Reconnecting/offline: keep the current list, show stream state, cap the rendered list length.
 
-### Codex Integration Status
+### Executor Adapter Status
 
 Data dependencies:
 
-- Codex events from `/v1/events`
-- Codex run summaries from `/v1/runs`
+- Codex adapter events from `/v1/events`
+- Codex adapter run summaries from `/v1/runs`
 - optional spool count metadata in Codex hook events
 
 The panel should distinguish `codex-hook` and `codex-exec-json` activity and emphasize failed tools, approval requests and stale/no-event states.
@@ -113,4 +113,4 @@ It should display health, active/failed run counts, last event and offline state
 - The console depends on normalized event payloads and cannot reconstruct missing correlation IDs.
 - Spool and replay status is visible only when adapters emit safe spool metadata.
 - The current remote-control model is intentionally out of scope.
-- Browser screenshot automation may not always be available in Codex sessions; local build and HTTP smoke scripts are the fallback validation path.
+- Browser screenshot automation may not always be available in local agent sessions; local build and HTTP smoke scripts are the fallback validation path.

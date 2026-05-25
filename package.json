@@ -2,7 +2,7 @@
   "name": "skybridge-agent-hub",
   "private": true,
   "version": "0.1.0",
-  "description": "Open-source local/cloud agent telemetry, notification, and remote-control foundation for Codex, OpenCode, Hermes, and custom agents.",
+  "description": "Agent-agnostic local/cloud control plane for AI-assisted software development with planner, executor, SCM/CI, notification, and runtime adapters.",
   "type": "module",
   "packageManager": "pnpm@10.12.1",
   "scripts": {
@@ -14,6 +14,8 @@
     "format": "prettier --write .",
     "smoke:operator-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-operator-console.ps1 -UseTempDatabase",
     "smoke:product-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-product-console.ps1",
+    "smoke:agent-agnostic-core": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-agent-agnostic-core.ps1",
+    "smoke:adapter-registry": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-adapter-registry.ps1",
     "smoke:release-dry-run": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-release-dry-run.ps1",
     "smoke:self-hosting-dry-run": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-hosting-dry-run.ps1",
     "smoke:codex-hook-integration": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-codex-hook-integration.ps1 -ApiBase http://127.0.0.1:8798 -StartServer",

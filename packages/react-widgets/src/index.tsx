@@ -9,9 +9,16 @@ import {
   type SkyBridgeHealth,
   type SupervisorNextAction,
   type SupervisorStatus,
-  type StoredNotification
+  type StoredNotification,
 } from "@skybridge-agent-hub/client";
-import type { IterationRun, RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeSeverity, SkyBridgeSourcePlatform } from "@skybridge-agent-hub/event-schema";
+import type {
+  IterationRun,
+  RunDetail,
+  RunSummary,
+  SkyBridgeEvent,
+  SkyBridgeSeverity,
+  SkyBridgeSourcePlatform,
+} from "@skybridge-agent-hub/event-schema";
 
 export interface WidgetProps {
   apiBase: string;
@@ -36,37 +43,45 @@ export interface SkyBridgeState {
   refresh: () => Promise<void>;
 }
 
-export function useSkyBridge(apiBase: string, filters: SourceFilters = {}): SkyBridgeState {
+export function useSkyBridge(
+  apiBase: string,
+  filters: SourceFilters = {},
+): SkyBridgeState {
   const [health, setHealth] = useState<SkyBridgeHealth | undefined>();
   const [events, setEvents] = useState<SkyBridgeEvent[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [notifications, setNotifications] = useState<StoredNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
-  const [streamState, setStreamState] = useState<SkyBridgeState["streamState"]>("connecting");
+  const [streamState, setStreamState] =
+    useState<SkyBridgeState["streamState"]>("connecting");
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
   const queryKey = JSON.stringify(filters);
 
-  const refresh = useMemo(() => async () => {
-    setLoading(true);
-    try {
-      const [nextHealth, nextEvents, nextRuns, nextNotifications] = await Promise.all([
-        client.getHealth(),
-        client.listEvents(toEventQuery(filters)),
-        client.listRuns(toRunQuery(filters)),
-        client.listNotifications()
-      ]);
-      setHealth(nextHealth);
-      setEvents(nextEvents);
-      setRuns(nextRuns);
-      setNotifications(nextNotifications);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [client, queryKey]);
+  const refresh = useMemo(
+    () => async () => {
+      setLoading(true);
+      try {
+        const [nextHealth, nextEvents, nextRuns, nextNotifications] =
+          await Promise.all([
+            client.getHealth(),
+            client.listEvents(toEventQuery(filters)),
+            client.listRuns(toRunQuery(filters)),
+            client.listNotifications(),
+          ]);
+        setHealth(nextHealth);
+        setEvents(nextEvents);
+        setRuns(nextRuns);
+        setNotifications(nextNotifications);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client, queryKey],
+  );
 
   useEffect(() => {
     let closed = false;
@@ -92,8 +107,11 @@ export function useSkyBridge(apiBase: string, filters: SourceFilters = {}): SkyB
       onEvent: (event) => {
         if (closed || !matchesFilters(event, filters)) return;
         setEvents((prev) => [...prev, event].slice(-200));
-        void client.listRuns(toRunQuery(filters)).then(setRuns).catch(() => undefined);
-      }
+        void client
+          .listRuns(toRunQuery(filters))
+          .then(setRuns)
+          .catch(() => undefined);
+      },
     });
 
     return () => {
@@ -102,7 +120,16 @@ export function useSkyBridge(apiBase: string, filters: SourceFilters = {}): SkyB
     };
   }, [client, refresh, queryKey]);
 
-  return { health, events, runs, notifications, loading, error, streamState, refresh };
+  return {
+    health,
+    events,
+    runs,
+    notifications,
+    loading,
+    error,
+    streamState,
+    refresh,
+  };
 }
 
 export function LoadingState({ label = "Loading" }: { label?: string }) {
@@ -113,7 +140,13 @@ export function ErrorState({ message }: { message: string }) {
   return <p className="skybridge-error">{message}</p>;
 }
 
-export function EmptyState({ title = "No data", detail }: { title?: string; detail?: string }) {
+export function EmptyState({
+  title = "No data",
+  detail,
+}: {
+  title?: string;
+  detail?: string;
+}) {
   return (
     <div className="skybridge-empty">
       <strong>{title}</strong>
@@ -123,27 +156,55 @@ export function EmptyState({ title = "No data", detail }: { title?: string; deta
 }
 
 export function SkyBridgeHealthCard({ apiBase }: WidgetProps) {
-  const { health, runs, events, notifications, loading, error, streamState } = useSkyBridge(apiBase);
+  const { health, runs, events, notifications, loading, error, streamState } =
+    useSkyBridge(apiBase);
   const failedRuns = runs.filter((run) => run.status === "failed").length;
-  const status = error ? "offline" : failedRuns ? "attention" : events.length ? "active" : "idle";
+  const status = error
+    ? "offline"
+    : failedRuns
+      ? "attention"
+      : events.length
+        ? "active"
+        : "idle";
 
   return (
     <section className="skybridge-card">
-      <PanelHeader kicker="System Health" title="SkyBridge" state={status} bad={status === "offline" || status === "attention"} />
+      <PanelHeader
+        kicker="System Health"
+        title="SkyBridge"
+        state={status}
+        bad={status === "offline" || status === "attention"}
+      />
       {loading && !health ? <LoadingState label="Checking API" /> : null}
       <dl className="skybridge-metrics">
         <Metric label="Persistence" value={health?.persistence ?? "unknown"} />
         <Metric label="Stream" value={streamState} />
         <Metric label="Runs" value={runs.length} />
-        <Metric label="Attention" value={failedRuns + notifications.filter((item) => item.status === "failed" || item.status === "skipped").length} />
+        <Metric
+          label="Attention"
+          value={
+            failedRuns +
+            notifications.filter(
+              (item) => item.status === "failed" || item.status === "skipped",
+            ).length
+          }
+        />
       </dl>
-      <p className="skybridge-runline">Last event: {events.at(-1)?.type ?? "none"} · Server time: {formatDateTime(health?.time)}</p>
+      <p className="skybridge-runline">
+        Last event: {events.at(-1)?.type ?? "none"} · Server time:{" "}
+        {formatDateTime(health?.time)}
+      </p>
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
-export function ActiveRunsPanel({ apiBase, filters = {}, selectedRunId, onSelectRun }: WidgetProps & {
+export function ActiveRunsPanel({
+  apiBase,
+  filters = {},
+  selectedRunId,
+  onSelectRun,
+}: WidgetProps & {
   filters?: SourceFilters;
   selectedRunId?: string;
   onSelectRun?: (runId: string) => void;
@@ -152,19 +213,44 @@ export function ActiveRunsPanel({ apiBase, filters = {}, selectedRunId, onSelect
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Runs" title="Active And Recent" state={`${runs.length}`} />
-      {loading && runs.length === 0 ? <LoadingState label="Loading runs" /> : null}
-      {!loading && runs.length === 0 ? <EmptyState title="No runs match" detail="Adjust the source filters or seed demo events." /> : null}
+      <PanelHeader
+        kicker="Runs"
+        title="Active And Recent"
+        state={`${runs.length}`}
+      />
+      {loading && runs.length === 0 ? (
+        <LoadingState label="Loading runs" />
+      ) : null}
+      {!loading && runs.length === 0 ? (
+        <EmptyState
+          title="No runs match"
+          detail="Adjust the source filters or seed demo events."
+        />
+      ) : null}
       <ol className="skybridge-run-list">
         {runs.map((run) => (
           <li key={run.run_id}>
-            <button className={selectedRunId === run.run_id ? "is-selected" : ""} type="button" onClick={() => onSelectRun?.(run.run_id)}>
+            <button
+              className={selectedRunId === run.run_id ? "is-selected" : ""}
+              type="button"
+              onClick={() => onSelectRun?.(run.run_id)}
+            >
               <span>
                 <strong>{run.title ?? run.run_id}</strong>
-                <small>{run.source_platform}/{run.source_adapter} · {run.branch ?? run.goal ?? "no branch or goal"}</small>
+                <small>
+                  {run.source_platform}/{run.source_adapter} ·{" "}
+                  {run.branch ?? run.goal ?? "no branch or goal"}
+                </small>
               </span>
-              <span className={`skybridge-state ${run.status === "failed" ? "skybridge-state--bad" : ""}`}>{run.status}</span>
-              <small>{run.tool_call_count} tools · {run.failed_tool_count} failed · {formatDateTime(run.last_seen_at)}</small>
+              <span
+                className={`skybridge-state ${run.status === "failed" ? "skybridge-state--bad" : ""}`}
+              >
+                {run.status}
+              </span>
+              <small>
+                {run.tool_call_count} tools · {run.failed_tool_count} failed ·{" "}
+                {formatDateTime(run.last_seen_at)}
+              </small>
             </button>
           </li>
         ))}
@@ -174,31 +260,63 @@ export function ActiveRunsPanel({ apiBase, filters = {}, selectedRunId, onSelect
   );
 }
 
-export function EventTimeline({ apiBase, filters = {} }: WidgetProps & { filters?: SourceFilters }) {
-  const { events, loading, error, streamState } = useSkyBridge(apiBase, filters);
+export function EventTimeline({
+  apiBase,
+  filters = {},
+}: WidgetProps & { filters?: SourceFilters }) {
+  const { events, loading, error, streamState } = useSkyBridge(
+    apiBase,
+    filters,
+  );
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Events" title="Timeline" state={streamState} bad={streamState === "unavailable"} />
-      {loading && events.length === 0 ? <LoadingState label="Loading events" /> : null}
-      {!loading && events.length === 0 ? <EmptyState title="No events match" detail="The timeline will update when telemetry arrives." /> : null}
+      <PanelHeader
+        kicker="Events"
+        title="Timeline"
+        state={streamState}
+        bad={streamState === "unavailable"}
+      />
+      {loading && events.length === 0 ? (
+        <LoadingState label="Loading events" />
+      ) : null}
+      {!loading && events.length === 0 ? (
+        <EmptyState
+          title="No events match"
+          detail="The timeline will update when telemetry arrives."
+        />
+      ) : null}
       <ol className="skybridge-timeline">
-        {events.slice(-50).reverse().map((event, index) => (
-          <li key={event.event_id ?? `${event.time}-${index}`}>
-            <span>
-              <strong>{event.type}</strong>
-              <small>{event.severity} · {event.correlation?.run_id ?? event.correlation?.session_id ?? "uncorrelated"}</small>
-            </span>
-            <small>{event.source.platform}/{event.source.adapter} · {formatDateTime(event.time)}</small>
-          </li>
-        ))}
+        {events
+          .slice(-50)
+          .reverse()
+          .map((event, index) => (
+            <li key={event.event_id ?? `${event.time}-${index}`}>
+              <span>
+                <strong>{event.type}</strong>
+                <small>
+                  {event.severity} ·{" "}
+                  {event.correlation?.run_id ??
+                    event.correlation?.session_id ??
+                    "uncorrelated"}
+                </small>
+              </span>
+              <small>
+                {event.source.platform}/{event.source.adapter} ·{" "}
+                {formatDateTime(event.time)}
+              </small>
+            </li>
+          ))}
       </ol>
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
-export function RunDetailPanel({ apiBase, runId }: WidgetProps & { runId?: string }) {
+export function RunDetailPanel({
+  apiBase,
+  runId,
+}: WidgetProps & { runId?: string }) {
   const [detail, setDetail] = useState<RunDetail | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -210,36 +328,61 @@ export function RunDetailPanel({ apiBase, runId }: WidgetProps & { runId?: strin
       return;
     }
     setLoading(true);
-    void client.getRun(runId, { limit: 100 })
+    void client
+      .getRun(runId, { limit: 100 })
       .then((nextDetail) => {
         setDetail(nextDetail);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      )
       .finally(() => setLoading(false));
   }, [client, runId]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Run Detail" title={detail?.summary.title ?? runId ?? "No run selected"} state={detail?.summary.status ?? "idle"} bad={detail?.summary.status === "failed"} />
-      {!runId ? <EmptyState title="Select a run" detail="Run details show safe metadata and recent events." /> : null}
+      <PanelHeader
+        kicker="Run Detail"
+        title={detail?.summary.title ?? runId ?? "No run selected"}
+        state={detail?.summary.status ?? "idle"}
+        bad={detail?.summary.status === "failed"}
+      />
+      {!runId ? (
+        <EmptyState
+          title="Select a run"
+          detail="Run details show safe metadata and recent events."
+        />
+      ) : null}
       {loading ? <LoadingState label="Loading run" /> : null}
       {detail ? (
         <>
           <dl className="skybridge-metrics skybridge-metrics--compact">
-            <Metric label="Source" value={`${detail.summary.source_platform}/${detail.summary.source_adapter}`} />
+            <Metric
+              label="Source"
+              value={`${detail.summary.source_platform}/${detail.summary.source_adapter}`}
+            />
             <Metric label="Tools" value={detail.summary.tool_call_count} />
             <Metric label="Failed" value={detail.summary.failed_tool_count} />
             <Metric label="Events" value={detail.summary.event_count} />
           </dl>
-          <p className="skybridge-runline">{detail.summary.goal ?? detail.summary.latest_message_summary ?? "No safe summary yet"}</p>
+          <p className="skybridge-runline">
+            {detail.summary.goal ??
+              detail.summary.latest_message_summary ??
+              "No safe summary yet"}
+          </p>
           <ol className="skybridge-timeline skybridge-timeline--compact">
-            {detail.events.slice(-12).reverse().map((event, index) => (
-              <li key={event.event_id ?? `${event.time}-${index}`}>
-                <span>{event.type}</span>
-                <small>{event.severity} · {formatDateTime(event.time)}</small>
-              </li>
-            ))}
+            {detail.events
+              .slice(-12)
+              .reverse()
+              .map((event, index) => (
+                <li key={event.event_id ?? `${event.time}-${index}`}>
+                  <span>{event.type}</span>
+                  <small>
+                    {event.severity} · {formatDateTime(event.time)}
+                  </small>
+                </li>
+              ))}
           </ol>
         </>
       ) : null}
@@ -248,35 +391,57 @@ export function RunDetailPanel({ apiBase, runId }: WidgetProps & { runId?: strin
   );
 }
 
-export function NotificationList({ apiBase, filters = {} }: WidgetProps & { filters?: NotificationListQuery }) {
+export function NotificationList({
+  apiBase,
+  filters = {},
+}: WidgetProps & { filters?: NotificationListQuery }) {
   const [items, setItems] = useState<StoredNotification[]>([]);
   const [error, setError] = useState<string | undefined>();
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
   const queryKey = JSON.stringify(filters);
 
   useEffect(() => {
-    void client.listNotifications(filters)
+    void client
+      .listNotifications(filters)
       .then((notifications) => {
         setItems(notifications);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client, queryKey]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Attention" title="Notifications" state={`${items.length}`} bad={items.some((item) => item.status === "failed")} />
-      {items.length === 0 ? <EmptyState title="No notifications" detail="Failed runs, approvals and notification attempts appear here." /> : null}
+      <PanelHeader
+        kicker="Attention"
+        title="Notifications"
+        state={`${items.length}`}
+        bad={items.some((item) => item.status === "failed")}
+      />
+      {items.length === 0 ? (
+        <EmptyState
+          title="No notifications"
+          detail="Failed runs, approvals and notification attempts appear here."
+        />
+      ) : null}
       <ol className="skybridge-timeline skybridge-timeline--compact">
-        {items.slice(-20).reverse().map((item) => (
-          <li key={item.id}>
-            <span>
-              <strong>{item.message.title}</strong>
-              <small>{item.provider} · {item.status}{item.error ? ` · ${item.error}` : ""}</small>
-            </span>
-            <small>{formatDateTime(item.createdAt)}</small>
-          </li>
-        ))}
+        {items
+          .slice(-20)
+          .reverse()
+          .map((item) => (
+            <li key={item.id}>
+              <span>
+                <strong>{item.message.title}</strong>
+                <small>
+                  {item.provider} · {item.status}
+                  {item.error ? ` · ${item.error}` : ""}
+                </small>
+              </span>
+              <small>{formatDateTime(item.createdAt)}</small>
+            </li>
+          ))}
       </ol>
       {error ? <ErrorState message={error} /> : null}
     </section>
@@ -289,24 +454,40 @@ export function ApprovalQueuePanel({ apiBase }: WidgetProps) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.listApprovals()
+    void client
+      .listApprovals()
       .then((approvals) => {
         setItems(approvals);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Operator" title="Approval Queue" state={`${items.length}`} bad={items.length > 0} />
-      {items.length === 0 ? <EmptyState title="No pending approvals" detail="Remote execution remains disabled; approvals are recorded for operator workflow testing." /> : null}
+      <PanelHeader
+        kicker="Operator"
+        title="Approval Queue"
+        state={`${items.length}`}
+        bad={items.length > 0}
+      />
+      {items.length === 0 ? (
+        <EmptyState
+          title="No pending approvals"
+          detail="Remote execution remains disabled; approvals are recorded for operator workflow testing."
+        />
+      ) : null}
       <ol className="skybridge-timeline skybridge-timeline--compact">
         {items.map((item) => (
           <li key={item.approval_id}>
             <span>
               <strong>{item.title ?? item.approval_id}</strong>
-              <small>{item.source} · {item.run_id ?? item.session_id ?? "uncorrelated"}</small>
+              <small>
+                {item.source} ·{" "}
+                {item.run_id ?? item.session_id ?? "uncorrelated"}
+              </small>
             </span>
             <small>{formatDateTime(item.requested_at)}</small>
           </li>
@@ -323,47 +504,82 @@ export function OperationsSummaryPanel({ apiBase }: WidgetProps) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.getMetrics()
+    void client
+      .getMetrics()
       .then((nextMetrics) => {
         setMetrics(nextMetrics);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Operations" title="Metrics Summary" state={`${metrics?.total_events ?? 0}`} />
+      <PanelHeader
+        kicker="Operations"
+        title="Metrics Summary"
+        state={`${metrics?.total_events ?? 0}`}
+      />
       <dl className="skybridge-metrics skybridge-metrics--compact">
         <Metric label="Events" value={metrics?.total_events ?? 0} />
         <Metric label="Running" value={metrics?.runs_by_status.running ?? 0} />
         <Metric label="Failed" value={metrics?.runs_by_status.failed ?? 0} />
-        <Metric label="Nodes" value={Object.values(metrics?.node_status_counts ?? {}).reduce((sum, count) => sum + count, 0)} />
+        <Metric
+          label="Nodes"
+          value={Object.values(metrics?.node_status_counts ?? {}).reduce(
+            (sum, count) => sum + count,
+            0,
+          )}
+        />
       </dl>
-      <p className="skybridge-runline">Sources: {Object.keys(metrics?.runs_by_source ?? {}).join(", ") || "none"}</p>
+      <p className="skybridge-runline">
+        Sources:{" "}
+        {Object.keys(metrics?.runs_by_source ?? {}).join(", ") || "none"}
+      </p>
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
 export function ProviderStatusPanel({ apiBase }: WidgetProps) {
-  const [providers, setProviders] = useState<Array<{ provider: string; configured: boolean; status: string; required_env: string }>>([]);
+  const [providers, setProviders] = useState<
+    Array<{
+      provider: string;
+      configured: boolean;
+      status: string;
+      required_env: string;
+    }>
+  >([]);
   const [error, setError] = useState<string | undefined>();
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.listNotificationProviders()
+    void client
+      .listNotificationProviders()
       .then((items) => {
         setProviders(items);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Providers" title="Notification Matrix" state={`${providers.filter((provider) => provider.configured).length}/${providers.length}`} />
-      {providers.length === 0 ? <EmptyState title="No provider status" detail="Provider configuration status appears when the server is reachable." /> : null}
+      <PanelHeader
+        kicker="Providers"
+        title="Notification Matrix"
+        state={`${providers.filter((provider) => provider.configured).length}/${providers.length}`}
+      />
+      {providers.length === 0 ? (
+        <EmptyState
+          title="No provider status"
+          detail="Provider configuration status appears when the server is reachable."
+        />
+      ) : null}
       <ol className="skybridge-timeline skybridge-timeline--compact">
         {providers.map((provider) => (
           <li key={provider.provider}>
@@ -371,7 +587,11 @@ export function ProviderStatusPanel({ apiBase }: WidgetProps) {
               <strong>{provider.provider}</strong>
               <small>{provider.required_env}</small>
             </span>
-            <span className={`skybridge-state ${provider.configured ? "" : "skybridge-state--bad"}`}>{provider.status}</span>
+            <span
+              className={`skybridge-state ${provider.configured ? "" : "skybridge-state--bad"}`}
+            >
+              {provider.status}
+            </span>
           </li>
         ))}
       </ol>
@@ -386,43 +606,74 @@ export function IterationStatusCard({ apiBase }: WidgetProps) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.listIterations()
+    void client
+      .listIterations()
       .then((items) => {
         setIterations(items);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   const current = iterations[0];
-  const bad = current?.state === "blocked" || current?.state === "failed" || current?.state === "ci_failed";
+  const bad =
+    current?.state === "blocked" ||
+    current?.state === "failed" ||
+    current?.state === "ci_failed";
 
   return (
     <section className="skybridge-panel skybridge-iteration-status">
-      <PanelHeader kicker="Autonomous Iteration" title="Current Iteration" state={current?.state ?? "idle"} bad={bad} />
+      <PanelHeader
+        kicker="Autonomous Iteration"
+        title="Current Iteration"
+        state={current?.state ?? "idle"}
+        bad={bad}
+      />
       {current ? (
         <>
           <dl className="skybridge-metrics skybridge-metrics--compact">
-            <Metric label="Attempts" value={`${current.attempts}/${current.max_attempts}`} />
-            <Metric label="PR" value={current.pr_number ? `#${current.pr_number}` : "none"} />
+            <Metric
+              label="Attempts"
+              value={`${current.attempts}/${current.max_attempts}`}
+            />
+            <Metric
+              label="PR"
+              value={current.pr_number ? `#${current.pr_number}` : "none"}
+            />
             <Metric label="Branch" value={current.branch} />
-            <Metric label="Auto-merge" value={current.auto_merge_enabled ? "enabled" : "off"} />
+            <Metric
+              label="Auto-merge"
+              value={current.auto_merge_enabled ? "enabled" : "off"}
+            />
           </dl>
-          <p className="skybridge-runline">{current.project_id} · {current.goal_id ?? "manual goal"} · {current.last_error ?? "no blocked reason"}</p>
+          <p className="skybridge-runline">
+            {current.project_id} · {current.goal_id ?? "manual goal"} ·{" "}
+            {current.last_error ?? "no blocked reason"}
+          </p>
         </>
-      ) : <EmptyState title="No iteration" detail="Controller state appears after a dry run or one-shot iteration is recorded." />}
+      ) : (
+        <EmptyState
+          title="No iteration"
+          detail="Controller state appears after a dry run or one-shot iteration is recorded."
+        />
+      )}
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
 export function IterationTimeline({ apiBase }: WidgetProps) {
-  const [events, setEvents] = useState<Array<{ type: string; time: string; payload: Record<string, unknown> }>>([]);
+  const [events, setEvents] = useState<
+    Array<{ type: string; time: string; payload: Record<string, unknown> }>
+  >([]);
   const [error, setError] = useState<string | undefined>();
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.listIterations()
+    void client
+      .listIterations()
       .then(async (items) => {
         const latest = items[0];
         if (!latest) {
@@ -433,19 +684,34 @@ export function IterationTimeline({ apiBase }: WidgetProps) {
         setEvents(detail.events ?? []);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Iteration" title="State Timeline" state={`${events.length}`} />
-      {events.length === 0 ? <EmptyState title="No timeline" detail="Iteration events appear when controller scripts emit state changes." /> : null}
+      <PanelHeader
+        kicker="Iteration"
+        title="State Timeline"
+        state={`${events.length}`}
+      />
+      {events.length === 0 ? (
+        <EmptyState
+          title="No timeline"
+          detail="Iteration events appear when controller scripts emit state changes."
+        />
+      ) : null}
       <ol className="skybridge-timeline skybridge-timeline--compact">
         {events.slice(-8).map((event, index) => (
           <li key={`${event.type}-${event.time}-${index}`}>
             <span>
               <strong>{event.type}</strong>
-              <small>{safePayloadString(event.payload.state) ?? safePayloadString(event.payload.reason) ?? "metadata only"}</small>
+              <small>
+                {safePayloadString(event.payload.state) ??
+                  safePayloadString(event.payload.reason) ??
+                  "metadata only"}
+              </small>
             </span>
             <small>{formatDateTime(event.time)}</small>
           </li>
@@ -462,28 +728,53 @@ export function CIGuardianPanel({ apiBase }: WidgetProps) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
   useEffect(() => {
-    void client.listIterations()
+    void client
+      .listIterations()
       .then((items) => {
         setIterations(items);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
-  const current = iterations.find((item) => item.state.startsWith("ci_") || item.pr_number) ?? iterations[0];
-  const ciState = current?.state.startsWith("ci_") ? current.state : current ? "pr_opened" : "idle";
+  const current =
+    iterations.find((item) => item.state.startsWith("ci_") || item.pr_number) ??
+    iterations[0];
+  const ciState = current?.state.startsWith("ci_")
+    ? current.state
+    : current
+      ? "pr_opened"
+      : "idle";
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="CI Guardian" title="PR Review Loop" state={ciState} bad={ciState === "ci_failed"} />
+      <PanelHeader
+        kicker="CI Guardian"
+        title="PR Review Loop"
+        state={ciState}
+        bad={ciState === "ci_failed"}
+      />
       {current ? (
         <dl className="skybridge-metrics skybridge-metrics--compact">
-          <Metric label="PR" value={current.pr_number ? `#${current.pr_number}` : "none"} />
-          <Metric label="Repairs" value={`${current.attempts}/${current.max_attempts}`} />
+          <Metric
+            label="PR"
+            value={current.pr_number ? `#${current.pr_number}` : "none"}
+          />
+          <Metric
+            label="Repairs"
+            value={`${current.attempts}/${current.max_attempts}`}
+          />
           <Metric label="Checks" value={current.checks.length} />
           <Metric label="Blocked" value={current.last_error ?? "no"} />
         </dl>
-      ) : <EmptyState title="No PR state" detail="CI Guardian state appears after PR checks are observed." />}
+      ) : (
+        <EmptyState
+          title="No PR state"
+          detail="CI Guardian state appears after PR checks are observed."
+        />
+      )}
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
@@ -492,8 +783,12 @@ export function CIGuardianPanel({ apiBase }: WidgetProps) {
 export function AutonomousIterationOperatorPanel({ apiBase }: WidgetProps) {
   const [iterations, setIterations] = useState<IterationRun[]>([]);
   const [supervisor, setSupervisor] = useState<SupervisorStatus | undefined>();
-  const [nextAction, setNextAction] = useState<SupervisorNextAction | undefined>();
-  const [providers, setProviders] = useState<Array<{ provider: string; configured: boolean; status: string }>>([]);
+  const [nextAction, setNextAction] = useState<
+    SupervisorNextAction | undefined
+  >();
+  const [providers, setProviders] = useState<
+    Array<{ provider: string; configured: boolean; status: string }>
+  >([]);
   const [error, setError] = useState<string | undefined>();
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
 
@@ -502,7 +797,7 @@ export function AutonomousIterationOperatorPanel({ apiBase }: WidgetProps) {
       client.listIterations(),
       client.getSupervisorStatus(),
       client.getSupervisorNextAction(),
-      client.listNotificationProviders()
+      client.listNotificationProviders(),
     ])
       .then(([nextIterations, nextSupervisor, action, nextProviders]) => {
         setIterations(nextIterations);
@@ -511,43 +806,86 @@ export function AutonomousIterationOperatorPanel({ apiBase }: WidgetProps) {
         setProviders(nextProviders);
         setError(undefined);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : String(err)),
+      );
   }, [client]);
 
   const latest = supervisor?.iterations.latest ?? iterations[0];
-  const ciStatus = latest?.state?.startsWith("ci_") ? latest.state : latest?.pr_number ? "pr_opened" : "idle";
-  const hermesStatus = supervisor?.ok ? (supervisor.iterations.blocked > 0 ? "attention" : "observing") : "offline";
-  const bootstrapStatus = supervisor?.notification_path?.skybridge_notification_center_required === false ? "bootstrap-direct" : "check setup";
+  const ciStatus = latest?.state?.startsWith("ci_")
+    ? latest.state
+    : latest?.pr_number
+      ? "pr_opened"
+      : "idle";
+  const hermesStatus = supervisor?.ok
+    ? supervisor.iterations.blocked > 0
+      ? "attention"
+      : "observing"
+    : "offline";
+  const bootstrapStatus =
+    supervisor?.notification_path?.skybridge_notification_center_required ===
+    false
+      ? "bootstrap-direct"
+      : "check setup";
   const ntfy = providers.find((provider) => provider.provider === "ntfy");
-  const blockedReason = latest?.last_error ?? (latest?.state === "blocked" || latest?.state === "failed" ? "blocked without reason" : "none");
-  const bad = latest?.state === "blocked" || latest?.state === "failed" || latest?.state === "ci_failed";
+  const blockedReason =
+    latest?.last_error ??
+    (latest?.state === "blocked" || latest?.state === "failed"
+      ? "blocked without reason"
+      : "none");
+  const bad =
+    latest?.state === "blocked" ||
+    latest?.state === "failed" ||
+    latest?.state === "ci_failed";
 
   return (
     <section className="skybridge-panel skybridge-autonomy-panel">
-      <PanelHeader kicker="Autonomous Operations" title="Iteration Control" state={latest?.state ?? "idle"} bad={bad} />
+      <PanelHeader
+        kicker="Autonomous Operations"
+        title="Iteration Control"
+        state={latest?.state ?? "idle"}
+        bad={bad}
+      />
       {latest ? (
         <>
           <dl className="skybridge-metrics skybridge-metrics--compact">
             <Metric label="Latest" value={latest.state} />
-            <Metric label="Open PR" value={latest.pr_number ? `#${latest.pr_number}` : "none"} />
+            <Metric
+              label="Open PR"
+              value={latest.pr_number ? `#${latest.pr_number}` : "none"}
+            />
             <Metric label="CI Guardian" value={ciStatus} />
             <Metric label="Hermes" value={hermesStatus} />
             <Metric label="Bootstrap" value={bootstrapStatus} />
-            <Metric label="ntfy" value={ntfy?.configured ? "configured" : ntfy?.status ?? "unknown"} />
+            <Metric
+              label="ntfy"
+              value={
+                ntfy?.configured ? "configured" : (ntfy?.status ?? "unknown")
+              }
+            />
             <Metric label="Blocked" value={blockedReason} />
             <Metric label="Next" value={nextAction?.action ?? "observe"} />
           </dl>
           <p className="skybridge-runline">
-            {latest.branch} · attempts {latest.attempts}/{latest.max_attempts} · {nextAction?.reason ?? nextAction?.state ?? "metadata only"}
+            {latest.branch} · attempts {latest.attempts}/{latest.max_attempts} ·{" "}
+            {nextAction?.reason ?? nextAction?.state ?? "metadata only"}
           </p>
         </>
-      ) : <EmptyState title="No autonomous iteration" detail="Run the controller smoke or a dry-run iteration to populate operator state." />}
+      ) : (
+        <EmptyState
+          title="No autonomous iteration"
+          detail="Run the controller smoke or a dry-run iteration to populate operator state."
+        />
+      )}
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
-export function SourceFilterBar({ filters, onChange }: {
+export function SourceFilterBar({
+  filters,
+  onChange,
+}: {
   filters: SourceFilters;
   onChange: (filters: SourceFilters) => void;
 }) {
@@ -555,7 +893,15 @@ export function SourceFilterBar({ filters, onChange }: {
     <section className="skybridge-filterbar" aria-label="Source filters">
       <label>
         Platform
-        <select value={filters.platform ?? "all"} onChange={(event) => onChange({ ...filters, platform: event.currentTarget.value as SourceFilters["platform"] })}>
+        <select
+          value={filters.platform ?? "all"}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              platform: event.currentTarget.value as SourceFilters["platform"],
+            })
+          }
+        >
           <option value="all">All</option>
           <option value="codex">Codex</option>
           <option value="skybridge">SkyBridge</option>
@@ -566,11 +912,28 @@ export function SourceFilterBar({ filters, onChange }: {
       </label>
       <label>
         Adapter
-        <input value={filters.adapter ?? ""} placeholder="any adapter" onChange={(event) => onChange({ ...filters, adapter: event.currentTarget.value || undefined })} />
+        <input
+          value={filters.adapter ?? ""}
+          placeholder="any adapter"
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              adapter: event.currentTarget.value || undefined,
+            })
+          }
+        />
       </label>
       <label>
         Severity
-        <select value={filters.severity ?? "all"} onChange={(event) => onChange({ ...filters, severity: event.currentTarget.value as SourceFilters["severity"] })}>
+        <select
+          value={filters.severity ?? "all"}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              severity: event.currentTarget.value as SourceFilters["severity"],
+            })
+          }
+        >
           <option value="all">All</option>
           <option value="info">Info</option>
           <option value="warning">Warning</option>
@@ -580,7 +943,15 @@ export function SourceFilterBar({ filters, onChange }: {
       </label>
       <label>
         Run status
-        <select value={filters.status ?? "all"} onChange={(event) => onChange({ ...filters, status: event.currentTarget.value as SourceFilters["status"] })}>
+        <select
+          value={filters.status ?? "all"}
+          onChange={(event) =>
+            onChange({
+              ...filters,
+              status: event.currentTarget.value as SourceFilters["status"],
+            })
+          }
+        >
           <option value="all">All</option>
           <option value="running">Running</option>
           <option value="completed">Completed</option>
@@ -613,22 +984,41 @@ export interface CodexIntegrationSummary {
   spool_count?: number;
 }
 
-export function summarizeCodexIntegration(runs: RunSummary[], events: SkyBridgeEvent[]): CodexIntegrationSummary {
+export function summarizeCodexIntegration(
+  runs: RunSummary[],
+  events: SkyBridgeEvent[],
+): CodexIntegrationSummary {
   const codexRuns = runs.filter((run) => run.source_platform === "codex");
-  const hookEvents = events.filter((event) => event.source.platform === "codex" && event.source.adapter === "codex-hook");
+  const hookEvents = events.filter(
+    (event) =>
+      event.source.platform === "codex" &&
+      event.source.adapter === "codex-hook",
+  );
   const latestHookEvent = hookEvents.at(-1);
-  const failedToolCount = codexRuns.reduce((sum, run) => sum + run.failed_tool_count, 0);
-  const activeToolCount = codexRuns.reduce((sum, run) => sum + run.active_tool_count, 0);
+  const failedToolCount = codexRuns.reduce(
+    (sum, run) => sum + run.failed_tool_count,
+    0,
+  );
+  const activeToolCount = codexRuns.reduce(
+    (sum, run) => sum + run.active_tool_count,
+    0,
+  );
   const spoolCount = latestSpoolCount(hookEvents);
 
   return {
-    status: failedToolCount > 0 ? "attention" : hookEvents.length > 0 || codexRuns.some((run) => run.status === "running") ? "active" : "idle",
+    status:
+      failedToolCount > 0
+        ? "attention"
+        : hookEvents.length > 0 ||
+            codexRuns.some((run) => run.status === "running")
+          ? "active"
+          : "idle",
     recent_runs: codexRuns.slice(0, 5),
     latest_hook_event: latestHookEvent,
     hook_event_count: hookEvents.length,
     failed_tool_count: failedToolCount,
     active_tool_count: activeToolCount,
-    spool_count: spoolCount
+    spool_count: spoolCount,
   };
 }
 
@@ -638,34 +1028,65 @@ export function CodexIntegrationStatus({ apiBase }: WidgetProps) {
 
   return (
     <section className="skybridge-panel skybridge-codex-integration">
-      <PanelHeader kicker="Codex Local" title="Integration Status" state={summary.status} bad={summary.status === "attention"} />
+      <PanelHeader
+        kicker="Executor Adapter"
+        title="Codex Status"
+        state={summary.status}
+        bad={summary.status === "attention"}
+      />
       <dl className="skybridge-metrics skybridge-metrics--compact">
         <Metric label="Runs" value={summary.recent_runs.length} />
         <Metric label="Hook events" value={summary.hook_event_count} />
         <Metric label="Active tools" value={summary.active_tool_count} />
         <Metric label="Failed tools" value={summary.failed_tool_count} />
       </dl>
-      <p className="skybridge-runline">Last hook: {summary.latest_hook_event?.type ?? "none"} · Spool: {summary.spool_count ?? "local only"}</p>
+      <p className="skybridge-runline">
+        Last hook: {summary.latest_hook_event?.type ?? "none"} · Spool:{" "}
+        {summary.spool_count ?? "local only"}
+      </p>
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
 }
 
-export function summarizeSelfObservation(runs: RunSummary[], events: SkyBridgeEvent[]): SelfObservationSummary {
-  const selfEvents = events.filter((event) => event.source.platform === "codex" || event.source.platform === "skybridge");
-  const latestLifecycle = [...selfEvents].reverse().map((event) => safePayloadString(event.payload.lifecycle)).find(Boolean);
+export function summarizeSelfObservation(
+  runs: RunSummary[],
+  events: SkyBridgeEvent[],
+): SelfObservationSummary {
+  const selfEvents = events.filter(
+    (event) =>
+      event.source.platform === "codex" ||
+      event.source.platform === "skybridge",
+  );
+  const latestLifecycle = [...selfEvents]
+    .reverse()
+    .map((event) => safePayloadString(event.payload.lifecycle))
+    .find(Boolean);
   const failedRuns = runs.filter((run) => run.status === "failed").length;
   const activeRuns = runs.filter((run) => run.status === "running").length;
 
   return {
-    status: failedRuns > 0 ? "attention" : selfEvents.length > 0 || activeRuns > 0 ? "observing" : "idle",
+    status:
+      failedRuns > 0
+        ? "attention"
+        : selfEvents.length > 0 || activeRuns > 0
+          ? "observing"
+          : "idle",
     active_runs: activeRuns,
     failed_runs: failedRuns,
-    codex_events: selfEvents.filter((event) => event.source.platform === "codex").length,
-    runner_events: selfEvents.filter((event) => event.source.adapter === "yolo-runner").length,
-    smoke_events: selfEvents.filter((event) => event.source.adapter === "self-observation-smoke").length,
-    notification_events: selfEvents.filter((event) => event.type.startsWith("notification.")).length,
-    latest_lifecycle: latestLifecycle
+    codex_events: selfEvents.filter(
+      (event) => event.source.platform === "codex",
+    ).length,
+    runner_events: selfEvents.filter(
+      (event) => event.source.adapter === "yolo-runner",
+    ).length,
+    smoke_events: selfEvents.filter(
+      (event) => event.source.adapter === "self-observation-smoke",
+    ).length,
+    notification_events: selfEvents.filter((event) =>
+      event.type.startsWith("notification."),
+    ).length,
+    latest_lifecycle: latestLifecycle,
   };
 }
 
@@ -675,14 +1096,22 @@ export function SelfObservationPanel({ apiBase }: WidgetProps) {
 
   return (
     <section className="skybridge-panel skybridge-self-observation">
-      <PanelHeader kicker="Local Loop" title="Self-Observation" state={summary.status} bad={summary.status === "attention"} />
+      <PanelHeader
+        kicker="Dogfooding Loop"
+        title="Self-Observation"
+        state={summary.status}
+        bad={summary.status === "attention"}
+      />
       <dl className="skybridge-metrics skybridge-metrics--compact">
         <Metric label="Codex" value={summary.codex_events} />
         <Metric label="Runner" value={summary.runner_events} />
         <Metric label="Smoke" value={summary.smoke_events} />
         <Metric label="Notify" value={summary.notification_events} />
       </dl>
-      <p className="skybridge-runline">{summary.active_runs} active · {summary.failed_runs} failed · {summary.latest_lifecycle ?? "no lifecycle yet"}</p>
+      <p className="skybridge-runline">
+        {summary.active_runs} active · {summary.failed_runs} failed ·{" "}
+        {summary.latest_lifecycle ?? "no lifecycle yet"}
+      </p>
       {error ? <ErrorState message={error} /> : null}
     </section>
   );
@@ -702,13 +1131,17 @@ export function AgentPipelineBar({ apiBase }: WidgetProps) {
     running: runs.filter((run) => run.status === "running").length,
     completed: runs.filter((run) => run.status === "completed").length,
     failed: runs.filter((run) => run.status === "failed").length,
-    unknown: runs.filter((run) => run.status === "unknown").length
+    unknown: runs.filter((run) => run.status === "unknown").length,
   };
   const total = Math.max(runs.length, 1);
 
   return (
     <section className="skybridge-panel">
-      <PanelHeader kicker="Pipeline" title="Run Distribution" state={`${runs.length}`} />
+      <PanelHeader
+        kicker="Pipeline"
+        title="Run Distribution"
+        state={`${runs.length}`}
+      />
       <div className="skybridge-pipeline" aria-label="Run status distribution">
         {Object.entries(counts).map(([status, count]) => (
           <span
@@ -719,7 +1152,10 @@ export function AgentPipelineBar({ apiBase }: WidgetProps) {
           />
         ))}
       </div>
-      <p className="skybridge-runline">{counts.running} running · {counts.completed} completed · {counts.failed} failed</p>
+      <p className="skybridge-runline">
+        {counts.running} running · {counts.completed} completed ·{" "}
+        {counts.failed} failed
+      </p>
     </section>
   );
 }
@@ -728,14 +1164,26 @@ export function CodexIntegrationPanel(props: WidgetProps) {
   return <CodexIntegrationStatus {...props} />;
 }
 
-function PanelHeader({ kicker, title, state, bad = false }: { kicker: string; title: string; state: string; bad?: boolean }) {
+function PanelHeader({
+  kicker,
+  title,
+  state,
+  bad = false,
+}: {
+  kicker: string;
+  title: string;
+  state: string;
+  bad?: boolean;
+}) {
   return (
     <div className="skybridge-card__header">
       <div>
         <p className="skybridge-kicker">{kicker}</p>
         <h2>{title}</h2>
       </div>
-      <span className={`skybridge-state ${bad ? "skybridge-state--bad" : ""}`}>{state}</span>
+      <span className={`skybridge-state ${bad ? "skybridge-state--bad" : ""}`}>
+        {state}
+      </span>
     </div>
   );
 }
@@ -751,27 +1199,50 @@ function Metric({ label, value }: { label: string; value: React.ReactNode }) {
 
 function toEventQuery(filters: SourceFilters): EventListQuery {
   return {
-    platform: filters.platform && filters.platform !== "all" ? filters.platform : undefined,
+    platform:
+      filters.platform && filters.platform !== "all"
+        ? filters.platform
+        : undefined,
     adapter: filters.adapter,
-    severity: filters.severity && filters.severity !== "all" ? filters.severity : undefined,
+    severity:
+      filters.severity && filters.severity !== "all"
+        ? filters.severity
+        : undefined,
     type: filters.type as EventListQuery["type"],
-    limit: 200
+    limit: 200,
   };
 }
 
 function toRunQuery(filters: SourceFilters): RunListQuery {
   return {
-    platform: filters.platform && filters.platform !== "all" ? filters.platform : undefined,
+    platform:
+      filters.platform && filters.platform !== "all"
+        ? filters.platform
+        : undefined,
     adapter: filters.adapter,
-    status: filters.status && filters.status !== "all" ? filters.status : undefined,
-    limit: 200
+    status:
+      filters.status && filters.status !== "all" ? filters.status : undefined,
+    limit: 200,
   };
 }
 
-function matchesFilters(event: SkyBridgeEvent, filters: SourceFilters): boolean {
-  if (filters.platform && filters.platform !== "all" && event.source.platform !== filters.platform) return false;
+function matchesFilters(
+  event: SkyBridgeEvent,
+  filters: SourceFilters,
+): boolean {
+  if (
+    filters.platform &&
+    filters.platform !== "all" &&
+    event.source.platform !== filters.platform
+  )
+    return false;
   if (filters.adapter && event.source.adapter !== filters.adapter) return false;
-  if (filters.severity && filters.severity !== "all" && event.severity !== filters.severity) return false;
+  if (
+    filters.severity &&
+    filters.severity !== "all" &&
+    event.severity !== filters.severity
+  )
+    return false;
   if (filters.type && event.type !== filters.type) return false;
   return true;
 }
@@ -781,7 +1252,9 @@ function formatDateTime(input: string | undefined): string {
 }
 
 function safePayloadString(input: unknown): string | undefined {
-  return typeof input === "string" && input.length > 0 && input.length <= 120 ? input : undefined;
+  return typeof input === "string" && input.length > 0 && input.length <= 120
+    ? input
+    : undefined;
 }
 
 function latestSpoolCount(events: SkyBridgeEvent[]): number | undefined {

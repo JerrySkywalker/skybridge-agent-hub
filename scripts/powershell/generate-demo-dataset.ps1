@@ -46,12 +46,18 @@ function ConvertTo-OrderedObject {
 }
 
 $events = @(
+  New-Event "plan.updated" "skybridge" "rule-based-planner" "demo-rule-planner" @{ title = "Rule-based planner demo"; category = "fixture-backed"; work_order_id = "wo_demo_docs"; planner_adapter = "rule-based-planner" }
+  New-Event "run.completed" "skybridge" "manual-executor" "demo-manual-executor" @{ title = "Manual executor demo"; category = "fixture-backed"; work_order_id = "wo_demo_docs"; executor_adapter = "manual-executor"; pr_number = 27 }
   New-Event "run.started" "codex" "codex-hook" "demo-codex" @{ title = "Codex demo run"; category = "dogfooding" }
   New-Event "tool.completed" "codex" "codex-hook" "demo-codex" @{ tool_name = "shell"; output_omitted = $true }
   New-Event "run.completed" "opencode" "opencode-plugin" "demo-opencode" @{ title = "OpenCode demo run" }
   New-Event "run.failed" "hermes" "hermes-api" "demo-hermes-failed" @{ title = "Hermes failed run"; detail = "fixture failure" } "error"
   New-Event "approval.requested" "codex" "codex-hook" "demo-approval" @{ approval_id = "demo-approval-1"; title = "Approve safe fixture action" } "warning"
   New-Event "notification.sent" "skybridge" "demo-dataset" "demo-notify-sent" @{ provider = "ntfy"; status = "sent" }
+  New-Event "iteration.ci_green" "skybridge" "github-provider" "demo-github-provider" @{ provider = "github"; status = "ci_green"; category = "dogfooding"; pr_number = 27 }
+  New-Event "iteration.ci_pending" "skybridge" "generic-scm-provider" "demo-generic-scm" @{ provider = "generic-scm"; status = "placeholder"; category = "experimental" }
+  New-Event "notification.skipped" "skybridge" "ntfy-provider" "demo-ntfy-provider" @{ provider = "ntfy"; status = "skipped"; category = "stable" }
+  New-Event "notification.skipped" "skybridge" "generic-notification-provider" "demo-generic-notify" @{ provider = "generic-notification"; status = "placeholder"; category = "experimental" }
   New-Event "notification.skipped" "skybridge" "demo-dataset" "demo-notify-skipped" @{ provider = "placeholder"; status = "skipped" }
   New-Event "notification.failed" "skybridge" "demo-dataset" "demo-notify-failed" @{ provider = "gotify"; status = "failed" } "warning"
   New-Event "node.heartbeat" "skybridge" "sidecar" "demo-node" @{ node_id = "demo-node"; host = "demo"; labels = @("local", "demo"); capabilities = @("event-forwarding", "heartbeat") }
