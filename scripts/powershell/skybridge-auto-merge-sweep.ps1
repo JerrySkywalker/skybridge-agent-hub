@@ -146,6 +146,9 @@ foreach ($pr in $pullRequests) {
     file_risk = $eligibility.file_risk.risk
     blocked_files = @($eligibility.file_risk.blocked_files)
     outside_allowed_files = @($eligibility.file_risk.outside_allowed_files)
+    missing_checks = @($eligibility.checks.missing_checks)
+    pending_checks = @($eligibility.checks.pending_checks)
+    not_green_checks = @($eligibility.checks.not_green_checks)
   }) | Out-Null
 }
 
@@ -168,6 +171,15 @@ $summary = [pscustomobject]@{
   total_open_prs = $pullRequests.Count
   eligible_count = $eligibleCount
   skipped_count = $skippedCount
+  policy_counts = [pscustomobject]@{
+    eligible = $eligibleCount
+    blocked = @($resultArray | Where-Object { $_.reasons -contains "blocked_path" }).Count
+    draft = @($resultArray | Where-Object { $_.reasons -contains "draft_pr" }).Count
+    non_ai_branch = @($resultArray | Where-Object { $_.reasons -contains "branch_prefix_not_allowed" }).Count
+    high_risk_files = @($resultArray | Where-Object { $_.file_risk -in @("blocked", "needs_review") }).Count
+    missing_checks = @($resultArray | Where-Object { @($_.missing_checks).Count -gt 0 }).Count
+    pending_checks = @($resultArray | Where-Object { @($_.pending_checks).Count -gt 0 }).Count
+  }
   results = $resultArray
 }
 

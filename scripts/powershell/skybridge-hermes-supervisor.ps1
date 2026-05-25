@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)]
-  [ValidateSet("Status", "StartNext", "RepairPR", "NightlyReport", "NotifyTest", "AutoMergeSweepDryRun", "HermesHealth", "HermesRunSmoke")]
+  [ValidateSet("Status", "StartNext", "RepairPR", "NightlyReport", "NotifyTest", "AutoMergeSweepDryRun", "HermesHealth", "HermesRunSmoke", "NightlySweep", "SweepAndNotify")]
   [string]$Mode,
 
   [switch]$DryRun,
@@ -19,6 +19,10 @@ param(
   [string]$HermesApiKey,
 
   [switch]$Send,
+
+  [switch]$EnableAutoMerge,
+
+  [string]$PolicyFile,
 
   [switch]$Json
 )
@@ -195,7 +199,7 @@ $actions = @()
 $notification = $null
 $hermes = $null
 
-if ($UseHermesApi -and $Mode -in @("Status", "NightlyReport", "HermesHealth", "NotifyTest", "AutoMergeSweepDryRun")) {
+if ($UseHermesApi -and $Mode -in @("Status", "NightlyReport", "HermesHealth", "NotifyTest", "AutoMergeSweepDryRun", "NightlySweep", "SweepAndNotify")) {
   $hermes = Invoke-HermesSmoke -Kind "api"
 }
 if ($UseHermesApi -and $Mode -eq "HermesRunSmoke") {
@@ -252,9 +256,16 @@ switch ($Mode) {
     }
   }
   "NightlyReport" {
-    if ($status.ok -eq $false -and $Send) {
-      $notification = Invoke-Bootstrap -Severity "warning" -Title "SkyBridge nightly degraded" -Message "SkyBridge status endpoint is unavailable during nightly report."
-    }
+    $args = @(
+      "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+      "-File", ".\scripts\powershell\skybridge-nightly-supervisor-report.ps1",
+      "-Json"
+    )
+    if ($DryRun) { $args += "-DryRun" }
+    if ($UseHermesApi) { $args += "-UseHermesApi" }
+    if ($Send) { $args += "-Send" }
+    if (-not [string]::IsNullOrWhiteSpace($PolicyFile)) { $args += @("-PolicyFile", $PolicyFile) }
+    $actions += Invoke-SafeJsonCommand -Label "nightly_report" -Arguments $args
   }
   "AutoMergeSweepDryRun" {
     $args = @(
@@ -263,7 +274,42 @@ switch ($Mode) {
       "-Json",
       "-SuppressBlockedNotifications"
     )
+    if (-not [string]::IsNullOrWhiteSpace($PolicyFile)) { $args += @("-PolicyFile", $PolicyFile) }
     $actions += Invoke-SafeJsonCommand -Label "auto_merge_sweep_dry_run" -Arguments $args
+  }
+  "NightlySweep" {
+    $args = @(
+      "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+      "-File", ".\scripts\powershell\skybridge-auto-merge-sweep.ps1",
+      "-Json",
+      "-SuppressBlockedNotifications"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($PolicyFile)) { $args += @("-PolicyFile", $PolicyFile) }
+    if ($EnableAutoMerge) { $args += "-EnableAutoMerge" }
+    $sweepAction = Invoke-SafeJsonCommand -Label "nightly_sweep" -Arguments $args
+    $actions += $sweepAction
+    if ($Send) {
+      $counts = $sweepAction.json.policy_counts
+      $message = "Nightly sweep completed: open=$($sweepAction.json.total_open_prs), eligible=$($counts.eligible), blocked=$($counts.blocked), draft=$($counts.draft), non_ai=$($counts.non_ai_branch), missing_checks=$($counts.missing_checks), pending_checks=$($counts.pending_checks), auto_merge=$EnableAutoMerge."
+      $notification = Invoke-Bootstrap -Severity "info" -Title "SkyBridge nightly sweep" -Message $message
+    }
+  }
+  "SweepAndNotify" {
+    $args = @(
+      "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+      "-File", ".\scripts\powershell\skybridge-auto-merge-sweep.ps1",
+      "-Json",
+      "-SuppressBlockedNotifications"
+    )
+    if (-not [string]::IsNullOrWhiteSpace($PolicyFile)) { $args += @("-PolicyFile", $PolicyFile) }
+    if ($EnableAutoMerge) { $args += "-EnableAutoMerge" }
+    $sweepAction = Invoke-SafeJsonCommand -Label "sweep_and_notify" -Arguments $args
+    $actions += $sweepAction
+    if ($Send) {
+      $counts = $sweepAction.json.policy_counts
+      $message = "Sweep summary: open=$($sweepAction.json.total_open_prs), eligible=$($counts.eligible), blocked=$($counts.blocked), high_risk=$($counts.high_risk_files), missing_checks=$($counts.missing_checks), pending_checks=$($counts.pending_checks), auto_merge=$EnableAutoMerge."
+      $notification = Invoke-Bootstrap -Severity "info" -Title "SkyBridge sweep summary" -Message $message
+    }
   }
   "NotifyTest" {
     $notification = Invoke-Bootstrap -Severity "info" -Title "SkyBridge Hermes notify test" -Message "Hermes supervisor bootstrap notification test."
@@ -304,6 +350,7 @@ $summary = @{
   mode = $Mode
   dry_run = [bool]$DryRun
   send_requested = [bool]$Send
+  enable_auto_merge_requested = [bool]$EnableAutoMerge
   use_hermes_api = [bool]$UseHermesApi
   skybridge_api_base = $SkyBridgeApiBase
   hermes_api_base_configured = -not [string]::IsNullOrWhiteSpace($HermesApiBase)
@@ -323,7 +370,8 @@ $summary = @{
     production_deploy = $false
     branch_protection_mutated = $false
     auto_merge_enabled_by_default = $false
-    auto_merge_sweep_dry_run_only = $true
+    auto_merge_sweep_dry_run_only = -not [bool]$EnableAutoMerge
+    auto_merge_requires_enable_flag = $true
     skybridge_server_required_for_dry_run = $false
     notification_center_required = $false
     phone_notification_requires_send = $true
