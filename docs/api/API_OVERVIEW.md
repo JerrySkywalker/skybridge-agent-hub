@@ -18,6 +18,30 @@ SkyBridge APIs are local-first and return safe derived metadata for an agent-agn
 - `GET /v1/health`
 - `POST /v1/events`
 - `GET /v1/events`
+- `POST /v1/workers/register`
+- `POST /v1/workers/:workerId/heartbeat`
+- `GET /v1/workers`
+- `GET /v1/workers/:workerId`
+- `PATCH /v1/workers/:workerId`
+- `GET /v1/workers/summary`
+- `POST /v1/projects`
+- `GET /v1/projects`
+- `GET /v1/projects/:projectId`
+- `POST /v1/projects/:projectId/goals`
+- `GET /v1/projects/:projectId/goals`
+- `GET /v1/goals/:goalId`
+- `PATCH /v1/goals/:goalId`
+- `POST /v1/tasks`
+- `GET /v1/tasks`
+- `GET /v1/tasks/:taskId`
+- `POST /v1/tasks/:taskId/claim`
+- `POST /v1/tasks/:taskId/start`
+- `POST /v1/tasks/:taskId/complete`
+- `POST /v1/tasks/:taskId/fail`
+- `POST /v1/tasks/:taskId/block`
+- `POST /v1/tasks/:taskId/requeue`
+- `GET /v1/tasks/summary`
+- `GET /v1/projects/:projectId/tasks`
 - `GET /v1/runs`
 - `GET /v1/runs/:runId`
 - `GET /v1/iterations`
@@ -36,3 +60,31 @@ SkyBridge APIs are local-first and return safe derived metadata for an agent-agn
 The product summary APIs are intended for dashboard and embed consumption. Field names use snake_case to match existing server responses. Derived PR, Hermes and auto-merge summaries are local/fixture-backed unless future integrations explicitly persist richer state. Hermes, Codex, GitHub and ntfy remain adapters/providers, not core API dependencies.
 
 Remote execution and production deployment APIs are intentionally absent.
+
+## Worker APIs
+
+Workers are runtime providers such as a manual executor, Codex worker, OpenCode worker or future sidecar. `PATCH /v1/workers/:workerId` can update safe display metadata and the enabled flag. Worker status is derived from heartbeat recency and enabled state: `online`, `stale`, `offline` or `disabled`.
+
+Worker responses do not include credentials or secret configuration.
+
+## Project And Goal APIs
+
+Projects contain master goals. Master goals are durable objectives that planner adapters can later decompose into tasks. Hermes may create goals or tasks through an adapter, but the APIs are neutral and also support manual or rule-based planners.
+
+## Task APIs
+
+Tasks move through this lifecycle:
+
+```text
+queued -> claimed -> running -> completed
+queued -> claimed -> failed -> queued
+queued -> blocked
+```
+
+Supported statuses are `queued`, `claimed`, `running`, `completed`, `failed`, `blocked`, `cancelled` and `stale`. Completed and cancelled tasks cannot be claimed again. Disabled or offline workers cannot claim tasks.
+
+Task result fields are safe summaries and links only. Raw prompts, command output, patches, tokens and secrets must not be stored.
+
+## Safety Notes
+
+The Worker Pool and Task Queue APIs are local/control-plane state APIs. They do not start real Codex, OpenCode or Hermes execution, do not mutate GitHub settings and do not send notifications by themselves. Executor and planner behavior remains adapter-owned.

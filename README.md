@@ -200,6 +200,12 @@ notification.*
 
 Events include source metadata, optional run/session correlation IDs, severity and a redacted payload. Codex hook payloads intentionally summarize tool input and omit full command output by default.
 
+## Worker Pool And Task Queue
+
+SkyBridge Core now includes a durable worker pool and task queue. Machines or local runtimes join as workers, planners create tasks under projects and master goals, executors claim and complete tasks, and SkyBridge tracks the neutral lifecycle state.
+
+Hermes is an optional planner adapter. Codex, OpenCode and manual execution are optional executor adapters. The queue works without any one of them, so local smoke tests can use fixture/manual workers only.
+
 ## API Examples
 
 Check server health:

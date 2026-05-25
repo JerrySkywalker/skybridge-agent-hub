@@ -1,7 +1,16 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { IterationRun, SkyBridgeEvent } from "@skybridge-agent-hub/event-schema";
+import type {
+  IterationRun,
+  MasterGoal,
+  Project,
+  SkyBridgeEvent,
+  Task,
+  TaskEvent,
+  Worker,
+  WorkerHeartbeat,
+} from "@skybridge-agent-hub/event-schema";
 import type { NotificationMessage } from "@skybridge-agent-hub/notification-ntfy";
 
 export type StoredEvent = SkyBridgeEvent & { id: string; receivedAt: string };
@@ -44,12 +53,24 @@ export interface StoredIterationEvent {
 }
 
 export type StoredIterationRun = IterationRun & { events: StoredIterationEvent[] };
+export type StoredProject = Project;
+export type StoredMasterGoal = MasterGoal;
+export type StoredWorker = Omit<Worker, "status" | "current_task_id" | "last_seen_at">;
+export type StoredWorkerHeartbeat = WorkerHeartbeat;
+export type StoredTask = Task;
+export type StoredTaskEvent = TaskEvent;
 
 interface LocalStoreData {
   events: StoredEvent[];
   notifications: StoredNotification[];
   audit: StoredAuditRecord[];
   iterations?: StoredIterationRun[];
+  projects?: StoredProject[];
+  masterGoals?: StoredMasterGoal[];
+  workers?: StoredWorker[];
+  workerHeartbeats?: StoredWorkerHeartbeat[];
+  tasks?: StoredTask[];
+  taskEvents?: StoredTaskEvent[];
 }
 
 export interface EventStore {
@@ -66,11 +87,38 @@ export interface EventStore {
   addAuditRecord(record: StoredAuditRecord): Promise<void>;
   upsertIteration(iteration: StoredIterationRun): Promise<void>;
   addIterationEvent(event: StoredIterationEvent): Promise<void>;
+  listProjects(): StoredProject[];
+  getProject(projectId: string): StoredProject | undefined;
+  upsertProject(project: StoredProject): Promise<void>;
+  listGoals(projectId?: string): StoredMasterGoal[];
+  getGoal(goalId: string): StoredMasterGoal | undefined;
+  upsertGoal(goal: StoredMasterGoal): Promise<void>;
+  listWorkers(): StoredWorker[];
+  getWorker(workerId: string): StoredWorker | undefined;
+  upsertWorker(worker: StoredWorker): Promise<void>;
+  listWorkerHeartbeats(workerId?: string): StoredWorkerHeartbeat[];
+  addWorkerHeartbeat(heartbeat: StoredWorkerHeartbeat): Promise<void>;
+  listTasks(filters?: { projectId?: string; goalId?: string; status?: string }): StoredTask[];
+  getTask(taskId: string): StoredTask | undefined;
+  upsertTask(task: StoredTask): Promise<void>;
+  listTaskEvents(taskId?: string): StoredTaskEvent[];
+  addTaskEvent(event: StoredTaskEvent): Promise<void>;
 }
 
 export class MemoryStore implements EventStore {
   kind = "memory" as const;
-  private data: Required<LocalStoreData> = { events: [], notifications: [], audit: [], iterations: [] };
+  private data: Required<LocalStoreData> = {
+    events: [],
+    notifications: [],
+    audit: [],
+    iterations: [],
+    projects: [],
+    masterGoals: [],
+    workers: [],
+    workerHeartbeats: [],
+    tasks: [],
+    taskEvents: [],
+  };
 
   async load(): Promise<void> {}
 
@@ -123,6 +171,80 @@ export class MemoryStore implements EventStore {
     if (!existing) return;
     existing.events.push(event);
     existing.updated_at = event.time;
+  }
+
+  listProjects(): StoredProject[] {
+    return [...this.data.projects].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getProject(projectId: string): StoredProject | undefined {
+    return this.data.projects.find((project) => project.project_id === projectId);
+  }
+
+  async upsertProject(project: StoredProject): Promise<void> {
+    upsertBy(this.data.projects, project, (item) => item.project_id);
+  }
+
+  listGoals(projectId?: string): StoredMasterGoal[] {
+    return this.data.masterGoals
+      .filter((goal) => !projectId || goal.project_id === projectId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getGoal(goalId: string): StoredMasterGoal | undefined {
+    return this.data.masterGoals.find((goal) => goal.goal_id === goalId);
+  }
+
+  async upsertGoal(goal: StoredMasterGoal): Promise<void> {
+    upsertBy(this.data.masterGoals, goal, (item) => item.goal_id);
+  }
+
+  listWorkers(): StoredWorker[] {
+    return [...this.data.workers].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getWorker(workerId: string): StoredWorker | undefined {
+    return this.data.workers.find((worker) => worker.worker_id === workerId);
+  }
+
+  async upsertWorker(worker: StoredWorker): Promise<void> {
+    upsertBy(this.data.workers, worker, (item) => item.worker_id);
+  }
+
+  listWorkerHeartbeats(workerId?: string): StoredWorkerHeartbeat[] {
+    return this.data.workerHeartbeats
+      .filter((heartbeat) => !workerId || heartbeat.worker_id === workerId)
+      .sort((a, b) => b.seen_at.localeCompare(a.seen_at));
+  }
+
+  async addWorkerHeartbeat(heartbeat: StoredWorkerHeartbeat): Promise<void> {
+    this.data.workerHeartbeats.push(heartbeat);
+  }
+
+  listTasks(filters: { projectId?: string; goalId?: string; status?: string } = {}): StoredTask[] {
+    return this.data.tasks
+      .filter((task) => !filters.projectId || task.project_id === filters.projectId)
+      .filter((task) => !filters.goalId || task.goal_id === filters.goalId)
+      .filter((task) => !filters.status || task.status === filters.status)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getTask(taskId: string): StoredTask | undefined {
+    return this.data.tasks.find((task) => task.task_id === taskId);
+  }
+
+  async upsertTask(task: StoredTask): Promise<void> {
+    upsertBy(this.data.tasks, task, (item) => item.task_id);
+  }
+
+  listTaskEvents(taskId?: string): StoredTaskEvent[] {
+    return this.data.taskEvents
+      .filter((event) => !taskId || event.task_id === taskId)
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }
+
+  async addTaskEvent(event: StoredTaskEvent): Promise<void> {
+    this.data.taskEvents.push(event);
   }
 }
 
@@ -279,6 +401,162 @@ export class SqliteStore implements EventStore {
     addEvent();
   }
 
+  listProjects(): StoredProject[] {
+    const rows = this.requireDb().prepare(`
+      SELECT project_json FROM projects ORDER BY updated_at DESC, rowid DESC
+    `).all() as Array<{ project_json: string }>;
+    return rows.map((row) => JSON.parse(row.project_json) as StoredProject);
+  }
+
+  getProject(projectId: string): StoredProject | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT project_json FROM projects WHERE project_id = ?
+    `).get(projectId) as { project_json: string } | undefined;
+    return row ? JSON.parse(row.project_json) as StoredProject : undefined;
+  }
+
+  async upsertProject(project: StoredProject): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO projects (project_id, name, repo, status, created_at, updated_at, project_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        name = excluded.name,
+        repo = excluded.repo,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        project_json = excluded.project_json
+    `).run(...toProjectParams(project));
+  }
+
+  listGoals(projectId?: string): StoredMasterGoal[] {
+    const rows = this.requireDb().prepare(`
+      SELECT goal_json FROM master_goals
+      ${projectId ? "WHERE project_id = ?" : ""}
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(...(projectId ? [projectId] : [])) as Array<{ goal_json: string }>;
+    return rows.map((row) => JSON.parse(row.goal_json) as StoredMasterGoal);
+  }
+
+  getGoal(goalId: string): StoredMasterGoal | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT goal_json FROM master_goals WHERE goal_id = ?
+    `).get(goalId) as { goal_json: string } | undefined;
+    return row ? JSON.parse(row.goal_json) as StoredMasterGoal : undefined;
+  }
+
+  async upsertGoal(goal: StoredMasterGoal): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO master_goals (goal_id, project_id, title, status, created_at, updated_at, goal_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(goal_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        title = excluded.title,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        goal_json = excluded.goal_json
+    `).run(...toGoalParams(goal));
+  }
+
+  listWorkers(): StoredWorker[] {
+    const rows = this.requireDb().prepare(`
+      SELECT worker_json FROM workers ORDER BY updated_at DESC, rowid DESC
+    `).all() as Array<{ worker_json: string }>;
+    return rows.map((row) => JSON.parse(row.worker_json) as StoredWorker);
+  }
+
+  getWorker(workerId: string): StoredWorker | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT worker_json FROM workers WHERE worker_id = ?
+    `).get(workerId) as { worker_json: string } | undefined;
+    return row ? JSON.parse(row.worker_json) as StoredWorker : undefined;
+  }
+
+  async upsertWorker(worker: StoredWorker): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO workers (worker_id, name, provider, enabled, created_at, updated_at, worker_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(worker_id) DO UPDATE SET
+        name = excluded.name,
+        provider = excluded.provider,
+        enabled = excluded.enabled,
+        updated_at = excluded.updated_at,
+        worker_json = excluded.worker_json
+    `).run(...toWorkerParams(worker));
+  }
+
+  listWorkerHeartbeats(workerId?: string): StoredWorkerHeartbeat[] {
+    const rows = this.requireDb().prepare(`
+      SELECT heartbeat_json FROM worker_heartbeats
+      ${workerId ? "WHERE worker_id = ?" : ""}
+      ORDER BY seen_at DESC, rowid DESC
+    `).all(...(workerId ? [workerId] : [])) as Array<{ heartbeat_json: string }>;
+    return rows.map((row) => JSON.parse(row.heartbeat_json) as StoredWorkerHeartbeat);
+  }
+
+  async addWorkerHeartbeat(heartbeat: StoredWorkerHeartbeat): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT OR REPLACE INTO worker_heartbeats (heartbeat_id, worker_id, seen_at, heartbeat_json)
+      VALUES (?, ?, ?, ?)
+    `).run(heartbeat.heartbeat_id, heartbeat.worker_id, heartbeat.seen_at, JSON.stringify(heartbeat));
+  }
+
+  listTasks(filters: { projectId?: string; goalId?: string; status?: string } = {}): StoredTask[] {
+    const rows = this.requireDb().prepare(`
+      SELECT task_json FROM tasks
+      WHERE (? IS NULL OR project_id = ?)
+        AND (? IS NULL OR goal_id = ?)
+        AND (? IS NULL OR status = ?)
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(
+      filters.projectId ?? null,
+      filters.projectId ?? null,
+      filters.goalId ?? null,
+      filters.goalId ?? null,
+      filters.status ?? null,
+      filters.status ?? null,
+    ) as Array<{ task_json: string }>;
+    return rows.map((row) => JSON.parse(row.task_json) as StoredTask);
+  }
+
+  getTask(taskId: string): StoredTask | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT task_json FROM tasks WHERE task_id = ?
+    `).get(taskId) as { task_json: string } | undefined;
+    return row ? JSON.parse(row.task_json) as StoredTask : undefined;
+  }
+
+  async upsertTask(task: StoredTask): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO tasks (task_id, project_id, goal_id, status, risk, source, assigned_worker_id, created_at, updated_at, task_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(task_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        goal_id = excluded.goal_id,
+        status = excluded.status,
+        risk = excluded.risk,
+        source = excluded.source,
+        assigned_worker_id = excluded.assigned_worker_id,
+        updated_at = excluded.updated_at,
+        task_json = excluded.task_json
+    `).run(...toTaskParams(task));
+  }
+
+  listTaskEvents(taskId?: string): StoredTaskEvent[] {
+    const rows = this.requireDb().prepare(`
+      SELECT event_json FROM task_events
+      ${taskId ? "WHERE task_id = ?" : ""}
+      ORDER BY time ASC, rowid ASC
+    `).all(...(taskId ? [taskId] : [])) as Array<{ event_json: string }>;
+    return rows.map((row) => JSON.parse(row.event_json) as StoredTaskEvent);
+  }
+
+  async addTaskEvent(event: StoredTaskEvent): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT OR REPLACE INTO task_events (task_event_id, task_id, type, worker_id, time, event_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(event.task_event_id, event.task_id, event.type, event.worker_id ?? null, event.time, JSON.stringify(event));
+  }
+
   private createSchema() {
     const db = this.requireDb();
     db.exec(`
@@ -371,6 +649,83 @@ export class SqliteStore implements EventStore {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        project_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        repo TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        project_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+
+      CREATE TABLE IF NOT EXISTS master_goals (
+        goal_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        goal_json TEXT NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_master_goals_project_id ON master_goals(project_id);
+      CREATE INDEX IF NOT EXISTS idx_master_goals_status ON master_goals(status);
+
+      CREATE TABLE IF NOT EXISTS workers (
+        worker_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        worker_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_workers_enabled ON workers(enabled);
+
+      CREATE TABLE IF NOT EXISTS worker_heartbeats (
+        heartbeat_id TEXT PRIMARY KEY,
+        worker_id TEXT NOT NULL,
+        seen_at TEXT NOT NULL,
+        heartbeat_json TEXT NOT NULL,
+        FOREIGN KEY(worker_id) REFERENCES workers(worker_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_worker_heartbeats_worker_id ON worker_heartbeats(worker_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_heartbeats_seen_at ON worker_heartbeats(seen_at);
+
+      CREATE TABLE IF NOT EXISTS tasks (
+        task_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        goal_id TEXT,
+        status TEXT NOT NULL,
+        risk TEXT NOT NULL,
+        source TEXT NOT NULL,
+        assigned_worker_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        task_json TEXT NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+        FOREIGN KEY(goal_id) REFERENCES master_goals(goal_id) ON DELETE SET NULL,
+        FOREIGN KEY(assigned_worker_id) REFERENCES workers(worker_id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_goal_id ON tasks(goal_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+      CREATE INDEX IF NOT EXISTS idx_tasks_worker ON tasks(assigned_worker_id);
+
+      CREATE TABLE IF NOT EXISTS task_events (
+        task_event_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        worker_id TEXT,
+        time TEXT NOT NULL,
+        event_json TEXT NOT NULL,
+        FOREIGN KEY(task_id) REFERENCES tasks(task_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id);
+      CREATE INDEX IF NOT EXISTS idx_task_events_time ON task_events(time);
     `);
   }
 
@@ -591,6 +946,63 @@ function toIterationEventParams(event: StoredIterationEvent): unknown[] {
   ];
 }
 
+function toProjectParams(project: StoredProject): unknown[] {
+  return [
+    project.project_id,
+    project.name,
+    project.repo ?? null,
+    project.status,
+    project.created_at,
+    project.updated_at,
+    JSON.stringify(project),
+  ];
+}
+
+function toGoalParams(goal: StoredMasterGoal): unknown[] {
+  return [
+    goal.goal_id,
+    goal.project_id,
+    goal.title,
+    goal.status,
+    goal.created_at,
+    goal.updated_at,
+    JSON.stringify(goal),
+  ];
+}
+
+function toWorkerParams(worker: StoredWorker): unknown[] {
+  return [
+    worker.worker_id,
+    worker.name,
+    worker.provider,
+    worker.enabled ? 1 : 0,
+    worker.created_at,
+    worker.updated_at,
+    JSON.stringify(worker),
+  ];
+}
+
+function toTaskParams(task: StoredTask): unknown[] {
+  return [
+    task.task_id,
+    task.project_id,
+    task.goal_id ?? null,
+    task.status,
+    task.risk,
+    task.source,
+    task.assigned_worker_id ?? null,
+    task.created_at,
+    task.updated_at,
+    JSON.stringify(task),
+  ];
+}
+
 function sliceTail<T>(items: T[], limit?: number): T[] {
   return limit ? items.slice(-limit) : [...items];
+}
+
+function upsertBy<T>(items: T[], item: T, getKey: (item: T) => string): void {
+  const index = items.findIndex((existing) => getKey(existing) === getKey(item));
+  if (index >= 0) items[index] = item;
+  else items.push(item);
 }

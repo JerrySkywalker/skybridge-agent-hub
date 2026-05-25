@@ -127,6 +127,72 @@ describe("SkyBridgeClient", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(6, "http://localhost:8787/v1/automerge/summary");
   });
 
+  it("builds worker, project, goal and task helper URLs", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ worker: { worker_id: "worker/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ worker: { worker_id: "worker/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ workers: [] }))
+      .mockResolvedValueOnce(jsonResponse({ worker: { worker_id: "worker/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ total: 1, online: 1, stale: 0, offline: 0, disabled: 0, workers: [] }))
+      .mockResolvedValueOnce(jsonResponse({ project: { project_id: "proj/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ project: { project_id: "proj/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ goal: { goal_id: "goal/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ goals: [] }))
+      .mockResolvedValueOnce(jsonResponse({ goal: { goal_id: "goal/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ goal: { goal_id: "goal/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ tasks: [] }))
+      .mockResolvedValueOnce(jsonResponse({ tasks: [] }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ task: { task_id: "task/1" } }))
+      .mockResolvedValueOnce(jsonResponse({ total: 1, queued: 0, claimed: 0, running: 0, completed: 1, failed: 0, blocked: 0, cancelled: 0, stale: 0 }));
+    const client = new SkyBridgeClient("http://localhost:8787/");
+
+    await client.registerWorker({ worker_id: "worker/1", name: "Worker" });
+    await client.sendWorkerHeartbeat("worker/1");
+    await client.listWorkers();
+    await client.getWorker("worker/1");
+    await client.getWorkersSummary();
+    await client.createProject({ project_id: "proj/1", name: "Project" });
+    await client.getProject("proj/1");
+    await client.createGoal("proj/1", { goal_id: "goal/1", title: "Goal" });
+    await client.listGoals("proj/1");
+    await client.getGoal("goal/1");
+    await client.updateGoal("goal/1", { status: "completed" });
+    await client.createTask({ task_id: "task/1", project_id: "proj/1", title: "Task" });
+    await client.listTasks({ project_id: "proj/1", status: "queued" });
+    await client.listProjectTasks("proj/1");
+    await client.getTask("task/1");
+    await client.claimTask("task/1", "worker/1");
+    await client.completeTask("task/1", { summary: "done" });
+    await client.requeueTask("task/1");
+    await client.getTasksSummary();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://localhost:8787/v1/workers/register", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://localhost:8787/v1/workers/worker%2F1/heartbeat", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:8787/v1/workers");
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "http://localhost:8787/v1/workers/worker%2F1");
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:8787/v1/workers/summary");
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "http://localhost:8787/v1/projects", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, "http://localhost:8787/v1/projects/proj%2F1");
+    expect(fetchMock).toHaveBeenNthCalledWith(8, "http://localhost:8787/v1/projects/proj%2F1/goals", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(9, "http://localhost:8787/v1/projects/proj%2F1/goals");
+    expect(fetchMock).toHaveBeenNthCalledWith(10, "http://localhost:8787/v1/goals/goal%2F1");
+    expect(fetchMock).toHaveBeenNthCalledWith(11, "http://localhost:8787/v1/goals/goal%2F1", expect.objectContaining({ method: "PATCH" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(12, "http://localhost:8787/v1/tasks", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(13, "http://localhost:8787/v1/tasks?project_id=proj%2F1&status=queued");
+    expect(fetchMock).toHaveBeenNthCalledWith(14, "http://localhost:8787/v1/projects/proj%2F1/tasks");
+    expect(fetchMock).toHaveBeenNthCalledWith(15, "http://localhost:8787/v1/tasks/task%2F1");
+    expect(fetchMock).toHaveBeenNthCalledWith(16, "http://localhost:8787/v1/tasks/task%2F1/claim", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(17, "http://localhost:8787/v1/tasks/task%2F1/complete", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(18, "http://localhost:8787/v1/tasks/task%2F1/requeue", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(19, "http://localhost:8787/v1/tasks/summary");
+  });
+
   it("throws useful errors for non-2xx responses", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_query" }, 400));

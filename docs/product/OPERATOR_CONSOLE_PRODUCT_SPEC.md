@@ -22,6 +22,18 @@ Purpose: supervise bounded autonomous work loops.
 
 Shows iteration state, PR number, branch, attempts, repair attempts, blocked reasons, checks and state-event timeline. Raw local logs remain outside the API.
 
+### Worker Pool
+
+Purpose: show which runtime providers can execute tasks.
+
+Shows worker status, capabilities, current task, last seen time and disabled/enabled display state. It does not expose destructive controls.
+
+### Task Queue
+
+Purpose: show planner-created or manually-created work waiting for executors.
+
+Shows task status, risk, assigned worker, project/goal, latest task event and placeholder result or PR links. Hermes can be a planner adapter, and Codex/OpenCode/manual execution can be executor adapters, but none are required for the queue.
+
 ### PR/CI
 
 Purpose: review PR readiness without mutating GitHub settings.
@@ -76,6 +88,10 @@ The console consumes safe server APIs:
 
 - `GET /v1/summary`
 - `GET /v1/projects`
+- `GET /v1/workers`
+- `GET /v1/workers/summary`
+- `GET /v1/tasks`
+- `GET /v1/tasks/summary`
 - `GET /v1/iterations/summary`
 - `GET /v1/prs/summary`
 - `GET /v1/notifications/summary`

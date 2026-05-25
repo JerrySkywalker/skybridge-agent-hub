@@ -20,6 +20,16 @@ import {
   type SkyBridgeEventType,
   type SkyBridgeEvent,
   type SkyBridgeSourcePlatform,
+  type MasterGoal,
+  type Project,
+  type Task,
+  type TaskEvent,
+  type TaskRisk,
+  type TaskSource,
+  type TaskStatus,
+  type Worker,
+  type WorkerCapability,
+  type WorkerStatus,
 } from "@skybridge-agent-hub/event-schema";
 import {
   send as sendNtfy,
@@ -32,7 +42,13 @@ import {
   type StoredAuditRecord,
   type StoredEvent,
   type StoredIterationRun,
+  type StoredMasterGoal,
   type StoredNotification,
+  type StoredProject,
+  type StoredTask,
+  type StoredTaskEvent,
+  type StoredWorker,
+  type StoredWorkerHeartbeat,
 } from "./store.js";
 
 export type {
@@ -64,6 +80,29 @@ const ITERATION_STATES: IterationState[] = [
   "merged",
   "blocked",
   "failed",
+];
+
+const GOAL_STATUSES = ["active", "paused", "completed", "blocked", "cancelled"] as const;
+const PROJECT_STATUSES = ["active", "paused", "archived"] as const;
+const TASK_STATUSES: TaskStatus[] = [
+  "queued",
+  "claimed",
+  "running",
+  "completed",
+  "failed",
+  "blocked",
+  "cancelled",
+  "stale",
+];
+const TASK_RISKS: TaskRisk[] = ["low", "medium", "high"];
+const TASK_SOURCES: TaskSource[] = [
+  "manual",
+  "planner",
+  "rule_based",
+  "hermes",
+  "codex",
+  "opencode",
+  "custom",
 ];
 
 function summarizeRuns(events: StoredEvent[]): RunSummary[] {
@@ -275,6 +314,242 @@ export async function createServer(
       };
     },
   );
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/v1/workers/register",
+    async (request, reply) => {
+      const parsed = parseWorkerInput(request.body);
+      if (!parsed.ok) return reply.code(400).send(parsed.response);
+      const existing = store.getWorker(parsed.worker.worker_id);
+      const worker: StoredWorker = {
+        ...(existing ?? parsed.worker),
+        ...parsed.worker,
+        created_at: existing?.created_at ?? parsed.worker.created_at,
+        updated_at: new Date().toISOString(),
+      };
+      await store.upsertWorker(worker);
+      await addStoredEvent(coreEvent("worker.registered", { worker_id: worker.worker_id, provider: worker.provider }));
+      return reply.code(existing ? 200 : 201).send({ ok: true, worker: presentWorker(worker, store) });
+    },
+  );
+
+  app.post<{
+    Params: { workerId: string };
+    Body: { status_note?: unknown; load?: unknown; seen_at?: unknown };
+  }>("/v1/workers/:workerId/heartbeat", async (request, reply) => {
+    const workerId = decodeURIComponent(request.params.workerId);
+    const worker = store.getWorker(workerId);
+    if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
+    const now = new Date().toISOString();
+    const seenAt = safeIsoString(request.body?.seen_at) ?? now;
+    const heartbeat: StoredWorkerHeartbeat = {
+      heartbeat_id: `wh_${nanoid()}`,
+      worker_id: workerId,
+      seen_at: seenAt,
+      status_note: safeString(request.body?.status_note),
+      load: typeof request.body?.load === "number" && Number.isFinite(request.body.load) ? request.body.load : undefined,
+    };
+    await store.addWorkerHeartbeat(heartbeat);
+    await store.upsertWorker({ ...worker, updated_at: now });
+    await addStoredEvent(coreEvent("worker.heartbeat", { worker_id: workerId }));
+    return { ok: true, worker: presentWorker(store.getWorker(workerId)!, store), heartbeat };
+  });
+
+  app.get("/v1/workers", async () => ({
+    workers: store.listWorkers().map((worker) => presentWorker(worker, store)),
+  }));
+
+  app.get<{ Params: { workerId: string } }>(
+    "/v1/workers/:workerId",
+    async (request, reply) => {
+      const worker = store.getWorker(decodeURIComponent(request.params.workerId));
+      if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
+      return { worker: presentWorker(worker, store) };
+    },
+  );
+
+  app.patch<{
+    Params: { workerId: string };
+    Body: { name?: unknown; enabled?: unknown; labels?: unknown; capabilities?: unknown };
+  }>("/v1/workers/:workerId", async (request, reply) => {
+    const workerId = decodeURIComponent(request.params.workerId);
+    const worker = store.getWorker(workerId);
+    if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
+    const updated: StoredWorker = {
+      ...worker,
+      name: safeString(request.body?.name) ?? worker.name,
+      enabled: typeof request.body?.enabled === "boolean" ? request.body.enabled : worker.enabled,
+      labels: safeStringArray(request.body?.labels) ?? worker.labels,
+      capabilities: safeStringArray(request.body?.capabilities) ?? worker.capabilities,
+      updated_at: new Date().toISOString(),
+    };
+    await store.upsertWorker(updated);
+    return { ok: true, worker: presentWorker(updated, store) };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/projects", async (request, reply) => {
+    const parsed = parseProjectInput(request.body);
+    if (!parsed.ok) return reply.code(400).send(parsed.response);
+    if (store.getProject(parsed.project.project_id))
+      return reply.code(409).send({ ok: false, error: "project_exists" });
+    await store.upsertProject(parsed.project);
+    await addStoredEvent(coreEvent("project.created", { project_id: parsed.project.project_id, name: parsed.project.name }));
+    return reply.code(201).send({ ok: true, project: parsed.project });
+  });
+
+  app.get("/v1/projects", async () => ({
+    projects: mergeProjectViews(store.listProjects(), summarizeProjects(summarizeRuns(store.listEvents()), store.listIterations(1000))),
+  }));
+
+  app.get<{ Params: { projectId: string } }>(
+    "/v1/projects/:projectId",
+    async (request, reply) => {
+      const project = store.getProject(decodeURIComponent(request.params.projectId));
+      if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
+      return { project };
+    },
+  );
+
+  app.post<{ Params: { projectId: string }; Body: Record<string, unknown> }>(
+    "/v1/projects/:projectId/goals",
+    async (request, reply) => {
+      const projectId = decodeURIComponent(request.params.projectId);
+      if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
+      const parsed = parseGoalInput(projectId, request.body);
+      if (!parsed.ok) return reply.code(400).send(parsed.response);
+      await store.upsertGoal(parsed.goal);
+      await addStoredEvent(coreEvent("goal.created", { project_id: projectId, goal_id: parsed.goal.goal_id, title: parsed.goal.title }));
+      return reply.code(201).send({ ok: true, goal: parsed.goal });
+    },
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    "/v1/projects/:projectId/goals",
+    async (request, reply) => {
+      const projectId = decodeURIComponent(request.params.projectId);
+      if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
+      return { goals: store.listGoals(projectId) };
+    },
+  );
+
+  app.get<{ Params: { goalId: string } }>("/v1/goals/:goalId", async (request, reply) => {
+    const goal = store.getGoal(decodeURIComponent(request.params.goalId));
+    if (!goal) return reply.code(404).send({ ok: false, error: "goal_not_found" });
+    return { goal };
+  });
+
+  app.patch<{ Params: { goalId: string }; Body: { status?: unknown; title?: unknown; summary?: unknown } }>(
+    "/v1/goals/:goalId",
+    async (request, reply) => {
+      const goal = store.getGoal(decodeURIComponent(request.params.goalId));
+      if (!goal) return reply.code(404).send({ ok: false, error: "goal_not_found" });
+      const status = safeString(request.body?.status);
+      if (status && !GOAL_STATUSES.includes(status as (typeof GOAL_STATUSES)[number]))
+        return reply.code(400).send({ ok: false, error: "invalid_goal_status" });
+      const updated: StoredMasterGoal = {
+        ...goal,
+        title: safeString(request.body?.title) ?? goal.title,
+        summary: safeString(request.body?.summary) ?? goal.summary,
+        status: (status as StoredMasterGoal["status"] | undefined) ?? goal.status,
+        updated_at: new Date().toISOString(),
+      };
+      await store.upsertGoal(updated);
+      return { ok: true, goal: updated };
+    },
+  );
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/tasks", async (request, reply) => {
+    const parsed = parseTaskInput(request.body, store);
+    if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+    await store.upsertTask(parsed.task);
+    await recordTaskEvent(parsed.task, "task.created", undefined, "Task created.", addStoredEvent, store);
+    return reply.code(201).send({ ok: true, task: withTaskEvents(parsed.task, store) });
+  });
+
+  app.get<{ Querystring: { status?: string; project_id?: string; goal_id?: string } }>("/v1/tasks", async (request, reply) => {
+    if (request.query.status && !TASK_STATUSES.includes(request.query.status as TaskStatus))
+      return reply.code(400).send({ ok: false, error: "invalid_task_status" });
+    return {
+      tasks: store.listTasks({
+        projectId: request.query.project_id,
+        goalId: request.query.goal_id,
+        status: request.query.status,
+      }).map((task) => withTaskEvents(task, store)),
+    };
+  });
+
+  app.get<{ Params: { projectId: string } }>("/v1/projects/:projectId/tasks", async (request, reply) => {
+    const projectId = decodeURIComponent(request.params.projectId);
+    if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
+    return { tasks: store.listTasks({ projectId }).map((task) => withTaskEvents(task, store)) };
+  });
+
+  app.get<{ Params: { taskId: string } }>("/v1/tasks/:taskId", async (request, reply) => {
+    const task = store.getTask(decodeURIComponent(request.params.taskId));
+    if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+    return { task: withTaskEvents(task, store) };
+  });
+
+  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/claim", async (request, reply) => {
+    const task = store.getTask(decodeURIComponent(request.params.taskId));
+    if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+    const workerId = safeString(request.body?.worker_id);
+    if (!workerId) return reply.code(400).send({ ok: false, error: "missing_worker_id" });
+    const worker = store.getWorker(workerId);
+    if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
+    const workerView = presentWorker(worker, store);
+    if (!workerView.enabled || workerView.status !== "online")
+      return reply.code(409).send({ ok: false, error: "worker_unavailable" });
+    if (!["queued", "failed", "stale"].includes(task.status))
+      return reply.code(409).send({ ok: false, error: "task_not_claimable" });
+    const now = new Date().toISOString();
+    const updated: StoredTask = {
+      ...task,
+      status: "claimed",
+      assigned_worker_id: workerId,
+      claim: { claim_id: `claim_${nanoid()}`, task_id: task.task_id, worker_id: workerId, claimed_at: now },
+      updated_at: now,
+    };
+    await store.upsertTask(updated);
+    await recordTaskEvent(updated, "task.claimed", workerId, "Task claimed.", addStoredEvent, store);
+    return { ok: true, task: withTaskEvents(updated, store) };
+  });
+
+  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/start", async (request, reply) => {
+    return updateTaskTerminal(request.params.taskId, request.body?.worker_id, "running", "task.started", reply, store, addStoredEvent);
+  });
+
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/complete", async (request, reply) => {
+    return finishTask(request.params.taskId, request.body, "completed", "task.completed", reply, store, addStoredEvent);
+  });
+
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/fail", async (request, reply) => {
+    return finishTask(request.params.taskId, request.body, "failed", "task.failed", reply, store, addStoredEvent);
+  });
+
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/block", async (request, reply) => {
+    return finishTask(request.params.taskId, request.body, "blocked", "task.blocked", reply, store, addStoredEvent);
+  });
+
+  app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/requeue", async (request, reply) => {
+    const task = store.getTask(decodeURIComponent(request.params.taskId));
+    if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+    if (task.status === "completed" || task.status === "cancelled")
+      return reply.code(409).send({ ok: false, error: "task_not_requeueable" });
+    const updated: StoredTask = {
+      ...task,
+      status: "queued",
+      assigned_worker_id: undefined,
+      claim: undefined,
+      updated_at: new Date().toISOString(),
+    };
+    await store.upsertTask(updated);
+    await recordTaskEvent(updated, "task.requeued", undefined, "Task requeued.", addStoredEvent, store);
+    return { ok: true, task: withTaskEvents(updated, store) };
+  });
+
+  app.get("/v1/workers/summary", async () => summarizeWorkers(store));
+  app.get("/v1/tasks/summary", async () => summarizeTasks(store));
 
   app.get<{ Querystring: IterationListQuery }>(
     "/v1/iterations",
@@ -511,6 +786,9 @@ export async function createServer(
       listAuditRecordsForQuery(store, {}),
     );
     const hermes = summarizeHermes(events, iterations);
+    const workers = summarizeWorkers(store);
+    const tasks = summarizeTasks(store);
+    const activeGoals = store.listGoals().filter((goal) => goal.status === "active");
     const latestFailure = runs.find((run) => run.status === "failed");
     return {
       health: healthResponse(),
@@ -532,6 +810,17 @@ export async function createServer(
         node_stale: summarizeNodes(events).filter(
           (node) => node.status === "stale",
         ).length,
+        workers: workers.total,
+        workers_online: workers.online,
+        workers_stale: workers.stale,
+        workers_offline: workers.offline,
+        tasks: tasks.total,
+        tasks_queued: tasks.queued,
+        tasks_running: tasks.running + tasks.claimed,
+        tasks_completed: tasks.completed,
+        tasks_failed: tasks.failed,
+        tasks_blocked: tasks.blocked,
+        active_goals: activeGoals.length,
         automerge_blocked: automerge.blocked,
         attention_items:
           runs.filter((run) => run.status === "failed").length +
@@ -549,12 +838,16 @@ export async function createServer(
         hermes_status: hermes.status,
         notification: notifications.at(-1),
         failure: latestFailure,
+        active_goal: activeGoals[0],
+        latest_task_event: tasks.latest_event,
         next_recommended_action: nextRecommendedAction({
           latestFailure,
           prs,
           automerge,
           hermes,
           notifications,
+          workers,
+          tasks,
         }),
       },
       recent_failures: runs
@@ -563,13 +856,6 @@ export async function createServer(
       sources: summarizeSources(events),
     };
   });
-
-  app.get("/v1/projects", async () => ({
-    projects: summarizeProjects(
-      summarizeRuns(store.listEvents()),
-      store.listIterations(1000),
-    ),
-  }));
 
   app.get("/v1/iterations/summary", async () =>
     summarizeIterations(store.listIterations(1000)),
@@ -1728,9 +2014,17 @@ function nextRecommendedAction(input: {
   automerge: ReturnType<typeof summarizeAutoMerge>;
   hermes: ReturnType<typeof summarizeHermes>;
   notifications: StoredNotification[];
+  workers?: ReturnType<typeof summarizeWorkers>;
+  tasks?: ReturnType<typeof summarizeTasks>;
 }) {
   if (input.latestFailure)
     return `Inspect failed run ${input.latestFailure.run_id}.`;
+  if (input.tasks && input.tasks.blocked > 0)
+    return "Open task queue and review blocked tasks.";
+  if (input.tasks && input.tasks.queued > 0 && (!input.workers || input.workers.online === 0))
+    return "Bring a worker online before claiming queued tasks.";
+  if (input.tasks && input.tasks.queued > 0)
+    return "Claim the next queued task with an online worker.";
   if (input.prs.ci_failed > 0) return "Open PR/CI and repair failed checks.";
   if (input.automerge.blocked > 0)
     return "Review blocked auto-merge decisions.";
@@ -2070,6 +2364,315 @@ function parseEventPayload(
       },
     };
   }
+}
+
+function coreEvent(type: SkyBridgeEventType, payload: Record<string, unknown>): StoredEvent {
+  const event = createEvent({
+    type,
+    source: { platform: "skybridge", adapter: "core-api" },
+    payload,
+  });
+  return {
+    ...event,
+    id: event.event_id ?? nanoid(),
+    event_id: event.event_id ?? undefined,
+    receivedAt: new Date().toISOString(),
+  };
+}
+
+function parseProjectInput(input: Record<string, unknown> | undefined):
+  | { ok: true; project: StoredProject }
+  | { ok: false; response: QueryErrorResponse } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return invalidQuery("body", "Expected a project object.");
+  const name = safeString(input.name);
+  if (!name) return invalidQuery("name", "Expected a bounded project name.");
+  const id = safeString(input.project_id) ?? slugId("project", name);
+  const status = safeString(input.status) ?? "active";
+  if (!PROJECT_STATUSES.includes(status as StoredProject["status"]))
+    return invalidQuery("status", "Expected a valid project status.");
+  return {
+    ok: true,
+    project: {
+      project_id: id,
+      name,
+      repo: safeString(input.repo),
+      description: safeString(input.description),
+      status: status as StoredProject["status"],
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
+function parseGoalInput(projectId: string, input: Record<string, unknown> | undefined):
+  | { ok: true; goal: StoredMasterGoal }
+  | { ok: false; response: QueryErrorResponse } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return invalidQuery("body", "Expected a goal object.");
+  const title = safeString(input.title);
+  if (!title) return invalidQuery("title", "Expected a bounded goal title.");
+  const status = safeString(input.status) ?? "active";
+  if (!GOAL_STATUSES.includes(status as StoredMasterGoal["status"]))
+    return invalidQuery("status", "Expected a valid goal status.");
+  return {
+    ok: true,
+    goal: {
+      goal_id: safeString(input.goal_id) ?? slugId("goal", title),
+      project_id: projectId,
+      title,
+      summary: safeString(input.summary),
+      status: status as StoredMasterGoal["status"],
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
+function parseWorkerInput(input: Record<string, unknown> | undefined):
+  | { ok: true; worker: StoredWorker }
+  | { ok: false; response: QueryErrorResponse } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return invalidQuery("body", "Expected a worker object.");
+  const name = safeString(input.name);
+  if (!name) return invalidQuery("name", "Expected a bounded worker name.");
+  return {
+    ok: true,
+    worker: {
+      worker_id: safeString(input.worker_id) ?? slugId("worker", name),
+      name,
+      provider: safeString(input.provider) ?? "manual",
+      capabilities: safeStringArray(input.capabilities) ?? [],
+      labels: safeStringArray(input.labels) ?? [],
+      enabled: input.enabled !== false,
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
+function parseTaskInput(input: Record<string, unknown> | undefined, store: EventStore):
+  | { ok: true; task: StoredTask }
+  | { ok: false; status?: number; response: QueryErrorResponse | { ok: false; error: string } } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return { ok: false, response: invalidQuery("body", "Expected a task object.").response };
+  const title = safeString(input.title);
+  const projectId = safeString(input.project_id);
+  if (!title) return { ok: false, response: invalidQuery("title", "Expected a bounded task title.").response };
+  if (!projectId) return { ok: false, response: invalidQuery("project_id", "Expected a project id.").response };
+  if (!store.getProject(projectId)) return { ok: false, status: 404, response: { ok: false, error: "project_not_found" } };
+  const goalId = safeString(input.goal_id);
+  if (goalId && !store.getGoal(goalId)) return { ok: false, status: 404, response: { ok: false, error: "goal_not_found" } };
+  const risk = safeString(input.risk) ?? "low";
+  const source = safeString(input.source) ?? "manual";
+  if (!TASK_RISKS.includes(risk as TaskRisk)) return { ok: false, response: invalidQuery("risk", "Expected a valid task risk.").response };
+  if (!TASK_SOURCES.includes(source as TaskSource)) return { ok: false, response: invalidQuery("source", "Expected a valid task source.").response };
+  return {
+    ok: true,
+    task: {
+      task_id: safeString(input.task_id) ?? slugId("task", title),
+      project_id: projectId,
+      goal_id: goalId,
+      title,
+      body: safeLongString(input.body),
+      prompt_summary: safeString(input.prompt_summary),
+      status: "queued",
+      risk: risk as TaskRisk,
+      source: source as TaskSource,
+      required_capabilities: safeStringArray(input.required_capabilities) ?? [],
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
+function presentWorker(worker: StoredWorker, store: EventStore): Worker {
+  const latestHeartbeat = store.listWorkerHeartbeats(worker.worker_id)[0];
+  const status = worker.enabled ? statusFromHeartbeat(latestHeartbeat) : "disabled";
+  const currentTask = store
+    .listTasks({ status: "claimed" })
+    .find((task) => task.assigned_worker_id === worker.worker_id) ??
+    store.listTasks({ status: "running" }).find((task) => task.assigned_worker_id === worker.worker_id);
+  return {
+    ...worker,
+    status,
+    current_task_id: currentTask?.task_id,
+    last_seen_at: latestHeartbeat?.seen_at,
+  };
+}
+
+function statusFromHeartbeat(heartbeat: StoredWorkerHeartbeat | undefined): WorkerStatus {
+  if (!heartbeat) return "offline";
+  const ageMs = Date.now() - Date.parse(heartbeat.seen_at);
+  if (!Number.isFinite(ageMs)) return "offline";
+  if (ageMs <= 2 * 60 * 1000) return "online";
+  if (ageMs <= 15 * 60 * 1000) return "stale";
+  return "offline";
+}
+
+function withTaskEvents(task: StoredTask, store: EventStore): Task & { events: StoredTaskEvent[]; last_event?: StoredTaskEvent } {
+  const events = store.listTaskEvents(task.task_id);
+  return { ...task, events, last_event: events.at(-1) };
+}
+
+async function recordTaskEvent(
+  task: StoredTask,
+  type: Extract<SkyBridgeEventType, `task.${string}`>,
+  workerId: string | undefined,
+  message: string,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  store: EventStore,
+  payload: Record<string, unknown> = {},
+): Promise<void> {
+  const event: StoredTaskEvent = {
+    task_event_id: `te_${nanoid()}`,
+    task_id: task.task_id,
+    type,
+    worker_id: workerId,
+    time: new Date().toISOString(),
+    message,
+    payload: { status: task.status, ...payload },
+  };
+  await store.addTaskEvent(event);
+  await addStoredEvent(coreEvent(type, {
+    task_id: task.task_id,
+    project_id: task.project_id,
+    goal_id: task.goal_id,
+    worker_id: workerId,
+    status: task.status,
+    risk: task.risk,
+  }));
+}
+
+async function updateTaskTerminal(
+  taskIdParam: string,
+  workerIdInput: unknown,
+  status: TaskStatus,
+  eventType: Extract<SkyBridgeEventType, `task.${string}`>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+) {
+  const task = store.getTask(decodeURIComponent(taskIdParam));
+  if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+  if (["completed", "cancelled"].includes(task.status)) return reply.code(409).send({ ok: false, error: "invalid_task_transition" });
+  const workerId = safeString(workerIdInput) ?? task.assigned_worker_id;
+  const updated: StoredTask = { ...task, status, assigned_worker_id: workerId, updated_at: new Date().toISOString() };
+  await store.upsertTask(updated);
+  await recordTaskEvent(updated, eventType, workerId, `Task ${status}.`, addStoredEvent, store);
+  return { ok: true, task: withTaskEvents(updated, store) };
+}
+
+async function finishTask(
+  taskIdParam: string,
+  body: Record<string, unknown>,
+  status: TaskStatus,
+  eventType: Extract<SkyBridgeEventType, `task.${string}`>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+) {
+  const task = store.getTask(decodeURIComponent(taskIdParam));
+  if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+  if (task.status === "completed" || task.status === "cancelled")
+    return reply.code(409).send({ ok: false, error: "invalid_task_transition" });
+  const workerId = safeString(body.worker_id) ?? task.assigned_worker_id;
+  const updated: StoredTask = {
+    ...task,
+    status,
+    assigned_worker_id: workerId,
+    result: {
+      summary: safeString(body.summary),
+      result_url: safeString(body.result_url),
+      pr_url: safeString(body.pr_url),
+      error_summary: safeString(body.error_summary),
+    },
+    updated_at: new Date().toISOString(),
+  };
+  await store.upsertTask(updated);
+  await recordTaskEvent(
+    updated,
+    eventType,
+    workerId,
+    `Task ${status}.`,
+    addStoredEvent,
+    store,
+    updated.result ? { ...updated.result } : {},
+  );
+  return { ok: true, task: withTaskEvents(updated, store) };
+}
+
+function summarizeWorkers(store: EventStore) {
+  const workers = store.listWorkers().map((worker) => presentWorker(worker, store));
+  const byStatus = countBy(workers, (worker) => worker.status);
+  return {
+    total: workers.length,
+    online: byStatus.online ?? 0,
+    stale: byStatus.stale ?? 0,
+    offline: byStatus.offline ?? 0,
+    disabled: byStatus.disabled ?? 0,
+    workers,
+  };
+}
+
+function summarizeTasks(store: EventStore) {
+  const tasks = store.listTasks();
+  const byStatus = countBy(tasks, (task) => task.status);
+  const latestEvent = store.listTaskEvents().at(-1);
+  return {
+    total: tasks.length,
+    queued: byStatus.queued ?? 0,
+    claimed: byStatus.claimed ?? 0,
+    running: byStatus.running ?? 0,
+    completed: byStatus.completed ?? 0,
+    failed: byStatus.failed ?? 0,
+    blocked: byStatus.blocked ?? 0,
+    cancelled: byStatus.cancelled ?? 0,
+    stale: byStatus.stale ?? 0,
+    latest_event: latestEvent,
+  };
+}
+
+function mergeProjectViews(projects: StoredProject[], derived: ReturnType<typeof summarizeProjects>) {
+  const byId = new Map(derived.map((project) => [project.project_id, project]));
+  const merged = projects.map((project) => ({
+    ...project,
+    ...(byId.get(project.project_id) ?? {
+      run_count: 0,
+      active_runs: 0,
+      failed_runs: 0,
+      iteration_count: 0,
+      latest_activity_at: project.updated_at,
+    }),
+    goal_count: 0,
+  }));
+  for (const project of derived) {
+    if (!projects.some((stored) => stored.project_id === project.project_id)) {
+      merged.push(project as StoredProject & typeof project & { goal_count: number });
+    }
+  }
+  return merged;
+}
+
+function slugId(prefix: string, value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40) || prefix;
+  return `${prefix}_${slug}_${nanoid(6)}`;
+}
+
+function safeLongString(input: unknown): string | undefined {
+  return typeof input === "string" && input.length > 0 && input.length <= 2000
+    ? input
+    : undefined;
+}
+
+function safeIsoString(input: unknown): string | undefined {
+  if (typeof input !== "string" || input.length > 80) return undefined;
+  const time = Date.parse(input);
+  return Number.isFinite(time) ? input : undefined;
 }
 
 function parseIterationInput(

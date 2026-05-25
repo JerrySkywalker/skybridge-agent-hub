@@ -2,6 +2,8 @@ import type {
   AdapterCapability,
   AdapterRole,
   IterationRun,
+  MasterGoal,
+  Project,
   RunDetail,
   RunSummary,
   SkyBridgeEvent,
@@ -9,6 +11,13 @@ import type {
   SkyBridgeSeverity,
   SkyBridgeSourcePlatform,
   SourceCapability,
+  Task,
+  TaskEvent,
+  TaskRisk,
+  TaskSource,
+  TaskStatus,
+  Worker,
+  WorkerCapability,
 } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
@@ -65,6 +74,17 @@ export interface SummaryResponse {
     notification_skipped?: number;
     nodes?: number;
     node_stale?: number;
+    workers?: number;
+    workers_online?: number;
+    workers_stale?: number;
+    workers_offline?: number;
+    tasks?: number;
+    tasks_queued?: number;
+    tasks_running?: number;
+    tasks_completed?: number;
+    tasks_failed?: number;
+    tasks_blocked?: number;
+    active_goals?: number;
     automerge_blocked?: number;
     attention_items: number;
   };
@@ -75,6 +95,8 @@ export interface SummaryResponse {
     hermes_status?: string;
     notification?: StoredNotification;
     failure?: RunSummary;
+    active_goal?: MasterGoal;
+    latest_task_event?: TaskEvent;
     next_recommended_action?: string;
   };
   recent_failures?: RunSummary[];
@@ -88,11 +110,46 @@ export interface SummaryResponse {
 
 export interface ProjectSummary {
   project_id: string;
+  name?: string;
+  repo?: string;
+  description?: string;
+  status?: string;
   run_count: number;
   active_runs: number;
   failed_runs: number;
   iteration_count: number;
+  goal_count?: number;
   latest_activity_at?: string;
+}
+
+export type WorkerRecord = Worker;
+export type ProjectRecord = Project;
+export type GoalRecord = MasterGoal;
+export type TaskRecord = Task & {
+  events?: TaskEvent[];
+  last_event?: TaskEvent;
+};
+
+export interface WorkerSummary {
+  total: number;
+  online: number;
+  stale: number;
+  offline: number;
+  disabled: number;
+  workers: WorkerRecord[];
+}
+
+export interface TaskSummary {
+  total: number;
+  queued: number;
+  claimed: number;
+  running: number;
+  completed: number;
+  failed: number;
+  blocked: number;
+  cancelled: number;
+  stale: number;
+  latest_event?: TaskEvent;
 }
 
 export interface IterationsSummary {
@@ -301,11 +358,231 @@ export class SkyBridgeClient {
     return this.getJson<SummaryResponse>("/v1/summary");
   }
 
+  async registerWorker(input: {
+    worker_id?: string;
+    name: string;
+    provider?: string;
+    capabilities?: WorkerCapability[];
+    labels?: string[];
+    enabled?: boolean;
+  }): Promise<WorkerRecord> {
+    const response = await fetch(this.url("/v1/workers/register"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    await assertOk(response, "worker register");
+    return ((await response.json()) as { worker: WorkerRecord }).worker;
+  }
+
+  async sendWorkerHeartbeat(
+    workerId: string,
+    input: { status_note?: string; load?: number } = {},
+  ): Promise<WorkerRecord> {
+    const response = await fetch(
+      this.url(`/v1/workers/${encodeURIComponent(workerId)}/heartbeat`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "worker heartbeat");
+    return ((await response.json()) as { worker: WorkerRecord }).worker;
+  }
+
+  async listWorkers(): Promise<WorkerRecord[]> {
+    const json = await this.getJson<{ workers: WorkerRecord[] }>("/v1/workers");
+    return json.workers;
+  }
+
+  async getWorker(workerId: string): Promise<WorkerRecord> {
+    const json = await this.getJson<{ worker: WorkerRecord }>(
+      `/v1/workers/${encodeURIComponent(workerId)}`,
+    );
+    return json.worker;
+  }
+
+  async updateWorker(
+    workerId: string,
+    input: {
+      name?: string;
+      enabled?: boolean;
+      labels?: string[];
+      capabilities?: WorkerCapability[];
+    },
+  ): Promise<WorkerRecord> {
+    const response = await fetch(
+      this.url(`/v1/workers/${encodeURIComponent(workerId)}`),
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "worker update");
+    return ((await response.json()) as { worker: WorkerRecord }).worker;
+  }
+
+  async getWorkersSummary(): Promise<WorkerSummary> {
+    return this.getJson<WorkerSummary>("/v1/workers/summary");
+  }
+
   async listProjects(): Promise<ProjectSummary[]> {
     const json = await this.getJson<{ projects: ProjectSummary[] }>(
       "/v1/projects",
     );
     return json.projects;
+  }
+
+  async createProject(input: {
+    project_id?: string;
+    name: string;
+    repo?: string;
+    description?: string;
+    status?: Project["status"];
+  }): Promise<ProjectRecord> {
+    const response = await fetch(this.url("/v1/projects"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    await assertOk(response, "project create");
+    return ((await response.json()) as { project: ProjectRecord }).project;
+  }
+
+  async getProject(projectId: string): Promise<ProjectRecord> {
+    const json = await this.getJson<{ project: ProjectRecord }>(
+      `/v1/projects/${encodeURIComponent(projectId)}`,
+    );
+    return json.project;
+  }
+
+  async createGoal(
+    projectId: string,
+    input: {
+      goal_id?: string;
+      title: string;
+      summary?: string;
+      status?: MasterGoal["status"];
+    },
+  ): Promise<GoalRecord> {
+    const response = await fetch(
+      this.url(`/v1/projects/${encodeURIComponent(projectId)}/goals`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "goal create");
+    return ((await response.json()) as { goal: GoalRecord }).goal;
+  }
+
+  async listGoals(projectId: string): Promise<GoalRecord[]> {
+    const json = await this.getJson<{ goals: GoalRecord[] }>(
+      `/v1/projects/${encodeURIComponent(projectId)}/goals`,
+    );
+    return json.goals;
+  }
+
+  async getGoal(goalId: string): Promise<GoalRecord> {
+    const json = await this.getJson<{ goal: GoalRecord }>(
+      `/v1/goals/${encodeURIComponent(goalId)}`,
+    );
+    return json.goal;
+  }
+
+  async updateGoal(
+    goalId: string,
+    input: { title?: string; summary?: string; status?: MasterGoal["status"] },
+  ): Promise<GoalRecord> {
+    const response = await fetch(
+      this.url(`/v1/goals/${encodeURIComponent(goalId)}`),
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "goal update");
+    return ((await response.json()) as { goal: GoalRecord }).goal;
+  }
+
+  async createTask(input: {
+    task_id?: string;
+    project_id: string;
+    goal_id?: string;
+    title: string;
+    body?: string;
+    prompt_summary?: string;
+    risk?: TaskRisk;
+    source?: TaskSource;
+    required_capabilities?: WorkerCapability[];
+  }): Promise<TaskRecord> {
+    const response = await fetch(this.url("/v1/tasks"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    await assertOk(response, "task create");
+    return ((await response.json()) as { task: TaskRecord }).task;
+  }
+
+  async listTasks(query: TaskListQuery = {}): Promise<TaskRecord[]> {
+    const json = await this.getJson<{ tasks: TaskRecord[] }>(
+      `/v1/tasks${queryString(query)}`,
+    );
+    return json.tasks;
+  }
+
+  async listProjectTasks(projectId: string): Promise<TaskRecord[]> {
+    const json = await this.getJson<{ tasks: TaskRecord[] }>(
+      `/v1/projects/${encodeURIComponent(projectId)}/tasks`,
+    );
+    return json.tasks;
+  }
+
+  async getTask(taskId: string): Promise<TaskRecord> {
+    const json = await this.getJson<{ task: TaskRecord }>(
+      `/v1/tasks/${encodeURIComponent(taskId)}`,
+    );
+    return json.task;
+  }
+
+  async claimTask(taskId: string, workerId: string): Promise<TaskRecord> {
+    return this.postTaskAction(taskId, "claim", { worker_id: workerId });
+  }
+
+  async startTask(taskId: string, workerId?: string): Promise<TaskRecord> {
+    return this.postTaskAction(taskId, "start", { worker_id: workerId });
+  }
+
+  async completeTask(
+    taskId: string,
+    input: {
+      worker_id?: string;
+      summary?: string;
+      result_url?: string;
+      pr_url?: string;
+    } = {},
+  ): Promise<TaskRecord> {
+    return this.postTaskAction(taskId, "complete", input);
+  }
+
+  async failTask(
+    taskId: string,
+    input: { worker_id?: string; error_summary?: string; result_url?: string } = {},
+  ): Promise<TaskRecord> {
+    return this.postTaskAction(taskId, "fail", input);
+  }
+
+  async requeueTask(taskId: string): Promise<TaskRecord> {
+    return this.postTaskAction(taskId, "requeue", {});
+  }
+
+  async getTasksSummary(): Promise<TaskSummary> {
+    return this.getJson<TaskSummary>("/v1/tasks/summary");
   }
 
   async getIterationsSummary(): Promise<IterationsSummary> {
@@ -463,6 +740,23 @@ export class SkyBridgeClient {
   private url(path: string): string {
     return `${this.apiBase.replace(/\/$/, "")}${path}`;
   }
+
+  private async postTaskAction(
+    taskId: string,
+    action: "claim" | "start" | "complete" | "fail" | "requeue",
+    input: Record<string, unknown>,
+  ): Promise<TaskRecord> {
+    const response = await fetch(
+      this.url(`/v1/tasks/${encodeURIComponent(taskId)}/${action}`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, `task ${action}`);
+    return ((await response.json()) as { task: TaskRecord }).task;
+  }
 }
 
 export interface EventListQuery {
@@ -499,6 +793,12 @@ export interface NotificationListQuery {
   provider?: StoredNotification["provider"];
   severity?: SkyBridgeSeverity;
   limit?: number;
+}
+
+export interface TaskListQuery {
+  project_id?: string;
+  goal_id?: string;
+  status?: TaskStatus;
 }
 
 export interface AuditListQuery {
