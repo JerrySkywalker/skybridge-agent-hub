@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-05-25 Super Goal 049-060 Hermes Always-on Autonomy Pilot
+
+- Added a Hermes tunnel lifecycle helper, check-only tunnel smoke and tunnel recovery guide. The validated local tunnel was listening on `127.0.0.1:18642`; no duplicate tunnel was started.
+- Added the Hermes health watchdog and smoke. Validation checked the tunnel, `/health` and `/v1/capabilities` through the local tunnel with the Hermes API key present but not printed.
+- Added the nightly supervisor report. It collects Hermes health, GitHub open PRs, latest workflow status, auto-merge sweep dry-run, local SkyBridge API status, bootstrap notification config and a progress tail summary.
+- Hardened the Hermes-supervised sweep path with `NightlySweep`, `NightlyReport` and `SweepAndNotify` supervisor modes plus policy counts for eligible, blocked, draft, non-AI branch, high-risk file, missing-check and pending-check states.
+- Added the Windows Task Scheduler-compatible nightly pilot wrapper. It writes local logs under `.agent/nightly/<timestamp>/`, verifies or starts the tunnel, checks Hermes health, runs the nightly report and runs a dry-run sweep by default.
+- Added server-side supervisor option docs. Current mode remains local Windows execution with cloud Hermes supervision through the private tunnel; no server worker was deployed and no `/opt`, OpenResty, Authelia, 1Panel or Docker daemon config was touched.
+- Phase 055 real phone summary test: sent one non-urgent nightly supervisor report notification through the new report command; ntfy reported sent and urgent notification was not used.
+- Phase 056 candidate PR decision: skipped creating a new tiny docs-only candidate because GitHub reported zero open PRs and the new nightly sweep/report paths already exercised the real repository dry-run path safely. No real auto-merge occurred.
+- Added operator docs alignment for the local Codex worker, GitHub CI/auto-merge gate, auto-merge sweep, Hermes cloud supervisor, bootstrap ntfy fallback and human-only controls.
+- Added a safe failure drill covering simulated Hermes unavailable, no eligible PRs, blocked high-risk PR and phone-notification dry-run preview.
+- Phase 059 validation passed: PowerShell parse validation, Hermes env loading, tunnel check-only smoke, health watchdog smoke, Hermes cloud API smoke, Hermes cloud run smoke, supervised sweep dry-run, nightly sweep dry-run, failure drill, bootstrap notification dry-run, Codex phone notification dry-run, auto-merge policy smoke and `just check`.
+- Safety notes: no secrets, local env files, production deploy, server root config mutation, GitHub settings mutation, public Hermes exposure, WSS remote execution, urgent notification or real auto-merge were introduced.
+
 ## 2026-05-23 Super Goal 042-048 Hermes Cloud Supervisor Integration
 
 - Added safe local Hermes env loading from `$HOME\.skybridge\hermes.env.ps1` or `HERMES_ENV_FILE`, with JSON presence reporting and no secret values included.

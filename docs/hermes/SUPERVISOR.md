@@ -35,6 +35,15 @@ Hermes must not:
 
 Hermes can run on a schedule, for example hourly health checks and nightly queue processing. The local bridge script returns JSON so Hermes can turn each pass into a concise report without learning repository internals.
 
+## Current Autonomy Stack
+
+- Local Codex worker: performs repository edits, local checks and AI branch work on the operator machine.
+- GitHub CI and auto-merge: runs required checks and keeps branch protection as the final merge gate.
+- Auto-merge sweep: classifies open PRs, reports eligible/blocked/draft/non-AI/missing-check/pending-check counts and remains dry-run unless `-EnableAutoMerge` is explicit.
+- Hermes cloud supervisor: stays private behind the local SSH tunnel and supervises health, reports and sweep decisions through JSON commands.
+- Bootstrap ntfy fallback: sends concise non-urgent phone summaries when `-Send` is explicit; urgent remains reserved for hard safety boundaries.
+- Human-only controls: production deployment, server root configuration, GitHub branch protection/repository settings, secret changes, public Hermes exposure and scheduled real auto-merge.
+
 ## Supervision Model
 
 ```text
@@ -65,3 +74,23 @@ Hermes prompts should include:
 - instruction to notify through bootstrap notifier for urgent or blocked outcomes.
 
 Templates live under `docs/hermes/prompts/` and are safe examples. They do not contain credentials.
+
+## Nightly Pilot Commands
+
+Safe local pilot:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-hermes-nightly-pilot.ps1 -UseHermesApi -Json
+```
+
+Same pilot with one non-urgent phone summary:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-hermes-nightly-pilot.ps1 -UseHermesApi -Send -Json
+```
+
+Dry-run sweep only:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-supervisor.ps1 -Mode NightlySweep -UseHermesApi -DryRun -Json
+```

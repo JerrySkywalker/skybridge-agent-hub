@@ -139,6 +139,16 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-supervi
   -Json
 ```
 
+Nightly sweep mode with policy counts:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-supervisor.ps1 `
+  -Mode NightlySweep `
+  -UseHermesApi `
+  -DryRun `
+  -Json
+```
+
 Composed smoke:
 
 ```powershell
@@ -146,6 +156,27 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-supervised-
 ```
 
 Do not pass `-EnableAutoMerge` unless an operator intentionally wants a guarded real sweep for safe docs-only `ai/**` PRs.
+
+## Nightly Pilot
+
+Safe local pilot:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-hermes-nightly-pilot.ps1 `
+  -UseHermesApi `
+  -Json
+```
+
+Same pilot with exactly one non-urgent phone summary:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-hermes-nightly-pilot.ps1 `
+  -UseHermesApi `
+  -Send `
+  -Json
+```
+
+The wrapper writes local logs under `.agent/nightly/<timestamp>/`. It does not create a Windows scheduled task automatically and does not enable real auto-merge by default.
 
 ## Safety Boundaries
 

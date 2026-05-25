@@ -6,7 +6,9 @@ param(
   [switch]$NotifyBootstrap,
   [switch]$SuppressBlockedNotifications,
   [switch]$Json,
-  [switch]$Fixture
+  [switch]$Fixture,
+  [ValidateSet("Mixed", "NoEligible", "BlockedHighRisk")]
+  [string]$FixtureScenario = "Mixed"
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +42,41 @@ function Get-OpenPullRequests {
     $checks = @($policy.required_checks | ForEach-Object {
       [pscustomobject]@{ name = $_; status = "COMPLETED"; conclusion = "SUCCESS" }
     })
+    if ($FixtureScenario -eq "NoEligible") {
+      return @(
+        [pscustomobject]@{
+          number = 201
+          title = "fixture draft docs"
+          url = "https://example.invalid/pull/201"
+          headRefName = "ai/fixture-draft-docs"
+          isDraft = $true
+          files = @("docs/automation/draft.md")
+          checks = $checks
+        },
+        [pscustomobject]@{
+          number = 202
+          title = "fixture human docs"
+          url = "https://example.invalid/pull/202"
+          headRefName = "feature/human-docs"
+          isDraft = $false
+          files = @("docs/automation/human.md")
+          checks = $checks
+        }
+      )
+    }
+    if ($FixtureScenario -eq "BlockedHighRisk") {
+      return @(
+        [pscustomobject]@{
+          number = 301
+          title = "fixture blocked workflow"
+          url = "https://example.invalid/pull/301"
+          headRefName = "ai/fixture-blocked-workflow"
+          isDraft = $false
+          files = @(".github/workflows/pr.yml")
+          checks = $checks
+        }
+      )
+    }
     return @(
       [pscustomobject]@{
         number = 101
@@ -146,6 +183,9 @@ foreach ($pr in $pullRequests) {
     file_risk = $eligibility.file_risk.risk
     blocked_files = @($eligibility.file_risk.blocked_files)
     outside_allowed_files = @($eligibility.file_risk.outside_allowed_files)
+    missing_checks = @($eligibility.checks.missing_checks)
+    pending_checks = @($eligibility.checks.pending_checks)
+    not_green_checks = @($eligibility.checks.not_green_checks)
   }) | Out-Null
 }
 
@@ -165,9 +205,20 @@ $summary = [pscustomobject]@{
   dry_run = $dryRun
   auto_merge_requested = [bool]$EnableAutoMerge
   policy_enabled = [bool]$policy.enabled
+  fixture = [bool]$Fixture
+  fixture_scenario = if ($Fixture) { $FixtureScenario } else { $null }
   total_open_prs = $pullRequests.Count
   eligible_count = $eligibleCount
   skipped_count = $skippedCount
+  policy_counts = [pscustomobject]@{
+    eligible = $eligibleCount
+    blocked = @($resultArray | Where-Object { $_.reasons -contains "blocked_path" }).Count
+    draft = @($resultArray | Where-Object { $_.reasons -contains "draft_pr" }).Count
+    non_ai_branch = @($resultArray | Where-Object { $_.reasons -contains "branch_prefix_not_allowed" }).Count
+    high_risk_files = @($resultArray | Where-Object { $_.file_risk -in @("blocked", "needs_review") }).Count
+    missing_checks = @($resultArray | Where-Object { @($_.missing_checks).Count -gt 0 }).Count
+    pending_checks = @($resultArray | Where-Object { @($_.pending_checks).Count -gt 0 }).Count
+  }
   results = $resultArray
 }
 
