@@ -1,4 +1,15 @@
-import type { IterationRun, RunDetail, RunSummary, SkyBridgeEvent, SkyBridgeEventType, SkyBridgeSeverity, SkyBridgeSourcePlatform, SourceCapability } from "@skybridge-agent-hub/event-schema";
+import type {
+  AdapterCapability,
+  AdapterRole,
+  IterationRun,
+  RunDetail,
+  RunSummary,
+  SkyBridgeEvent,
+  SkyBridgeEventType,
+  SkyBridgeSeverity,
+  SkyBridgeSourcePlatform,
+  SourceCapability,
+} from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
   title: string;
@@ -22,7 +33,15 @@ export interface StoredNotification {
   severity?: string;
   source_event_id?: string;
   target?: string;
-  provider: "ntfy" | "apprise" | "gotify" | "bark" | "wecom" | "fcm" | "xiaomi-push" | "placeholder";
+  provider:
+    | "ntfy"
+    | "apprise"
+    | "gotify"
+    | "bark"
+    | "wecom"
+    | "fcm"
+    | "xiaomi-push"
+    | "placeholder";
   dedupe_key?: string;
   status: "pending" | "sent" | "skipped" | "failed";
   retry_count?: number;
@@ -83,7 +102,13 @@ export interface IterationsSummary {
   failed: number;
   repair_attempts: number;
   latest?: IterationRun;
-  recent: Array<IterationRun & { blocked_reason?: string; repair_attempts: number; raw_logs_included: false }>;
+  recent: Array<
+    IterationRun & {
+      blocked_reason?: string;
+      repair_attempts: number;
+      raw_logs_included: false;
+    }
+  >;
 }
 
 export interface PrSummaryItem {
@@ -117,7 +142,13 @@ export interface NotificationsSummary {
   failed: number;
   pending: number;
   by_severity: Record<string, number>;
-  providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>;
+  providers: Array<{
+    provider: string;
+    configured: boolean;
+    status: string;
+    required_env: string;
+    credential_values_exposed: boolean;
+  }>;
   bootstrap_fallback: {
     status: string;
     script: string;
@@ -228,28 +259,41 @@ export class SkyBridgeClient {
     const response = await fetch(this.url("/v1/events"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(event)
+      body: JSON.stringify(event),
     });
     await assertOk(response, "event ingest");
     return response.json() as Promise<{ ok: boolean; id: string }>;
   }
 
   async listEvents(query: EventListQuery = {}): Promise<SkyBridgeEvent[]> {
-    const json = await this.getJson<{ events: SkyBridgeEvent[] }>(`/v1/events${queryString(query)}`);
+    const json = await this.getJson<{ events: SkyBridgeEvent[] }>(
+      `/v1/events${queryString(query)}`,
+    );
     return json.events;
   }
 
   async listRuns(query: RunListQuery = {}): Promise<RunSummary[]> {
-    const json = await this.getJson<{ runs: RunSummary[] }>(`/v1/runs${queryString(query)}`);
+    const json = await this.getJson<{ runs: RunSummary[] }>(
+      `/v1/runs${queryString(query)}`,
+    );
     return json.runs;
   }
 
-  async getRun(runId: string, query: { limit?: number } = {}): Promise<RunDetail> {
-    return this.getJson<RunDetail>(`/v1/runs/${encodeURIComponent(runId)}${queryString(query)}`);
+  async getRun(
+    runId: string,
+    query: { limit?: number } = {},
+  ): Promise<RunDetail> {
+    return this.getJson<RunDetail>(
+      `/v1/runs/${encodeURIComponent(runId)}${queryString(query)}`,
+    );
   }
 
-  async listNotifications(query: NotificationListQuery = {}): Promise<StoredNotification[]> {
-    const json = await this.getJson<{ notifications: StoredNotification[] }>(`/v1/notifications${queryString(query)}`);
+  async listNotifications(
+    query: NotificationListQuery = {},
+  ): Promise<StoredNotification[]> {
+    const json = await this.getJson<{ notifications: StoredNotification[] }>(
+      `/v1/notifications${queryString(query)}`,
+    );
     return json.notifications;
   }
 
@@ -258,7 +302,9 @@ export class SkyBridgeClient {
   }
 
   async listProjects(): Promise<ProjectSummary[]> {
-    const json = await this.getJson<{ projects: ProjectSummary[] }>("/v1/projects");
+    const json = await this.getJson<{ projects: ProjectSummary[] }>(
+      "/v1/projects",
+    );
     return json.projects;
   }
 
@@ -283,8 +329,17 @@ export class SkyBridgeClient {
   }
 
   async listSources(): Promise<SourceCapability[]> {
-    const json = await this.getJson<{ sources: SourceCapability[] }>("/v1/sources");
+    const json = await this.getJson<{ sources: SourceCapability[] }>(
+      "/v1/sources",
+    );
     return json.sources;
+  }
+
+  async listAdapters(role?: AdapterRole): Promise<AdapterCapability[]> {
+    const json = await this.getJson<{ adapters: AdapterCapability[] }>(
+      `/v1/adapters${queryString({ role })}`,
+    );
+    return json.adapters;
   }
 
   async listNodes(): Promise<NodeSummary[]> {
@@ -292,8 +347,24 @@ export class SkyBridgeClient {
     return json.nodes;
   }
 
-  async listNotificationProviders(): Promise<Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>> {
-    const json = await this.getJson<{ providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }> }>("/v1/notifications/providers");
+  async listNotificationProviders(): Promise<
+    Array<{
+      provider: string;
+      configured: boolean;
+      status: string;
+      required_env: string;
+      credential_values_exposed: boolean;
+    }>
+  > {
+    const json = await this.getJson<{
+      providers: Array<{
+        provider: string;
+        configured: boolean;
+        status: string;
+        required_env: string;
+        credential_values_exposed: boolean;
+      }>;
+    }>("/v1/notifications/providers");
     return json.providers;
   }
 
@@ -302,17 +373,39 @@ export class SkyBridgeClient {
   }
 
   async listAuditEntries(query: AuditListQuery = {}): Promise<AuditEntry[]> {
-    const json = await this.getJson<{ audit: AuditEntry[] }>(`/v1/audit${queryString(query)}`);
+    const json = await this.getJson<{ audit: AuditEntry[] }>(
+      `/v1/audit${queryString(query)}`,
+    );
     return json.audit;
   }
 
   async listIterations(): Promise<IterationRun[]> {
-    const json = await this.getJson<{ iterations: IterationRun[] }>("/v1/iterations");
+    const json = await this.getJson<{ iterations: IterationRun[] }>(
+      "/v1/iterations",
+    );
     return json.iterations;
   }
 
-  async getIteration(iterationId: string): Promise<IterationRun & { events?: Array<{ type: string; time: string; payload: Record<string, unknown> }> }> {
-    const json = await this.getJson<{ iteration: IterationRun & { events?: Array<{ type: string; time: string; payload: Record<string, unknown> }> } }>(`/v1/iterations/${encodeURIComponent(iterationId)}`);
+  async getIteration(
+    iterationId: string,
+  ): Promise<
+    IterationRun & {
+      events?: Array<{
+        type: string;
+        time: string;
+        payload: Record<string, unknown>;
+      }>;
+    }
+  > {
+    const json = await this.getJson<{
+      iteration: IterationRun & {
+        events?: Array<{
+          type: string;
+          time: string;
+          payload: Record<string, unknown>;
+        }>;
+      };
+    }>(`/v1/iterations/${encodeURIComponent(iterationId)}`);
     return json.iteration;
   }
 
@@ -325,27 +418,38 @@ export class SkyBridgeClient {
   }
 
   async listApprovals(): Promise<ApprovalSummary[]> {
-    const json = await this.getJson<{ approvals: ApprovalSummary[] }>("/v1/approvals");
+    const json = await this.getJson<{ approvals: ApprovalSummary[] }>(
+      "/v1/approvals",
+    );
     return json.approvals;
   }
 
-  async sendNotification(message: NotificationRequest): Promise<{ ok: boolean; provider: string }> {
+  async sendNotification(
+    message: NotificationRequest,
+  ): Promise<{ ok: boolean; provider: string }> {
     const response = await fetch(this.url("/v1/notifications/send"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(message)
+      body: JSON.stringify(message),
     });
     await assertOk(response, "notification request");
     return response.json() as Promise<{ ok: boolean; provider: string }>;
   }
 
-  streamEvents(optionsOrHandler: StreamEventsOptions | ((event: SkyBridgeEvent) => void)): EventSource {
-    const options = typeof optionsOrHandler === "function" ? { onEvent: optionsOrHandler } : optionsOrHandler;
+  streamEvents(
+    optionsOrHandler: StreamEventsOptions | ((event: SkyBridgeEvent) => void),
+  ): EventSource {
+    const options =
+      typeof optionsOrHandler === "function"
+        ? { onEvent: optionsOrHandler }
+        : optionsOrHandler;
     const source = new EventSource(this.url("/v1/stream"));
     if (options.onOpen) source.addEventListener("open", options.onOpen);
     if (options.onError) source.addEventListener("error", options.onError);
     source.addEventListener("skybridge.event", (message) => {
-      options.onEvent(JSON.parse((message as MessageEvent).data) as SkyBridgeEvent);
+      options.onEvent(
+        JSON.parse((message as MessageEvent).data) as SkyBridgeEvent,
+      );
     });
     return source;
   }

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import redactionRules from "./redaction-rules.json" with { type: "json" };
 
-export const SKYBRIDGE_EVENT_SCHEMA_VERSION = "skybridge.agent_event.v1" as const;
+export const SKYBRIDGE_EVENT_SCHEMA_VERSION =
+  "skybridge.agent_event.v1" as const;
 
 export const SkyBridgeEventTypeSchema = z.enum([
   "session.started",
@@ -48,18 +49,30 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "notification.requested",
   "notification.sent",
   "notification.skipped",
-  "notification.failed"
+  "notification.failed",
 ]);
 
-export const SkyBridgeSeveritySchema = z.enum(["debug", "info", "warning", "error", "critical"]);
-export const SkyBridgeSourcePlatformSchema = z.enum(["codex", "opencode", "hermes", "skybridge", "custom"]);
+export const SkyBridgeSeveritySchema = z.enum([
+  "debug",
+  "info",
+  "warning",
+  "error",
+  "critical",
+]);
+export const SkyBridgeSourcePlatformSchema = z.enum([
+  "codex",
+  "opencode",
+  "hermes",
+  "skybridge",
+  "custom",
+]);
 
 export const SkyBridgeSourceSchema = z.object({
   platform: SkyBridgeSourcePlatformSchema,
   adapter: z.string().min(1),
   node_id: z.string().optional(),
   agent_id: z.string().optional(),
-  cwd: z.string().optional()
+  cwd: z.string().optional(),
 });
 
 export const SkyBridgeCorrelationSchema = z.object({
@@ -67,23 +80,27 @@ export const SkyBridgeCorrelationSchema = z.object({
   run_id: z.string().optional(),
   turn_id: z.string().optional(),
   step_id: z.string().optional(),
-  tool_call_id: z.string().optional()
+  tool_call_id: z.string().optional(),
 });
 
 export const SkyBridgeEventSchema = z.object({
-  schema: z.literal(SKYBRIDGE_EVENT_SCHEMA_VERSION).default(SKYBRIDGE_EVENT_SCHEMA_VERSION),
+  schema: z
+    .literal(SKYBRIDGE_EVENT_SCHEMA_VERSION)
+    .default(SKYBRIDGE_EVENT_SCHEMA_VERSION),
   event_id: z.string().optional(),
   time: z.string().datetime(),
   type: SkyBridgeEventTypeSchema,
   severity: SkyBridgeSeveritySchema.default("info"),
   source: SkyBridgeSourceSchema,
   correlation: SkyBridgeCorrelationSchema.optional(),
-  payload: z.record(z.unknown()).default({})
+  payload: z.record(z.unknown()).default({}),
 });
 
 export type SkyBridgeEventType = z.infer<typeof SkyBridgeEventTypeSchema>;
 export type SkyBridgeSeverity = z.infer<typeof SkyBridgeSeveritySchema>;
-export type SkyBridgeSourcePlatform = z.infer<typeof SkyBridgeSourcePlatformSchema>;
+export type SkyBridgeSourcePlatform = z.infer<
+  typeof SkyBridgeSourcePlatformSchema
+>;
 export type SkyBridgeSource = z.infer<typeof SkyBridgeSourceSchema>;
 export type SkyBridgeCorrelation = z.infer<typeof SkyBridgeCorrelationSchema>;
 export type SkyBridgeEvent = z.infer<typeof SkyBridgeEventSchema>;
@@ -96,6 +113,92 @@ export type SkyBridgeEventInput = {
   correlation?: SkyBridgeCorrelation;
   payload?: Record<string, unknown>;
 };
+
+export const AdapterRoleSchema = z.enum([
+  "planner",
+  "executor",
+  "scm_ci_provider",
+  "notification_provider",
+  "runtime_provider",
+]);
+
+export const AdapterStabilitySchema = z.enum([
+  "stable",
+  "experimental",
+  "fixture-backed",
+  "dogfooding",
+]);
+
+export type AdapterRole = z.infer<typeof AdapterRoleSchema>;
+export type AdapterStability = z.infer<typeof AdapterStabilitySchema>;
+
+export interface AdapterCapability {
+  id: string;
+  role: AdapterRole;
+  label: string;
+  provider: string;
+  stability: AdapterStability;
+  optional: boolean;
+  dogfooding: boolean;
+  capabilities: string[];
+  event_families: string[];
+  notes: string;
+}
+
+export interface ProviderStatus {
+  provider: string;
+  role: AdapterRole;
+  status: "available" | "configured" | "degraded" | "missing" | "placeholder";
+  configured: boolean;
+  required_env?: string[];
+  credential_values_exposed: false;
+  message?: string;
+}
+
+export interface WorkOrder {
+  work_order_id: string;
+  title: string;
+  description: string;
+  kind: "docs" | "code" | "test" | "ops" | "manual";
+  risk: "low" | "medium" | "high";
+  planner_adapter: string;
+  created_at: string;
+  constraints: string[];
+  acceptance: string[];
+  suggested_files: string[];
+}
+
+export interface PlannerDecision {
+  decision_id: string;
+  planner_adapter: string;
+  input_summary: string;
+  work_orders: WorkOrder[];
+  requires_human_review: boolean;
+  created_at: string;
+}
+
+export interface ExecutionResult {
+  execution_id: string;
+  work_order_id: string;
+  executor_adapter: string;
+  status: "completed" | "failed" | "blocked" | "skipped";
+  completed_at: string;
+  summary: string;
+  pr_number?: number;
+  note?: string;
+  events: SkyBridgeEvent[];
+}
+
+export interface NotificationJob {
+  notification_job_id: string;
+  provider: string;
+  title: string;
+  message: string;
+  priority: "low" | "default" | "high" | "urgent";
+  status: "queued" | "sent" | "skipped" | "failed";
+  created_at: string;
+  source_work_order_id?: string;
+}
 
 export const IterationStateSchema = z.enum([
   "idle",
@@ -112,7 +215,7 @@ export const IterationStateSchema = z.enum([
   "auto_merge_enabled",
   "merged",
   "blocked",
-  "failed"
+  "failed",
 ]);
 
 export type IterationState = z.infer<typeof IterationStateSchema>;
@@ -184,24 +287,192 @@ export interface SourceCapability {
   notes: string;
 }
 
+export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
+  {
+    id: "rule-based-planner",
+    role: "planner",
+    label: "Rule-Based Planner",
+    provider: "skybridge",
+    stability: "fixture-backed",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["docs-only-work-order", "safe-fixture-planning"],
+    event_families: ["plan", "todo"],
+    notes:
+      "Minimal planner proof that creates a low-risk docs WorkOrder without Hermes.",
+  },
+  {
+    id: "hermes-api",
+    role: "planner",
+    label: "Hermes Agent",
+    provider: "hermes",
+    stability: "dogfooding",
+    optional: true,
+    dogfooding: true,
+    capabilities: ["supervision", "nightly-report", "safe-run-smoke"],
+    event_families: ["run", "tool", "message", "agent"],
+    notes:
+      "Dogfooding planner/supervisor adapter; not required by SkyBridge Core.",
+  },
+  {
+    id: "codex-exec-json",
+    role: "executor",
+    label: "Codex Exec",
+    provider: "codex",
+    stability: "dogfooding",
+    optional: true,
+    dogfooding: true,
+    capabilities: ["bounded-execution", "jsonl-telemetry", "redacted-output"],
+    event_families: [
+      "session",
+      "run",
+      "turn",
+      "tool",
+      "file",
+      "diff",
+      "approval",
+      "message",
+    ],
+    notes: "Dogfooding executor adapter used by local autonomous development.",
+  },
+  {
+    id: "manual-executor",
+    role: "executor",
+    label: "Manual Executor",
+    provider: "skybridge",
+    stability: "fixture-backed",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["manual-result-registration", "pr-note-attachment"],
+    event_families: ["run", "message"],
+    notes: "Minimal executor proof that records completed work without Codex.",
+  },
+  {
+    id: "opencode-plugin",
+    role: "executor",
+    label: "OpenCode",
+    provider: "opencode",
+    stability: "fixture-backed",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["plugin-events", "tool-events", "todo-events"],
+    event_families: [
+      "session",
+      "run",
+      "tool",
+      "file",
+      "approval",
+      "todo",
+      "message",
+      "agent",
+    ],
+    notes: "OpenCode event adapter foundation backed by fixtures.",
+  },
+  {
+    id: "github-actions",
+    role: "scm_ci_provider",
+    label: "GitHub",
+    provider: "github",
+    stability: "dogfooding",
+    optional: true,
+    dogfooding: true,
+    capabilities: ["pr-summary", "ci-status", "auto-merge-policy-dry-run"],
+    event_families: ["iteration", "approval", "notification"],
+    notes:
+      "SCM/CI provider used for PR and CI policy; repository settings remain operator-owned.",
+  },
+  {
+    id: "generic-scm",
+    role: "scm_ci_provider",
+    label: "Generic SCM",
+    provider: "custom",
+    stability: "experimental",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["placeholder-provider-contract"],
+    event_families: ["iteration", "approval"],
+    notes:
+      "Placeholder proving SCM/CI is a provider boundary, not a GitHub-only core.",
+  },
+  {
+    id: "ntfy",
+    role: "notification_provider",
+    label: "ntfy",
+    provider: "ntfy",
+    stability: "stable",
+    optional: true,
+    dogfooding: true,
+    capabilities: ["direct-send", "skipped-placeholder", "bootstrap-fallback"],
+    event_families: ["notification"],
+    notes: "First notification provider; optional and replaceable.",
+  },
+  {
+    id: "generic-notification",
+    role: "notification_provider",
+    label: "Generic Notification Provider",
+    provider: "custom",
+    stability: "experimental",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["placeholder-provider-contract"],
+    event_families: ["notification"],
+    notes: "Placeholder proving notification routing is provider-agnostic.",
+  },
+  {
+    id: "sidecar",
+    role: "runtime_provider",
+    label: "Local Sidecar",
+    provider: "skybridge",
+    stability: "experimental",
+    optional: true,
+    dogfooding: false,
+    capabilities: ["node-heartbeat", "event-forwarding"],
+    event_families: ["node", "agent"],
+    notes:
+      "Runtime worker provider boundary for future local and remote nodes.",
+  },
+];
+
 export const SOURCE_CAPABILITIES: SourceCapability[] = [
   {
     platform: "codex",
     label: "Codex",
     adapters: ["codex-hook", "codex-exec-json", "codex-appserver"],
-    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    event_families: [
+      "session",
+      "run",
+      "turn",
+      "tool",
+      "file",
+      "diff",
+      "approval",
+      "message",
+      "agent",
+      "notification",
+    ],
     supports_remote_control: false,
     default_safe: true,
-    notes: "Local hook and exec telemetry with command, prompt and output redaction by default."
+    notes:
+      "Local hook and exec telemetry with command, prompt and output redaction by default.",
   },
   {
     platform: "opencode",
     label: "OpenCode",
     adapters: ["opencode-plugin"],
-    event_families: ["session", "run", "tool", "file", "approval", "todo", "message", "agent"],
+    event_families: [
+      "session",
+      "run",
+      "tool",
+      "file",
+      "approval",
+      "todo",
+      "message",
+      "agent",
+    ],
     supports_remote_control: false,
     default_safe: true,
-    notes: "Plugin event telemetry normalized from status, tool, file, permission and todo events."
+    notes:
+      "Plugin event telemetry normalized from status, tool, file, permission and todo events.",
   },
   {
     platform: "hermes",
@@ -210,26 +481,52 @@ export const SOURCE_CAPABILITIES: SourceCapability[] = [
     event_families: ["run", "tool", "message", "agent"],
     supports_remote_control: false,
     default_safe: true,
-    notes: "API and stream event telemetry normalized from run status and event stream samples."
+    notes:
+      "API and stream event telemetry normalized from run status and event stream samples.",
   },
   {
     platform: "skybridge",
     label: "SkyBridge",
-    adapters: ["yolo-runner", "self-observation-smoke", "demo-dataset", "sidecar"],
-    event_families: ["run", "tool", "notification", "agent", "node", "approval", "iteration"],
+    adapters: [
+      "yolo-runner",
+      "self-observation-smoke",
+      "demo-dataset",
+      "sidecar",
+    ],
+    event_families: [
+      "run",
+      "tool",
+      "notification",
+      "agent",
+      "node",
+      "approval",
+      "iteration",
+    ],
     supports_remote_control: false,
     default_safe: true,
-    notes: "First-party runner, smoke, node and dogfooding telemetry."
+    notes: "First-party runner, smoke, node and dogfooding telemetry.",
   },
   {
     platform: "custom",
     label: "Custom Agent",
     adapters: ["custom"],
-    event_families: ["session", "run", "turn", "tool", "file", "diff", "approval", "message", "agent", "notification"],
+    event_families: [
+      "session",
+      "run",
+      "turn",
+      "tool",
+      "file",
+      "diff",
+      "approval",
+      "message",
+      "agent",
+      "notification",
+    ],
     supports_remote_control: false,
     default_safe: false,
-    notes: "Bring-your-own adapter; events must be normalized and redacted before ingestion."
-  }
+    notes:
+      "Bring-your-own adapter; events must be normalized and redacted before ingestion.",
+  },
 ];
 
 export const SharedRedactionRules = redactionRules;
@@ -238,7 +535,7 @@ export function createEvent(input: SkyBridgeEventInput): SkyBridgeEvent {
   return SkyBridgeEventSchema.parse({
     schema: SKYBRIDGE_EVENT_SCHEMA_VERSION,
     time: input.time ?? new Date().toISOString(),
-    ...input
+    ...input,
   });
 }
 
@@ -246,8 +543,112 @@ export function parseEvent(input: unknown): SkyBridgeEvent {
   return SkyBridgeEventSchema.parse(input);
 }
 
-export function isNotificationTrigger(event: Pick<SkyBridgeEvent, "type">): boolean {
-  return event.type === "run.failed" || event.type === "approval.requested" || event.type === "notification.requested";
+export function isNotificationTrigger(
+  event: Pick<SkyBridgeEvent, "type">,
+): boolean {
+  return (
+    event.type === "run.failed" ||
+    event.type === "approval.requested" ||
+    event.type === "notification.requested"
+  );
+}
+
+export function listAdapterCapabilities(
+  role?: AdapterRole,
+): AdapterCapability[] {
+  return ADAPTER_CAPABILITIES.filter(
+    (capability) => !role || capability.role === role,
+  );
+}
+
+export function createRuleBasedPlannerDecision(input: {
+  goal: string;
+  now?: string;
+  plannerAdapter?: string;
+}): PlannerDecision {
+  const now = input.now ?? new Date().toISOString();
+  const normalized = input.goal.trim().replace(/\s+/g, " ");
+  const summary =
+    normalized.length > 160 ? `${normalized.slice(0, 157)}...` : normalized;
+  const slug =
+    summary
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "docs-task";
+  const workOrder: WorkOrder = {
+    work_order_id: `wo_docs_${slug}`,
+    title: `Docs-only task: ${summary || "Review product documentation"}`,
+    description:
+      "Review and update documentation only. Do not change runtime code, secrets, deployment settings or GitHub settings.",
+    kind: "docs",
+    risk: "low",
+    planner_adapter: input.plannerAdapter ?? "rule-based-planner",
+    created_at: now,
+    constraints: [
+      "docs-only",
+      "no secrets",
+      "no deployment",
+      "no GitHub settings mutation",
+    ],
+    acceptance: [
+      "Documentation describes the requested goal.",
+      "No runtime behavior changes are required.",
+      "The change can be reviewed independently.",
+    ],
+    suggested_files: ["README.md", "docs/"],
+  };
+
+  return {
+    decision_id: `pd_${slug || "docs_task"}`,
+    planner_adapter: workOrder.planner_adapter,
+    input_summary: summary,
+    work_orders: [workOrder],
+    requires_human_review: false,
+    created_at: now,
+  };
+}
+
+export function createManualExecutionResult(input: {
+  workOrder: WorkOrder;
+  summary: string;
+  prNumber?: number;
+  note?: string;
+  now?: string;
+  executorAdapter?: string;
+}): ExecutionResult {
+  const now = input.now ?? new Date().toISOString();
+  const event = createEvent({
+    type: "run.completed",
+    time: now,
+    source: {
+      platform: "skybridge",
+      adapter: input.executorAdapter ?? "manual-executor",
+    },
+    correlation: { run_id: input.workOrder.work_order_id },
+    payload: {
+      title: input.workOrder.title,
+      work_order_id: input.workOrder.work_order_id,
+      planner_adapter: input.workOrder.planner_adapter,
+      executor_adapter: input.executorAdapter ?? "manual-executor",
+      summary: input.summary,
+      pr_number: input.prNumber,
+      note: input.note,
+      manual_result: true,
+    },
+  });
+
+  return {
+    execution_id: `exec_${input.workOrder.work_order_id}`,
+    work_order_id: input.workOrder.work_order_id,
+    executor_adapter: input.executorAdapter ?? "manual-executor",
+    status: "completed",
+    completed_at: now,
+    summary: input.summary,
+    pr_number: input.prNumber,
+    note: input.note,
+    events: [event],
+  };
 }
 
 export function redactForTelemetry(input: unknown): unknown {
@@ -257,7 +658,8 @@ export function redactForTelemetry(input: unknown): unknown {
 function redactValue(input: unknown, depth: number): unknown {
   if (depth > 8) return "[REDACTED:depth]";
   if (typeof input === "string") return redactString(input);
-  if (Array.isArray(input)) return input.slice(0, 100).map((item) => redactValue(item, depth + 1));
+  if (Array.isArray(input))
+    return input.slice(0, 100).map((item) => redactValue(item, depth + 1));
   if (!input || typeof input !== "object") return input;
   const output: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -277,17 +679,23 @@ function redactValue(input: unknown, depth: number): unknown {
 function redactString(input: string): string {
   let output = input;
   for (const pattern of redactionRules.secretValuePatterns) {
-    output = output.replace(new RegExp(pattern, "gi"), redactionRules.replacement);
+    output = output.replace(
+      new RegExp(pattern, "gi"),
+      redactionRules.replacement,
+    );
   }
-  return output.length > redactionRules.maxStringLength ? `${output.slice(0, redactionRules.maxStringLength)}...` : output;
+  return output.length > redactionRules.maxStringLength
+    ? `${output.slice(0, redactionRules.maxStringLength)}...`
+    : output;
 }
 
 function summarizeOmitted(value: unknown): Record<string, unknown> {
-  const text = typeof value === "string" ? value : JSON.stringify(value ?? null);
+  const text =
+    typeof value === "string" ? value : JSON.stringify(value ?? null);
   return {
     omitted: true,
     length: text.length,
-    reason: "unsafe_raw_payload"
+    reason: "unsafe_raw_payload",
   };
 }
 

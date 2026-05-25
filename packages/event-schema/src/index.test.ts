@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createEvent, isNotificationTrigger, parseEvent, redactForTelemetry, SharedRedactionRules } from "./index.js";
+import {
+  createEvent,
+  createManualExecutionResult,
+  createRuleBasedPlannerDecision,
+  isNotificationTrigger,
+  listAdapterCapabilities,
+  parseEvent,
+  redactForTelemetry,
+  SharedRedactionRules,
+} from "./index.js";
 
 describe("event schema", () => {
   it("creates a normalized event", () => {
@@ -7,7 +16,7 @@ describe("event schema", () => {
       type: "run.started",
       source: { platform: "codex", adapter: "codex-hook" },
       severity: "info",
-      payload: {}
+      payload: {},
     });
 
     expect(event.schema).toBe("skybridge.agent_event.v1");
@@ -23,7 +32,7 @@ describe("event schema", () => {
         severity: "info",
         source: { platform, adapter: `${platform}-adapter` },
         correlation: { session_id: "s1", run_id: "r1" },
-        payload: { message: "started" }
+        payload: { message: "started" },
       });
 
       expect(event.source.platform).toBe(platform);
@@ -54,7 +63,7 @@ describe("event schema", () => {
       title: "001-demo.md",
       lifecycle: "notification.requested",
       branch: "ai/001-demo",
-      goal_id: "001"
+      goal_id: "001",
     };
 
     expect(summary.run_id).toBe("runner-001-demo");
@@ -66,13 +75,16 @@ describe("event schema", () => {
       token: "abc123",
       headers: { Authorization: "Bearer abc.def.ghi" },
       stdout: "full command output",
-      nested: { api_key: "sk-testsecret123456" }
+      nested: { api_key: "sk-testsecret123456" },
     }) as Record<string, unknown>;
 
     expect(redacted.token).toBe(SharedRedactionRules.replacement);
     expect(JSON.stringify(redacted)).not.toContain("abc.def.ghi");
     expect(JSON.stringify(redacted)).not.toContain("sk-testsecret123456");
-    expect(redacted.stdout).toMatchObject({ omitted: true, reason: "unsafe_raw_payload" });
+    expect(redacted.stdout).toMatchObject({
+      omitted: true,
+      reason: "unsafe_raw_payload",
+    });
   });
 
   it("validates iteration lifecycle events and safe metadata payloads", () => {
@@ -90,14 +102,14 @@ describe("event schema", () => {
         state: "local_checking",
         attempts: 1,
         max_attempts: 3,
-        checks: [{ name: "corepack pnpm check", status: "pending" }]
-      }
+        checks: [{ name: "corepack pnpm check", status: "pending" }],
+      },
     });
 
     expect(event.type).toBe("iteration.state_changed");
     expect(event.payload).toMatchObject({
       iteration_id: "iter_001",
-      state: "local_checking"
+      state: "local_checking",
     });
   });
 
@@ -107,12 +119,55 @@ describe("event schema", () => {
       state: "ci_failed",
       prompt: "raw prompt must not be sent",
       stderr: "raw check output must not be sent",
-      token: "secret-token"
+      token: "secret-token",
     });
 
     const text = JSON.stringify(redacted);
     expect(text).not.toContain("raw prompt must not be sent");
     expect(text).not.toContain("raw check output must not be sent");
     expect(text).not.toContain("secret-token");
+  });
+
+  it("exposes neutral adapter capabilities by role", () => {
+    const planners = listAdapterCapabilities("planner");
+    const executors = listAdapterCapabilities("executor");
+    const notifications = listAdapterCapabilities("notification_provider");
+
+    expect(planners.map((item) => item.id)).toContain("rule-based-planner");
+    expect(planners.map((item) => item.id)).toContain("hermes-api");
+    expect(executors.map((item) => item.id)).toContain("manual-executor");
+    expect(executors.map((item) => item.id)).toContain("codex-exec-json");
+    expect(notifications.map((item) => item.id)).toContain("ntfy");
+    expect(listAdapterCapabilities().every((item) => item.optional)).toBe(true);
+  });
+
+  it("creates a docs-only work order without Hermes", () => {
+    const decision = createRuleBasedPlannerDecision({
+      goal: "Update the README positioning for agent-agnostic core boundaries.",
+      now: "2026-05-25T00:00:00.000Z",
+    });
+
+    expect(decision.planner_adapter).toBe("rule-based-planner");
+    expect(decision.work_orders).toHaveLength(1);
+    expect(decision.work_orders[0]?.kind).toBe("docs");
+    expect(decision.work_orders[0]?.constraints).toContain("no deployment");
+  });
+
+  it("records a manual executor result without Codex", () => {
+    const [workOrder] = createRuleBasedPlannerDecision({
+      goal: "Write docs",
+      now: "2026-05-25T00:00:00.000Z",
+    }).work_orders;
+    const result = createManualExecutionResult({
+      workOrder: workOrder!,
+      summary: "Documentation update completed manually.",
+      prNumber: 27,
+      now: "2026-05-25T00:01:00.000Z",
+    });
+
+    expect(result.executor_adapter).toBe("manual-executor");
+    expect(result.pr_number).toBe(27);
+    expect(result.events[0]?.source.adapter).toBe("manual-executor");
+    expect(result.events[0]?.payload.manual_result).toBe(true);
   });
 });
