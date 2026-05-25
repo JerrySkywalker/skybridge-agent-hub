@@ -1,15 +1,15 @@
 # Autonomous Iteration Panel
 
-The Operator Console includes an autonomous iteration control panel for one-glance supervision of the controller, CI Guardian, Hermes and bootstrap notification path.
+The Operator Console includes an autonomous iteration control panel for one-glance supervision of the controller, CI Guardian, optional Hermes planner adapter and bootstrap notification path.
 
 The panel shows safe metadata only:
 
 - latest iteration state;
 - open PR number when known;
 - CI Guardian status derived from PR/CI iteration states;
-- Hermes supervisor status from `/v1/supervisor/status`;
+- planner/supervisor status from `/v1/supervisor/status`;
 - bootstrap notification path;
-- ntfy provider configuration state;
+- notification provider configuration state;
 - blocked reason;
 - next recommended action from `/v1/supervisor/next-action`.
 

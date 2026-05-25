@@ -1,20 +1,32 @@
 # SkyBridge Agent Hub
 
-Open-source telemetry, notifications and control foundations for autonomous coding agents.
+SkyBridge is an agent-agnostic control plane for AI-assisted software development.
 
-SkyBridge Agent Hub collects normalized events from tools such as Codex, OpenCode, Hermes Agent and future custom agents, then turns them into run state, dashboards, notification jobs and eventually safe remote-control workflows.
+It provides:
+
+- project/goal/task orchestration;
+- worker pool management;
+- run/event/audit logging;
+- CI/PR/auto-merge policy;
+- notification routing;
+- operator dashboard.
+
+Agent systems such as Hermes, Codex, OpenCode or future tools connect through adapters.
 
 ## Why SkyBridge Exists
 
 Autonomous agents are useful, but their execution state is usually scattered across terminal logs, local hooks, CI output and ad hoc notification scripts. That makes long-running work hard to supervise and hard to recover when a run fails.
 
-SkyBridge provides a shared foundation for:
+SkyBridge Core provides a shared foundation for:
 
-- ingesting events from multiple agent runtimes;
+- ingesting normalized events from multiple planner and executor adapters;
 - viewing sessions, runs, tool calls and failures in one place;
-- sending low-noise notifications for important state changes;
+- routing low-noise notifications through provider adapters;
+- reviewing PR/CI and auto-merge policy through SCM/CI providers;
 - embedding agent status in React apps, web dashboards and Web Components;
 - building toward local sidecars and remote approval/control surfaces without exposing secrets by default.
+
+Hermes and Codex are important dogfooding adapters in this repository, but they are not required dependencies of SkyBridge Core.
 
 ## Features
 
@@ -23,17 +35,17 @@ SkyBridge provides a shared foundation for:
 - Run/session aggregation for agent work history.
 - Server-sent events stream for live dashboards.
 - SQLite persistence with a one-time import path from the previous local JSON store.
-- ntfy-first notification provider with skipped placeholder records when credentials are not configured.
-- Codex hook adapter, OpenCode/Hermes adapter foundations and local sidecar event forwarder.
+- ntfy-first notification provider adapter with skipped placeholder records when credentials are not configured.
+- Codex hook/exec adapters, OpenCode/Hermes adapter foundations, rule-based planner fixture, manual executor fixture and local sidecar event forwarder.
 - React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
-- Productized Operator Console for daily agent operations across overview, runs, iterations, PR/CI, auto-merge, notifications, Hermes, sources, audit and compact embeds.
-- Codex TUI Master Goal workflow for long-horizon autonomous development.
+- Productized Operator Console for daily operations across overview, runs, iterations, PR/CI, auto-merge, notification providers, planner/executor adapters, sources, audit and compact embeds.
+- Optional Codex TUI Master Goal workflow for long-horizon dogfooding development.
 - PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
 - Reproducible Docker builds, GHCR publishing, release-tag validation, staging dry-run and backup/rollback operator scripts.
 - Approval queue, node registry, metrics endpoint, demo dataset and release candidate smoke foundations.
 - Nightly local validation script and release-candidate audit docs for repeatable v0.9 hardening.
-- Agent CI/CD Control Plane foundations: Autonomous Iteration Controller, CI Guardian, Hermes supervisor bridge, bootstrap direct notifications and iteration dashboard panels.
+- Agent CI/CD Control Plane foundations: Autonomous Iteration Controller, CI Guardian, optional Hermes supervisor bridge, bootstrap direct notifications and iteration dashboard panels.
 
 ## Current MVP Status
 
@@ -57,7 +69,7 @@ Requirements:
 - Git
 - Node.js 22.5+ with `node:sqlite`
 - pnpm via Corepack
-- optional: Docker, GitHub CLI, Codex CLI and `just`
+- optional: Docker, GitHub CLI, Codex CLI, Hermes local tunnel tools and `just`
 
 Install and check the workspace:
 
@@ -78,7 +90,7 @@ The server listens on `http://127.0.0.1:8787` by default. Events and notificatio
 
 ### Operator Console
 
-The web dashboard is the SkyBridge Operator Console. It shows system health, active/recent runs, iterations, PR/CI state, auto-merge decisions, notification health, Hermes supervision, source adapters, audit metadata and a safe run detail panel.
+The web dashboard is the SkyBridge Operator Console. It shows system health, active/recent runs, iterations, PR/CI state, auto-merge decisions, notification provider health, planner/executor adapter state, source adapters, audit metadata and a safe run detail panel.
 
 Seed a local demo view:
 
@@ -115,7 +127,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\generate-demo-dataset.ps
 
 See [docs/demo/DEMO_DATASET.md](docs/demo/DEMO_DATASET.md).
 
-### Codex Hook Integration
+### Optional Codex Hook Integration
 
 Validate the local Codex hook path without changing user config:
 
@@ -143,30 +155,29 @@ See [docs/codex/CODEX_LOCAL_INTEGRATION.md](docs/codex/CODEX_LOCAL_INTEGRATION.m
 
 ## Architecture
 
+SkyBridge uses a Core + Adapter Ring boundary:
+
 ```text
-Agent Sources
-  Codex hooks / Codex exec JSON / Codex app-server
-  OpenCode plugin events
-  Hermes Agent API/events
-  Custom agents
-        |
-        v
-Adapter Layer
-  Normalize source-specific events
-        |
-        v
-SkyBridge Server
-  Event ingestion
-  Run/session aggregation
-  SSE/WebSocket stream
-  Notification job creation
-        |
-        +-- Dashboard widgets
-        +-- Message center
-        +-- Future remote app API
+                Adapter Ring
+  PlannerAdapter   ExecutorAdapter   RuntimeProvider
+     Hermes          Codex              Local sidecar
+     Rule-based      Manual             Future workers
+        \              |               /
+         \             |              /
+          +-----------------------------------+
+          |          SkyBridge Core           |
+          | goals/tasks, events, runs, audit, |
+          | policy, notification routing, API |
+          +-----------------------------------+
+             /                         \
+            /                           \
+   SCM/CI providers              Notification providers
+   GitHub, generic SCM           ntfy, generic provider
 ```
 
-The server is the durable local/cloud hub. Adapters are responsible for turning source-specific payloads into the normalized event schema before the data reaches server APIs or UI packages.
+The server is the durable local/cloud hub. Adapters are responsible for turning source-specific payloads into the normalized event schema before the data reaches server APIs or UI packages. Core code should depend on neutral contracts such as PlannerAdapter, ExecutorAdapter, SCMProvider, NotificationProvider and RuntimeProvider, not on Hermes, Codex, GitHub or ntfy directly.
+
+See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md) and [docs/adapters/README.md](docs/adapters/README.md).
 
 ## Event Model
 
@@ -294,7 +305,9 @@ Release images publish to GHCR on `main` and `v*` tags. Staging automation is dr
 
 See [docs/operations/CI_CD_RELEASE_PLAN.md](docs/operations/CI_CD_RELEASE_PLAN.md), [docs/operations/RELEASE.md](docs/operations/RELEASE.md), [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) and [docs/operations/BACKUP_ROLLBACK.md](docs/operations/BACKUP_ROLLBACK.md).
 
-## Autonomous Development Workflows
+## Dogfooding Development Workflows
+
+SkyBridge is currently developed with Hermes, Codex, GitHub Actions and ntfy in the loop. That is dogfooding, not product lock-in: the same core APIs accept rule-based planner output, manual execution results, generic SCM/CI provider state and generic notification provider state.
 
 Recommended primary workflow:
 

@@ -64,7 +64,7 @@ corepack pnpm --filter @skybridge-agent-hub/server dev
 corepack pnpm --filter @skybridge-agent-hub/web dev
 ```
 
-Open the Vite URL and use the console sections for health, runs, timeline, Codex integration, notifications and run detail. The compact iframe-style route is available at `/#/embed/compact`.
+Open the Vite URL and use the console sections for health, runs, timeline, planner/executor adapters, notifications and run detail. The compact iframe-style route is available at `/#/embed/compact`.
 
 Focused checks:
 
@@ -135,7 +135,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1 `
   -UseTempDatabase
 ```
 
-The fixture includes Codex hook, Codex exec, yolo-runner, failed tool, approval request, notification skipped/sent and offline spool/replay events. Payloads are intentionally fake and redacted.
+The fixture includes rule-based planner, manual executor, Codex hook, Codex exec, yolo-runner, failed tool, approval request, SCM/CI provider, notification provider and offline spool/replay events. Payloads are intentionally fake and redacted.
 
 ## Codex hook integration smoke
 
