@@ -28,6 +28,18 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "agent.idle",
   "agent.error",
   "agent.stale",
+  "worker.registered",
+  "worker.heartbeat",
+  "worker.offline",
+  "project.created",
+  "goal.created",
+  "task.created",
+  "task.claimed",
+  "task.started",
+  "task.completed",
+  "task.failed",
+  "task.blocked",
+  "task.requeued",
   "node.connected",
   "node.heartbeat",
   "node.disconnected",
@@ -168,6 +180,121 @@ export interface WorkOrder {
   suggested_files: string[];
 }
 
+export type WorkerCapability =
+  | "manual-execution"
+  | "codex-exec"
+  | "opencode-exec"
+  | "filesystem"
+  | "git"
+  | "tests"
+  | "docs"
+  | "notifications"
+  | string;
+
+export type WorkerStatus = "online" | "stale" | "offline" | "disabled";
+export type TaskStatus =
+  | "queued"
+  | "claimed"
+  | "running"
+  | "completed"
+  | "failed"
+  | "blocked"
+  | "cancelled"
+  | "stale";
+export type TaskRisk = "low" | "medium" | "high";
+export type TaskSource =
+  | "manual"
+  | "planner"
+  | "rule_based"
+  | "hermes"
+  | "codex"
+  | "opencode"
+  | "custom";
+
+export interface Project {
+  project_id: string;
+  name: string;
+  repo?: string;
+  description?: string;
+  status: "active" | "paused" | "archived";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MasterGoal {
+  goal_id: string;
+  project_id: string;
+  title: string;
+  summary?: string;
+  status: "active" | "paused" | "completed" | "blocked" | "cancelled";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Worker {
+  worker_id: string;
+  name: string;
+  provider: string;
+  capabilities: WorkerCapability[];
+  labels: string[];
+  enabled: boolean;
+  status: WorkerStatus;
+  current_task_id?: string;
+  last_seen_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkerHeartbeat {
+  heartbeat_id: string;
+  worker_id: string;
+  seen_at: string;
+  status_note?: string;
+  load?: number;
+}
+
+export interface TaskClaim {
+  claim_id: string;
+  task_id: string;
+  worker_id: string;
+  claimed_at: string;
+}
+
+export interface TaskResult {
+  summary?: string;
+  result_url?: string;
+  pr_url?: string;
+  error_summary?: string;
+}
+
+export interface Task {
+  task_id: string;
+  project_id: string;
+  goal_id?: string;
+  title: string;
+  body?: string;
+  prompt_summary?: string;
+  status: TaskStatus;
+  risk: TaskRisk;
+  source: TaskSource;
+  required_capabilities: WorkerCapability[];
+  assigned_worker_id?: string;
+  claim?: TaskClaim;
+  result?: TaskResult;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskEvent {
+  task_event_id: string;
+  task_id: string;
+  type: Extract<SkyBridgeEventType, `task.${string}`>;
+  worker_id?: string;
+  time: string;
+  message?: string;
+  payload: Record<string, unknown>;
+}
+
 export interface PlannerDecision {
   decision_id: string;
   planner_adapter: string;
@@ -297,7 +424,7 @@ export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
     optional: true,
     dogfooding: false,
     capabilities: ["docs-only-work-order", "safe-fixture-planning"],
-    event_families: ["plan", "todo"],
+    event_families: ["plan", "todo", "task"],
     notes:
       "Minimal planner proof that creates a low-risk docs WorkOrder without Hermes.",
   },
@@ -310,7 +437,7 @@ export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
     optional: true,
     dogfooding: true,
     capabilities: ["supervision", "nightly-report", "safe-run-smoke"],
-    event_families: ["run", "tool", "message", "agent"],
+    event_families: ["run", "tool", "message", "agent", "task"],
     notes:
       "Dogfooding planner/supervisor adapter; not required by SkyBridge Core.",
   },
@@ -344,7 +471,7 @@ export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
     optional: true,
     dogfooding: false,
     capabilities: ["manual-result-registration", "pr-note-attachment"],
-    event_families: ["run", "message"],
+    event_families: ["run", "message", "task"],
     notes: "Minimal executor proof that records completed work without Codex.",
   },
   {
@@ -427,7 +554,7 @@ export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
     optional: true,
     dogfooding: false,
     capabilities: ["node-heartbeat", "event-forwarding"],
-    event_families: ["node", "agent"],
+    event_families: ["node", "agent", "worker", "task"],
     notes:
       "Runtime worker provider boundary for future local and remote nodes.",
   },
@@ -499,6 +626,10 @@ export const SOURCE_CAPABILITIES: SourceCapability[] = [
       "notification",
       "agent",
       "node",
+      "worker",
+      "project",
+      "goal",
+      "task",
       "approval",
       "iteration",
     ],

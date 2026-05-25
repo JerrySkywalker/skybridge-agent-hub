@@ -539,6 +539,285 @@ describe("server api", () => {
     expect(invalid.statusCode).toBe(400);
   });
 
+  it("registers workers, records heartbeats and hides secret-like fields", async () => {
+    const server = await testServer();
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: {
+        worker_id: "worker-local-1",
+        name: "Local worker",
+        provider: "manual",
+        capabilities: ["manual-execution", "tests"],
+        token: "must-not-return",
+      },
+    });
+    expect(create.statusCode).toBe(201);
+
+    const heartbeat = await server.inject({
+      method: "POST",
+      url: "/v1/workers/worker-local-1/heartbeat",
+      payload: { status_note: "ready", load: 0.2 },
+    });
+    expect(heartbeat.statusCode).toBe(200);
+    expect(
+      heartbeat.json<{ worker: { status: string; last_seen_at?: string } }>()
+        .worker,
+    ).toMatchObject({ status: "online", last_seen_at: expect.any(String) });
+
+    const list = await server.inject({ method: "GET", url: "/v1/workers" });
+    const bodyText = list.body;
+    expect(list.statusCode).toBe(200);
+    expect(bodyText).not.toContain("must-not-return");
+    expect(
+      list.json<{ workers: Array<{ worker_id: string; status: string }> }>()
+        .workers,
+    ).toEqual([
+      expect.objectContaining({
+        worker_id: "worker-local-1",
+        status: "online",
+      }),
+    ]);
+  });
+
+  it("creates projects and master goals with structured invalid responses", async () => {
+    const server = await testServer();
+    const project = await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-core", name: "Core project" },
+    });
+    expect(project.statusCode).toBe(201);
+
+    const goal = await server.inject({
+      method: "POST",
+      url: "/v1/projects/proj-core/goals",
+      payload: { goal_id: "goal-core", title: "Build core" },
+    });
+    expect(goal.statusCode).toBe(201);
+
+    const goals = await server.inject({
+      method: "GET",
+      url: "/v1/projects/proj-core/goals",
+    });
+    expect(
+      goals.json<{ goals: Array<{ goal_id: string }> }>().goals,
+    ).toEqual([expect.objectContaining({ goal_id: "goal-core" })]);
+
+    const update = await server.inject({
+      method: "PATCH",
+      url: "/v1/goals/goal-core",
+      payload: { status: "blocked" },
+    });
+    expect(update.statusCode).toBe(200);
+    expect(update.json<{ goal: { status: string } }>().goal.status).toBe(
+      "blocked",
+    );
+
+    const missing = await server.inject({
+      method: "GET",
+      url: "/v1/projects/missing",
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json<{ error: string }>().error).toBe("project_not_found");
+
+    const invalid = await server.inject({
+      method: "PATCH",
+      url: "/v1/goals/goal-core",
+      payload: { status: "unknown" },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
+  it("runs task queue transitions and writes task events", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-tasks", name: "Task project" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects/proj-tasks/goals",
+      payload: { goal_id: "goal-tasks", title: "Task goal" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: {
+        worker_id: "worker-task-1",
+        name: "Task worker",
+        capabilities: ["manual-execution"],
+      },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/workers/worker-task-1/heartbeat",
+      payload: {},
+    });
+
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "task-1",
+        project_id: "proj-tasks",
+        goal_id: "goal-tasks",
+        title: "Implement task core",
+        risk: "medium",
+        source: "manual",
+      },
+    });
+    expect(create.statusCode).toBe(201);
+
+    const claim = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-1/claim",
+      payload: { worker_id: "worker-task-1" },
+    });
+    expect(claim.statusCode).toBe(200);
+    expect(claim.json<{ task: { status: string } }>().task.status).toBe(
+      "claimed",
+    );
+
+    const complete = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-1/complete",
+      payload: { summary: "done" },
+    });
+    expect(complete.statusCode).toBe(200);
+    expect(
+      complete.json<{ task: { status: string; events: Array<{ type: string }> } }>()
+        .task,
+    ).toMatchObject({
+      status: "completed",
+      events: expect.arrayContaining([
+        expect.objectContaining({ type: "task.created" }),
+        expect.objectContaining({ type: "task.claimed" }),
+        expect.objectContaining({ type: "task.completed" }),
+      ]),
+    });
+
+    const claimCompleted = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-1/claim",
+      payload: { worker_id: "worker-task-1" },
+    });
+    expect(claimCompleted.statusCode).toBe(409);
+
+    const failTask = await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "task-2",
+        project_id: "proj-tasks",
+        title: "Fail then requeue",
+      },
+    });
+    expect(failTask.statusCode).toBe(201);
+    await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-2/claim",
+      payload: { worker_id: "worker-task-1" },
+    });
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/v1/tasks/task-2/fail",
+          payload: { error_summary: "test failure" },
+        })
+      ).json<{ task: { status: string } }>().task.status,
+    ).toBe("failed");
+    expect(
+      (
+        await server.inject({ method: "POST", url: "/v1/tasks/task-2/requeue" })
+      ).json<{ task: { status: string } }>().task.status,
+    ).toBe("queued");
+  });
+
+  it("prevents disabled and offline workers from claiming tasks", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-claim", name: "Claim project" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: { task_id: "task-disabled", project_id: "proj-claim", title: "Blocked claim" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: { worker_id: "worker-disabled", name: "Disabled", enabled: false },
+    });
+    const disabled = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-disabled/claim",
+      payload: { worker_id: "worker-disabled" },
+    });
+    expect(disabled.statusCode).toBe(409);
+
+    await server.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: { worker_id: "worker-offline", name: "Offline" },
+    });
+    const offline = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/task-disabled/claim",
+      payload: { worker_id: "worker-offline" },
+    });
+    expect(offline.statusCode).toBe(409);
+  });
+
+  it("persists worker pool and task records to SQLite", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const first = await createServer({
+      dbFile,
+      logger: false,
+      jsonMigrationFile: false,
+    });
+    servers.push(first);
+    await first.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-durable", name: "Durable project" },
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: { worker_id: "worker-durable", name: "Durable worker" },
+    });
+    await first.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: { task_id: "task-durable", project_id: "proj-durable", title: "Durable task" },
+    });
+    await first.close();
+    servers.pop();
+
+    const second = await createServer({
+      dbFile,
+      logger: false,
+      jsonMigrationFile: false,
+    });
+    servers.push(second);
+    expect(
+      (
+        await second.inject({ method: "GET", url: "/v1/tasks/task-durable" })
+      ).json<{ task: { task_id: string } }>().task.task_id,
+    ).toBe("task-durable");
+    expect(
+      (
+        await second.inject({ method: "GET", url: "/v1/workers/worker-durable" })
+      ).json<{ worker: { worker_id: string } }>().worker.worker_id,
+    ).toBe("worker-durable");
+  });
+
   it("summarizes remote node heartbeat events without command execution", async () => {
     const server = await testServer();
     await server.inject({
