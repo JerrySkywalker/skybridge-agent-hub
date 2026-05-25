@@ -3,6 +3,7 @@
 ## 2026-05-25 Super Goal 049-060 Hermes Always-on Autonomy Pilot
 
 - Phase 055 real phone summary test: sent one non-urgent nightly supervisor report notification through the new report command; ntfy reported sent and urgent notification was not used.
+- Phase 056 candidate PR decision: skipped creating a new tiny docs-only candidate because GitHub reported zero open PRs and the new nightly sweep/report paths already exercised the real repository dry-run path safely. No real auto-merge occurred.
 
 ## 2026-05-23 Super Goal 042-048 Hermes Cloud Supervisor Integration
 
