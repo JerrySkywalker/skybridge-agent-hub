@@ -7,12 +7,22 @@
     "baseBranch": "main",
     "branchPrefix": "ai/"
   },
-  "codex": {
-    "command": "codex",
-    "args": ["exec", "--json"],
-    "sandbox": "workspace-write",
-    "approvalPolicy": "never",
-    "outputLastMessage": true
+  "core": {
+    "agentAgnostic": true,
+    "defaultPlannerAdapter": "rule-based-planner",
+    "defaultExecutorAdapter": "manual-executor"
+  },
+  "executorAdapters": {
+    "codex": {
+      "command": "codex",
+      "args": ["exec", "--json"],
+      "sandbox": "workspace-write",
+      "approvalPolicy": "never",
+      "outputLastMessage": true
+    },
+    "manual": {
+      "enabled": true
+    }
   },
   "goals": {
     "queuePath": "goals/ready",
@@ -28,25 +38,43 @@
       "corepack pnpm smoke:hermes-supervisor-flow"
     ]
   },
-  "github": {
-    "requiredChecks": ["Project check"],
-    "createPR": true,
-    "watchCI": true,
-    "autoMerge": false
+  "scmProviders": {
+    "github": {
+      "requiredChecks": ["Project check"],
+      "createPR": true,
+      "watchCI": true,
+      "autoMerge": false
+    },
+    "generic": {
+      "enabled": false
+    }
   },
-  "notifications": {
+  "notificationProviders": {
     "bootstrap": true,
-    "ntfyEnv": "NTFY_TOPIC_URL",
-    "wecomUrgentEnv": "WECOM_WEBHOOK_URL"
+    "ntfy": {
+      "enabled": false,
+      "topicEnv": "NTFY_TOPIC_URL"
+    },
+    "wecom": {
+      "urgentEnv": "WECOM_WEBHOOK_URL"
+    },
+    "generic": {
+      "enabled": false
+    }
   },
   "skybridge": {
     "apiBase": "http://127.0.0.1:8787",
     "telemetryEnabled": true,
     "failOpen": true
   },
-  "hermes": {
-    "enabled": true,
-    "supervisorId": "hermes-skybridge-supervisor",
-    "bridgeScript": "scripts/powershell/skybridge-hermes-supervisor.ps1"
+  "plannerAdapters": {
+    "ruleBased": {
+      "enabled": true
+    },
+    "hermes": {
+      "enabled": false,
+      "supervisorId": "hermes-skybridge-supervisor",
+      "bridgeScript": "scripts/powershell/skybridge-hermes-supervisor.ps1"
+    }
   }
 }

@@ -88,6 +88,12 @@ try {
   $health = Invoke-SkyBridgeJson "GET" "/v1/health"
   $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
   $events = @(
+    New-SkyBridgeEvent "demo-rule-planner-$stamp" "plan.updated" "info" "skybridge" "rule-based-planner" `
+      @{ session_id = "demo-rule-planner-session"; run_id = "demo-rule-planner-run" } `
+      @{ title = "Rule-based planner demo"; planner_adapter = "rule-based-planner"; work_order_id = "wo_demo_docs"; category = "fixture-backed"; lifecycle = "planner.work_order_created" } -17
+    New-SkyBridgeEvent "demo-manual-executor-$stamp" "run.completed" "info" "skybridge" "manual-executor" `
+      @{ session_id = "demo-manual-executor-session"; run_id = "wo_demo_docs" } `
+      @{ title = "Manual executor demo"; executor_adapter = "manual-executor"; work_order_id = "wo_demo_docs"; pr_number = 27; category = "fixture-backed"; lifecycle = "manual.completed" } -16
     New-SkyBridgeEvent "demo-codex-hook-start-$stamp" "run.started" "info" "codex" "codex-hook" `
       @{ session_id = "demo-codex-session"; run_id = "demo-codex-hook-run" } `
       @{ title = "Codex hook demo"; branch = "ai/demo-operator-console"; goal = "Validate hook telemetry"; lifecycle = "hook.prompt.accepted"; spool_count = 0 } -12
@@ -139,6 +145,18 @@ try {
     New-SkyBridgeEvent "demo-automerge-sweep-$stamp" "iteration.state_changed" "info" "skybridge" "auto-merge-sweep" `
       @{ session_id = "demo-automerge-session"; run_id = "demo-automerge-sweep-run" } `
       @{ mode = "NightlySweep"; dry_run = $true; sweep_id = "demo-sweep-$stamp"; eligible = 1; blocked = 1; summary = "Dry-run found one eligible PR and one high-risk blocked PR." } -11
+    New-SkyBridgeEvent "demo-github-provider-$stamp" "iteration.ci_green" "info" "skybridge" "github-provider" `
+      @{ session_id = "demo-github-provider-session"; run_id = "demo-github-provider-run" } `
+      @{ provider = "github"; status = "ci_green"; pr_number = 27; category = "dogfooding"; lifecycle = "scm.provider_status" } -11
+    New-SkyBridgeEvent "demo-generic-scm-$stamp" "iteration.ci_pending" "info" "skybridge" "generic-scm-provider" `
+      @{ session_id = "demo-generic-scm-session"; run_id = "demo-generic-scm-run" } `
+      @{ provider = "generic-scm"; status = "placeholder"; category = "experimental"; lifecycle = "scm.provider_status" } -11
+    New-SkyBridgeEvent "demo-ntfy-provider-$stamp" "notification.skipped" "info" "skybridge" "ntfy-provider" `
+      @{ session_id = "demo-ntfy-provider-session"; run_id = "demo-ntfy-provider-run" } `
+      @{ provider = "ntfy"; status = "skipped"; category = "stable"; reason = "demo placeholder" } -10
+    New-SkyBridgeEvent "demo-generic-notification-$stamp" "notification.skipped" "info" "skybridge" "generic-notification-provider" `
+      @{ session_id = "demo-generic-notification-session"; run_id = "demo-generic-notification-run" } `
+      @{ provider = "generic-notification"; status = "placeholder"; category = "experimental"; reason = "demo placeholder" } -10
     New-SkyBridgeEvent "demo-ci-failed-$stamp" "iteration.ci_failed" "error" "skybridge" "ci-guardian" `
       @{ session_id = "demo-ci-session"; run_id = "demo-ci-run" } `
       @{ pr_number = 80; branch = "ai/high-risk-product-demo"; ci_state = "ci_failed"; required_checks = @(@{ name = "Project check"; status = "failed"; summary = "fixture failure" }); eligibility = "blocked"; risk = "blocked"; reasons = @("failed required check", "high-risk files need review") } -10

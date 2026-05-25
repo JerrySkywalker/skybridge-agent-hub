@@ -2,6 +2,47 @@
   {
     "schema": "skybridge.agent_event.v1",
     "time": "2026-05-22T00:00:00.0000000Z",
+    "type": "plan.updated",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "rule-based-planner"
+    },
+    "correlation": {
+      "run_id": "demo-rule-planner",
+      "session_id": "demo-rule-planner-session"
+    },
+    "payload": {
+      "category": "fixture-backed",
+      "planner_adapter": "rule-based-planner",
+      "title": "Rule-based planner demo",
+      "work_order_id": "wo_demo_docs"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:01.0000000Z",
+    "type": "run.completed",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "manual-executor"
+    },
+    "correlation": {
+      "run_id": "demo-manual-executor",
+      "session_id": "demo-manual-executor-session"
+    },
+    "payload": {
+      "category": "fixture-backed",
+      "executor_adapter": "manual-executor",
+      "pr_number": 27,
+      "title": "Manual executor demo",
+      "work_order_id": "wo_demo_docs"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:02.0000000Z",
     "type": "run.started",
     "severity": "info",
     "source": {
@@ -19,7 +60,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:01.0000000Z",
+    "time": "2026-05-22T00:00:03.0000000Z",
     "type": "tool.completed",
     "severity": "info",
     "source": {
@@ -37,7 +78,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:02.0000000Z",
+    "time": "2026-05-22T00:00:04.0000000Z",
     "type": "run.completed",
     "severity": "info",
     "source": {
@@ -54,7 +95,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:03.0000000Z",
+    "time": "2026-05-22T00:00:05.0000000Z",
     "type": "run.failed",
     "severity": "error",
     "source": {
@@ -72,7 +113,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:04.0000000Z",
+    "time": "2026-05-22T00:00:06.0000000Z",
     "type": "approval.requested",
     "severity": "warning",
     "source": {
@@ -90,7 +131,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:05.0000000Z",
+    "time": "2026-05-22T00:00:07.0000000Z",
     "type": "notification.sent",
     "severity": "info",
     "source": {
@@ -108,7 +149,84 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:06.0000000Z",
+    "time": "2026-05-22T00:00:08.0000000Z",
+    "type": "iteration.ci_green",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "github-provider"
+    },
+    "correlation": {
+      "run_id": "demo-github-provider",
+      "session_id": "demo-github-provider-session"
+    },
+    "payload": {
+      "category": "dogfooding",
+      "pr_number": 27,
+      "provider": "github",
+      "status": "ci_green"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:09.0000000Z",
+    "type": "iteration.ci_pending",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "generic-scm-provider"
+    },
+    "correlation": {
+      "run_id": "demo-generic-scm",
+      "session_id": "demo-generic-scm-session"
+    },
+    "payload": {
+      "category": "experimental",
+      "provider": "generic-scm",
+      "status": "placeholder"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:10.0000000Z",
+    "type": "notification.skipped",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "ntfy-provider"
+    },
+    "correlation": {
+      "run_id": "demo-ntfy-provider",
+      "session_id": "demo-ntfy-provider-session"
+    },
+    "payload": {
+      "category": "stable",
+      "provider": "ntfy",
+      "status": "skipped"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:11.0000000Z",
+    "type": "notification.skipped",
+    "severity": "info",
+    "source": {
+      "platform": "skybridge",
+      "adapter": "generic-notification-provider"
+    },
+    "correlation": {
+      "run_id": "demo-generic-notify",
+      "session_id": "demo-generic-notify-session"
+    },
+    "payload": {
+      "category": "experimental",
+      "provider": "generic-notification",
+      "status": "placeholder"
+    }
+  },
+  {
+    "schema": "skybridge.agent_event.v1",
+    "time": "2026-05-22T00:00:12.0000000Z",
     "type": "notification.skipped",
     "severity": "info",
     "source": {
@@ -126,7 +244,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:07.0000000Z",
+    "time": "2026-05-22T00:00:13.0000000Z",
     "type": "notification.failed",
     "severity": "warning",
     "source": {
@@ -144,7 +262,7 @@
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:08.0000000Z",
+    "time": "2026-05-22T00:00:14.0000000Z",
     "type": "node.heartbeat",
     "severity": "info",
     "source": {
@@ -156,21 +274,15 @@
       "session_id": "demo-node-session"
     },
     "payload": {
-      "capabilities": [
-        "event-forwarding",
-        "heartbeat"
-      ],
+      "capabilities": ["event-forwarding", "heartbeat"],
       "host": "demo",
-      "labels": [
-        "local",
-        "demo"
-      ],
+      "labels": ["local", "demo"],
       "node_id": "demo-node"
     }
   },
   {
     "schema": "skybridge.agent_event.v1",
-    "time": "2026-05-22T00:00:09.0000000Z",
+    "time": "2026-05-22T00:00:15.0000000Z",
     "type": "agent.stale",
     "severity": "warning",
     "source": {
