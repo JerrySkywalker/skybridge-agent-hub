@@ -26,7 +26,7 @@ SkyBridge provides a shared foundation for:
 - ntfy-first notification provider with skipped placeholder records when credentials are not configured.
 - Codex hook adapter, OpenCode/Hermes adapter foundations and local sidecar event forwarder.
 - React dashboard shell, reusable React widgets and a framework-neutral status Web Component.
-- Operator Console for local autonomous development health, active runs, event timelines, Codex integration status, notifications and compact embeds.
+- Productized Operator Console for daily agent operations across overview, runs, iterations, PR/CI, auto-merge, notifications, Hermes, sources, audit and compact embeds.
 - Codex TUI Master Goal workflow for long-horizon autonomous development.
 - PowerShell goal runner scripts for fallback queue-driven batch work.
 - Public GitHub Actions checks for AI branches and pull requests.
@@ -78,13 +78,14 @@ The server listens on `http://127.0.0.1:8787` by default. Events and notificatio
 
 ### Operator Console
 
-The web dashboard is the SkyBridge Operator Console. It shows system health, active/recent runs, a live event timeline, Codex hook/exec integration status, notification attention items, source filters and a safe run detail panel.
+The web dashboard is the SkyBridge Operator Console. It shows system health, active/recent runs, iterations, PR/CI state, auto-merge decisions, notification health, Hermes supervision, source adapters, audit metadata and a safe run detail panel.
 
 Seed a local demo view:
 
 ```powershell
 corepack pnpm --filter @skybridge-agent-hub/web build
 corepack pnpm smoke:operator-console
+corepack pnpm smoke:product-console
 ```
 
 For interactive development, start the server and web app, then optionally seed demo events:
@@ -102,6 +103,7 @@ http://127.0.0.1:5173/#/embed/compact
 ```
 
 See [docs/ui/OPERATOR_CONSOLE.md](docs/ui/OPERATOR_CONSOLE.md) and [docs/ui/EMBEDDING.md](docs/ui/EMBEDDING.md).
+See also [docs/product/QUICKSTART_DASHBOARD.md](docs/product/QUICKSTART_DASHBOARD.md), [docs/product/OPERATOR_CONSOLE_PRODUCT_SPEC.md](docs/product/OPERATOR_CONSOLE_PRODUCT_SPEC.md), [docs/product/SCREENSHOT_GUIDE.md](docs/product/SCREENSHOT_GUIDE.md) and [docs/api/API_OVERVIEW.md](docs/api/API_OVERVIEW.md).
 
 ### Demo Dataset
 

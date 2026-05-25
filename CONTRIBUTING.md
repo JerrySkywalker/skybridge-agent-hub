@@ -21,6 +21,25 @@ Every PR should include:
 - Rollback notes
 - Related goal file or issue
 
+## Local development quickstart
+
+```powershell
+corepack pnpm install
+corepack pnpm --filter @skybridge-agent-hub/server dev
+corepack pnpm --filter @skybridge-agent-hub/web dev
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\seed-demo-events.ps1
+```
+
+Use `corepack pnpm smoke:product-console` for the fixture-backed dashboard smoke before sending UI/API changes for review.
+
+## Issue and goal workflow
+
+Use goals for autonomous work that spans multiple commits. Keep each phase reviewable, record validation commands in the PR, and create follow-up goals for blocked high-risk changes rather than widening scope.
+
+## Architecture summary
+
+Adapters normalize source events to `skybridge.agent_event.v1`. The server persists safe events, notifications, audit records and iterations. `packages/client` exposes typed API helpers. `packages/react-widgets`, `packages/web-components` and `apps/web` consume the same safe summaries.
+
 ## Risk labels
 
 ```text
