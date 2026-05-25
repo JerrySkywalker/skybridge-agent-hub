@@ -39,9 +39,13 @@ Controller and CI Guardian auto-merge support is disabled by default. It require
 
 The scripts should call `gh pr merge --auto`, not push to `main`.
 
+The auto-merge sweep and Hermes nightly sweep default to dry-run. Their job is to make the operator state visible: eligible PRs, blocked/high-risk files, drafts, non-`ai/**` branches, missing checks and pending checks. Real sweep mode is only for low-risk docs/goals PRs and must remain explicitly operator-gated.
+
 ## Bootstrap Notifications
 
 Critical lifecycle phone notifications use `scripts/powershell/notify-bootstrap.ps1` directly. SkyBridge events are useful for dashboards, but phone notification must still work when the SkyBridge server is offline.
+
+Nightly pilot summaries use non-urgent ntfy notifications only when `-Send` is explicit. Urgent notification is not used for ordinary tunnel loss, missing PRs or dry-run sweep results.
 
 ## Readiness Check
 

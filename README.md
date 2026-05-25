@@ -352,6 +352,7 @@ SkyBridge now includes a reusable Agent CI/CD Control Plane foundation:
 - `skybridge-hermes-supervisor.ps1` gives Hermes a JSON bridge for status, start-next, repair and nightly reports.
 - `notify-bootstrap.ps1` sends direct ntfy or urgent WeCom/WeChat notifications without depending on the SkyBridge server.
 - Hermes cloud supervision can be validated through a local SSH tunnel with redacted API, run, supervisor and phone-notification smokes.
+- The nightly autonomy pilot verifies or starts the private Hermes tunnel, checks Hermes health, produces a nightly report, runs an auto-merge sweep dry-run and can send one non-urgent phone summary when explicitly requested.
 
 Start with dry runs:
 
@@ -361,9 +362,19 @@ corepack pnpm smoke:ci-guardian
 corepack pnpm smoke:hermes-supervisor-flow
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-cloud-api.ps1 -DryRun -Json
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-supervised-sweep.ps1 -DryRun -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\run-hermes-nightly-pilot.ps1 -UseHermesApi -Json
 ```
 
 See [docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md](docs/automation/AUTONOMOUS_ITERATION_CONTROLLER.md), [docs/hermes/SUPERVISOR.md](docs/hermes/SUPERVISOR.md), [docs/hermes/CLOUD_SUPERVISOR_RUNBOOK.md](docs/hermes/CLOUD_SUPERVISOR_RUNBOOK.md) and [docs/automation/REUSABLE_PROJECT_INTEGRATION.md](docs/automation/REUSABLE_PROJECT_INTEGRATION.md).
+
+Current responsibility split:
+
+- local Windows/Codex worker: edits code, runs checks, opens AI branches and executes pilot scripts;
+- GitHub: runs CI, enforces branch protection and performs auto-merge only when explicitly enabled for eligible low-risk PRs;
+- auto-merge sweep: classifies open PRs and defaults to dry-run;
+- cloud Hermes: supervises through the private tunnel and reports health/capabilities;
+- bootstrap ntfy: sends concise fallback phone summaries without requiring the SkyBridge server;
+- human-only: production deployment, server root configuration, branch protection changes, secret rotation, public Hermes exposure and unattended real auto-merge enablement.
 
 ## Roadmap
 
