@@ -124,24 +124,100 @@ try {
     New-SkyBridgeEvent "demo-runner-failed-$stamp" "run.failed" "error" "skybridge" "yolo-runner" `
       @{ session_id = "demo-runner-session"; run_id = "demo-yolo-runner-run" } `
       @{ lifecycle = "goal.failed"; summary = "Demo failure for Operator Console attention states."; redacted = $true } -1
+    New-SkyBridgeEvent "demo-opencode-start-$stamp" "run.started" "info" "opencode" "opencode-plugin" `
+      @{ session_id = "demo-opencode-session"; run_id = "demo-opencode-run" } `
+      @{ title = "OpenCode fixture adapter"; branch = "ai/demo-opencode"; goal = "Check adapter fixture"; lifecycle = "adapter.fixture" } -15
+    New-SkyBridgeEvent "demo-opencode-complete-$stamp" "run.completed" "info" "opencode" "opencode-plugin" `
+      @{ session_id = "demo-opencode-session"; run_id = "demo-opencode-run" } `
+      @{ lifecycle = "adapter.completed"; summary = "OpenCode fixture completed." } -14
+    New-SkyBridgeEvent "demo-hermes-start-$stamp" "run.started" "info" "hermes" "hermes-api" `
+      @{ session_id = "demo-hermes-session"; run_id = "demo-hermes-run" } `
+      @{ title = "Hermes safe run"; health = "ok"; tunnel_status = "loopback"; capabilities = @("health", "capabilities", "safe-run-smoke") } -13
+    New-SkyBridgeEvent "demo-hermes-degraded-$stamp" "agent.error" "warning" "hermes" "hermes-supervisor" `
+      @{ session_id = "demo-hermes-session"; run_id = "demo-hermes-run" } `
+      @{ summary = "Demo degraded state: cloud supervisor tunnel requires operator check."; api_health = "degraded"; tunnel_status = "loopback"; capabilities = @("health", "nightly-report") } -12
+    New-SkyBridgeEvent "demo-automerge-sweep-$stamp" "iteration.state_changed" "info" "skybridge" "auto-merge-sweep" `
+      @{ session_id = "demo-automerge-session"; run_id = "demo-automerge-sweep-run" } `
+      @{ mode = "NightlySweep"; dry_run = $true; sweep_id = "demo-sweep-$stamp"; eligible = 1; blocked = 1; summary = "Dry-run found one eligible PR and one high-risk blocked PR." } -11
+    New-SkyBridgeEvent "demo-ci-failed-$stamp" "iteration.ci_failed" "error" "skybridge" "ci-guardian" `
+      @{ session_id = "demo-ci-session"; run_id = "demo-ci-run" } `
+      @{ pr_number = 80; branch = "ai/high-risk-product-demo"; ci_state = "ci_failed"; required_checks = @(@{ name = "Project check"; status = "failed"; summary = "fixture failure" }); eligibility = "blocked"; risk = "blocked"; reasons = @("failed required check", "high-risk files need review") } -10
+    New-SkyBridgeEvent "demo-notification-failed-$stamp" "notification.failed" "warning" "skybridge" "notification-center" `
+      @{ session_id = "demo-notification-session"; run_id = "demo-notification-run" } `
+      @{ provider = "gotify"; status = "failed"; reason = "provider not configured in demo" } -9
   )
 
   foreach ($event in $events) {
     Invoke-SkyBridgeJson "POST" "/v1/events" $event | Out-Null
   }
 
+  $iterations = @(
+    @{
+      iteration_id = "demo-iter-green-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = "061-080"
+      repo = "JerrySkywalker/skybridge-agent-hub"
+      branch = "ai/productized-console-demo"
+      base_branch = "main"
+      state = "ci_green"
+      pr_number = 79
+      attempts = 1
+      max_attempts = 3
+      auto_merge_enabled = $false
+      checks = @(
+        @{ name = "Project check"; status = "passed"; summary = "demo green" },
+        @{ name = "Docker build (server)"; status = "passed"; summary = "demo green" },
+        @{ name = "Docker build (web)"; status = "passed"; summary = "demo green" }
+      )
+    }
+    @{
+      iteration_id = "demo-iter-blocked-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = "080"
+      repo = "JerrySkywalker/skybridge-agent-hub"
+      branch = "ai/high-risk-product-demo"
+      base_branch = "main"
+      state = "blocked"
+      pr_number = 80
+      attempts = 2
+      max_attempts = 3
+      auto_merge_enabled = $false
+      last_error = "Blocked high-risk PR: workflow or deploy path changed."
+      checks = @(
+        @{ name = "Project check"; status = "failed"; summary = "fixture failure" },
+        @{ name = "Docker build (web)"; status = "pending"; summary = "waiting" }
+      )
+    }
+  )
+
+  foreach ($iteration in $iterations) {
+    Invoke-SkyBridgeJson "POST" "/v1/iterations" $iteration | Out-Null
+    Invoke-SkyBridgeJson "POST" "/v1/iterations/$($iteration.iteration_id)/events" @{
+      type = "iteration.state_changed"
+      payload = @{
+        state = $iteration.state
+        pr_number = $iteration.pr_number
+        reason = $iteration.last_error
+      }
+    } | Out-Null
+  }
+
   $runs = Invoke-SkyBridgeJson "GET" "/v1/runs?limit=20"
   $eventList = Invoke-SkyBridgeJson "GET" "/v1/events?limit=50"
   $notifications = Invoke-SkyBridgeJson "GET" "/v1/notifications?limit=20"
+  $prs = Invoke-SkyBridgeJson "GET" "/v1/prs/summary"
 
   [pscustomobject]@{
     ApiBase = $ApiBase
     Persistence = $health.persistence
     DbFile = $DbFile
     SeededEvents = $events.Count
+    SeededIterations = $iterations.Count
     VisibleEvents = $eventList.events.Count
     Runs = $runs.runs.Count
     Notifications = $notifications.notifications.Count
+    OpenPrs = $prs.open
+    BlockedPrs = $prs.blocked
   } | Format-List
 } finally {
   if ($serverProcess) {

@@ -363,7 +363,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
 
   app.get("/v1/iterations/summary", async () => summarizeIterations(store.listIterations(1000)));
   app.get("/v1/prs/summary", async () => summarizePrs(store.listIterations(1000), store.listEvents()));
-  app.get("/v1/notifications/summary", async () => summarizeNotifications(store.listNotifications(1000), notificationProviders()));
+  app.get("/v1/notifications/summary", async () => summarizeNotifications(store.listNotifications(1000), notificationProviders(), store.listEvents()));
   app.get("/v1/hermes/summary", async () => summarizeHermes(store.listEvents(), store.listIterations(1000)));
   app.get("/v1/automerge/summary", async () => summarizeAutoMerge(store.listIterations(1000), store.listEvents(), listAuditRecordsForQuery(store, {})));
 
@@ -989,13 +989,14 @@ function summarizePrs(iterations: StoredIterationRun[], events: StoredEvent[]) {
   };
 }
 
-function summarizeNotifications(notifications: StoredNotification[], providers: ReturnType<typeof notificationProviders>) {
+function summarizeNotifications(notifications: StoredNotification[], providers: ReturnType<typeof notificationProviders>, events: StoredEvent[] = []) {
   const sorted = [...notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const notificationEvents = events.filter((event) => event.type.startsWith("notification."));
   return {
-    total: notifications.length,
-    sent: notifications.filter((notification) => notification.status === "sent").length,
-    skipped: notifications.filter((notification) => notification.status === "skipped").length,
-    failed: notifications.filter((notification) => notification.status === "failed").length,
+    total: notifications.length + notificationEvents.length,
+    sent: notifications.filter((notification) => notification.status === "sent").length + notificationEvents.filter((event) => event.type === "notification.sent").length,
+    skipped: notifications.filter((notification) => notification.status === "skipped").length + notificationEvents.filter((event) => event.type === "notification.skipped").length,
+    failed: notifications.filter((notification) => notification.status === "failed").length + notificationEvents.filter((event) => event.type === "notification.failed").length,
     pending: notifications.filter((notification) => notification.status === "pending").length,
     by_severity: countBy(notifications, (notification) => notification.severity ?? "unknown"),
     providers,
