@@ -335,16 +335,17 @@ export async function createServer(
 
   app.post<{
     Params: { workerId: string };
-    Body: { status_note?: unknown; load?: unknown };
+    Body: { status_note?: unknown; load?: unknown; seen_at?: unknown };
   }>("/v1/workers/:workerId/heartbeat", async (request, reply) => {
     const workerId = decodeURIComponent(request.params.workerId);
     const worker = store.getWorker(workerId);
     if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
     const now = new Date().toISOString();
+    const seenAt = safeIsoString(request.body?.seen_at) ?? now;
     const heartbeat: StoredWorkerHeartbeat = {
       heartbeat_id: `wh_${nanoid()}`,
       worker_id: workerId,
-      seen_at: now,
+      seen_at: seenAt,
       status_note: safeString(request.body?.status_note),
       load: typeof request.body?.load === "number" && Number.isFinite(request.body.load) ? request.body.load : undefined,
     };
@@ -2666,6 +2667,12 @@ function safeLongString(input: unknown): string | undefined {
   return typeof input === "string" && input.length > 0 && input.length <= 2000
     ? input
     : undefined;
+}
+
+function safeIsoString(input: unknown): string | undefined {
+  if (typeof input !== "string" || input.length > 80) return undefined;
+  const time = Date.parse(input);
+  return Number.isFinite(time) ? input : undefined;
 }
 
 function parseIterationInput(

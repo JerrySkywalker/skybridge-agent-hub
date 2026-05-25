@@ -220,10 +220,129 @@ try {
     } | Out-Null
   }
 
+  $projectBody = @{
+    project_id = "skybridge-agent-hub"
+    name = "SkyBridge Agent Hub"
+    repo = "JerrySkywalker/skybridge-agent-hub"
+    description = "Agent-agnostic control plane dogfooding project."
+  }
+  try {
+    Invoke-SkyBridgeJson "POST" "/v1/projects" $projectBody | Out-Null
+  } catch {
+    # Demo seeding is idempotent enough for local smoke use.
+  }
+
+  $goalBody = @{
+    goal_id = "demo-master-goal-$stamp"
+    title = "Hermes self-ordering core demo"
+    summary = "Fixture-backed master goal proving SkyBridge Core can queue tasks without Hermes."
+  }
+  Invoke-SkyBridgeJson "POST" "/v1/projects/skybridge-agent-hub/goals" $goalBody | Out-Null
+
+  $workers = @(
+    @{
+      worker_id = "demo-worker-online"
+      name = "Online local worker"
+      provider = "manual"
+      capabilities = @("manual-execution", "tests", "docs")
+      labels = @("local", "demo")
+    }
+    @{
+      worker_id = "demo-worker-stale"
+      name = "Stale lab worker"
+      provider = "codex"
+      capabilities = @("codex-exec", "git", "tests")
+      labels = @("stale", "demo")
+    }
+    @{
+      worker_id = "demo-worker-offline"
+      name = "Offline worker"
+      provider = "opencode"
+      capabilities = @("opencode-exec", "docs")
+      labels = @("offline", "demo")
+    }
+  )
+
+  foreach ($worker in $workers) {
+    Invoke-SkyBridgeJson "POST" "/v1/workers/register" $worker | Out-Null
+  }
+  Invoke-SkyBridgeJson "POST" "/v1/workers/demo-worker-online/heartbeat" @{ status_note = "ready"; load = 0.2 } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/workers/demo-worker-stale/heartbeat" @{
+    status_note = "last seen during demo"
+    load = 0.7
+    seen_at = (Get-Date).ToUniversalTime().AddMinutes(-8).ToString("o")
+  } | Out-Null
+
+  $taskBodies = @(
+    @{
+      task_id = "demo-task-queued-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = $goalBody.goal_id
+      title = "Review task queue docs"
+      prompt_summary = "Docs-only queued task created by fixture planner."
+      risk = "low"
+      source = "rule_based"
+      required_capabilities = @("docs")
+    }
+    @{
+      task_id = "demo-task-running-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = $goalBody.goal_id
+      title = "Run focused server checks"
+      prompt_summary = "Executor task claimed by the online demo worker."
+      risk = "medium"
+      source = "manual"
+      required_capabilities = @("tests")
+    }
+    @{
+      task_id = "demo-task-completed-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = $goalBody.goal_id
+      title = "Complete client helper smoke"
+      prompt_summary = "Completed fixture task with safe result metadata."
+      risk = "low"
+      source = "manual"
+      required_capabilities = @("tests")
+    }
+    @{
+      task_id = "demo-task-failed-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = $goalBody.goal_id
+      title = "Repair failed adapter fixture"
+      prompt_summary = "Failed fixture task with redacted error summary."
+      risk = "medium"
+      source = "planner"
+      required_capabilities = @("git", "tests")
+    }
+    @{
+      task_id = "demo-task-blocked-$stamp"
+      project_id = "skybridge-agent-hub"
+      goal_id = $goalBody.goal_id
+      title = "Blocked high-risk deploy path"
+      prompt_summary = "High-risk blocked fixture. No destructive controls are enabled."
+      risk = "high"
+      source = "hermes"
+      required_capabilities = @("git")
+    }
+  )
+
+  foreach ($task in $taskBodies) {
+    Invoke-SkyBridgeJson "POST" "/v1/tasks" $task | Out-Null
+  }
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-running-$stamp/claim" @{ worker_id = "demo-worker-online" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-running-$stamp/start" @{ worker_id = "demo-worker-online" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-completed-$stamp/claim" @{ worker_id = "demo-worker-online" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-completed-$stamp/complete" @{ summary = "Client helper fixture completed."; result_url = "about:blank" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-failed-$stamp/claim" @{ worker_id = "demo-worker-online" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-failed-$stamp/fail" @{ error_summary = "Fixture failure for task queue attention state." } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/demo-task-blocked-$stamp/block" @{ error_summary = "High-risk task requires later approved workflow." } | Out-Null
+
   $runs = Invoke-SkyBridgeJson "GET" "/v1/runs?limit=20"
   $eventList = Invoke-SkyBridgeJson "GET" "/v1/events?limit=50"
   $notifications = Invoke-SkyBridgeJson "GET" "/v1/notifications?limit=20"
   $prs = Invoke-SkyBridgeJson "GET" "/v1/prs/summary"
+  $workersSummary = Invoke-SkyBridgeJson "GET" "/v1/workers/summary"
+  $tasksSummary = Invoke-SkyBridgeJson "GET" "/v1/tasks/summary"
 
   [pscustomobject]@{
     ApiBase = $ApiBase
@@ -236,6 +355,13 @@ try {
     Notifications = $notifications.notifications.Count
     OpenPrs = $prs.open
     BlockedPrs = $prs.blocked
+    Workers = $workersSummary.total
+    OnlineWorkers = $workersSummary.online
+    QueuedTasks = $tasksSummary.queued
+    RunningTasks = $tasksSummary.running
+    CompletedTasks = $tasksSummary.completed
+    FailedTasks = $tasksSummary.failed
+    BlockedTasks = $tasksSummary.blocked
   } | Format-List
 } finally {
   if ($serverProcess) {
