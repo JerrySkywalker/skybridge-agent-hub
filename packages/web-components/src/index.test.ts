@@ -9,6 +9,10 @@ describe("agent status web component", () => {
       runs: 3,
       activeRuns: 1,
       failedRuns: 1,
+      openPrs: 2,
+      ciFailed: 1,
+      hermesStatus: "degraded",
+      lastNotification: "ntfy/sent",
       source: "codex/codex-hook",
       lastSeen: "2026-05-21T00:00:00.000Z",
       compact: true
@@ -16,7 +20,9 @@ describe("agent status web component", () => {
 
     expect(html).toContain("Operator Status");
     expect(html).toContain("attention");
-    expect(html).toContain("Failed");
+    expect(html).toContain("PR/CI");
+    expect(html).toContain("Hermes");
+    expect(html).toContain("ntfy/sent");
     expect(html).not.toContain("Active</dt>");
   });
 
