@@ -1,5 +1,9 @@
 # Progress Log
 
+## 2026-05-25 Super Goal 049-060 Hermes Always-on Autonomy Pilot
+
+- Phase 055 real phone summary test: sent one non-urgent nightly supervisor report notification through the new report command; ntfy reported sent and urgent notification was not used.
+
 ## 2026-05-23 Super Goal 042-048 Hermes Cloud Supervisor Integration
 
 - Added safe local Hermes env loading from `$HOME\.skybridge\hermes.env.ps1` or `HERMES_ENV_FILE`, with JSON presence reporting and no secret values included.
