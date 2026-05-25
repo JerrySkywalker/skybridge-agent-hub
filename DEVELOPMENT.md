@@ -75,6 +75,7 @@ corepack pnpm --filter @skybridge-agent-hub/react-widgets test
 corepack pnpm --filter @skybridge-agent-hub/web-components test
 corepack pnpm --filter @skybridge-agent-hub/web build
 corepack pnpm smoke:operator-console
+corepack pnpm smoke:product-console
 ```
 
 Nightly local validation for release-readiness:
