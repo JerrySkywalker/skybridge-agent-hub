@@ -596,6 +596,72 @@ describe("server api", () => {
     expect(next.json<{ action: string; pr_number: number }>()).toMatchObject({ action: "repair_ci", pr_number: 12 });
   });
 
+  it("returns product summary APIs from safe local state", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/iterations",
+      payload: {
+        iteration_id: "iter-product-1",
+        project_id: "skybridge-agent-hub",
+        repo: "JerrySkywalker/skybridge-agent-hub",
+        branch: "ai/product",
+        base_branch: "main",
+        state: "ci_green",
+        pr_number: 61,
+        attempts: 1,
+        max_attempts: 3,
+        checks: [{ name: "Project check", status: "passed", summary: "ok" }]
+      }
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "run.completed",
+        source: { platform: "hermes", adapter: "hermes-api" },
+        correlation: { run_id: "hermes-safe-run" },
+        payload: { capabilities: ["health"], health: "ok" }
+      })
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload: createEvent({
+        type: "notification.sent",
+        source: { platform: "skybridge", adapter: "notification-center" },
+        correlation: { run_id: "notify-run" },
+        payload: { provider: "ntfy", status: "sent" }
+      })
+    });
+
+    const projects = await server.inject({ method: "GET", url: "/v1/projects" });
+    expect(projects.json<{ projects: Array<{ project_id: string; iteration_count: number }> }>().projects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ project_id: "skybridge-agent-hub", iteration_count: 1 })
+    ]));
+
+    expect((await server.inject({ method: "GET", url: "/v1/iterations/summary" })).json<{ total: number; latest: { iteration_id: string } }>()).toMatchObject({
+      total: 1,
+      latest: { iteration_id: "iter-product-1" }
+    });
+    expect((await server.inject({ method: "GET", url: "/v1/prs/summary" })).json<{ open: number; eligible: number; latest_ci_state: string }>()).toMatchObject({
+      open: 1,
+      eligible: 1,
+      latest_ci_state: "ci_green"
+    });
+    expect((await server.inject({ method: "GET", url: "/v1/hermes/summary" })).json<{ status: string; api: { health: string } }>()).toMatchObject({
+      status: "available",
+      api: { health: "ok" }
+    });
+    expect((await server.inject({ method: "GET", url: "/v1/automerge/summary" })).json<{ enabled_by_default: boolean; eligible: number }>()).toMatchObject({
+      enabled_by_default: false,
+      eligible: 1
+    });
+    expect((await server.inject({ method: "GET", url: "/v1/notifications/summary" })).json<{ providers: unknown[]; bootstrap_fallback: { real_send_requires_explicit_send: boolean } }>()).toMatchObject({
+      bootstrap_fallback: { real_send_requires_explicit_send: true }
+    });
+  });
+
   it("returns a safe derived audit trail without raw payloads", async () => {
     const server = await testServer();
     await server.inject({

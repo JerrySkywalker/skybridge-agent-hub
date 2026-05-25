@@ -319,6 +319,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
     const events = store.listEvents();
     const runs = summarizeRuns(events);
     const notifications = store.listNotifications(1000);
+    const iterations = store.listIterations(1000);
+    const prs = summarizePrs(iterations, events);
+    const automerge = summarizeAutoMerge(iterations, events, listAuditRecordsForQuery(store, {}));
+    const hermes = summarizeHermes(events, iterations);
+    const latestFailure = runs.find((run) => run.status === "failed");
     return {
       health: healthResponse(),
       totals: {
@@ -326,18 +331,41 @@ export async function createServer(options: CreateServerOptions = {}): Promise<F
         runs: runs.length,
         active_runs: runs.filter((run) => run.status === "running").length,
         failed_runs: runs.filter((run) => run.status === "failed").length,
+        open_prs: prs.open,
+        ci_failed: prs.ci_failed,
         notifications: notifications.length,
         notification_failed: notifications.filter((notification) => notification.status === "failed").length,
         notification_skipped: notifications.filter((notification) => notification.status === "skipped").length,
         nodes: summarizeNodes(events).length,
         node_stale: summarizeNodes(events).filter((node) => node.status === "stale").length,
+        automerge_blocked: automerge.blocked,
         attention_items: runs.filter((run) => run.status === "failed").length
           + events.filter((event) => event.type === "approval.requested").length
           + notifications.filter((notification) => notification.status === "failed" || notification.status === "skipped").length
       },
+      latest: {
+        ci_state: prs.latest_ci_state,
+        automerge_sweep: automerge.latest_sweep,
+        iteration: summarizeIterations(iterations).latest,
+        hermes_status: hermes.status,
+        notification: notifications.at(-1),
+        failure: latestFailure,
+        next_recommended_action: nextRecommendedAction({ latestFailure, prs, automerge, hermes, notifications })
+      },
+      recent_failures: runs.filter((run) => run.status === "failed").slice(0, 8),
       sources: summarizeSources(events)
     };
   });
+
+  app.get("/v1/projects", async () => ({
+    projects: summarizeProjects(summarizeRuns(store.listEvents()), store.listIterations(1000))
+  }));
+
+  app.get("/v1/iterations/summary", async () => summarizeIterations(store.listIterations(1000)));
+  app.get("/v1/prs/summary", async () => summarizePrs(store.listIterations(1000), store.listEvents()));
+  app.get("/v1/notifications/summary", async () => summarizeNotifications(store.listNotifications(1000), notificationProviders()));
+  app.get("/v1/hermes/summary", async () => summarizeHermes(store.listEvents(), store.listIterations(1000)));
+  app.get("/v1/automerge/summary", async () => summarizeAutoMerge(store.listIterations(1000), store.listEvents(), listAuditRecordsForQuery(store, {})));
 
   app.get("/v1/metrics", async () => platformMetrics(store.listEvents(), store.listNotifications(1000)));
   app.get<{ Querystring: AuditListQuery }>("/v1/audit", async (request, reply) => {
@@ -837,6 +865,224 @@ function platformMetrics(events: StoredEvent[], notifications: StoredNotificatio
   };
 }
 
+function summarizeProjects(runs: RunSummary[], iterations: StoredIterationRun[]) {
+  const projects = new Map<string, {
+    project_id: string;
+    run_count: number;
+    active_runs: number;
+    failed_runs: number;
+    iteration_count: number;
+    latest_activity_at?: string;
+  }>();
+
+  for (const run of runs) {
+    const projectId = run.source_platform === "skybridge" ? "skybridge-agent-hub" : run.source_platform;
+    const project = projects.get(projectId) ?? {
+      project_id: projectId,
+      run_count: 0,
+      active_runs: 0,
+      failed_runs: 0,
+      iteration_count: 0
+    };
+    project.run_count += 1;
+    if (run.status === "running") project.active_runs += 1;
+    if (run.status === "failed") project.failed_runs += 1;
+    project.latest_activity_at = maxIso(project.latest_activity_at, run.last_seen_at);
+    projects.set(projectId, project);
+  }
+
+  for (const iteration of iterations) {
+    const project = projects.get(iteration.project_id) ?? {
+      project_id: iteration.project_id,
+      run_count: 0,
+      active_runs: 0,
+      failed_runs: 0,
+      iteration_count: 0
+    };
+    project.iteration_count += 1;
+    project.latest_activity_at = maxIso(project.latest_activity_at, iteration.updated_at);
+    projects.set(iteration.project_id, project);
+  }
+
+  return [...projects.values()].sort((a, b) => (b.latest_activity_at ?? "").localeCompare(a.latest_activity_at ?? ""));
+}
+
+function summarizeIterations(iterations: StoredIterationRun[]) {
+  const sorted = [...iterations].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return {
+    total: sorted.length,
+    active: sorted.filter((iteration) => !["merged", "blocked", "failed"].includes(iteration.state)).length,
+    blocked: sorted.filter((iteration) => iteration.state === "blocked").length,
+    failed: sorted.filter((iteration) => iteration.state === "failed" || iteration.state === "ci_failed").length,
+    repair_attempts: sorted.reduce((sum, iteration) => sum + iteration.attempts, 0),
+    latest: sorted[0],
+    recent: sorted.slice(0, 20).map((iteration) => ({
+      ...iteration,
+      blocked_reason: iteration.last_error,
+      repair_attempts: iteration.attempts,
+      raw_logs_included: false
+    }))
+  };
+}
+
+function summarizePrs(iterations: StoredIterationRun[], events: StoredEvent[]) {
+  const prs = new Map<number, {
+    pr_number: number;
+    branch?: string;
+    repo?: string;
+    state: "open" | "merged" | "blocked" | "unknown";
+    ci_state: string;
+    required_checks: Array<{ name: string; status: string; summary?: string }>;
+    eligibility: "eligible" | "blocked" | "pending" | "unknown";
+    risk: "low" | "needs_review" | "blocked" | "unknown";
+    reasons: string[];
+    updated_at: string;
+  }>();
+
+  for (const iteration of iterations.filter((item) => item.pr_number)) {
+    const ciState = iteration.state.startsWith("ci_") ? iteration.state : iteration.checks.some((check) => check.status === "failed") ? "ci_failed" : iteration.checks.some((check) => check.status === "pending") ? "ci_pending" : iteration.checks.length > 0 ? "ci_green" : "unknown";
+    const risk = riskFromIteration(iteration);
+    const reasons = [
+      iteration.last_error,
+      ...iteration.checks.filter((check) => check.status === "failed").map((check) => `${check.name}: ${check.summary ?? "failed"}`)
+    ].filter((reason): reason is string => Boolean(reason));
+    prs.set(iteration.pr_number!, {
+      pr_number: iteration.pr_number!,
+      branch: iteration.branch,
+      repo: iteration.repo,
+      state: iteration.state === "merged" ? "merged" : iteration.state === "blocked" || iteration.state === "failed" ? "blocked" : "open",
+      ci_state: ciState,
+      required_checks: iteration.checks.map((check) => ({ name: check.name, status: check.status, summary: check.summary })),
+      eligibility: eligibilityFromIteration(iteration, risk),
+      risk,
+      reasons,
+      updated_at: iteration.updated_at
+    });
+  }
+
+  for (const event of events) {
+    const prNumber = numberFromPayload(event.payload.pr_number ?? event.payload.prNumber);
+    if (!prNumber || prs.has(prNumber)) continue;
+    prs.set(prNumber, {
+      pr_number: prNumber,
+      branch: safeString(event.payload.branch),
+      state: event.type === "iteration.merged" ? "merged" : "unknown",
+      ci_state: safeString(event.payload.ci_state) ?? "unknown",
+      required_checks: safeChecksFromPayload(event.payload.required_checks),
+      eligibility: safeEligibility(event.payload.eligibility),
+      risk: safeRisk(event.payload.risk),
+      reasons: safeStringArray(event.payload.reasons) ?? [],
+      updated_at: event.time
+    });
+  }
+
+  const items = [...prs.values()].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return {
+    total: items.length,
+    open: items.filter((pr) => pr.state === "open").length,
+    merged: items.filter((pr) => pr.state === "merged").length,
+    blocked: items.filter((pr) => pr.eligibility === "blocked" || pr.state === "blocked").length,
+    eligible: items.filter((pr) => pr.eligibility === "eligible").length,
+    ci_failed: items.filter((pr) => pr.ci_state === "ci_failed").length,
+    latest_ci_state: items[0]?.ci_state ?? "unknown",
+    prs: items
+  };
+}
+
+function summarizeNotifications(notifications: StoredNotification[], providers: ReturnType<typeof notificationProviders>) {
+  const sorted = [...notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return {
+    total: notifications.length,
+    sent: notifications.filter((notification) => notification.status === "sent").length,
+    skipped: notifications.filter((notification) => notification.status === "skipped").length,
+    failed: notifications.filter((notification) => notification.status === "failed").length,
+    pending: notifications.filter((notification) => notification.status === "pending").length,
+    by_severity: countBy(notifications, (notification) => notification.severity ?? "unknown"),
+    providers,
+    bootstrap_fallback: {
+      status: "available-manual",
+      script: "scripts/powershell/notify-bootstrap.ps1",
+      real_send_requires_explicit_send: true
+    },
+    latest: sorted[0],
+    recent: sorted.slice(0, 20)
+  };
+}
+
+function summarizeHermes(events: StoredEvent[], iterations: StoredIterationRun[]) {
+  const hermesEvents = events.filter((event) => event.source.platform === "hermes" || event.source.adapter.toLowerCase().includes("hermes"));
+  const latest = hermesEvents.at(-1);
+  const failed = [...hermesEvents].reverse().find((event) => event.severity === "error" || event.severity === "critical" || event.type === "run.failed" || event.type === "agent.error");
+  const lastSafeRun = [...hermesEvents].reverse().find((event) => event.type === "run.completed" || event.type === "agent.idle");
+  const nightly = [...events].reverse().find((event) => event.source.adapter.includes("nightly") || safeString(event.payload.report_type) === "nightly");
+  const sweep = [...events].reverse().find((event) => event.source.adapter.includes("auto-merge") || safeString(event.payload.mode)?.includes("Sweep"));
+  const status = failed ? "degraded" : latest ? "available" : "placeholder";
+  return {
+    status,
+    tunnel: {
+      status: safeString(latest?.payload.tunnel_status) ?? (latest ? "observed" : "unknown"),
+      public_exposure: false
+    },
+    api: {
+      health: safeString(latest?.payload.health) ?? safeString(latest?.payload.api_health) ?? status,
+      base_publicly_exposed: false
+    },
+    capabilities: safeStringArray(latest?.payload.capabilities) ?? ["health", "capabilities", "safe-run-smoke"],
+    last_safe_run: lastSafeRun ? { event_id: lastSafeRun.id, run_id: lastSafeRun.correlation?.run_id, time: lastSafeRun.time } : undefined,
+    nightly_report: nightly ? { event_id: nightly.id, time: nightly.time, summary: safeString(nightly.payload.summary) ?? nightly.type } : undefined,
+    sweep_dry_run: sweep ? { event_id: sweep.id, time: sweep.time, summary: safeString(sweep.payload.summary) ?? safeString(sweep.payload.mode) ?? sweep.type } : undefined,
+    degraded_reason: failed ? safeString(failed.payload.summary) ?? safeString(failed.payload.reason) ?? failed.type : undefined,
+    related_iterations: iterations.filter((iteration) => iteration.branch.toLowerCase().includes("hermes") || iteration.goal_id?.toLowerCase().includes("hermes")).slice(0, 5)
+  };
+}
+
+function summarizeAutoMerge(iterations: StoredIterationRun[], events: StoredEvent[], audit: StoredAuditRecord[]) {
+  const sweepEvents = events.filter((event) => event.source.adapter.includes("auto-merge") || safeString(event.payload.mode)?.includes("Sweep") || safeString(event.payload.sweep_id));
+  const latestSweep = sweepEvents.at(-1);
+  const prSummary = summarizePrs(iterations, events);
+  return {
+    enabled_by_default: false,
+    dry_run_default: true,
+    total_prs: prSummary.total,
+    eligible: prSummary.eligible,
+    blocked: prSummary.blocked,
+    pending: prSummary.prs.filter((pr) => pr.eligibility === "pending").length,
+    merged_history: audit.filter((record) => record.action === "iteration.merged" || record.action === "pr.merged").slice(0, 20),
+    latest_sweep: latestSweep ? {
+      event_id: latestSweep.id,
+      time: latestSweep.time,
+      mode: safeString(latestSweep.payload.mode) ?? "dry-run",
+      dry_run: latestSweep.payload.dry_run !== false,
+      summary: safeString(latestSweep.payload.summary),
+      eligible: numberFromPayload(latestSweep.payload.eligible),
+      blocked: numberFromPayload(latestSweep.payload.blocked)
+    } : undefined,
+    decisions: prSummary.prs.map((pr) => ({
+      pr_number: pr.pr_number,
+      eligibility: pr.eligibility,
+      risk: pr.risk,
+      reasons: pr.reasons,
+      required_checks: pr.required_checks
+    }))
+  };
+}
+
+function nextRecommendedAction(input: {
+  latestFailure?: RunSummary;
+  prs: ReturnType<typeof summarizePrs>;
+  automerge: ReturnType<typeof summarizeAutoMerge>;
+  hermes: ReturnType<typeof summarizeHermes>;
+  notifications: StoredNotification[];
+}) {
+  if (input.latestFailure) return `Inspect failed run ${input.latestFailure.run_id}.`;
+  if (input.prs.ci_failed > 0) return "Open PR/CI and repair failed checks.";
+  if (input.automerge.blocked > 0) return "Review blocked auto-merge decisions.";
+  if (input.hermes.status === "degraded") return "Open Hermes and check degraded reason.";
+  if (input.notifications.some((notification) => notification.status === "failed")) return "Open notifications and repair provider configuration.";
+  if (input.prs.eligible > 0) return "Review eligible low-risk PRs before enabling auto-merge.";
+  return "Continue observing; no immediate operator action.";
+}
+
 function summarizeAudit(events: StoredEvent[]) {
   return events
     .filter((event) =>
@@ -921,6 +1167,50 @@ function countBy<T>(items: T[], key: (item: T) => string): Record<string, number
   const counts: Record<string, number> = {};
   for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
   return counts;
+}
+
+function maxIso(current: string | undefined, next: string): string {
+  return current && current > next ? current : next;
+}
+
+function numberFromPayload(input: unknown): number | undefined {
+  if (typeof input === "number" && Number.isFinite(input)) return input;
+  if (typeof input === "string" && /^\d+$/.test(input)) return Number(input);
+  return undefined;
+}
+
+function safeChecksFromPayload(input: unknown): Array<{ name: string; status: string; summary?: string }> {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 20).map((item) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    return {
+      name: safeString(record.name) ?? "check",
+      status: safeString(record.status) ?? "unknown",
+      summary: safeString(record.summary)
+    };
+  });
+}
+
+function safeEligibility(input: unknown): "eligible" | "blocked" | "pending" | "unknown" {
+  return input === "eligible" || input === "blocked" || input === "pending" ? input : "unknown";
+}
+
+function safeRisk(input: unknown): "low" | "needs_review" | "blocked" | "unknown" {
+  return input === "low" || input === "needs_review" || input === "blocked" ? input : "unknown";
+}
+
+function riskFromIteration(iteration: StoredIterationRun): "low" | "needs_review" | "blocked" | "unknown" {
+  if (iteration.last_error?.toLowerCase().includes("high-risk") || iteration.state === "blocked") return "blocked";
+  if (iteration.last_error) return "needs_review";
+  if (iteration.checks.length > 0) return "low";
+  return "unknown";
+}
+
+function eligibilityFromIteration(iteration: StoredIterationRun, risk: "low" | "needs_review" | "blocked" | "unknown"): "eligible" | "blocked" | "pending" | "unknown" {
+  if (risk === "blocked" || iteration.state === "blocked" || iteration.state === "failed" || iteration.checks.some((check) => check.status === "failed")) return "blocked";
+  if (iteration.state === "ci_green" && risk === "low") return "eligible";
+  if (iteration.state === "ci_pending" || iteration.checks.some((check) => check.status === "pending")) return "pending";
+  return "unknown";
 }
 
 function runGroupId(event: StoredEvent): string {
