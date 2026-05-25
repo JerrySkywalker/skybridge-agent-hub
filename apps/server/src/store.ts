@@ -417,8 +417,14 @@ export class SqliteStore implements EventStore {
 
   async upsertProject(project: StoredProject): Promise<void> {
     this.requireDb().prepare(`
-      INSERT OR REPLACE INTO projects (project_id, name, repo, status, created_at, updated_at, project_json)
+      INSERT INTO projects (project_id, name, repo, status, created_at, updated_at, project_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        name = excluded.name,
+        repo = excluded.repo,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        project_json = excluded.project_json
     `).run(...toProjectParams(project));
   }
 
@@ -440,8 +446,14 @@ export class SqliteStore implements EventStore {
 
   async upsertGoal(goal: StoredMasterGoal): Promise<void> {
     this.requireDb().prepare(`
-      INSERT OR REPLACE INTO master_goals (goal_id, project_id, title, status, created_at, updated_at, goal_json)
+      INSERT INTO master_goals (goal_id, project_id, title, status, created_at, updated_at, goal_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(goal_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        title = excluded.title,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        goal_json = excluded.goal_json
     `).run(...toGoalParams(goal));
   }
 
@@ -461,8 +473,14 @@ export class SqliteStore implements EventStore {
 
   async upsertWorker(worker: StoredWorker): Promise<void> {
     this.requireDb().prepare(`
-      INSERT OR REPLACE INTO workers (worker_id, name, provider, enabled, created_at, updated_at, worker_json)
+      INSERT INTO workers (worker_id, name, provider, enabled, created_at, updated_at, worker_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(worker_id) DO UPDATE SET
+        name = excluded.name,
+        provider = excluded.provider,
+        enabled = excluded.enabled,
+        updated_at = excluded.updated_at,
+        worker_json = excluded.worker_json
     `).run(...toWorkerParams(worker));
   }
 
@@ -509,8 +527,17 @@ export class SqliteStore implements EventStore {
 
   async upsertTask(task: StoredTask): Promise<void> {
     this.requireDb().prepare(`
-      INSERT OR REPLACE INTO tasks (task_id, project_id, goal_id, status, risk, source, assigned_worker_id, created_at, updated_at, task_json)
+      INSERT INTO tasks (task_id, project_id, goal_id, status, risk, source, assigned_worker_id, created_at, updated_at, task_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(task_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        goal_id = excluded.goal_id,
+        status = excluded.status,
+        risk = excluded.risk,
+        source = excluded.source,
+        assigned_worker_id = excluded.assigned_worker_id,
+        updated_at = excluded.updated_at,
+        task_json = excluded.task_json
     `).run(...toTaskParams(task));
   }
 

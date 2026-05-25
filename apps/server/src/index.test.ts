@@ -818,6 +818,33 @@ describe("server api", () => {
     ).toBe("worker-durable");
   });
 
+  it("derives SQLite worker status from persisted heartbeats", async () => {
+    const dir = await tempDir();
+    const dbFile = join(dir, "skybridge.sqlite");
+    const server = await createServer({
+      dbFile,
+      logger: false,
+      jsonMigrationFile: false,
+    });
+    servers.push(server);
+
+    await server.inject({
+      method: "POST",
+      url: "/v1/workers/register",
+      payload: { worker_id: "sqlite-worker", name: "SQLite worker" },
+    });
+    const heartbeat = await server.inject({
+      method: "POST",
+      url: "/v1/workers/sqlite-worker/heartbeat",
+      payload: {},
+    });
+
+    expect(heartbeat.json<{ worker: { status: string; last_seen_at?: string } }>().worker).toMatchObject({
+      status: "online",
+      last_seen_at: expect.any(String),
+    });
+  });
+
   it("summarizes remote node heartbeat events without command execution", async () => {
     const server = await testServer();
     await server.inject({
