@@ -52,6 +52,8 @@ Dry run:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-hermes-cloud-api.ps1 -DryRun -Json
 ```
 
+The local Operator Console Hermes view is available at `http://127.0.0.1:3000/#/hermes`. It displays local tunnel/API status, capabilities, last safe run, nightly report, sweep dry-run summary and degraded reason from safe local telemetry. It must continue to report that Hermes is not publicly exposed.
+
 Real local tunnel test:
 
 ```powershell

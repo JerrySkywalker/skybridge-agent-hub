@@ -45,7 +45,7 @@ The runner intentionally skips when Playwright is unavailable. When Playwright i
 
 By default, screenshots are written under `.agent/tmp/browser-visual-qa`, which is local runtime output and must not contain real agent logs or secrets. Use `-ArtifactDir <path>` to redirect artifacts for a CI upload step that is explicitly limited to fixture data.
 
-PR and AI-branch CI run the same command without installing Playwright. In that default public-runner state the step records a skip-safe log under `.agent/ci/browser-visual-qa.log` and does not produce screenshots. If a future controlled runner installs Playwright and produces `.agent/tmp/browser-visual-qa/manifest.json`, CI first runs `scripts/powershell/assert-browser-visual-qa-artifacts.ps1` and then uploads the artifact directory for seven days.
+PR and AI-branch CI run the same command without installing Playwright. In that default public-runner state the step records a skip-safe log under `.agent/ci/browser-visual-qa.log`, writes a skip manifest under `.agent/tmp/browser-visual-qa/manifest.json`, and does not produce screenshots. CI validates the manifest before uploading the artifact directory for seven days; skipped manifests must be fixture-only, non-production and marked `playwright_unavailable`, while screenshot manifests must also pass loopback-origin and PNG presence checks.
 
 ## Artifact Expectations
 

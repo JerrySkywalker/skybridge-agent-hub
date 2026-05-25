@@ -47,6 +47,8 @@ Dry-run smoke does not require notification credentials and does not send messag
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-bootstrap-notification.ps1
 ```
 
+The Operator Console notification view is available at `http://127.0.0.1:3000/#/notifications` after starting the local web app. It shows provider status, sent/skipped/failed counts and the bootstrap fallback path without exposing credential values.
+
 Manual dry run:
 
 ```powershell

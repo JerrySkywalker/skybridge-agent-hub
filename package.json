@@ -13,6 +13,7 @@
     "build": "corepack pnpm -r build",
     "format": "prettier --write .",
     "smoke:operator-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-operator-console.ps1 -UseTempDatabase",
+    "smoke:product-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-product-console.ps1",
     "smoke:release-dry-run": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-release-dry-run.ps1",
     "smoke:self-hosting-dry-run": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-hosting-dry-run.ps1",
     "smoke:codex-hook-integration": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-codex-hook-integration.ps1 -ApiBase http://127.0.0.1:8798 -StartServer",

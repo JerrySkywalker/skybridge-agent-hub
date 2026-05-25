@@ -25,6 +25,15 @@ if ($manifest.production_endpoint_used -ne $false) {
   throw "Browser visual QA manifest indicates production endpoint usage."
 }
 
+if ($manifest.skipped -eq $true) {
+  if ($manifest.reason -ne "playwright_unavailable") {
+    throw "Browser visual QA skip manifest has an unexpected reason: $($manifest.reason)"
+  }
+
+  Write-Host "Browser visual QA was skipped because Playwright is unavailable; skip manifest is safe to upload."
+  exit 0
+}
+
 if (-not $manifest.web_base_origin) {
   throw "Browser visual QA manifest is missing web_base_origin."
 }

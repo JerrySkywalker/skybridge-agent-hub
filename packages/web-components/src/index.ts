@@ -20,6 +20,21 @@ interface RunsResponse {
   }>;
 }
 
+interface ProductSummaryResponse {
+  totals: {
+    events: number;
+    runs: number;
+    active_runs: number;
+    failed_runs: number;
+    open_prs?: number;
+    ci_failed?: number;
+  };
+  latest?: {
+    hermes_status?: string;
+    notification?: { status: string; provider: string; message?: { title?: string } };
+  };
+}
+
 export interface AgentStatusViewModel {
   state: string;
   service?: string;
@@ -29,6 +44,10 @@ export interface AgentStatusViewModel {
   runs: number;
   activeRuns: number;
   failedRuns: number;
+  openPrs?: number;
+  ciFailed?: number;
+  hermesStatus?: string;
+  lastNotification?: string;
   source?: string;
   lastSeen?: string;
   error?: string;
@@ -70,6 +89,9 @@ export class AgentStatusElement extends HTMLElementBase {
         fetch(`${this.apiBase}/v1/events?limit=25`).then((response) => response.json() as Promise<EventsResponse>),
         fetch(`${this.apiBase}/v1/runs?limit=25`).then((response) => response.json() as Promise<RunsResponse>)
       ]);
+      const productSummary = await fetch(`${this.apiBase}/v1/summary`)
+        .then((response) => response.ok ? response.json() as Promise<ProductSummaryResponse> : undefined)
+        .catch(() => undefined);
       const latest = eventJson.events.at(-1);
       const failedRuns = runJson.runs.filter((run) => run.status === "failed").length;
       const activeRuns = runJson.runs.filter((run) => run.status === "running").length;
@@ -81,6 +103,10 @@ export class AgentStatusElement extends HTMLElementBase {
         runs: runJson.runs.length,
         activeRuns,
         failedRuns,
+        openPrs: productSummary?.totals.open_prs,
+        ciFailed: productSummary?.totals.ci_failed,
+        hermesStatus: productSummary?.latest?.hermes_status,
+        lastNotification: productSummary?.latest?.notification ? `${productSummary.latest.notification.provider}/${productSummary.latest.notification.status}` : undefined,
         source: latest ? `${latest.source.platform}/${latest.source.adapter}` : "none",
         lastSeen: latest ? new Date(latest.time).toLocaleString() : "not yet",
         compact: this.compact
@@ -109,8 +135,8 @@ export function renderAgentStatusHtml(data: AgentStatusViewModel): string {
   const statusBg = data.state === "offline" || data.state === "attention" ? "#fff0ef" : "#e9f7ef";
   const compactStyle = data.compact ? "max-width:360px;" : "";
   const metrics = data.compact
-    ? `<div><dt>Runs</dt><dd>${data.runs}</dd></div><div><dt>Failed</dt><dd>${data.failedRuns}</dd></div>`
-    : `<div><dt>Runs</dt><dd>${data.runs}</dd></div><div><dt>Active</dt><dd>${data.activeRuns}</dd></div><div><dt>Failed</dt><dd>${data.failedRuns}</dd></div><div><dt>Events</dt><dd>${data.events}</dd></div>`;
+    ? `<div><dt>Runs</dt><dd>${data.runs}</dd></div><div><dt>PR/CI</dt><dd>${data.openPrs ?? 0}/${data.ciFailed ?? 0}</dd></div>`
+    : `<div><dt>Runs</dt><dd>${data.runs}</dd></div><div><dt>Active</dt><dd>${data.activeRuns}</dd></div><div><dt>Failed</dt><dd>${data.failedRuns}</dd></div><div><dt>PR/CI</dt><dd>${data.openPrs ?? 0}/${data.ciFailed ?? 0}</dd></div>`;
 
   return `<section style="${compactStyle}font-family: system-ui, sans-serif; border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #fff; color: #172033;">
     <div style="display:flex; justify-content:space-between; gap:10px; align-items:start;">
@@ -122,6 +148,8 @@ export function renderAgentStatusHtml(data: AgentStatusViewModel): string {
     </div>
     <dl style="display:grid; grid-template-columns:repeat(${data.compact ? 2 : 4},minmax(0,1fr)); gap:10px; margin:12px 0 0;">
       ${metrics}
+      <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Hermes</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.hermesStatus ?? "unknown")}</dd></div>
+      <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last notification</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.lastNotification ?? "none")}</dd></div>
       <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last source</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.source ?? "none")}</dd></div>
       <div style="grid-column:1 / -1;"><dt style="font-size:12px; color:#52627a;">Last seen</dt><dd style="margin:0; font-weight:650;">${escapeHtml(data.lastSeen ?? "not yet")}</dd></div>
     </dl>

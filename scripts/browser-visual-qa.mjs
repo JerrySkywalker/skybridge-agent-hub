@@ -12,18 +12,20 @@ if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(webBaseUrl.hostname)) {
 const { chromium } = await import("playwright");
 
 const requiredConsoleText = [
-  "Operator Console",
-  "Metrics Summary",
-  "Approval Queue",
-  "Notifications",
-  "Notification Matrix",
-  "Run Detail"
+  "SkyBridge Agent Hub",
+  "Daily operator picture",
+  "Open PR/CI",
+  "Auto-merge",
+  "Hermes"
 ];
 
 const viewports = [
-  { name: "operator-console-desktop", path: "/", width: 1440, height: 1000, requiredText: requiredConsoleText },
-  { name: "operator-console-mobile", path: "/", width: 390, height: 900, requiredText: requiredConsoleText },
-  { name: "compact-embed", path: "/#/embed/compact", width: 420, height: 420, requiredText: ["SkyBridge Health"] }
+  { name: "overview-desktop", path: "/#/overview", width: 1440, height: 1000, requiredText: requiredConsoleText },
+  { name: "pr-ci-desktop", path: "/#/pr-ci", width: 1440, height: 1000, requiredText: ["PR/CI", "PR and CI readiness", "Auto-merge dry-run"] },
+  { name: "hermes-desktop", path: "/#/hermes", width: 1440, height: 1000, requiredText: ["Hermes", "Supervisor", "Cloud supervisor runbook"] },
+  { name: "notifications-desktop", path: "/#/notifications", width: 1440, height: 1000, requiredText: ["Notifications", "Notification Matrix", "Bootstrap"] },
+  { name: "overview-mobile", path: "/#/overview", width: 390, height: 900, requiredText: ["SkyBridge", "Daily operator picture"] },
+  { name: "compact-embed", path: "/#/embed/compact", width: 420, height: 460, requiredText: ["Operator Status", "PR/CI", "Hermes"] }
 ];
 
 const manifest = {
@@ -123,7 +125,7 @@ try {
         fail(`${viewport.name} logged browser errors: ${consoleErrors.join(" | ")}`);
       }
 
-      if (viewport.path === "/") {
+      if (viewport.path === "/#/overview") {
         await assertNoPrimaryPanelOverlap(page);
       }
 

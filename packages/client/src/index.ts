@@ -39,18 +39,129 @@ export interface SummaryResponse {
     runs: number;
     active_runs: number;
     failed_runs: number;
+    open_prs?: number;
+    ci_failed?: number;
     notifications: number;
     notification_failed?: number;
     notification_skipped?: number;
     nodes?: number;
     node_stale?: number;
+    automerge_blocked?: number;
     attention_items: number;
   };
+  latest?: {
+    ci_state?: string;
+    automerge_sweep?: AutoMergeSummary["latest_sweep"];
+    iteration?: IterationRun;
+    hermes_status?: string;
+    notification?: StoredNotification;
+    failure?: RunSummary;
+    next_recommended_action?: string;
+  };
+  recent_failures?: RunSummary[];
   sources: Array<{
     platform: string;
     adapter: string;
     event_count: number;
     latest_event_at: string;
+  }>;
+}
+
+export interface ProjectSummary {
+  project_id: string;
+  run_count: number;
+  active_runs: number;
+  failed_runs: number;
+  iteration_count: number;
+  latest_activity_at?: string;
+}
+
+export interface IterationsSummary {
+  total: number;
+  active: number;
+  blocked: number;
+  failed: number;
+  repair_attempts: number;
+  latest?: IterationRun;
+  recent: Array<IterationRun & { blocked_reason?: string; repair_attempts: number; raw_logs_included: false }>;
+}
+
+export interface PrSummaryItem {
+  pr_number: number;
+  branch?: string;
+  repo?: string;
+  state: "open" | "merged" | "blocked" | "unknown";
+  ci_state: string;
+  required_checks: Array<{ name: string; status: string; summary?: string }>;
+  eligibility: "eligible" | "blocked" | "pending" | "unknown";
+  risk: "low" | "needs_review" | "blocked" | "unknown";
+  reasons: string[];
+  updated_at: string;
+}
+
+export interface PrsSummary {
+  total: number;
+  open: number;
+  merged: number;
+  blocked: number;
+  eligible: number;
+  ci_failed: number;
+  latest_ci_state: string;
+  prs: PrSummaryItem[];
+}
+
+export interface NotificationsSummary {
+  total: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+  pending: number;
+  by_severity: Record<string, number>;
+  providers: Array<{ provider: string; configured: boolean; status: string; required_env: string; credential_values_exposed: boolean }>;
+  bootstrap_fallback: {
+    status: string;
+    script: string;
+    real_send_requires_explicit_send: boolean;
+  };
+  latest?: StoredNotification;
+  recent: StoredNotification[];
+}
+
+export interface HermesSummary {
+  status: "available" | "degraded" | "placeholder";
+  tunnel: { status: string; public_exposure: false };
+  api: { health: string; base_publicly_exposed: false };
+  capabilities: string[];
+  last_safe_run?: { event_id: string; run_id?: string; time: string };
+  nightly_report?: { event_id: string; time: string; summary: string };
+  sweep_dry_run?: { event_id: string; time: string; summary: string };
+  degraded_reason?: string;
+  related_iterations: IterationRun[];
+}
+
+export interface AutoMergeSummary {
+  enabled_by_default: false;
+  dry_run_default: true;
+  total_prs: number;
+  eligible: number;
+  blocked: number;
+  pending: number;
+  merged_history: AuditEntry[];
+  latest_sweep?: {
+    event_id: string;
+    time: string;
+    mode: string;
+    dry_run: boolean;
+    summary?: string;
+    eligible?: number;
+    blocked?: number;
+  };
+  decisions: Array<{
+    pr_number: number;
+    eligibility: PrSummaryItem["eligibility"];
+    risk: PrSummaryItem["risk"];
+    reasons: string[];
+    required_checks: PrSummaryItem["required_checks"];
   }>;
 }
 
@@ -144,6 +255,31 @@ export class SkyBridgeClient {
 
   async getSummary(): Promise<SummaryResponse> {
     return this.getJson<SummaryResponse>("/v1/summary");
+  }
+
+  async listProjects(): Promise<ProjectSummary[]> {
+    const json = await this.getJson<{ projects: ProjectSummary[] }>("/v1/projects");
+    return json.projects;
+  }
+
+  async getIterationsSummary(): Promise<IterationsSummary> {
+    return this.getJson<IterationsSummary>("/v1/iterations/summary");
+  }
+
+  async getPrsSummary(): Promise<PrsSummary> {
+    return this.getJson<PrsSummary>("/v1/prs/summary");
+  }
+
+  async getNotificationsSummary(): Promise<NotificationsSummary> {
+    return this.getJson<NotificationsSummary>("/v1/notifications/summary");
+  }
+
+  async getHermesSummary(): Promise<HermesSummary> {
+    return this.getJson<HermesSummary>("/v1/hermes/summary");
+  }
+
+  async getAutoMergeSummary(): Promise<AutoMergeSummary> {
+    return this.getJson<AutoMergeSummary>("/v1/automerge/summary");
   }
 
   async listSources(): Promise<SourceCapability[]> {

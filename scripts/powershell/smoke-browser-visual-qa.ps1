@@ -40,6 +40,19 @@ $playwrightInstalled = (Test-Path -LiteralPath "node_modules\playwright") -or (T
 
 if (-not $playwrightInstalled) {
   $message = "Playwright is not installed. Browser visual QA optional runner skipped; see docs/ui/BROWSER_VISUAL_QA.md."
+  if (-not $ArtifactDir) {
+    $ArtifactDir = Join-Path (Get-Location) ".agent\tmp\browser-visual-qa"
+  }
+  New-Item -ItemType Directory -Path $ArtifactDir -Force | Out-Null
+  @{
+    schema_version = 1
+    generated_at = (Get-Date).ToUniversalTime().ToString("o")
+    skipped = $true
+    reason = "playwright_unavailable"
+    fixture_only = $true
+    production_endpoint_used = $false
+    expected_routes = @("#/overview", "#/pr-ci", "#/hermes", "#/notifications", "#/embed/compact")
+  } | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $ArtifactDir "manifest.json") -Encoding utf8
   if ($SkipWhenUnavailable) {
     Write-Warning $message
     exit 0

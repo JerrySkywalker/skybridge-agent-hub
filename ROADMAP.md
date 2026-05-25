@@ -9,7 +9,7 @@
 - Demo dataset, dogfooding smoke and release candidate checklist.
 - Agent CI/CD Control Plane foundation for bounded iteration, PR CI repair, Hermes supervision and bootstrap notifications.
 
-Status: release-candidate foundation after PR #9. Codex, server, SQLite, notification, CI/CD and smoke foundations are implemented and locally validated. OpenCode/Hermes runtime compatibility, real browser visual QA, WSS remote control, mobile readiness, docs publishing and production deployment hardening remain follow-up work.
+Status: productized local operator slice after Super Goal 061-080. Codex, server, SQLite, notification, CI/CD, demo/smoke foundations and the routed Operator Console are implemented and locally validated. The console now has overview, runs, iterations, PR/CI, auto-merge, notifications, Hermes, sources/audit, settings and compact embed surfaces. OpenCode/Hermes runtime compatibility remains fixture/local-telemetry-backed; real browser screenshots are optional and skip safely when Playwright is unavailable. WSS remote control, mobile app readiness, docs publishing and production deployment hardening remain follow-up work.
 
 ## v1.0
 

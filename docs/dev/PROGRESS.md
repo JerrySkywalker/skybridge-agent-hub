@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-05-25 Super Goal 061-080 Productization Sprint
+
+- Added the Operator Console product spec covering Overview, Runs, Iterations, PR/CI, Auto-merge, Notifications, Hermes, Sources/Adapters, Audit and Settings.
+- Added safe local-derived product APIs: `/v1/projects`, `/v1/iterations/summary`, `/v1/prs/summary`, `/v1/notifications/summary`, `/v1/hermes/summary` and `/v1/automerge/summary`, and expanded `/v1/summary`.
+- Added typed client helpers and tests for the new dashboard product APIs.
+- Reworked the web Operator Console into hash-routed product surfaces for overview, runs, iterations, PR/CI, notifications, Hermes, sources/audit, settings and compact embed.
+- Expanded demo seeding with Codex, OpenCode and Hermes runs, PR/CI records, auto-merge sweep dry-run, failed CI, notification sent/failed telemetry, audit records and a blocked high-risk PR.
+- Added `smoke-product-console.ps1` and `corepack pnpm smoke:product-console` to validate seeded product state, summary APIs and web build without a browser by default.
+- Improved the compact Web Component embed to show product status, PR/CI count, Hermes status, last notification and offline state.
+- Updated optional browser visual QA to target overview, PR/CI, Hermes, notifications and embed routes, and to write a skip manifest when Playwright is unavailable.
+- Added product quickstart, screenshot guide and API overview docs; updated README, CONTRIBUTING, Hermes and bootstrap notification runbooks.
+- Real now: server persistence, summary APIs, typed client helpers, routed local UI, compact embed, demo smoke, audit-safe derived state.
+- Demo/fixture-backed now: OpenCode runtime data, Hermes degraded/supervisor data, PR/CI and auto-merge decision rows when not produced by real local scripts.
+- Deferred: public Hermes exposure remains forbidden, production deployment remains manual, real GitHub settings mutation is absent, always-on unattended auto-merge remains disabled, full browser screenshot capture depends on Playwright availability.
+
 ## 2026-05-25 Super Goal 049-060 Hermes Always-on Autonomy Pilot
 
 - Added a Hermes tunnel lifecycle helper, check-only tunnel smoke and tunnel recovery guide. The validated local tunnel was listening on `127.0.0.1:18642`; no duplicate tunnel was started.
