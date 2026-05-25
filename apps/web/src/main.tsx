@@ -21,6 +21,10 @@ import {
   type PrsSummary,
   type ProjectSummary,
   type SummaryResponse,
+  type TaskRecord,
+  type TaskSummary,
+  type WorkerRecord,
+  type WorkerSummary,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -33,6 +37,8 @@ type Route =
   | "overview"
   | "runs"
   | "iterations"
+  | "workers"
+  | "tasks"
   | "pr-ci"
   | "notifications"
   | "hermes"
@@ -45,6 +51,8 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "overview", label: "Overview" },
   { route: "runs", label: "Runs" },
   { route: "iterations", label: "Iterations" },
+  { route: "workers", label: "Worker Pool" },
+  { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
   { route: "notifications", label: "Notifications" },
   { route: "hermes", label: "Hermes Adapter" },
@@ -116,6 +124,8 @@ function App() {
           />
         ) : null}
         {route === "iterations" ? <IterationsPage apiBase={apiBase} /> : null}
+        {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
+        {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
         {route === "notifications" ? (
           <NotificationsPage apiBase={apiBase} />
@@ -155,6 +165,22 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
         <Kpi
           label="Auto-merge blocked"
           value={summary?.totals.automerge_blocked ?? 0}
+        />
+        <Kpi
+          label="Online workers"
+          value={summary?.totals.workers_online ?? 0}
+        />
+        <Kpi
+          label="Queued tasks"
+          value={summary?.totals.tasks_queued ?? 0}
+        />
+        <Kpi
+          label="Running tasks"
+          value={summary?.totals.tasks_running ?? 0}
+        />
+        <Kpi
+          label="Blocked tasks"
+          value={summary?.totals.tasks_blocked ?? 0}
         />
         <Kpi
           label="Latest iteration"
@@ -203,7 +229,7 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
             ]}
           />
           <SummaryCard
-            title="Adapter ring"
+          title="Adapter ring"
             state={`${data.adapters.length} adapters`}
             lines={[
               `Planner adapters: ${adapterLabels(data.adapters, "planner")}`,
@@ -211,10 +237,52 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
               `Notification providers: ${adapterLabels(data.adapters, "notification_provider")}`,
             ]}
           />
+          <SummaryCard
+            title="Task queue"
+            state={`${data.tasksSummary?.queued ?? 0} queued`}
+            lines={[
+              `Running: ${(data.tasksSummary?.running ?? 0) + (data.tasksSummary?.claimed ?? 0)}`,
+              `Completed: ${data.tasksSummary?.completed ?? 0}`,
+              `Latest event: ${data.tasksSummary?.latest_event?.type ?? "none"}`,
+            ]}
+          />
           <NotificationList apiBase={apiBase} />
         </aside>
       </section>
       {data.error ? <p className="skybridge-error">{data.error}</p> : null}
+    </div>
+  );
+}
+
+function WorkerPoolPage({ apiBase }: { apiBase: string }) {
+  const data = useProductData(apiBase);
+  return (
+    <div className="route-stack">
+      <section className="kpi-grid">
+        <Kpi label="Online" value={data.workersSummary?.online ?? 0} />
+        <Kpi label="Stale" value={data.workersSummary?.stale ?? 0} />
+        <Kpi label="Offline" value={data.workersSummary?.offline ?? 0} />
+        <Kpi label="Disabled" value={data.workersSummary?.disabled ?? 0} />
+      </section>
+      <WorkerTable workers={data.workers} />
+    </div>
+  );
+}
+
+function TaskQueuePage({ apiBase }: { apiBase: string }) {
+  const data = useProductData(apiBase);
+  return (
+    <div className="route-stack">
+      <section className="kpi-grid">
+        <Kpi label="Queued" value={data.tasksSummary?.queued ?? 0} />
+        <Kpi
+          label="Running"
+          value={(data.tasksSummary?.running ?? 0) + (data.tasksSummary?.claimed ?? 0)}
+        />
+        <Kpi label="Completed" value={data.tasksSummary?.completed ?? 0} />
+        <Kpi label="Failed" value={data.tasksSummary?.failed ?? 0} />
+      </section>
+      <TaskTable tasks={data.tasks} workers={data.workers} projects={data.projects} />
     </div>
   );
 }
@@ -483,6 +551,10 @@ function useProductData(apiBase: string) {
   const [adapters, setAdapters] = useState<
     Awaited<ReturnType<SkyBridgeClient["listAdapters"]>>
   >([]);
+  const [workers, setWorkers] = useState<WorkerRecord[]>([]);
+  const [workersSummary, setWorkersSummary] = useState<WorkerSummary | undefined>();
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [tasksSummary, setTasksSummary] = useState<TaskSummary | undefined>();
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
@@ -497,6 +569,10 @@ function useProductData(apiBase: string) {
       client.getAutoMergeSummary(),
       client.listAuditEntries({ limit: 20 }),
       client.listAdapters(),
+      client.listWorkers(),
+      client.getWorkersSummary(),
+      client.listTasks(),
+      client.getTasksSummary(),
     ])
       .then(
         ([
@@ -509,6 +585,10 @@ function useProductData(apiBase: string) {
           nextAutoMerge,
           nextAudit,
           nextAdapters,
+          nextWorkers,
+          nextWorkersSummary,
+          nextTasks,
+          nextTasksSummary,
         ]) => {
           if (cancelled) return;
           setSummary(nextSummary);
@@ -520,6 +600,10 @@ function useProductData(apiBase: string) {
           setAutoMerge(nextAutoMerge);
           setAudit(nextAudit);
           setAdapters(nextAdapters);
+          setWorkers(nextWorkers);
+          setWorkersSummary(nextWorkersSummary);
+          setTasks(nextTasks);
+          setTasksSummary(nextTasksSummary);
           setError(undefined);
         },
       )
@@ -542,8 +626,118 @@ function useProductData(apiBase: string) {
     automerge,
     audit,
     adapters,
+    workers,
+    workersSummary,
+    tasks,
+    tasksSummary,
     error,
   };
+}
+
+function WorkerTable({ workers }: { workers: WorkerRecord[] }) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Worker Pool</p>
+          <h2>Runtime providers</h2>
+        </div>
+        <span className="skybridge-state">{workers.length}</span>
+      </div>
+      {workers.length === 0 ? (
+        <p className="skybridge-state-note">No workers registered.</p>
+      ) : null}
+      <div className="data-table data-table--workers">
+        <div className="data-table__head">
+          <span>Worker</span>
+          <span>Status</span>
+          <span>Capabilities</span>
+          <span>Current task / last seen</span>
+        </div>
+        {workers.map((worker) => (
+          <div className="data-table__row" key={worker.worker_id}>
+            <span>
+              {worker.name}
+              <small>{worker.worker_id} · {worker.provider}</small>
+            </span>
+            <span>
+              <span className={badgeClass(worker.status === "online" ? "ok" : "bad")}>
+                {worker.status}
+              </span>
+              <small>{worker.enabled ? "enabled" : "disabled"}</small>
+            </span>
+            <span>
+              {worker.capabilities.join(", ") || "none"}
+              <small>{worker.labels.join(", ") || "no labels"}</small>
+            </span>
+            <span>
+              {worker.current_task_id ?? "none"}
+              <small>{formatDateTime(worker.last_seen_at)}</small>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TaskTable({
+  tasks,
+  workers,
+  projects,
+}: {
+  tasks: TaskRecord[];
+  workers: WorkerRecord[];
+  projects: ProjectSummary[];
+}) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Task Queue</p>
+          <h2>Queued and recent tasks</h2>
+        </div>
+        <span className="skybridge-state">{tasks.length}</span>
+      </div>
+      {tasks.length === 0 ? (
+        <p className="skybridge-state-note">No tasks recorded.</p>
+      ) : null}
+      <div className="data-table data-table--tasks">
+        <div className="data-table__head">
+          <span>Task</span>
+          <span>Status / risk</span>
+          <span>Worker</span>
+          <span>Project / result</span>
+        </div>
+        {tasks.map((task) => {
+          const worker = workers.find((item) => item.worker_id === task.assigned_worker_id);
+          const project = projects.find((item) => item.project_id === task.project_id);
+          return (
+            <div className="data-table__row" key={task.task_id}>
+              <span>
+                {task.title}
+                <small>{task.task_id} · {task.last_event?.type ?? "no event"}</small>
+              </span>
+              <span>
+                <span className={badgeClass(task.status === "failed" || task.status === "blocked" ? "bad" : "ok")}>
+                  {task.status}
+                </span>
+                <small>{task.risk} risk · {task.source}</small>
+              </span>
+              <span>
+                {worker?.name ?? task.assigned_worker_id ?? "unassigned"}
+                <small>{task.claim?.claimed_at ? formatDateTime(task.claim.claimed_at) : "not claimed"}</small>
+              </span>
+              <span>
+                {project?.name ?? task.project_id}
+                <small>{task.result?.pr_url ?? task.result?.result_url ?? "PR/result link pending"}</small>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function IterationList({
@@ -807,6 +1001,8 @@ function parseRoute(): Route {
 function titleForRoute(route: Route): string {
   if (route === "pr-ci") return "PR/CI";
   if (route === "hermes") return "Hermes Adapter";
+  if (route === "workers") return "Worker Pool";
+  if (route === "tasks") return "Task Queue";
   return route.charAt(0).toUpperCase() + route.slice(1);
 }
 
