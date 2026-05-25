@@ -8,9 +8,66 @@ body {
   margin: 0;
 }
 
+.app-shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #172033;
+  color: #eaf1fb;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 18px;
+}
+
+.brand {
+  display: grid;
+  gap: 2px;
+}
+
+.brand strong {
+  font-size: 20px;
+}
+
+.brand span {
+  color: #aebbd0;
+  font-size: 13px;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar-nav a,
+.sidebar-embed {
+  border-radius: 6px;
+  color: #dbe6f6;
+  font-size: 14px;
+  font-weight: 650;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.sidebar-nav a:hover,
+.sidebar-nav a.is-active,
+.sidebar-embed:hover {
+  background: #26364f;
+  color: #ffffff;
+}
+
+.sidebar-embed {
+  margin-top: auto;
+}
+
 .page {
-  max-width: 1120px;
-  margin: 0 auto;
+  max-width: 1240px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 32px 20px;
 }
 
@@ -75,6 +132,59 @@ h2 {
 .dashboard-grid {
   align-items: start;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+}
+
+.route-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.hero-panel {
+  align-items: center;
+  background: #172033;
+  border-radius: 8px;
+  color: #ffffff;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 24px;
+}
+
+.hero-panel h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.hero-panel p {
+  color: #c5d1e3;
+  margin: 0;
+}
+
+.kpi-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(28, 43, 68, 0.06);
+  display: grid;
+  gap: 8px;
+  min-height: 74px;
+  padding: 14px;
+}
+
+.kpi-card span {
+  color: #52627a;
+  font-size: 12px;
+}
+
+.kpi-card strong {
+  font-size: 22px;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-grid__main,
@@ -316,6 +426,122 @@ h2 {
   color: #52627a;
 }
 
+.rich-list,
+.summary-lines {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rich-list li {
+  align-items: center;
+  border-bottom: 1px solid #edf2f8;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.rich-list div,
+.data-table__row span,
+.product-row span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rich-list small,
+.data-table small {
+  color: #52627a;
+}
+
+.data-table {
+  display: grid;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.data-table__head,
+.data-table__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 0.7fr 1.2fr 0.7fr 1.2fr;
+  min-width: 680px;
+  padding: 10px 0;
+}
+
+.data-table__head {
+  border-bottom: 1px solid #dbe4ef;
+  color: #52627a;
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.data-table__row {
+  border-bottom: 1px solid #edf2f8;
+}
+
+.product-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.product-row {
+  align-items: start;
+  background: #f8fbff;
+  border: 1px solid #edf2f8;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.summary-lines {
+  color: #52627a;
+}
+
+.summary-lines li {
+  border-bottom: 1px solid #edf2f8;
+  padding-bottom: 8px;
+}
+
+.doc-links {
+  display: grid;
+  gap: 8px;
+}
+
+.doc-links a {
+  color: #2365a8;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.settings-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.settings-list div {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-list dt {
+  color: #52627a;
+  font-size: 12px;
+}
+
+.settings-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .embed-page {
   margin: 0 auto;
   max-width: 420px;
@@ -323,8 +549,22 @@ h2 {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 14px;
+  }
+
+  .sidebar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .topbar,
   .topbar__meta,
+  .hero-panel,
+  .rich-list li,
   .skybridge-timeline li {
     align-items: stretch;
     flex-direction: column;
@@ -332,6 +572,8 @@ h2 {
 
   .grid,
   .dashboard-grid,
+  .kpi-grid,
+  .product-row,
   .skybridge-filterbar,
   .skybridge-metrics {
     grid-template-columns: 1fr;
