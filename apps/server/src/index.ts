@@ -1,6 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
@@ -127,6 +128,52 @@ const TASK_SOURCES: TaskSource[] = [
   "custom",
 ];
 
+function getConfiguredWorkerTokens(): string[] {
+  const tokens: string[] = [];
+  const envToken = process.env.SKYBRIDGE_WORKER_TOKEN?.trim();
+  if (envToken) tokens.push(envToken);
+
+  const tokensFile = process.env.SKYBRIDGE_WORKER_TOKENS_FILE?.trim();
+  if (tokensFile && existsSync(tokensFile)) {
+    for (const line of readFileSync(tokensFile, "utf8").split(/\r?\n/)) {
+      const token = line.trim();
+      if (token && !token.startsWith("#")) tokens.push(token);
+    }
+  }
+
+  return [...new Set(tokens)];
+}
+
+function isWorkerAuthRequired(): boolean {
+  return getConfiguredWorkerTokens().length > 0 || process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH === "true";
+}
+
+function validateWorkerAuth(authorization: string | string[] | undefined):
+  | { ok: true }
+  | { ok: false; status: 401 | 403; error: string } {
+  const configuredTokens = getConfiguredWorkerTokens();
+  if (!isWorkerAuthRequired()) return { ok: true };
+  if (configuredTokens.length === 0) return { ok: false, status: 403, error: "worker_auth_not_configured" };
+
+  const header = Array.isArray(authorization) ? authorization[0] : authorization;
+  if (!header) return { ok: false, status: 401, error: "missing_worker_token" };
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  if (!match?.[1]?.trim()) return { ok: false, status: 401, error: "invalid_worker_auth_scheme" };
+
+  const candidate = match[1].trim();
+  for (const token of configuredTokens) {
+    if (constantTimeEqual(candidate, token)) return { ok: true };
+  }
+  return { ok: false, status: 403, error: "invalid_worker_token" };
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 function summarizeRuns(events: StoredEvent[]): RunSummary[] {
   const grouped = new Map<string, StoredEvent[]>();
   for (const event of events) {
@@ -231,6 +278,19 @@ export async function createServer(
   app.addHook("onClose", async () => {
     await store.close();
   });
+
+  const requireWorkerAuth = async (
+    request: { headers: Record<string, string | string[] | undefined> },
+    reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+  ) => {
+    const auth = validateWorkerAuth(request.headers.authorization);
+    if (auth.ok) return;
+    return reply.code(auth.status).send({
+      ok: false,
+      error: auth.error,
+      auth_mode: "bearer_token",
+    });
+  };
 
   const broadcast = (event: StoredEvent) => {
     const payload = `event: skybridge.event\ndata: ${JSON.stringify(event)}\n\n`;
@@ -339,6 +399,7 @@ export async function createServer(
 
   app.post<{ Body: Record<string, unknown> }>(
     "/v1/workers/register",
+    { preHandler: requireWorkerAuth },
     async (request, reply) => {
       const parsed = parseWorkerInput(request.body);
       if (!parsed.ok) return reply.code(400).send(parsed.response);
@@ -358,7 +419,7 @@ export async function createServer(
   app.post<{
     Params: { workerId: string };
     Body: { status_note?: unknown; load?: unknown; seen_at?: unknown };
-  }>("/v1/workers/:workerId/heartbeat", async (request, reply) => {
+  }>("/v1/workers/:workerId/heartbeat", { preHandler: requireWorkerAuth }, async (request, reply) => {
     const workerId = decodeURIComponent(request.params.workerId);
     const worker = store.getWorker(workerId);
     if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found" });
@@ -540,7 +601,7 @@ export async function createServer(
     return { task: withTaskEvents(task, store) };
   });
 
-  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/claim", async (request, reply) => {
+  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/claim", { preHandler: requireWorkerAuth }, async (request, reply) => {
     const task = store.getTask(decodeURIComponent(request.params.taskId));
     if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
     const workerId = safeString(request.body?.worker_id);
@@ -570,23 +631,23 @@ export async function createServer(
     return { ok: true, task: withTaskEvents(updated, store) };
   });
 
-  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/start", async (request, reply) => {
+  app.post<{ Params: { taskId: string }; Body: { worker_id?: unknown } }>("/v1/tasks/:taskId/start", { preHandler: requireWorkerAuth }, async (request, reply) => {
     return updateTaskTerminal(request.params.taskId, request.body?.worker_id, "running", "task.started", reply, store, addStoredEvent);
   });
 
-  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/complete", async (request, reply) => {
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/complete", { preHandler: requireWorkerAuth }, async (request, reply) => {
     return finishTask(request.params.taskId, request.body, "completed", "task.completed", reply, store, addStoredEvent);
   });
 
-  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/fail", async (request, reply) => {
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/fail", { preHandler: requireWorkerAuth }, async (request, reply) => {
     return finishTask(request.params.taskId, request.body, "failed", "task.failed", reply, store, addStoredEvent);
   });
 
-  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/block", async (request, reply) => {
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>("/v1/tasks/:taskId/block", { preHandler: requireWorkerAuth }, async (request, reply) => {
     return finishTask(request.params.taskId, request.body, "blocked", "task.blocked", reply, store, addStoredEvent);
   });
 
-  app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/requeue", async (request, reply) => {
+  app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/requeue", { preHandler: requireWorkerAuth }, async (request, reply) => {
     const task = store.getTask(decodeURIComponent(request.params.taskId));
     if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
     if (task.status === "completed" || task.status === "cancelled")

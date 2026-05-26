@@ -34,6 +34,26 @@ async function tempDir() {
   return dir;
 }
 
+async function withWorkerToken<T>(token: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const previousToken = process.env.SKYBRIDGE_WORKER_TOKEN;
+  const previousRequired = process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH;
+  const previousFile = process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+  try {
+    if (token === undefined) delete process.env.SKYBRIDGE_WORKER_TOKEN;
+    else process.env.SKYBRIDGE_WORKER_TOKEN = token;
+    delete process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+    delete process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH;
+    return await fn();
+  } finally {
+    if (previousToken === undefined) delete process.env.SKYBRIDGE_WORKER_TOKEN;
+    else process.env.SKYBRIDGE_WORKER_TOKEN = previousToken;
+    if (previousRequired === undefined) delete process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH;
+    else process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH = previousRequired;
+    if (previousFile === undefined) delete process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+    else process.env.SKYBRIDGE_WORKER_TOKENS_FILE = previousFile;
+  }
+}
+
 describe("server api", () => {
   it("accepts and lists normalized events", async () => {
     const server = await testServer();
@@ -578,6 +598,59 @@ describe("server api", () => {
         status: "online",
       }),
     ]);
+  });
+
+  it("requires bearer token on worker-sensitive routes when worker auth is configured", async () => {
+    await withWorkerToken("server-worker-token", async () => {
+      const server = await testServer();
+
+      const missing = await server.inject({
+        method: "POST",
+        url: "/v1/workers/register",
+        payload: { worker_id: "auth-worker", name: "Auth worker" },
+      });
+      expect(missing.statusCode).toBe(401);
+      expect(missing.body).not.toContain("server-worker-token");
+      expect(missing.json<{ error: string }>().error).toBe("missing_worker_token");
+
+      const wrong = await server.inject({
+        method: "POST",
+        url: "/v1/workers/register",
+        headers: { authorization: "Bearer wrong-token" },
+        payload: { worker_id: "auth-worker", name: "Auth worker" },
+      });
+      expect(wrong.statusCode).toBe(403);
+      expect(wrong.body).not.toContain("server-worker-token");
+      expect(wrong.json<{ error: string }>().error).toBe("invalid_worker_token");
+
+      const create = await server.inject({
+        method: "POST",
+        url: "/v1/workers/register",
+        headers: { authorization: "Bearer server-worker-token" },
+        payload: { worker_id: "auth-worker", name: "Auth worker" },
+      });
+      expect(create.statusCode).toBe(201);
+
+      const heartbeat = await server.inject({
+        method: "POST",
+        url: "/v1/workers/auth-worker/heartbeat",
+        headers: { authorization: "Bearer server-worker-token" },
+        payload: { status_note: "ready" },
+      });
+      expect(heartbeat.statusCode).toBe(200);
+    });
+  });
+
+  it("keeps local worker routes no-auth when worker auth is not configured", async () => {
+    await withWorkerToken(undefined, async () => {
+      const server = await testServer();
+      const create = await server.inject({
+        method: "POST",
+        url: "/v1/workers/register",
+        payload: { worker_id: "local-noauth-worker", name: "Local no-auth worker" },
+      });
+      expect(create.statusCode).toBe(201);
+    });
   });
 
   it("creates projects and master goals with structured invalid responses", async () => {
