@@ -255,6 +255,7 @@ if ($WorkerProfileFile -or $env:SKYBRIDGE_WORKER_PROFILE) {
 } else {
   $config = Read-SkyBridgeWorkerConfig -ConfigFile $ConfigFile
 }
+Assert-SkyBridgeWorkerApiSafety -Config $config
 if ($PollIntervalSeconds -gt 0) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue $PollIntervalSeconds -Force }
 
 if (-not ($Register -or $Heartbeat -or $PollOnce -or $Loop)) {

@@ -21,6 +21,7 @@ function Read-SkyBridgeWorkerConfig {
   if (-not $config.max_task_runtime_minutes) { $config | Add-Member -NotePropertyName max_task_runtime_minutes -NotePropertyValue 30 -Force }
   if ($null -eq $config.auto_merge_enabled) { $config | Add-Member -NotePropertyName auto_merge_enabled -NotePropertyValue $false -Force }
   if ($null -eq $config.notification_enabled) { $config | Add-Member -NotePropertyName notification_enabled -NotePropertyValue $false -Force }
+  if ([string]$config.auth_mode -eq "worker-token") { $config.auth_mode = "bearer_token" }
   return $config
 }
 
@@ -29,13 +30,50 @@ function Get-SkyBridgeWorkerToken {
   $envVar = if ($Config.token_env_var) { [string]$Config.token_env_var } else { "SKYBRIDGE_WORKER_TOKEN" }
   $token = [Environment]::GetEnvironmentVariable($envVar)
   if ([string]::IsNullOrWhiteSpace($token) -and $env:SKYBRIDGE_WORKER_TOKEN) { $token = $env:SKYBRIDGE_WORKER_TOKEN }
-  if ([string]::IsNullOrWhiteSpace($token) -and $env:SKYBRIDGE_WORKER_TOKEN_FILE) {
-    if (Test-Path -LiteralPath $env:SKYBRIDGE_WORKER_TOKEN_FILE -PathType Leaf) {
-      $token = (Get-Content -Raw -LiteralPath $env:SKYBRIDGE_WORKER_TOKEN_FILE).Trim()
+  $tokenFile = if ($Config.token_file) { [string]$Config.token_file } else { $env:SKYBRIDGE_WORKER_TOKEN_FILE }
+  if ([string]::IsNullOrWhiteSpace($token) -and -not [string]::IsNullOrWhiteSpace($tokenFile)) {
+    if (Test-Path -LiteralPath $tokenFile -PathType Leaf) {
+      $token = (Get-Content -Raw -LiteralPath $tokenFile).Trim()
     }
   }
   if ([string]::IsNullOrWhiteSpace($token)) { return $null }
   return $token
+}
+
+function Test-SkyBridgeLocalApiBase {
+  param([string]$ApiBase)
+  try {
+    $uri = [System.Uri]::new($ApiBase)
+    return $uri.Host -in @("127.0.0.1", "localhost", "::1")
+  } catch {
+    return $false
+  }
+}
+
+function Test-SkyBridgeHttpsApiBase {
+  param([string]$ApiBase)
+  try {
+    return ([System.Uri]::new($ApiBase)).Scheme -eq "https"
+  } catch {
+    return $false
+  }
+}
+
+function Assert-SkyBridgeWorkerApiSafety {
+  param($Config)
+  if ([string]::IsNullOrWhiteSpace([string]$Config.api_base)) {
+    throw "SkyBridge api_base is required. Set skybridge_api_base in the worker profile or SKYBRIDGE_API_BASE."
+  }
+  $isLocal = Test-SkyBridgeLocalApiBase -ApiBase $Config.api_base
+  if (-not $isLocal -and $Config.reject_insecure_http_for_remote -ne $false -and -not (Test-SkyBridgeHttpsApiBase -ApiBase $Config.api_base)) {
+    throw "Remote SkyBridge api_base must use HTTPS unless reject_insecure_http_for_remote is explicitly false."
+  }
+  if (-not $isLocal -and $Config.allow_remote_server -ne $true) {
+    throw "Worker profile api_base is remote, but allow_remote_server is not true."
+  }
+  if ($Config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-SkyBridgeWorkerToken -Config $Config))) {
+    throw "SkyBridge worker token is required by auth_mode=bearer_token. Set the configured token env var or token_file."
+  }
 }
 
 function Invoke-SkyBridgeApi {
@@ -50,10 +88,10 @@ function Invoke-SkyBridgeApi {
 
   $uri = "$($ApiBase.TrimEnd('/'))$Path"
   $headers = @{}
-  if ($Config -and $Config.auth_mode -eq "worker-token") {
+  if ($Config -and [string]$Config.auth_mode -eq "bearer_token") {
     $token = Get-SkyBridgeWorkerToken -Config $Config
     if ([string]::IsNullOrWhiteSpace($token)) {
-      throw "SkyBridge worker token is required by auth_mode=worker-token. Set the configured token env var or SKYBRIDGE_WORKER_TOKEN_FILE."
+      throw "SkyBridge worker token is required by auth_mode=bearer_token. Set the configured token env var or token_file."
     }
     $headers["Authorization"] = "Bearer $token"
   }
@@ -114,7 +152,7 @@ function Set-ProjectControlState {
 function Test-SkyBridgeServerAvailable {
   param($Config)
   try {
-    Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $Config.api_base -Config $Config -TimeoutSeconds 5 | Out-Null
+    Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $Config.api_base -TimeoutSeconds 5 | Out-Null
     return $true
   } catch {
     return $false

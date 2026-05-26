@@ -52,6 +52,10 @@ function Read-WorkerProfile {
   Assert-StringField -Profile $profile -Name "worker_id"
   Assert-StringField -Profile $profile -Name "display_name"
   Assert-StringArrayField -Profile $profile -Name "project_ids"
+  if (-not $profile.allowed_project_ids) {
+    $profile | Add-Member -NotePropertyName allowed_project_ids -NotePropertyValue @($profile.project_ids) -Force
+  }
+  Assert-StringArrayField -Profile $profile -Name "allowed_project_ids"
   Assert-StringArrayField -Profile $profile -Name "capabilities"
   Assert-StringArrayField -Profile $profile -Name "executor_adapters"
   if (-not $profile.repo_paths -or $profile.repo_paths.GetType().Name -notmatch "Object") {
@@ -64,12 +68,20 @@ function Read-WorkerProfile {
       throw "Worker profile missing required field 'skybridge_api_base'."
     }
   }
+  if ([string]$profile.auth_mode -eq "worker-token") {
+    $profile.auth_mode = "bearer_token"
+  }
   if ([string]::IsNullOrWhiteSpace([string]$profile.auth_mode)) {
     $profile | Add-Member -NotePropertyName auth_mode -NotePropertyValue "none" -Force
+  }
+  if (@("none", "bearer_token") -notcontains [string]$profile.auth_mode) {
+    throw "Worker profile auth_mode must be one of: none, bearer_token."
   }
   if ([string]::IsNullOrWhiteSpace([string]$profile.token_env_var)) {
     $profile | Add-Member -NotePropertyName token_env_var -NotePropertyValue "SKYBRIDGE_WORKER_TOKEN" -Force
   }
+  if ($null -eq $profile.allow_remote_server) { $profile | Add-Member -NotePropertyName allow_remote_server -NotePropertyValue $false -Force }
+  if ($null -eq $profile.reject_insecure_http_for_remote) { $profile | Add-Member -NotePropertyName reject_insecure_http_for_remote -NotePropertyValue $true -Force }
   if ($null -eq $profile.allow_auto_merge) { $profile | Add-Member -NotePropertyName allow_auto_merge -NotePropertyValue $false -Force }
   if ($null -eq $profile.allow_production_deploy) { $profile | Add-Member -NotePropertyName allow_production_deploy -NotePropertyValue $false -Force }
   if ($profile.allow_production_deploy -eq $true) { throw "Worker profile cannot enable allow_production_deploy in this repository workflow." }
@@ -84,7 +96,7 @@ function Read-WorkerProfile {
 function ConvertTo-EdgeWorkerConfig {
   param($Profile, [string]$ProjectId)
   $selectedProject = if (-not [string]::IsNullOrWhiteSpace($ProjectId)) { $ProjectId } else { [string]@($Profile.project_ids)[0] }
-  if (@($Profile.project_ids) -notcontains $selectedProject) {
+  if (@($Profile.allowed_project_ids) -notcontains $selectedProject) {
     throw "Worker profile does not allow project '$selectedProject'."
   }
   $repoPath = $Profile.repo_paths.$selectedProject
@@ -99,6 +111,9 @@ function ConvertTo-EdgeWorkerConfig {
     api_base = $Profile.skybridge_api_base
     auth_mode = $Profile.auth_mode
     token_env_var = $Profile.token_env_var
+    token_file = $Profile.token_file
+    allow_remote_server = [bool]$Profile.allow_remote_server
+    reject_insecure_http_for_remote = [bool]$Profile.reject_insecure_http_for_remote
     capabilities = @($Profile.capabilities)
     executor_adapters = @($Profile.executor_adapters)
     allowed_task_types = @($Profile.preferred_task_types)
@@ -131,6 +146,7 @@ if ($MyInvocation.InvocationName -ne ".") {
       worker_id = $profile.worker_id
       display_name = $profile.display_name
       project_ids = @($profile.project_ids)
+      allowed_project_ids = @($profile.allowed_project_ids)
       capabilities = @($profile.capabilities)
       executor_adapters = @($profile.executor_adapters)
       max_parallel_tasks = [int]$profile.max_parallel_tasks
@@ -139,6 +155,9 @@ if ($MyInvocation.InvocationName -ne ".") {
       skybridge_api_base = $profile.skybridge_api_base
       auth_mode = $profile.auth_mode
       token_env_var = $profile.token_env_var
+      token_file_configured = -not [string]::IsNullOrWhiteSpace([string]$profile.token_file)
+      allow_remote_server = [bool]$profile.allow_remote_server
+      reject_insecure_http_for_remote = [bool]$profile.reject_insecure_http_for_remote
       token_value_printed = $false
     }
   }
