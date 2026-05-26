@@ -4,7 +4,13 @@ This document describes the deployment shape for direct worker connectivity. It 
 
 ## Public API Target
 
-Use a dedicated HTTPS subdomain for SkyBridge Server:
+Use a dedicated HTTPS subdomain for SkyBridge Server. The first planned endpoint is:
+
+```text
+https://skybridge.jerryskywalker.space
+```
+
+Generic examples may use:
 
 ```text
 https://skybridge.example.com
@@ -32,6 +38,8 @@ worker -> HTTPS reverse proxy -> SkyBridge Server
 
 The proxy should terminate TLS, preserve the request path, forward `Authorization` headers, enforce sane body limits and expose only the SkyBridge API. Do not proxy Hermes publicly.
 
+See `docs/operations/openresty-skybridge.example.conf` for a template server block.
+
 ## Auth Boundary
 
 SkyBridge worker routes support bearer token auth when the server has worker tokens configured:
@@ -54,6 +62,17 @@ GET /v1/health
 ```
 
 Health does not prove worker authorization. Worker auth is proven by a protected worker route such as registration or heartbeat.
+
+Use the remote smoke script for the first registration test:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -TokenEnvVar SKYBRIDGE_WORKER_TOKEN `
+  -WorkerSmoke `
+  -AuthFailureCheck `
+  -Json
+```
 
 ## Hermes Boundary
 
@@ -89,3 +108,4 @@ To roll back remote worker access entirely, remove the public reverse proxy rout
 - No token issuing, revocation API or scoped token registry exists yet.
 - No replay-resistant request signing exists yet.
 - No branch protection or GitHub settings mutation is performed by this deployment model.
+- First real cloud deployment wiring and remote worker heartbeat still require operator-side server setup.

@@ -177,7 +177,7 @@ SkyBridge uses a Core + Adapter Ring boundary:
 
 The server is the durable local/cloud hub. Adapters are responsible for turning source-specific payloads into the normalized event schema before the data reaches server APIs or UI packages. Core code should depend on neutral contracts such as PlannerAdapter, ExecutorAdapter, SCMProvider, NotificationProvider and RuntimeProvider, not on Hermes, Codex, GitHub or ntfy directly.
 
-See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md), [docs/architecture/CLOUD_CONTROL_PLANE.md](docs/architecture/CLOUD_CONTROL_PLANE.md) and [docs/adapters/README.md](docs/adapters/README.md).
+See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md), [docs/architecture/CLOUD_CONTROL_PLANE.md](docs/architecture/CLOUD_CONTROL_PLANE.md), [docs/architecture/DIRECT_WORKER_CONNECTIVITY.md](docs/architecture/DIRECT_WORKER_CONNECTIVITY.md) and [docs/adapters/README.md](docs/adapters/README.md).
 
 ## Event Model
 
@@ -224,6 +224,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-offline-beh
 See [docs/orchestrator/EDGE_WORKER_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md), [docs/orchestrator/CLI_CONTROL_RUNBOOK.md](docs/orchestrator/CLI_CONTROL_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_EXECUTION.md](docs/orchestrator/EDGE_WORKER_EXECUTION.md) and [docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md](docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md).
 
 Worker profile and Goal Registry operations are documented in [docs/orchestrator/WORKER_PROFILE_RUNBOOK.md](docs/orchestrator/WORKER_PROFILE_RUNBOOK.md) and [docs/orchestrator/GOAL_REGISTRY_RUNBOOK.md](docs/orchestrator/GOAL_REGISTRY_RUNBOOK.md).
+
+Cloud server and first remote worker registration templates are documented in [docs/operations/SKYBRIDGE_CLOUD_TOPOLOGY.md](docs/operations/SKYBRIDGE_CLOUD_TOPOLOGY.md), [docs/operations/SKYBRIDGE_SERVER_API_DEPLOYMENT.md](docs/operations/SKYBRIDGE_SERVER_API_DEPLOYMENT.md) and [docs/orchestrator/FIRST_REMOTE_WORKER_REGISTRATION.md](docs/orchestrator/FIRST_REMOTE_WORKER_REGISTRATION.md).
 
 Validate the local cloud-control-plane foundations:
 

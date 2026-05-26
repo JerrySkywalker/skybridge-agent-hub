@@ -147,6 +147,17 @@ Run a dry-run remote profile smoke:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 -DryRun
 ```
 
+For the first real remote registration/heartbeat, use `docs/orchestrator/FIRST_REMOTE_WORKER_REGISTRATION.md` and:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -TokenEnvVar SKYBRIDGE_WORKER_TOKEN `
+  -WorkerSmoke `
+  -AuthFailureCheck `
+  -Json
+```
+
 Run a real remote smoke only when the explicit API base and token are present:
 
 ```powershell
@@ -184,4 +195,5 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-profile.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-token-auth.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-token-auth-failure.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 -DryRun
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 -DryRun -Json
 ```
