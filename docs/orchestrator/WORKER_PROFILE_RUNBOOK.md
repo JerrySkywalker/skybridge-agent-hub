@@ -66,11 +66,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\load-worker-profile.ps1 
 
 ## Edge Worker Usage
 
-The edge worker still supports legacy `config/edge-worker.json`, but a worker profile is preferred when provided:
+The edge worker accepts new-format worker profiles directly. Users should keep clean profiles with `project_ids`, `repo_paths` and `skybridge_api_base`; generated `edge-worker.*.generated.json` runtime configs are no longer needed for normal use.
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps1 `
-  -WorkerProfileFile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
+  -ConfigFile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
   -ProjectId skybridge-agent-hub `
   -Loop `
   -MaxTasks 2 `
@@ -80,7 +80,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps
   -Json
 ```
 
-Set `SKYBRIDGE_WORKER_PROFILE` to point the worker at a profile without passing `-WorkerProfileFile`.
+`-WorkerProfileFile` and `SKYBRIDGE_WORKER_PROFILE` remain supported aliases for explicitly selecting a profile. Legacy runtime configs that already contain `project_id`, `repo_path` and `api_base` are still supported for compatibility.
 
 ## API Base And Worker Token
 
