@@ -102,6 +102,32 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
+After registration works, submit and execution should use the one-shot operator path instead of handwritten API calls:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -GoalId remote-worker-smoke-goal `
+  -TaskId remote-docs-task-001 `
+  -TaskTitle "Remote docs task" `
+  -TaskBody "Update one docs file with a short pilot note." `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -DryRun
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -WorkerProfile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskId remote-docs-task-001 `
+  -GoalId remote-worker-smoke-goal `
+  -NoSubmit `
+  -DryRun
+```
+
+`skybridge-run-once.ps1` uses `-PollOnce` only and attempts to restore project control to `paused` before exiting. Keep the long-running loop disabled for remote work until the next explicit pilot.
+
 Expected success shape:
 
 ```json

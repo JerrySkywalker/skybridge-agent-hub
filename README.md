@@ -229,6 +229,8 @@ Cloud server and first remote worker registration templates are documented in [d
 
 Remote worker reliability helpers include `skybridge-status.ps1`, `skybridge-control.ps1`, `skybridge-worker-status.ps1`, `skybridge-rerun-ci.ps1` and task evidence repair. Keep real worker tokens in local token files and use bounded `-PollOnce` workflows until the always-on remote loop is explicitly enabled.
 
+For one-shot operator work, use `skybridge-submit.ps1` to dry-run or create a single goal/task, then `skybridge-run-once.ps1` to start control for one task, heartbeat the worker, run `-PollOnce`, pause control and write local status snapshots.
+
 Validate the local cloud-control-plane foundations:
 
 ```powershell

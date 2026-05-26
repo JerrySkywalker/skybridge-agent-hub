@@ -192,7 +192,69 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
+## Standard Operator Workflow
+
+Use this sequence for one-shot remote work:
+
+1. Read compact status.
+2. Submit one goal/task.
+3. Run one bounded worker pass.
+4. Read compact status again.
+5. Inspect the child PR and task evidence.
+
+Status:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
+
+Submit is dry-run by default. Add `-Apply` only when the task body and IDs are correct:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -GoalId remote-worker-smoke-goal `
+  -TaskId remote-docs-task-001 `
+  -TaskTitle "Remote docs task" `
+  -TaskBody "Update one docs file with a short pilot note." `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -DryRun
+```
+
+Run one worker pass. This starts project control with `max_tasks=1`, registers/heartbeats the worker, runs `skybridge-edge-worker.ps1 -PollOnce`, and pauses control in a `finally` block:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -WorkerProfile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskId remote-docs-task-001 `
+  -GoalId remote-worker-smoke-goal `
+  -NoSubmit `
+  -DryRun
+```
+
 Do not start the long-running `-Loop` mode for remote work yet. Use `-PollOnce` only until repeated task reliability and operator recovery are validated.
+
+The Hermes/SkyBridge facade can call the same workflow:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1 `
+  -Area goal `
+  -Command submit `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -GoalId remote-worker-smoke-goal `
+  -TaskId remote-docs-task-001 `
+  -TaskTitle "Remote docs task" `
+  -TaskBody "Update one docs file with a short pilot note." `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
 
 ## CI Rerun And Evidence Repair
 
