@@ -9,9 +9,10 @@
 - The worker created draft child PR #57. After verifying it changed only `docs/dev/REMOTE_WORKER_EXECUTION_PILOT.md` and was classified low-risk child-task work, PR #57 was marked ready for review.
 - CI Guardian blocked the task because GitHub Actions checkout failed with HTTP 403 and an account-suspended message. This was not retried as a dependency-download transient.
 - Child PR: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/57
-- Cloud task final status: `failed`, with task result PR URL pointing to PR #57 and EvidenceSummary recorded with `ci_status=blocked_github_checkout_403`.
+- Child PR recovery: PR #57 checks later recovered and passed, and PR #57 merged at `2026-05-26T13:02:48Z` with merge commit `99c4c21b2fb1881596d48db43482beedbb0384a8`.
+- Cloud task final status remained `failed`, with task result PR URL pointing to PR #57 and EvidenceSummary recorded with `ci_status=blocked_github_checkout_403`, because the original worker-owned task report captured the initial CI Guardian blocker.
 - Project control was restored to `paused` with `stop_requested=false` and stop reason `operator_paused_after_167b_pilot`.
-- Evidence summary: the cloud control plane -> local worker claim -> Codex docs edit -> worker-owned child PR packaging -> low-risk ready gate -> cloud failure evidence path is proven; the full green PR/CI/completion loop is not proven yet because GitHub Actions checkout was blocked by HTTP 403.
+- Evidence summary: the cloud control plane -> local worker claim -> Codex docs edit -> worker-owned child PR packaging -> low-risk ready gate -> GitHub Actions green -> merge path is proven. Server-side evidence repair from failed task to completed task remains a follow-up need if the API rejects failed -> completed repair.
 
 ## 2026-05-26 Super Goal 167 Remote Worker Execution Pilot Prep
 
