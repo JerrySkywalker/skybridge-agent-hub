@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 161 Real Hermes Planner Recovery
+
+- Hermes API status: recovered and connected through the private loopback tunnel. `smoke-hermes-cloud-api.ps1 -Json` passed for `/health`, `/health/detailed`, `/v1/capabilities` and `/v1/models`; `smoke-hermes-cloud-run.ps1 -Json` passed for `/v1/responses`. `HERMES_API_BASE` and `HERMES_API_KEY` were present via the local Hermes env loader, and secret values were not recorded.
+- Planner decision status: real `skybridge-hermes-planner.ps1 -Json` returned valid strict JSON with `decision=continue`, `task_type=docs` and `risk=low`. The real create-task run returned `decision=continue` for a docs-only task.
+- Task ID: `hermes-add-planneradapter-runbook-clarification-20260526034523`.
+- Worker ID: `edge-worker-super-141`.
+- Worker execution status: the Edge Worker claimed and started the task, then marked it failed before Codex execution because `config/edge-worker.json` points `codex_command` at the stale local path `.agent/super-141-real-pilot/codex-worker.cmd`, which is no longer present. No files were changed by Codex.
+- PR URL: none. The worker failed before validation, commit, draft PR creation or CI Guardian.
+- Task status: failed in SkyBridge with error summary `This command cannot be run due to the error: system cannot find the file specified.`
+- Blocker before a 3-round real self-bootstrap: repair the local Edge Worker Codex command path, for example by updating the uncommitted local worker config to the installed Codex command or recreating a safe wrapper, then rerun one docs-only task before allowing rounds 2 and 3.
+
 ## 2026-05-26 Super Goal 142-160 Hermes Planner Bootstrap
 
 - Added the neutral PlannerAdapter contract extensions for `continue`, `repair`, `wait`, `stop`, `blocked`, work-order/task metadata, validation commands, risk, allowed/blocked paths, task type and stop criteria. Hermes remains optional and records tasks as `source=hermes-planner`.
