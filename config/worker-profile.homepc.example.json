@@ -2,6 +2,7 @@
   "worker_id": "homepc-codex-worker",
   "display_name": "Home PC Codex worker",
   "project_ids": ["skybridge-agent-hub"],
+  "allowed_project_ids": ["skybridge-agent-hub"],
   "repo_paths": {
     "skybridge-agent-hub": "V:\\src\\skybridge-agent-hub"
   },
@@ -12,9 +13,12 @@
   "max_parallel_tasks": 1,
   "allow_auto_merge": false,
   "allow_production_deploy": false,
+  "allow_remote_server": false,
+  "reject_insecure_http_for_remote": true,
   "skybridge_api_base": "http://127.0.0.1:8787",
   "auth_mode": "none",
   "token_env_var": "SKYBRIDGE_WORKER_TOKEN",
+  "token_file": "",
   "codex_command": "codex",
   "codex_sandbox": "danger-full-access"
 }
