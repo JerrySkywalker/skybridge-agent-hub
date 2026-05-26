@@ -786,7 +786,9 @@ function WorkerTable({ workers, tasks }: { workers: WorkerRecord[]; tasks: TaskR
               </span>
               <span>
                 {worker.capabilities.join(", ") || "none"}
-                <small>{worker.labels.join(", ") || "no labels"}</small>
+                <small>
+                  {worker.labels.join(", ") || "no labels"} · {worker.auth_mode ?? "auth unknown"} · {worker.api_base_redacted ?? "api local/unknown"}
+                </small>
               </span>
               <span>
                 {worker.current_task_id ?? lastTask?.task_id ?? "none"}

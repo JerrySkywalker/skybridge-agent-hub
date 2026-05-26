@@ -33,9 +33,12 @@ Profiles currently support:
 - `max_parallel_tasks`
 - `allow_auto_merge`
 - `allow_production_deploy`
+- `allow_remote_server`
+- `reject_insecure_http_for_remote`
 - `skybridge_api_base`
 - `auth_mode`
 - `token_env_var`
+- `token_file`
 - `codex_command`
 - `codex_sandbox`
 
@@ -93,14 +96,77 @@ Cloud control plane workers should use HTTPS:
 SKYBRIDGE_API_BASE=https://skybridge.example.invalid
 ```
 
-Remote worker registration is expected to require a worker token:
+Remote worker registration uses bearer token auth:
 
 ```text
 SKYBRIDGE_WORKER_TOKEN=<local-only token>
 SKYBRIDGE_WORKER_TOKEN_FILE=C:\Users\operator\.skybridge\worker-token.txt
 ```
 
-The current implementation creates the boundary and forwards a bearer header when a token is configured. Token issuing, rotation, revocation and production auth policy remain future work.
+Profiles may use either:
+
+```json
+{
+  "auth_mode": "bearer_token",
+  "token_env_var": "SKYBRIDGE_WORKER_TOKEN",
+  "token_file": "C:\\Users\\operator\\.skybridge\\worker-token.txt",
+  "allow_remote_server": true,
+  "reject_insecure_http_for_remote": true
+}
+```
+
+The worker first checks `token_env_var`, then the profile `token_file`, then `SKYBRIDGE_WORKER_TOKEN_FILE`. Token values are not printed.
+
+`reject_insecure_http_for_remote=true` requires HTTPS for non-localhost API bases. Localhost and `127.0.0.1` may use HTTP for development.
+
+## Remote Profile Example
+
+Start from the placeholder cloud profile:
+
+```powershell
+Copy-Item .\config\worker-profile.cloud.example.json "$HOME\.skybridge\worker.$env:COMPUTERNAME.json"
+```
+
+Edit only the local copy. Set `skybridge_api_base` to the HTTPS SkyBridge Server URL, keep `auth_mode` as `bearer_token`, set `allow_remote_server` to `true` and keep `allow_production_deploy` as `false`.
+
+Set a token through the current shell:
+
+```powershell
+$env:SKYBRIDGE_WORKER_TOKEN = "<local-only worker token>"
+```
+
+Or store it in a local file outside the repository and point the profile at that file:
+
+```powershell
+Set-Content -LiteralPath "$HOME\.skybridge\worker-token.txt" -Value "<local-only worker token>"
+```
+
+Run a dry-run remote profile smoke:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 -DryRun
+```
+
+Run a real remote smoke only when the explicit API base and token are present:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 `
+  -ApiBase https://skybridge.example.com `
+  -TokenEnvVar SKYBRIDGE_WORKER_TOKEN `
+  -RunReal
+```
+
+## Troubleshooting
+
+`401 missing_worker_token` means the server requires bearer auth but the request did not include an `Authorization: Bearer` header. Check `auth_mode`, `token_env_var`, `token_file` and local shell environment.
+
+`403 invalid_worker_token` means a token was sent but does not match the server-side `SKYBRIDGE_WORKER_TOKEN` or `SKYBRIDGE_WORKER_TOKENS_FILE`.
+
+`Remote SkyBridge api_base must use HTTPS` means the profile points at a non-localhost HTTP URL while `reject_insecure_http_for_remote` is enabled.
+
+If the machine sleeps or loses network, restart the bounded loop after confirming `/v1/health`, GitHub auth, Codex availability and repo cleanliness. The worker should not claim new tasks while degraded.
+
+When running behind a reverse proxy, ensure the proxy forwards `Authorization` headers and does not expose the Hermes API.
 
 ## Safety
 
@@ -115,4 +181,7 @@ The current implementation creates the boundary and forwards a bearer header whe
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-profile.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-token-auth.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-token-auth-failure.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 -DryRun
 ```

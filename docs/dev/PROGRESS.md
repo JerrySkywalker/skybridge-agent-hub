@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 165 Direct Worker Connectivity
+
+- Added direct worker connectivity architecture and a first bearer-token auth boundary for worker-sensitive routes. Local development remains no-auth when no worker token is configured; remote workers use `auth_mode=bearer_token`.
+- Server-side worker auth supports `SKYBRIDGE_WORKER_TOKEN`, `SKYBRIDGE_WORKER_TOKENS_FILE` and structured 401/403 responses without logging token values.
+- Worker profiles now include allowed project IDs, remote-server allow flag, HTTPS enforcement for non-localhost API bases, token env/file settings and redacted auth/API status in worker records.
+- Added token auth success/failure smokes and a remote-profile dry-run smoke. No real worker token, env file, production deploy, GitHub settings mutation or public Hermes exposure was introduced.
+- Added SkyBridge Server API deployment guidance. Remaining production gaps: real cloud deployment wiring, token issuing/rotation/revocation APIs, scoped worker tokens and first explicit remote worker registration smoke.
+
 ## 2026-05-26 Super Goal 164 Cloud Control Plane Foundations
 
 - Added the cloud control plane architecture direction: SkyBridge Server is the authoritative state source, the Goal Registry is the durable objective registry, local workers are execution caches and direct SkyBridge API connectivity replaces SSH tunnel dependency for long-term worker operation.

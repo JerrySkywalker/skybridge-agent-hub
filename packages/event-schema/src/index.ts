@@ -336,6 +336,9 @@ export interface Worker {
   labels: string[];
   enabled: boolean;
   status: WorkerStatus;
+  auth_mode?: "none" | "bearer_token";
+  api_base_redacted?: string;
+  allow_remote_server?: boolean;
   current_task_id?: string;
   last_seen_at?: string;
   created_at: string;
