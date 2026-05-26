@@ -79,11 +79,19 @@ function Select-TaskSummary {
 
 function Select-WorkerSummary {
   param($Worker)
+  $seenAt = if ($Worker.last_seen_at) { [string]$Worker.last_seen_at } else { $null }
+  if ($Worker.status -in @("online", "stale") -and $Worker.updated_at) {
+    try {
+      $updated = [datetimeoffset]::Parse([string]$Worker.updated_at)
+      $seen = if ($seenAt) { [datetimeoffset]::Parse($seenAt) } else { [datetimeoffset]::MinValue }
+      if ($updated -gt $seen) { $seenAt = [string]$Worker.updated_at }
+    } catch {}
+  }
   [pscustomobject]@{
     worker_id = if ($Worker.worker_id) { [string]$Worker.worker_id } else { "-" }
     status = if ($Worker.status) { [string]$Worker.status } else { "offline" }
-    last_seen_at = if ($Worker.last_seen_at) { [string]$Worker.last_seen_at } else { $null }
-    last_seen = Format-RelativeTime -IsoTime $Worker.last_seen_at
+    last_seen_at = $seenAt
+    last_seen = if ($Worker.status -eq "online") { "0s ago" } else { Format-RelativeTime -IsoTime $seenAt }
     current_task_id = if ($Worker.current_task_id) { [string]$Worker.current_task_id } else { $null }
     auth_mode = if ($Worker.auth_mode) { [string]$Worker.auth_mode } else { $null }
     api_base = if ($Worker.api_base) { [string]$Worker.api_base } else { $null }

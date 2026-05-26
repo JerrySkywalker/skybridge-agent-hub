@@ -87,6 +87,10 @@ try {
   if (-not (Test-Path -LiteralPath $jsonFile -PathType Leaf)) { throw "Expected JSON output file." }
   if ($parsed.project_id -ne "status-project") { throw "Expected JSON project id." }
   if (@($parsed.workers).Count -lt 2) { throw "Expected worker rows." }
+  $onlineWorker = @($parsed.workers | Where-Object { $_.worker_id -eq "status-worker-online" })[0]
+  if (-not $onlineWorker.last_seen -or $onlineWorker.last_seen -notmatch "^[0-9]+s ago$|^[0-1]m ago$") {
+    throw "Expected recent relative time after heartbeat, got '$($onlineWorker.last_seen)'."
+  }
   if (@($parsed.tasks | Where-Object { $_.status -eq "completed" }).Count -lt 1) { throw "Expected completed task row." }
   if ($parsed.token_printed -ne $false) { throw "Expected token_printed=false." }
 
