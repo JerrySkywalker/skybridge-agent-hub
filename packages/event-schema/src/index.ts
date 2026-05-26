@@ -208,6 +208,21 @@ export type TaskStatus =
   | "cancelled"
   | "stale";
 export type TaskRisk = "low" | "medium" | "high";
+export type GoalRisk = TaskRisk;
+export type GoalPriority = "low" | "normal" | "high" | "urgent";
+export type GoalStatus =
+  | "draft"
+  | "ready"
+  | "queued"
+  | "active"
+  | "partially_completed"
+  | "completed"
+  | "failed"
+  | "blocked"
+  | "superseded"
+  | "archived"
+  | "paused"
+  | "cancelled";
 export type TaskSource =
   | "manual"
   | "planner"
@@ -283,9 +298,34 @@ export interface MasterGoal {
   project_id: string;
   title: string;
   summary?: string;
-  status: "active" | "paused" | "completed" | "blocked" | "cancelled";
+  status: GoalStatus;
+  source?: string;
+  priority?: GoalPriority;
+  risk?: GoalRisk;
+  lifecycle?: string;
+  acceptance_criteria?: string[];
+  evidence_requirements?: string[];
+  dedupe_key?: string;
+  supersedes?: string[];
+  superseded_by?: string;
+  stale_reason?: string;
+  blocked_reason?: string;
+  planner_metadata?: PlannerAdapterMetadata;
+  model_backend_metadata?: ModelBackendMetadata;
+  completion_note?: string;
+  evidence_summary?: EvidenceSummary;
+  progress_summary?: GoalProgressSummary;
   created_at: string;
   updated_at: string;
+}
+
+export interface ModelBackendMetadata {
+  adapter: string;
+  backend?: string;
+  model?: string;
+  audit_only: true;
+  raw_response_included: false;
+  secrets_included: false;
 }
 
 export interface Worker {
@@ -322,6 +362,31 @@ export interface TaskResult {
   result_url?: string;
   pr_url?: string;
   error_summary?: string;
+  evidence_summary?: EvidenceSummary;
+}
+
+export interface EvidenceSummary {
+  task_id?: string;
+  goal_id?: string;
+  pr_url?: string;
+  commit_sha?: string;
+  changed_files?: string[];
+  validation_status?: string;
+  ci_status?: string;
+  risk_status?: string;
+  summary: string;
+  created_at: string;
+}
+
+export interface GoalProgressSummary {
+  total_tasks: number;
+  queued_tasks: number;
+  running_tasks: number;
+  completed_tasks: number;
+  failed_tasks: number;
+  blocked_tasks: number;
+  evidence_count: number;
+  updated_at: string;
 }
 
 export interface Task {

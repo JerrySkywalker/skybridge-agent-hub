@@ -607,7 +607,7 @@ describe("server api", () => {
     const update = await server.inject({
       method: "PATCH",
       url: "/v1/goals/goal-core",
-      payload: { status: "blocked" },
+      payload: { status: "blocked", blocked_reason: "operator review" },
     });
     expect(update.statusCode).toBe(200);
     expect(update.json<{ goal: { status: string } }>().goal.status).toBe(
@@ -681,6 +681,180 @@ describe("server api", () => {
       payload: { state: "launching" },
     });
     expect(invalid.statusCode).toBe(400);
+  });
+
+  it("validates goal registry lifecycle metadata", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "goal-registry", name: "Goal Registry" },
+    });
+
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/projects/goal-registry/goals",
+      payload: {
+        goal_id: "goal-registry-1",
+        title: "Build registry",
+        status: "ready",
+        source: "smoke",
+        priority: "high",
+        risk: "medium",
+        acceptance_criteria: ["Goal can be imported."],
+        evidence_requirements: ["Smoke test output."],
+        dedupe_key: "goal-registry/build",
+        planner_metadata: {
+          adapter: "rule-based",
+          decision: "continue",
+          reason: "fixture",
+          allowed_paths: ["docs/"],
+          blocked_paths: [],
+          validation: ["just check"],
+          stop_criteria_status: [],
+          created_at: "2026-05-26T00:00:00.000Z",
+        },
+        model_backend_metadata: {
+          adapter: "hermes",
+          backend: "fixture",
+          model: "placeholder",
+          token: "must-not-return",
+        },
+      },
+    });
+    expect(create.statusCode).toBe(201);
+    const created = create.json<{
+      goal: {
+        status: string;
+        priority: string;
+        risk: string;
+        acceptance_criteria: string[];
+        model_backend_metadata: { audit_only: boolean; secrets_included: boolean };
+      };
+    }>().goal;
+    expect(created).toMatchObject({
+      status: "ready",
+      priority: "high",
+      risk: "medium",
+      acceptance_criteria: ["Goal can be imported."],
+      model_backend_metadata: { audit_only: true, secrets_included: false },
+    });
+    expect(create.body).not.toContain("must-not-return");
+
+    const blockedWithoutReason = await server.inject({
+      method: "PATCH",
+      url: "/v1/goals/goal-registry-1",
+      payload: { status: "blocked" },
+    });
+    expect(blockedWithoutReason.statusCode).toBe(400);
+
+    const completedWithoutEvidence = await server.inject({
+      method: "PATCH",
+      url: "/v1/goals/goal-registry-1",
+      payload: { status: "completed" },
+    });
+    expect(completedWithoutEvidence.statusCode).toBe(400);
+
+    const completed = await server.inject({
+      method: "PATCH",
+      url: "/v1/goals/goal-registry-1",
+      payload: { status: "completed", completion_note: "Evidence reviewed." },
+    });
+    expect(completed.statusCode).toBe(200);
+  });
+
+  it("summarizes goal tasks and evidence without auto-completing goals", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "goal-evidence", name: "Goal Evidence" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects/goal-evidence/goals",
+      payload: {
+        goal_id: "goal-evidence-1",
+        title: "Collect evidence",
+        status: "active",
+        acceptance_criteria: ["Task completed."],
+        evidence_requirements: ["PR and validation status."],
+      },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "evidence-task-1",
+        project_id: "goal-evidence",
+        goal_id: "goal-evidence-1",
+        title: "Evidence task",
+        risk: "low",
+        source: "manual",
+      },
+    });
+
+    const complete = await server.inject({
+      method: "POST",
+      url: "/v1/tasks/evidence-task-1/complete",
+      payload: {
+        summary: "Task done.",
+        evidence_summary: {
+          task_id: "evidence-task-1",
+          goal_id: "goal-evidence-1",
+          pr_url: "https://example.invalid/pull/1",
+          commit_sha: "abc123",
+          changed_files: ["docs/example.md"],
+          validation_status: "passed",
+          ci_status: "pending",
+          risk_status: "low",
+          summary: "Docs changed and validation passed.",
+        },
+      },
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const detail = await server.inject({
+      method: "GET",
+      url: "/v1/goals/goal-evidence-1",
+    });
+    const goal = detail.json<{
+      goal: {
+        status: string;
+        task_summary: { completed: number; evidence_count: number };
+        progress_summary: { completed_tasks: number; evidence_count: number };
+      };
+    }>().goal;
+    expect(goal.status).toBe("partially_completed");
+    expect(goal.task_summary).toMatchObject({ completed: 1, evidence_count: 1 });
+    expect(goal.progress_summary).toMatchObject({ completed_tasks: 1, evidence_count: 1 });
+  });
+
+  it("rejects executable tasks for archived goals", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "archived-project", name: "Archived Project" },
+    });
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects/archived-project/goals",
+      payload: { goal_id: "archived-goal", title: "Archived", status: "archived" },
+    });
+
+    const task = await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "archived-task",
+        project_id: "archived-project",
+        goal_id: "archived-goal",
+        title: "Should not execute",
+      },
+    });
+    expect(task.statusCode).toBe(409);
+    expect(task.json<{ error: string }>().error).toBe("goal_not_executable");
   });
 
   it("runs task queue transitions and writes task events", async () => {
