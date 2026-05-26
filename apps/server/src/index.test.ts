@@ -38,11 +38,13 @@ async function withWorkerToken<T>(token: string | undefined, fn: () => Promise<T
   const previousToken = process.env.SKYBRIDGE_WORKER_TOKEN;
   const previousRequired = process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH;
   const previousFile = process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+  const previousRemoteApiBase = process.env.SKYBRIDGE_REMOTE_API_BASE;
   try {
     if (token === undefined) delete process.env.SKYBRIDGE_WORKER_TOKEN;
     else process.env.SKYBRIDGE_WORKER_TOKEN = token;
     delete process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
     delete process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH;
+    delete process.env.SKYBRIDGE_REMOTE_API_BASE;
     return await fn();
   } finally {
     if (previousToken === undefined) delete process.env.SKYBRIDGE_WORKER_TOKEN;
@@ -51,6 +53,8 @@ async function withWorkerToken<T>(token: string | undefined, fn: () => Promise<T
     else process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH = previousRequired;
     if (previousFile === undefined) delete process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
     else process.env.SKYBRIDGE_WORKER_TOKENS_FILE = previousFile;
+    if (previousRemoteApiBase === undefined) delete process.env.SKYBRIDGE_REMOTE_API_BASE;
+    else process.env.SKYBRIDGE_REMOTE_API_BASE = previousRemoteApiBase;
   }
 }
 
@@ -651,6 +655,34 @@ describe("server api", () => {
       });
       expect(create.statusCode).toBe(201);
     });
+  });
+
+  it("isolates local no-auth worker tests from developer worker env vars", async () => {
+    const previousToken = process.env.SKYBRIDGE_WORKER_TOKEN;
+    const previousTokensFile = process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+    const previousRemoteApiBase = process.env.SKYBRIDGE_REMOTE_API_BASE;
+    process.env.SKYBRIDGE_WORKER_TOKEN = "developer-shell-token";
+    process.env.SKYBRIDGE_WORKER_TOKENS_FILE = "developer-shell-token-file";
+    process.env.SKYBRIDGE_REMOTE_API_BASE = "https://skybridge.example.invalid";
+    try {
+      await withWorkerToken(undefined, async () => {
+        const server = await testServer();
+        const create = await server.inject({
+          method: "POST",
+          url: "/v1/workers/register",
+          payload: { worker_id: "isolated-noauth-worker", name: "Isolated no-auth worker" },
+        });
+        expect(create.statusCode).toBe(201);
+        expect(create.body).not.toContain("developer-shell-token");
+      });
+    } finally {
+      if (previousToken === undefined) delete process.env.SKYBRIDGE_WORKER_TOKEN;
+      else process.env.SKYBRIDGE_WORKER_TOKEN = previousToken;
+      if (previousTokensFile === undefined) delete process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
+      else process.env.SKYBRIDGE_WORKER_TOKENS_FILE = previousTokensFile;
+      if (previousRemoteApiBase === undefined) delete process.env.SKYBRIDGE_REMOTE_API_BASE;
+      else process.env.SKYBRIDGE_REMOTE_API_BASE = previousRemoteApiBase;
+    }
   });
 
   it("creates projects and master goals with structured invalid responses", async () => {
