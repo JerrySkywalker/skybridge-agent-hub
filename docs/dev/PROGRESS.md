@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 142A Edge Worker Codex Invocation Hardening
+
+- Root cause confirmed: local `config/edge-worker.json` still pointed `codex_command` at deleted `.agent/super-141-real-pilot/codex-worker.cmd`, so the worker depended on a temporary Super 141 shim that no longer existed.
+- Hardened worker Codex resolution: explicit `codex_command` is still preferred when configured, but omitted config now resolves `codex` from `PATH` with `Get-Command`; missing explicit commands fail with a clear setup error.
+- Hardened Windows invocation: PowerShell Codex shims such as `codex.ps1` run through `pwsh -File`, and task prompts are written to local `prompt.md` files and passed through stdin with the `-` prompt marker to avoid multi-word and long-prompt quoting bugs.
+- Enforced ownership split in the nested Codex task prompt: Codex edits only; the edge worker owns safe file filtering, validation, commit, push, draft PR creation and CI Guardian.
+- Added `.agent/workers/` to gitignore and updated edge worker/Codex adapter docs with command resolution, Windows shim behavior, prompt stdin handling and local worker artifact handling.
+- Validation passed: `smoke-codex-task-runner.ps1 -DryRun`, `smoke-edge-worker-register.ps1`, `smoke-edge-worker-claim.ps1`, `smoke-worker-task-core.ps1`, `smoke-task-state-machine.ps1`, `validate-powershell.ps1` and `just check`.
+- Real docs-only worker pilot passed. Task `super-142a-codex-invocation-pilot-20260526122339` was claimed by `edge-worker-super-141`, Codex resolved from `PATH` to `C:\Users\jerry\AppData\Roaming\npm\codex.ps1`, validation ran `just check`, the worker created draft PR #37 and completed the task. Auto-merge remained disabled.
+- Child PR: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/37
+- Remaining blocker before Hermes planner dispatch: ensure each real worker host has either a working Codex CLI on `PATH` or a durable explicit `codex_command`; do not use task-specific `.agent` shims.
+
 ## 2026-05-26 Super Goal 142-160 Hermes Planner Bootstrap
 
 - Added the neutral PlannerAdapter contract extensions for `continue`, `repair`, `wait`, `stop`, `blocked`, work-order/task metadata, validation commands, risk, allowed/blocked paths, task type and stop criteria. Hermes remains optional and records tasks as `source=hermes-planner`.

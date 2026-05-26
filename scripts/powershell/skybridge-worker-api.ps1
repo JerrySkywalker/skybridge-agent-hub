@@ -16,7 +16,6 @@ function Read-SkyBridgeWorkerConfig {
   if ([string]::IsNullOrWhiteSpace($config.project_id)) { throw "Worker config missing project_id." }
   if ([string]::IsNullOrWhiteSpace($config.repo_path)) { throw "Worker config missing repo_path." }
   if ([string]::IsNullOrWhiteSpace($config.api_base)) { throw "Worker config missing api_base." }
-  if ([string]::IsNullOrWhiteSpace($config.codex_command)) { $config | Add-Member -NotePropertyName codex_command -NotePropertyValue "codex" -Force }
   if ([string]::IsNullOrWhiteSpace($config.codex_sandbox)) { $config | Add-Member -NotePropertyName codex_sandbox -NotePropertyValue "workspace-write" -Force }
   if (-not $config.poll_interval_seconds) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue 30 -Force }
   if (-not $config.max_task_runtime_minutes) { $config | Add-Member -NotePropertyName max_task_runtime_minutes -NotePropertyValue 30 -Force }
