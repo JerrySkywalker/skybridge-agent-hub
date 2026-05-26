@@ -1,8 +1,16 @@
 # Edge Worker Pilot
 
-Status: prepared, not run from this implementation branch.
+Status: rerun target for the Codex invocation hardening pilot.
 
 The first real pilot must be docs-only because the edge worker executes `codex exec --sandbox danger-full-access` in a trusted local repository and then creates a draft PR. It should be launched from a clean operator shell after this branch is merged or from a disposable clone.
+
+## Codex Invocation Hardening
+
+The Super 141 pilot exposed a local-only blocker: `config/edge-worker.json` had `codex_command` set to a deleted `.agent/super-141-real-pilot/codex-worker.cmd` shim. The worker now treats `codex_command` as optional. If omitted, it resolves `codex` from `PATH` with `Get-Command`. If provided, it is respected and must exist; missing explicit paths fail with a clear setup error.
+
+The worker no longer needs temporary `.agent` command shims. On Windows, `Get-Command codex` may resolve to a PowerShell shim such as `codex.ps1`; the worker launches that through `pwsh -File`. Task prompts are written to `.agent/workers/<worker>/<task>/prompt.md` and passed to `codex exec` through stdin using the `-` prompt marker, which avoids multi-word and long prompt quoting issues.
+
+Nested Codex is instructed not to commit, push or create PRs. The worker owns safe file filtering, validation, git commit, push, draft PR creation and CI Guardian invocation.
 
 ## Exact Next Command
 
@@ -56,6 +64,7 @@ Expected behavior:
 - worker heartbeats before polling;
 - worker claims the docs-only task;
 - Codex creates a task branch from `origin/main`;
+- Codex resolves from explicit config or `PATH` without a temporary `.agent` shim;
 - Codex updates documentation only;
 - validation runs from worker config;
 - worker commits safe changed files;
@@ -63,6 +72,6 @@ Expected behavior:
 - CI Guardian runs with auto-merge disabled unless `auto_merge_enabled` is explicitly true;
 - task is marked complete with safe summary and PR URL, or failed with a bounded error summary.
 
-## Why It Was Not Run Here
+## Pilot Rerun Note
 
-The implementation branch already contains the edge worker changes. A real worker run would switch the worktree to a task branch from `origin/main`, which is unsafe while this super-goal branch has unmerged changes. The smoke suite covers register, heartbeat, dry-run claim, claim-only, and Codex command-shape behavior without mutating the active branch.
+For Super 142A, the safe real rerun task should update `docs/dev/EDGE_WORKER_CODEX_INVOCATION_PILOT.md` only. Run it after the parent branch has committed and pushed the invocation hardening changes, because the worker switches the active worktree to a child task branch from `origin/main`.

@@ -18,17 +18,130 @@ function Get-SafeTaskBranchName {
   return "$prefix$($Task.task_id)-$slug"
 }
 
+function Test-ObjectProperty {
+  param($InputObject, [Parameter(Mandatory = $true)][string]$Name)
+  return $null -ne ($InputObject.PSObject.Properties[$Name])
+}
+
+function New-CodexProcessSpec {
+  param(
+    [Parameter(Mandatory = $true)][string]$ResolvedPath,
+    [Parameter(Mandatory = $true)][string]$DisplayCommand,
+    [Parameter(Mandatory = $true)][string]$ResolutionSource
+  )
+
+  $extension = [System.IO.Path]::GetExtension($ResolvedPath)
+  if ($extension -ieq ".ps1") {
+    return [pscustomobject]@{
+      file_path = "pwsh"
+      argument_prefix = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ResolvedPath)
+      display_command = $DisplayCommand
+      resolved_path = $ResolvedPath
+      resolution_source = $ResolutionSource
+      powershell_shim = $true
+    }
+  }
+
+  return [pscustomobject]@{
+    file_path = $ResolvedPath
+    argument_prefix = @()
+    display_command = $DisplayCommand
+    resolved_path = $ResolvedPath
+    resolution_source = $ResolutionSource
+    powershell_shim = $false
+  }
+}
+
+function Resolve-CodexCommand {
+  param($Config)
+
+  $hasConfiguredCommand = (Test-ObjectProperty -InputObject $Config -Name "codex_command") -and -not [string]::IsNullOrWhiteSpace($Config.codex_command)
+  if ($hasConfiguredCommand) {
+    $candidate = ([string]$Config.codex_command).Trim()
+    $isPathLike = [System.IO.Path]::IsPathRooted($candidate) -or $candidate.Contains("\") -or $candidate.Contains("/")
+    if ($isPathLike) {
+      if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+        throw "Configured codex_command was not found: $candidate. Set codex_command to an installed Codex CLI path, or remove codex_command to resolve codex from PATH."
+      }
+      $resolved = (Resolve-Path -LiteralPath $candidate).Path
+      return New-CodexProcessSpec -ResolvedPath $resolved -DisplayCommand $candidate -ResolutionSource "config"
+    }
+
+    $configuredCommand = Get-Command $candidate -ErrorAction SilentlyContinue
+    if (-not $configuredCommand) {
+      throw "Configured codex_command '$candidate' was not found on PATH. Set codex_command to an installed Codex CLI path, or remove codex_command to resolve codex from PATH."
+    }
+    return New-CodexProcessSpec -ResolvedPath $configuredCommand.Source -DisplayCommand $candidate -ResolutionSource "config"
+  }
+
+  $pathCommand = Get-Command "codex" -ErrorAction SilentlyContinue
+  if (-not $pathCommand) {
+    throw "Codex CLI was not found on PATH. Install Codex CLI or set codex_command in the edge worker config to the installed executable, .cmd or .ps1 path."
+  }
+  return New-CodexProcessSpec -ResolvedPath $pathCommand.Source -DisplayCommand "codex" -ResolutionSource "PATH"
+}
+
+function New-CodexTaskPrompt {
+  param($Task)
+  return @"
+Execute SkyBridge task $($Task.task_id) in the local repository.
+
+Title: $($Task.title)
+Risk: $($Task.risk)
+Source: $($Task.source)
+Prompt summary: $($Task.prompt_summary)
+
+Body:
+$($Task.body)
+
+Safety boundaries:
+- keep the change focused on this task;
+- do not touch secrets, .env files, production config, deployment credentials, GitHub settings or server root configuration;
+- do not upload raw command output or secrets to SkyBridge;
+- for docs-only tasks, modify documentation only;
+- do not run git add, git commit, git push or gh pr create; the edge worker owns commit, push and draft PR creation after validation passes.
+"@
+}
+
+function New-CodexExecArguments {
+  param(
+    [Parameter(Mandatory = $true)][string]$Sandbox,
+    [Parameter(Mandatory = $true)][string]$LastMessagePath
+  )
+
+  return @(
+    "exec",
+    "--sandbox", $Sandbox,
+    "--json",
+    "--output-last-message", $LastMessagePath,
+    "-"
+  )
+}
+
 function Invoke-LoggedProcess {
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
     [Parameter(Mandatory = $true)][string[]]$ArgumentList,
     [Parameter(Mandatory = $true)][string]$WorkingDirectory,
     [Parameter(Mandatory = $true)][string]$LogPath,
+    [string]$InputPath,
     [int]$TimeoutMinutes = 30
   )
 
   $errPath = "$LogPath.err"
-  $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -NoNewWindow -PassThru -RedirectStandardOutput $LogPath -RedirectStandardError $errPath
+  $startParams = @{
+    FilePath = $FilePath
+    ArgumentList = $ArgumentList
+    WorkingDirectory = $WorkingDirectory
+    NoNewWindow = $true
+    PassThru = $true
+    RedirectStandardOutput = $LogPath
+    RedirectStandardError = $errPath
+  }
+  if (-not [string]::IsNullOrWhiteSpace($InputPath)) {
+    $startParams.RedirectStandardInput = $InputPath
+  }
+  $process = Start-Process @startParams
   $timeoutMs = [Math]::Max(1, $TimeoutMinutes) * 60 * 1000
   if (-not $process.WaitForExit($timeoutMs)) {
     try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
@@ -60,40 +173,21 @@ function Invoke-CodexTask {
   $branch = Get-SafeTaskBranchName -Config $Config -Task $Task
   $jsonlPath = Join-Path $runDir "codex-exec.jsonl"
   $lastMessagePath = Join-Path $runDir "last-message.md"
+  $promptPath = Join-Path $runDir "prompt.md"
   $gitLogPath = Join-Path $runDir "git-branch.log"
 
-  $prompt = @"
-Execute SkyBridge task $($Task.task_id) in the local repository.
-
-Title: $($Task.title)
-Risk: $($Task.risk)
-Source: $($Task.source)
-Prompt summary: $($Task.prompt_summary)
-
-Body:
-$($Task.body)
-
-Safety boundaries:
-- keep the change focused on this task;
-- do not touch secrets, .env files, production config, deployment credentials, GitHub settings or server root configuration;
-- do not upload raw command output or secrets to SkyBridge;
-- for docs-only tasks, modify documentation only.
-"@
+  $prompt = New-CodexTaskPrompt -Task $Task
+  Set-Content -LiteralPath $promptPath -Value $prompt -Encoding UTF8 -NoNewline
 
   try {
+    $codexCommand = Resolve-CodexCommand -Config $Config
     git -C $Config.repo_path fetch origin main *> $gitLogPath
     if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed" }
     git -C $Config.repo_path switch -C $branch origin/main *>> $gitLogPath
     if ($LASTEXITCODE -ne 0) { throw "git switch branch failed" }
 
-    $arguments = @(
-      "exec",
-      "--sandbox", [string]$Config.codex_sandbox,
-      "--json",
-      "--output-last-message", $lastMessagePath,
-      $prompt
-    )
-    $codex = Invoke-LoggedProcess -FilePath ([string]$Config.codex_command) -ArgumentList $arguments -WorkingDirectory ([string]$Config.repo_path) -LogPath $jsonlPath -TimeoutMinutes ([int]$Config.max_task_runtime_minutes)
+    $arguments = @($codexCommand.argument_prefix) + @(New-CodexExecArguments -Sandbox ([string]$Config.codex_sandbox) -LastMessagePath $lastMessagePath)
+    $codex = Invoke-LoggedProcess -FilePath ([string]$codexCommand.file_path) -ArgumentList $arguments -WorkingDirectory ([string]$Config.repo_path) -LogPath $jsonlPath -InputPath $promptPath -TimeoutMinutes ([int]$Config.max_task_runtime_minutes)
     $changedFiles = @(Get-SafeGitChangedFiles -RepoPath $Config.repo_path)
     $completedAt = (Get-Date).ToUniversalTime().ToString("o")
     return [pscustomobject]@{
@@ -110,6 +204,13 @@ Safety boundaries:
       log_path = $jsonlPath
       error_log_path = $codex.error_log_path
       last_message_path = $lastMessagePath
+      prompt_path = $promptPath
+      codex_command_resolution = [pscustomobject]@{
+        source = $codexCommand.resolution_source
+        display_command = $codexCommand.display_command
+        resolved_path = $codexCommand.resolved_path
+        powershell_shim = [bool]$codexCommand.powershell_shim
+      }
       changed_files = $changedFiles
       raw_logs_local_only = $true
     }
@@ -127,6 +228,7 @@ Safety boundaries:
       run_dir = $runDir
       log_path = $jsonlPath
       last_message_path = $lastMessagePath
+      prompt_path = $promptPath
       changed_files = @()
       raw_logs_local_only = $true
     }

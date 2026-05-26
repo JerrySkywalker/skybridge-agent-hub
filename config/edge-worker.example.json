@@ -8,7 +8,6 @@
   "capabilities": ["codex-exec", "filesystem", "git", "tests", "docs", "notifications"],
   "allowed_task_types": ["docs", "test", "code"],
   "blocked_task_types": ["deploy", "secrets", "production"],
-  "codex_command": "codex",
   "codex_sandbox": "danger-full-access",
   "max_task_runtime_minutes": 45,
   "validation_commands": ["just check"],

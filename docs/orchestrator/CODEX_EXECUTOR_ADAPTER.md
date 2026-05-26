@@ -22,11 +22,15 @@ The adapter:
 
 1. creates `.agent/workers/<worker>/<task>/`;
 2. creates a task branch from `origin/main`;
-3. runs `codex exec --sandbox <codex_sandbox> --json --output-last-message <path> <prompt>`;
-4. writes Codex JSONL and last-message files locally;
-5. returns a structured `ExecutionResult`.
+3. resolves Codex from explicit `codex_command` or, when omitted, `Get-Command codex`;
+4. writes the task prompt to a local `prompt.md`;
+5. runs `codex exec --sandbox <codex_sandbox> --json --output-last-message <path> -` with the prompt file redirected to stdin;
+6. writes Codex JSONL and last-message files locally;
+7. returns a structured `ExecutionResult`.
 
 `danger-full-access` is intended only for trusted local repository execution.
+
+Explicit `codex_command` is preferred when present. A missing explicit path fails with a clear setup error. The examples intentionally omit `codex_command` so normal Windows installs resolve the active Codex CLI from `PATH` instead of depending on temporary `.agent` shims. PowerShell shims such as `codex.ps1` are invoked through `pwsh -File` to avoid Windows process launch ambiguity.
 
 ## Validation
 
@@ -42,7 +46,7 @@ Validation logs are local-only and summarized in `ValidationResult`.
 
 ## Git And PR
 
-The adapter commits only safe changed files. It excludes `.agent`, `.data`, local env files, local edge worker config and secret-like filenames. It then pushes a task branch and creates a draft PR with `gh pr create`.
+The nested Codex prompt explicitly tells Codex not to run `git add`, `git commit`, `git push` or `gh pr create`. The edge worker owns git packaging after validation: it commits only safe changed files, excluding `.agent`, `.data`, local env files, local edge worker config and secret-like filenames. It then pushes a task branch and creates a draft PR with `gh pr create`.
 
 GitHub is treated as an SCM/CI provider. The adapter must not mutate repository settings, branch protection or secrets.
 
