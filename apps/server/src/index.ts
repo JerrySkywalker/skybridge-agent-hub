@@ -2689,10 +2689,31 @@ function parseWorkerInput(input: Record<string, unknown> | undefined):
       capabilities: safeStringArray(input.capabilities) ?? [],
       labels: safeStringArray(input.labels) ?? [],
       enabled: input.enabled !== false,
+      auth_mode: safeWorkerAuthMode(input.auth_mode),
+      api_base_redacted: redactApiBase(safeString(input.api_base)),
+      allow_remote_server: typeof input.allow_remote_server === "boolean" ? input.allow_remote_server : undefined,
       created_at: now,
       updated_at: now,
     },
   };
+}
+
+function safeWorkerAuthMode(input: unknown): "none" | "bearer_token" | undefined {
+  const value = safeString(input);
+  if (!value) return undefined;
+  if (value === "worker-token") return "bearer_token";
+  if (value === "none" || value === "bearer_token") return value;
+  return undefined;
+}
+
+function redactApiBase(input: string | undefined): string | undefined {
+  if (!input) return undefined;
+  try {
+    const url = new URL(input);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function parseTaskInput(input: Record<string, unknown> | undefined, store: EventStore):

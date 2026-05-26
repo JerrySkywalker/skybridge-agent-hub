@@ -127,6 +127,9 @@ function Register-Worker {
     capabilities = @($Config.capabilities)
     labels = @("edge", "local", "windows")
     enabled = $true
+    auth_mode = if ($Config.auth_mode) { [string]$Config.auth_mode } else { "none" }
+    api_base = $Config.api_base
+    allow_remote_server = [bool]$Config.allow_remote_server
   } -Config $Config
 }
 
