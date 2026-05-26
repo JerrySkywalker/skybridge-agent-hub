@@ -264,7 +264,7 @@ function WorkerPoolPage({ apiBase }: { apiBase: string }) {
         <Kpi label="Offline" value={data.workersSummary?.offline ?? 0} />
         <Kpi label="Disabled" value={data.workersSummary?.disabled ?? 0} />
       </section>
-      <WorkerTable workers={data.workers} />
+      <WorkerTable workers={data.workers} tasks={data.tasks} />
     </div>
   );
 }
@@ -634,7 +634,7 @@ function useProductData(apiBase: string) {
   };
 }
 
-function WorkerTable({ workers }: { workers: WorkerRecord[] }) {
+function WorkerTable({ workers, tasks }: { workers: WorkerRecord[]; tasks: TaskRecord[] }) {
   return (
     <section className="skybridge-panel">
       <div className="skybridge-card__header">
@@ -652,30 +652,34 @@ function WorkerTable({ workers }: { workers: WorkerRecord[] }) {
           <span>Worker</span>
           <span>Status</span>
           <span>Capabilities</span>
-          <span>Current task / last seen</span>
+          <span>Task / result</span>
         </div>
-        {workers.map((worker) => (
-          <div className="data-table__row" key={worker.worker_id}>
-            <span>
-              {worker.name}
-              <small>{worker.worker_id} · {worker.provider}</small>
-            </span>
-            <span>
-              <span className={badgeClass(worker.status === "online" ? "ok" : "bad")}>
-                {worker.status}
+        {workers.map((worker) => {
+          const workerTasks = tasks.filter((task) => task.assigned_worker_id === worker.worker_id);
+          const lastTask = workerTasks[0];
+          return (
+            <div className="data-table__row" key={worker.worker_id}>
+              <span>
+                {worker.name}
+                <small>{worker.worker_id} · {worker.provider}</small>
               </span>
-              <small>{worker.enabled ? "enabled" : "disabled"}</small>
-            </span>
-            <span>
-              {worker.capabilities.join(", ") || "none"}
-              <small>{worker.labels.join(", ") || "no labels"}</small>
-            </span>
-            <span>
-              {worker.current_task_id ?? "none"}
-              <small>{formatDateTime(worker.last_seen_at)}</small>
-            </span>
-          </div>
-        ))}
+              <span>
+                <span className={badgeClass(worker.status === "online" ? "ok" : "bad")}>
+                  {worker.status}
+                </span>
+                <small>{worker.enabled ? "enabled" : "disabled"} · {formatDateTime(worker.last_seen_at)}</small>
+              </span>
+              <span>
+                {worker.capabilities.join(", ") || "none"}
+                <small>{worker.labels.join(", ") || "no labels"}</small>
+              </span>
+              <span>
+                {worker.current_task_id ?? lastTask?.task_id ?? "none"}
+                <small>{lastTask ? `${lastTask.status}: ${lastTask.result?.summary ?? lastTask.last_event?.type ?? "no result yet"}` : "no task history"}</small>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -707,11 +711,15 @@ function TaskTable({
           <span>Task</span>
           <span>Status / risk</span>
           <span>Worker</span>
-          <span>Project / result</span>
+          <span>Execution / validation</span>
+          <span>Project / PR</span>
         </div>
         {tasks.map((task) => {
           const worker = workers.find((item) => item.worker_id === task.assigned_worker_id);
           const project = projects.find((item) => item.project_id === task.project_id);
+          const executionStatus = taskExecutionStatus(task);
+          const validationStatus = taskValidationStatus(task);
+          const prUrl = task.result?.pr_url;
           return (
             <div className="data-table__row" key={task.task_id}>
               <span>
@@ -729,8 +737,14 @@ function TaskTable({
                 <small>{task.claim?.claimed_at ? formatDateTime(task.claim.claimed_at) : "not claimed"}</small>
               </span>
               <span>
+                {executionStatus}
+                <small>Validation: {validationStatus}</small>
+              </span>
+              <span>
                 {project?.name ?? task.project_id}
-                <small>{task.result?.pr_url ?? task.result?.result_url ?? "PR/result link pending"}</small>
+                <small>
+                  {prUrl ? <a href={prUrl}>{prUrl}</a> : task.result?.result_url ?? "PR/result link pending"}
+                </small>
               </span>
             </div>
           );
@@ -738,6 +752,25 @@ function TaskTable({
       </div>
     </section>
   );
+}
+
+function taskExecutionStatus(task: TaskRecord): string {
+  const summary = task.result?.summary ?? "";
+  const match = summary.match(/Execution:\s*([A-Za-z_-]+)/i);
+  if (match?.[1]) return match[1].toLowerCase();
+  if (task.status === "running" || task.status === "claimed") return task.status;
+  if (task.status === "completed") return "completed";
+  if (task.status === "failed" || task.status === "blocked") return task.status;
+  return "pending";
+}
+
+function taskValidationStatus(task: TaskRecord): string {
+  const summary = task.result?.summary ?? "";
+  const match = summary.match(/Validation:\s*([A-Za-z_-]+)/i);
+  if (match?.[1]) return match[1].toLowerCase();
+  if (task.status === "completed") return "unknown";
+  if (task.status === "failed") return "failed or skipped";
+  return "pending";
 }
 
 function IterationList({
