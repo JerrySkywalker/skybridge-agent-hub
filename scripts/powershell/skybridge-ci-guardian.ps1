@@ -98,31 +98,18 @@ function Get-PrAutoMergeEligibility {
     [object]$Policy
   )
 
-  $prJson = gh pr view $PrNumber --json number,headRefName,isDraft,statusCheckRollup 2>$null
-  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($prJson)) {
-    throw "failed to read PR #$PrNumber metadata"
+  $classifier = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\classify-skybridge-pr.ps1" -PrNumber $PrNumber -Json
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($classifier)) {
+    throw "failed to classify PR #$PrNumber for auto-merge"
   }
-  $prInfo = $prJson | ConvertFrom-Json
-
-  $changedFiles = @(gh pr diff $PrNumber --name-only 2>$null)
-  if ($LASTEXITCODE -ne 0 -or $changedFiles.Count -eq 0) {
-    throw "failed to read changed files for PR #$PrNumber"
+  $classification = $classifier | ConvertFrom-Json
+  $legacyReasons = @()
+  if (-not [bool]$classification.auto_merge_eligible) { $legacyReasons = @($classification.reasons) }
+  return [pscustomobject]@{
+    eligible = [bool]$classification.auto_merge_eligible
+    reasons = @($legacyReasons)
+    classifier = $classification
   }
-
-  $checks = @($prInfo.statusCheckRollup | ForEach-Object {
-    [pscustomobject]@{
-      name = $_.name
-      status = $_.status
-      conclusion = $_.conclusion
-    }
-  })
-
-  return Test-SkyBridgeAutoMergeEligibility `
-    -PrInfo $prInfo `
-    -ChangedFiles $changedFiles `
-    -Checks $checks `
-    -Policy $Policy `
-    -AllowPendingChecks:$AllowPendingRequiredChecks
 }
 
 $prNumber = Get-CurrentPrNumber

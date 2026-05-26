@@ -27,6 +27,22 @@ SkyBridge APIs are local-first and return safe derived metadata for an agent-agn
 - `GET /v1/automerge/summary`: dry-run default, eligibility decisions, blocked reasons and local merged history when available.
 - `GET /v1/adapters`: neutral planner, executor, SCM/CI, notification and runtime provider capability registry.
 
+## PR Lifecycle Automation
+
+PR lifecycle and merge coordination currently run through local automation scripts rather than server mutation APIs:
+
+- `classify-skybridge-pr.ps1`: classifies child task, parent/super-goal, tracking, duplicate, stale, conflicting, high-risk, blocked and auto-merge-candidate PRs.
+- `skybridge-merge-coordinator.ps1`: lists open PRs, applies per-project serial merge policy, recommends actions and defaults to dry-run.
+- `build-planner-compact-state.ps1`: emits safe compact planner state for Hermes, including completed/open tasks, open/merged PRs, dedupe keys, changed files, CI status, auto-merge status, locked files and `do_not_repeat`.
+
+Default policy:
+
+- child task PR: auto PR plus auto-merge when eligible;
+- parent/super-goal PR: auto PR plus manual merge unless a later policy explicitly allows low-risk parent auto-merge;
+- high-risk PR: auto PR for human review only.
+
+These scripts do not mutate GitHub settings or branch protection. `skybridge-merge-coordinator.ps1` mutates PRs only with `-Apply`.
+
 ## Core APIs
 
 - `GET /v1/health`

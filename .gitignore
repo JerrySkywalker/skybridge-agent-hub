@@ -39,6 +39,7 @@ logs/
 .agent/spool/
 .agent/tmp/
 .agent/workers/
+.agent/self-bootstrap/
 .agent/codex-phone-smoke/
 .agent/codex-phone-*.md
 .agent/last-message.md

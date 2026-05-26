@@ -5,6 +5,7 @@ param(
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$GoalId = "self-bootstrap-smoke",
   [string]$ProjectStateJson,
+  [string]$CompactStateFile,
   [string]$FixtureFile,
   [switch]$CreateTask,
   [switch]$DryRun,
@@ -62,10 +63,16 @@ function Test-PlannerDecisionSchema {
       if ([string]::IsNullOrWhiteSpace($Decision.task.$field)) { throw "Planner task missing $field." }
     }
     if (@("low", "medium", "high") -notcontains [string]$Decision.task.risk) { throw "Planner task has invalid risk." }
-    foreach ($field in @("allowed_paths", "blocked_paths", "validation")) {
+    foreach ($field in @("allowed_paths", "blocked_paths", "validation", "expected_files", "depends_on")) {
       if ($null -eq $Decision.task.$field -or $Decision.task.$field.GetType().Name -notmatch "Object\[\]|ArrayList") {
         throw "Planner task $field must be an array."
       }
+    }
+    foreach ($field in @("dedupe_key", "advances_acceptance", "merge_strategy")) {
+      if ([string]::IsNullOrWhiteSpace($Decision.task.$field)) { throw "Planner task missing $field." }
+    }
+    if (@("auto_pr_auto_merge", "auto_pr_manual_merge", "human_review") -notcontains [string]$Decision.task.merge_strategy) {
+      throw "Planner task has invalid merge_strategy."
     }
   }
   if ($null -eq $Decision.stop_criteria_status) { $Decision | Add-Member -NotePropertyName stop_criteria_status -NotePropertyValue @() -Force }
@@ -84,6 +91,11 @@ function New-DryRunPlannerDecision {
       allowed_paths = @("docs/orchestrator/", "docs/dev/PROGRESS.md", "goals/master/self-bootstrap-smoke.md")
       blocked_paths = @(".env", "config/*.secret.ps1", ".agent/", ".data/", "deploy/production", "/opt/")
       validation = @("corepack pnpm check")
+      dedupe_key = "docs/hermes-self-bootstrap-round-$Round"
+      expected_files = @("docs/dev/PROGRESS.md")
+      depends_on = @()
+      advances_acceptance = "Documents self-bootstrap proof round $Round."
+      merge_strategy = "auto_pr_auto_merge"
     }
     stop_criteria_status = @("round_$Round planned", "three_round_docs_only_proof in_progress")
   }
@@ -138,6 +150,11 @@ function New-SkyBridgeTaskFromPlannerDecision {
     allowed_paths = @($Decision.task.allowed_paths)
     blocked_paths = @($Decision.task.blocked_paths)
     validation = @($Decision.task.validation)
+    dedupe_key = [string]$Decision.task.dedupe_key
+    expected_files = @($Decision.task.expected_files)
+    depends_on = @($Decision.task.depends_on)
+    advances_acceptance = [string]$Decision.task.advances_acceptance
+    merge_strategy = [string]$Decision.task.merge_strategy
     stop_criteria_status = @($Decision.stop_criteria_status)
     created_at = (Get-Date).ToUniversalTime().ToString("o")
     raw_response_included = $false
@@ -163,7 +180,8 @@ function New-SkyBridgeTaskFromPlannerDecision {
 
 $masterGoal = Get-SafeFileText -Path $MasterGoalFile
 $promptTemplate = Get-SafeFileText -Path (Join-Path $PSScriptRoot "..\..\docs\hermes\prompts\self-bootstrap-planner.md")
-$state = if ($ProjectStateJson -and (Test-Path -LiteralPath $ProjectStateJson -PathType Leaf)) { Get-Content -Raw -LiteralPath $ProjectStateJson } else { "{}" }
+$statePath = if ($CompactStateFile) { $CompactStateFile } else { $ProjectStateJson }
+$state = if ($statePath -and (Test-Path -LiteralPath $statePath -PathType Leaf)) { Get-Content -Raw -LiteralPath $statePath } else { "{}" }
 $prompt = @"
 $promptTemplate
 

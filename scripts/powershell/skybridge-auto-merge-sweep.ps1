@@ -145,6 +145,17 @@ foreach ($pr in $pullRequests) {
   $message = "not eligible"
   if ($eligibility.eligible) {
     if ($EnableAutoMerge) {
+      $classificationOutput = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\classify-skybridge-pr.ps1" -PrNumber ([int]$pr.number) -Json
+      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($classificationOutput)) {
+        $action = "error"
+        $message = "failed to classify PR before enabling auto-merge"
+      } else {
+        $classification = $classificationOutput | ConvertFrom-Json
+        if (-not [bool]$classification.auto_merge_eligible) {
+          $action = "blocked_by_lifecycle_classifier"
+          $message = "classifier blocked auto-merge: $($classification.reasons -join ', ')"
+          $eligibility.reasons = @(@($eligibility.reasons) + @($classification.reasons) + @("lifecycle_classifier_blocked")) | Select-Object -Unique
+        } else {
       gh pr merge $pr.number --auto --squash
       if ($LASTEXITCODE -ne 0) {
         $action = "error"
@@ -152,6 +163,8 @@ foreach ($pr in $pullRequests) {
       } else {
         $action = "enabled_auto_merge"
         $message = "GitHub auto-merge enabled"
+      }
+        }
       }
     } else {
       $action = "dry_run_eligible"
