@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 167 Remote Worker Execution Pilot Prep
+
+- Added `scripts/powershell/skybridge-status.ps1`, a compact cloud status command for narrow terminals. It queries `/v1/health`, project control, workers and project tasks, renders compact worker/task tables, and can write full JSON snapshots to `.agent/tmp` without printing worker tokens.
+- Added `smoke-skybridge-status.ps1`, which starts a temporary local SkyBridge server, seeds paused project control, online/offline workers and queued/running/completed/failed/blocked tasks, then verifies compact and JSON status output.
+- Remote preflight confirmed `$HOME\.skybridge\worker.laptop-zenbookduo.json` exists and loads as a bearer-token remote worker profile for `https://skybridge.jerryskywalker.space` without printing token values.
+- Blocker: `SKYBRIDGE_WORKER_TOKEN` was not present in this Codex process, user environment or machine environment, and the profile has no configured token file. Because worker-sensitive routes require bearer auth, the real remote register/heartbeat, cloud docs task creation, `-PollOnce` execution, child PR packaging and EvidenceSummary reporting were not run.
+- Safety state: project control was not changed by this run, so no start/resume operation needed rollback; the project was expected to remain paused from the prior safe state.
+
 ## 2026-05-26 Super Goal 166 Cloud Server Remote Worker Smoke
 
 - Added safe cloud deployment wiring templates for `https://skybridge.jerryskywalker.space`: topology doc, server env example, SkyBridge compose template, OpenResty reverse proxy example and remote home PC worker profile example.
