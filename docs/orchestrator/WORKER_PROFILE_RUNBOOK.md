@@ -129,16 +129,26 @@ Copy-Item .\config\worker-profile.cloud.example.json "$HOME\.skybridge\worker.$e
 
 Edit only the local copy. Set `skybridge_api_base` to the HTTPS SkyBridge Server URL, keep `auth_mode` as `bearer_token`, set `allow_remote_server` to `true` and keep `allow_production_deploy` as `false`.
 
-Set a token through the current shell:
+Prefer a local token file outside the repository:
+
+```powershell
+New-Item -ItemType Directory -Path "$HOME\.skybridge\secrets" -Force | Out-Null
+Set-Content -LiteralPath "$HOME\.skybridge\secrets\worker-token.txt" -Value "<local-only worker token>"
+```
+
+Point the profile at that file:
+
+```json
+{
+  "auth_mode": "bearer_token",
+  "token_file": "C:\\Users\\operator\\.skybridge\\secrets\\worker-token.txt"
+}
+```
+
+A shell token is still supported for short-lived test sessions:
 
 ```powershell
 $env:SKYBRIDGE_WORKER_TOKEN = "<local-only worker token>"
-```
-
-Or store it in a local file outside the repository and point the profile at that file:
-
-```powershell
-Set-Content -LiteralPath "$HOME\.skybridge\worker-token.txt" -Value "<local-only worker token>"
 ```
 
 Run a dry-run remote profile smoke:
@@ -157,6 +167,43 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-a
   -AuthFailureCheck `
   -Json
 ```
+
+For day-to-day operator checks, use the profile-aware wrapper:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-status.ps1 `
+  -Command register-heartbeat `
+  -ConfigFile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
+  -ProjectId skybridge-agent-hub
+```
+
+Use compact status and project control helpers instead of ad hoc `Invoke-RestMethod` snippets:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
+  -Command pause `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
+
+Do not start the long-running `-Loop` mode for remote work yet. Use `-PollOnce` only until repeated task reliability and operator recovery are validated.
+
+## CI Rerun And Evidence Repair
+
+When a child PR is blocked by a transient checkout or fetch issue, classify it before changing task evidence:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-rerun-ci.ps1 `
+  -PrNumber 57
+```
+
+The rerun helper is dry-run by default. Add `-Apply` only for one bounded rerun batch. If checks later pass and the child PR merges, append recovered evidence instead of erasing the original failed task event. Recovered task evidence is visible in `skybridge-status.ps1` as `recovered`; the original failed event remains in task history.
 
 Run a real remote smoke only when the explicit API base and token are present:
 
