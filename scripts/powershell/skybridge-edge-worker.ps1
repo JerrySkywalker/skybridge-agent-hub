@@ -19,9 +19,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$edgeConfigFile = $ConfigFile
+$edgeWorkerProfileFile = $WorkerProfileFile
+$edgeProjectId = $ProjectId
+$edgeJson = $Json
+
 . (Join-Path $PSScriptRoot "skybridge-worker-api.ps1")
 . (Join-Path $PSScriptRoot "load-worker-profile.ps1")
 . (Join-Path $PSScriptRoot "invoke-codex-task.ps1")
+
+$ConfigFile = $edgeConfigFile
+$WorkerProfileFile = $edgeWorkerProfileFile
+$ProjectId = $edgeProjectId
+$Json = $edgeJson
 
 function Write-EdgeWorkerResult {
   param($Result)
