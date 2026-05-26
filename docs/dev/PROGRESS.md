@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-05-26 Goal 167B First Remote Worker Execution Pilot
+
+- Remote preflight used `$HOME\.skybridge\worker.laptop-zenbookduo.json` with `token_file_configured=true`; token values were not printed. `laptop-zenbookduo` registered and heartbeated through `https://skybridge.jerryskywalker.space` using direct bearer-token worker auth.
+- Initial compact status showed project `skybridge-agent-hub` paused, `remote-claim-smoke-001` blocked, `remote-claim-smoke-002` completed and no queued stale smoke task. Snapshots were written under `.agent/tmp/remote-status-before-167b.json` and `.agent/tmp/remote-status-after-167b.json`.
+- `remote-docs-exec-pilot-001` already existed from the first failed attempt, so the second run created docs-only task `remote-docs-exec-pilot-002` for goal `remote-worker-smoke-goal` with `required_capabilities=["codex"]`, then started project control with `state=running`, `stop_requested=false`, `max_tasks=1`.
+- `-PollOnce` proved remote heartbeat, control read, task claim/start and Codex docs execution. Validation was skipped because no validation commands were configured, using the worker fix that ignores empty validation commands.
+- The worker created draft child PR #57. After verifying it changed only `docs/dev/REMOTE_WORKER_EXECUTION_PILOT.md` and was classified low-risk child-task work, PR #57 was marked ready for review.
+- CI Guardian blocked the task because GitHub Actions checkout failed with HTTP 403 and an account-suspended message. This was not retried as a dependency-download transient.
+- Child PR: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/57
+- Child PR recovery: PR #57 checks later recovered and passed, and PR #57 merged at `2026-05-26T13:02:48Z` with merge commit `99c4c21b2fb1881596d48db43482beedbb0384a8`.
+- Cloud task final status remained `failed`, with task result PR URL pointing to PR #57 and EvidenceSummary recorded with `ci_status=blocked_github_checkout_403`, because the original worker-owned task report captured the initial CI Guardian blocker.
+- Project control was restored to `paused` with `stop_requested=false` and stop reason `operator_paused_after_167b_pilot`.
+- Evidence summary: the cloud control plane -> local worker claim -> Codex docs edit -> worker-owned child PR packaging -> low-risk ready gate -> GitHub Actions green -> merge path is proven. Server-side evidence repair from failed task to completed task remains a follow-up need if the API rejects failed -> completed repair.
+
 ## 2026-05-26 Super Goal 167 Remote Worker Execution Pilot Prep
 
 - Added `scripts/powershell/skybridge-status.ps1`, a compact cloud status command for narrow terminals. It queries `/v1/health`, project control, workers and project tasks, renders compact worker/task tables, and can write full JSON snapshots to `.agent/tmp` without printing worker tokens.
