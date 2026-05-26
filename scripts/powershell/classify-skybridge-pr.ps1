@@ -176,8 +176,20 @@ $autoMergeEligible = (
   ($reasons -notcontains "stale_or_unknown_base")
 )
 
+$draftReadyCandidate = (
+  $prType -eq "child_task" -and
+  $risk -eq "low" -and
+  $checkState -eq "green" -and
+  [bool]$prInfo.isDraft -and
+  $duplicates.Count -eq 0 -and
+  ($reasons -notcontains "conflicting_pr") -and
+  ($reasons -notcontains "stale_or_unknown_base")
+)
+
 $recommendedAction = if ($autoMergeEligible) {
   "enable_auto_merge"
+} elseif ($draftReadyCandidate) {
+  "mark_ready_then_recheck"
 } elseif ($lifecycleState -eq "duplicate") {
   if ([bool]$policy.conflict_policy.close_duplicates) { "close_duplicate_with_comment" } else { "block_duplicate" }
 } elseif ($lifecycleState -eq "conflicting") {
