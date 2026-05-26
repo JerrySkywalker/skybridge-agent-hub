@@ -1,0 +1,44 @@
+# Template for a SkyBridge Server API deployment behind a reverse proxy.
+# This file is safe to render with `docker compose config`; it does not deploy by itself.
+# OpenResty or another reverse proxy should publish HTTPS and proxy to 127.0.0.1:8787.
+# Hermes is intentionally not exposed here.
+
+services:
+  skybridge-server:
+    image: ${SKYBRIDGE_IMAGE_REGISTRY:-ghcr.io/jerry1999-main}/skybridge-agent-hub-server:${SKYBRIDGE_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - path: ${SKYBRIDGE_ENV_FILE:-../config/skybridge-server.env.example}
+        required: false
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      HOST: ${SKYBRIDGE_HOST:-0.0.0.0}
+      PORT: ${SKYBRIDGE_PORT:-8787}
+      SKYBRIDGE_DB_FILE: ${SKYBRIDGE_DB_FILE:-/data/skybridge.sqlite}
+      SKYBRIDGE_PUBLIC_BASE_URL: ${SKYBRIDGE_PUBLIC_BASE_URL:-https://skybridge.example.com}
+      SKYBRIDGE_REQUIRE_WORKER_AUTH: ${SKYBRIDGE_REQUIRE_WORKER_AUTH:-true}
+      SKYBRIDGE_WORKER_TOKEN: ${SKYBRIDGE_WORKER_TOKEN:-}
+      SKYBRIDGE_WORKER_TOKENS_FILE: ${SKYBRIDGE_WORKER_TOKENS_FILE:-}
+      NTFY_TOPIC_URL: ${NTFY_TOPIC_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+    ports:
+      - "127.0.0.1:${SKYBRIDGE_PORT:-8787}:${SKYBRIDGE_PORT:-8787}"
+    volumes:
+      - skybridge-server-data:/data
+      # Optional: mount a server-local token file and set SKYBRIDGE_WORKER_TOKENS_FILE.
+      # - /srv/skybridge/worker-tokens.txt:/run/secrets/skybridge-worker-tokens:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || '8787') + '/v1/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - skybridge-server
+
+volumes:
+  skybridge-server-data:
+
+networks:
+  skybridge-server:
+    driver: bridge
