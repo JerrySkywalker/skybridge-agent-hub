@@ -1,0 +1,20 @@
+{
+  "worker_id": "cloud-worker-placeholder",
+  "display_name": "Cloud-connected worker placeholder",
+  "project_ids": ["skybridge-agent-hub"],
+  "repo_paths": {
+    "skybridge-agent-hub": "D:\\work\\skybridge-agent-hub"
+  },
+  "capabilities": ["codex-exec", "filesystem", "git", "tests", "docs"],
+  "executor_adapters": ["codex"],
+  "preferred_task_types": ["docs", "code", "test"],
+  "blocked_task_types": ["deploy", "secrets", "production", "server-root-config"],
+  "max_parallel_tasks": 1,
+  "allow_auto_merge": false,
+  "allow_production_deploy": false,
+  "skybridge_api_base": "https://skybridge.example.invalid",
+  "auth_mode": "worker-token",
+  "token_env_var": "SKYBRIDGE_WORKER_TOKEN",
+  "codex_command": "codex",
+  "codex_sandbox": "workspace-write"
+}

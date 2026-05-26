@@ -19,6 +19,11 @@ config/edge-worker.json
 config/edge-worker.*.json
 !config/edge-worker.example.json
 !config/edge-worker.homepc.example.json
+config/worker-profile.json
+config/worker-profile.*.json
+!config/worker-profile.example.json
+!config/worker-profile.homepc.example.json
+!config/worker-profile.cloud.example.json
 
 # build
 dist/
