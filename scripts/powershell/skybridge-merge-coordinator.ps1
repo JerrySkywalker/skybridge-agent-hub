@@ -61,6 +61,12 @@ function Invoke-CoordinatorAction {
       $result.applied = $true
       $result.message = "enabled GitHub auto-merge"
     }
+    "mark_ready_then_recheck" {
+      gh pr ready $prNumber | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "failed to mark PR #$prNumber ready" }
+      $result.applied = $true
+      $result.message = "marked PR ready; rerun coordinator after checks refresh"
+    }
     "update_branch_then_recheck" {
       gh pr update-branch $prNumber | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "failed to update branch for PR #$prNumber" }

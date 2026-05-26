@@ -17,7 +17,7 @@ $fixturePrs = @(
     body = "dedupe_key: docs/low-risk"
     url = "https://example.invalid/pull/101"
     headRefName = "ai/edge-worker/hermes-low-risk-docs"
-    isDraft = $false
+    isDraft = $true
     mergeStateStatus = "CLEAN"
     files = @("docs/automation/low-risk.md")
     statusCheckRollup = $greenChecks
@@ -92,7 +92,7 @@ function Assert-PrAction {
   if ($State -and $item.lifecycle_state -ne $State) { throw "PR #$Number expected state $State but got $($item.lifecycle_state)." }
 }
 
-Assert-PrAction -Number 101 -Action "enable_auto_merge" -State "ready"
+Assert-PrAction -Number 101 -Action "mark_ready_then_recheck" -State "draft"
 Assert-PrAction -Number 102 -Action "block_duplicate" -State "duplicate"
 Assert-PrAction -Number 103 -Action "block_duplicate" -State "duplicate"
 Assert-PrAction -Number 104 -Action "update_branch_then_recheck" -State "stale"
