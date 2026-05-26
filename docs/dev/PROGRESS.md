@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 161 PR Lifecycle And Planner Feedback
+
+- Added PR lifecycle terminology, merge coordinator policy, PR classifier, dry-run merge coordinator, compact planner state builder, planner dedupe contract, and fixture smokes for lifecycle and planner dedupe behavior.
+- Default future policy is child task PRs use auto PR plus auto-merge when eligible; parent/super-goal PRs use auto PR plus manual merge by default; high-risk PRs require human review and notification.
+- CI Guardian and auto-merge sweep now route auto-merge attempts through the PR lifecycle classifier before enabling GitHub auto-merge.
+- Live merge coordinator dry-run against the real repository returned zero open PRs, with no eligible, duplicate, stale, conflicting or high-risk PRs and no mutations applied.
+- Remaining work in this goal: complete runbook/API documentation and full validation.
+
 ## 2026-05-26 Super Goal 160B Real Hermes Self-Bootstrap Rerun
 
 - Preflight confirmed PR #35 (`1c0ffa2`) and PR #38 (`a6708fc`) were merged to `main`, Hermes API base/key were present without printing secret values, `/v1/responses` was available, and Edge Worker Codex resolution used PATH rather than a temporary `.agent` shim.
