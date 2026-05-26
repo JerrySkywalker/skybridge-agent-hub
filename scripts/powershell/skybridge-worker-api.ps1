@@ -78,6 +78,26 @@ function Send-WorkerHeartbeat {
   }
 }
 
+function Get-ProjectControlState {
+  param($Config)
+  Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base
+}
+
+function Set-ProjectControlState {
+  param($Config, [hashtable]$Patch)
+  Invoke-SkyBridgeApi -Method PATCH -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base -Body $Patch
+}
+
+function Test-SkyBridgeServerAvailable {
+  param($Config)
+  try {
+    Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $Config.api_base -TimeoutSeconds 5 | Out-Null
+    return $true
+  } catch {
+    return $false
+  }
+}
+
 function Get-QueuedTasks {
   param($Config)
   Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?status=queued&project_id=$([uri]::EscapeDataString($Config.project_id))" -ApiBase $Config.api_base

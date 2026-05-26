@@ -264,6 +264,7 @@ function WorkerPoolPage({ apiBase }: { apiBase: string }) {
         <Kpi label="Offline" value={data.workersSummary?.offline ?? 0} />
         <Kpi label="Disabled" value={data.workersSummary?.disabled ?? 0} />
       </section>
+      <LoopControlPanel projects={data.projects} tasks={data.tasks} />
       <WorkerTable workers={data.workers} tasks={data.tasks} />
     </div>
   );
@@ -282,6 +283,7 @@ function TaskQueuePage({ apiBase }: { apiBase: string }) {
         <Kpi label="Completed" value={data.tasksSummary?.completed ?? 0} />
         <Kpi label="Failed" value={data.tasksSummary?.failed ?? 0} />
       </section>
+      <LoopControlPanel projects={data.projects} tasks={data.tasks} />
       <TaskTable tasks={data.tasks} workers={data.workers} projects={data.projects} />
     </div>
   );
@@ -776,6 +778,48 @@ function TaskTable({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function LoopControlPanel({
+  projects,
+  tasks,
+}: {
+  projects: ProjectSummary[];
+  tasks: TaskRecord[];
+}) {
+  const project = projects.find((item) => item.control_state);
+  const control = project?.control_state;
+  const currentTask = tasks.find((task) => task.task_id === control?.current_task_id);
+  const state = control?.state ?? "stopped";
+  const idleOrDegraded = control?.degraded_reason
+    ? `degraded: ${control.degraded_reason}`
+    : control?.idle_since
+      ? `idle since ${formatDateTime(control.idle_since)}`
+      : "ready";
+  return (
+    <section className="dashboard-grid">
+      <SummaryCard
+        title="Edge worker loop"
+        state={state}
+        lines={[
+          `Project: ${project?.name ?? project?.project_id ?? "none selected"}`,
+          `Last heartbeat: ${formatDateTime(control?.last_heartbeat)}`,
+          `Loop task count: ${control?.loop_task_count ?? 0}`,
+          `Idle/degraded: ${idleOrDegraded}`,
+        ]}
+      />
+      <SummaryCard
+        title="Loop control"
+        state={control?.stop_requested ? "stop requested" : control?.stop_reason ?? "operator gated"}
+        lines={[
+          `Current worker: ${control?.current_worker_id ?? "none"}`,
+          `Current task: ${currentTask?.title ?? control?.current_task_id ?? "none"}`,
+          `Max tasks: ${control?.max_tasks ?? "not set"}`,
+          `Last error: ${control?.last_error ?? "none"}`,
+        ]}
+      />
     </section>
   );
 }

@@ -32,6 +32,7 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "worker.heartbeat",
   "worker.offline",
   "project.created",
+  "project.control_updated",
   "goal.created",
   "task.created",
   "task.claimed",
@@ -255,7 +256,25 @@ export interface Project {
   repo?: string;
   description?: string;
   status: "active" | "paused" | "archived";
+  control_state?: ProjectControlState;
   created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectControlState {
+  state: "running" | "paused" | "stopped";
+  stop_requested: boolean;
+  max_rounds?: number;
+  max_tasks?: number;
+  current_worker_id?: string;
+  current_task_id?: string;
+  loop_task_count?: number;
+  degraded_reason?: string;
+  idle_since?: string;
+  stop_reason?: string;
+  last_error?: string;
+  last_notification?: string;
+  last_heartbeat?: string;
   updated_at: string;
 }
 

@@ -22,6 +22,7 @@ import {
   type SkyBridgeSourcePlatform,
   type MasterGoal,
   type Project,
+  type ProjectControlState,
   type Task,
   type TaskEvent,
   type TaskRisk,
@@ -409,6 +410,41 @@ export async function createServer(
       const project = store.getProject(decodeURIComponent(request.params.projectId));
       if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
       return { project };
+    },
+  );
+
+  app.get<{ Params: { projectId: string } }>(
+    "/v1/projects/:projectId/control",
+    async (request, reply) => {
+      const project = store.getProject(decodeURIComponent(request.params.projectId));
+      if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
+      return { ok: true, control_state: controlStateForProject(project) };
+    },
+  );
+
+  app.patch<{ Params: { projectId: string }; Body: Record<string, unknown> }>(
+    "/v1/projects/:projectId/control",
+    async (request, reply) => {
+      const project = store.getProject(decodeURIComponent(request.params.projectId));
+      if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
+      const parsed = parseProjectControlPatch(project.control_state, request.body);
+      if (!parsed.ok) return reply.code(400).send(parsed.response);
+      const updated: StoredProject = {
+        ...project,
+        control_state: parsed.controlState,
+        updated_at: parsed.controlState.updated_at,
+      };
+      await store.upsertProject(updated);
+      await addStoredEvent(coreEvent("project.control_updated", {
+        project_id: project.project_id,
+        state: parsed.controlState.state,
+        stop_requested: parsed.controlState.stop_requested,
+        current_worker_id: parsed.controlState.current_worker_id,
+        current_task_id: parsed.controlState.current_task_id,
+        degraded_reason: parsed.controlState.degraded_reason,
+        stop_reason: parsed.controlState.stop_reason,
+      }));
+      return { ok: true, project: updated, control_state: parsed.controlState };
     },
   );
 
@@ -2405,6 +2441,73 @@ function parseProjectInput(input: Record<string, unknown> | undefined):
       updated_at: now,
     },
   };
+}
+
+function controlStateForProject(project: StoredProject): ProjectControlState {
+  return project.control_state ?? {
+    state: "stopped",
+    stop_requested: false,
+    loop_task_count: 0,
+    updated_at: project.updated_at,
+  };
+}
+
+function parseProjectControlPatch(
+  existing: ProjectControlState | undefined,
+  input: Record<string, unknown> | undefined,
+):
+  | { ok: true; controlState: ProjectControlState }
+  | { ok: false; response: QueryErrorResponse } {
+  const now = new Date().toISOString();
+  const current = existing ?? {
+    state: "stopped" as const,
+    stop_requested: false,
+    loop_task_count: 0,
+    updated_at: now,
+  };
+  if (!input || typeof input !== "object")
+    return invalidQuery("body", "Expected a project control patch object.");
+  const state = safeString(input.state);
+  if (state && !["running", "paused", "stopped"].includes(state))
+    return invalidQuery("state", "Expected running, paused or stopped.");
+  const controlState: ProjectControlState = {
+    ...current,
+    state: (state as ProjectControlState["state"] | undefined) ?? current.state,
+    stop_requested:
+      typeof input.stop_requested === "boolean"
+        ? input.stop_requested
+        : current.stop_requested,
+    max_rounds: safeOptionalInteger(input.max_rounds, 1, 1000) ?? current.max_rounds,
+    max_tasks: safeOptionalInteger(input.max_tasks, 1, 1000) ?? current.max_tasks,
+    current_worker_id: safeNullableString(input.current_worker_id, current.current_worker_id),
+    current_task_id: safeNullableString(input.current_task_id, current.current_task_id),
+    loop_task_count: safeOptionalInteger(input.loop_task_count, 0, 100000) ?? current.loop_task_count,
+    degraded_reason: safeNullableString(input.degraded_reason, current.degraded_reason),
+    idle_since: safeNullableIsoString(input.idle_since, current.idle_since),
+    stop_reason: safeNullableString(input.stop_reason, current.stop_reason),
+    last_error: safeNullableString(input.last_error, current.last_error),
+    last_notification: safeNullableString(input.last_notification, current.last_notification),
+    last_heartbeat: safeNullableIsoString(input.last_heartbeat, current.last_heartbeat),
+    updated_at: now,
+  };
+  return { ok: true, controlState };
+}
+
+function safeOptionalInteger(input: unknown, min: number, max: number): number | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== "number" || !Number.isInteger(input)) return undefined;
+  if (input < min || input > max) return undefined;
+  return input;
+}
+
+function safeNullableString(input: unknown, fallback: string | undefined): string | undefined {
+  if (input === null) return undefined;
+  return safeString(input) ?? fallback;
+}
+
+function safeNullableIsoString(input: unknown, fallback: string | undefined): string | undefined {
+  if (input === null) return undefined;
+  return safeIsoString(input) ?? fallback;
 }
 
 function parseGoalInput(projectId: string, input: Record<string, unknown> | undefined):

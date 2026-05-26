@@ -36,6 +36,7 @@ logs/
 # agent runtime
 .agent/runs/
 .agent/iterations/
+.agent/edge-worker-loop/
 .agent/spool/
 .agent/tmp/
 .agent/workers/
