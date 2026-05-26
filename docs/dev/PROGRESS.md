@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 142-160 Hermes Planner Bootstrap
+
+- Added the neutral PlannerAdapter contract extensions for `continue`, `repair`, `wait`, `stop`, `blocked`, work-order/task metadata, validation commands, risk, allowed/blocked paths, task type and stop criteria. Hermes remains optional and records tasks as `source=hermes-planner`.
+- Added `docs/hermes/prompts/self-bootstrap-planner.md`, `scripts/powershell/skybridge-hermes-planner.ps1`, `skybridge-hermes-evaluate-result.ps1`, `skybridge-self-bootstrap-loop.ps1`, `skybridge-hermes-cli.ps1` and dry-run smoke wrappers for planner, evaluation and loop validation.
+- Added the self-bootstrap master goal at `goals/master/self-bootstrap-smoke.md` and runbooks for the Hermes PlannerAdapter and self-bootstrap loop.
+- Updated the Operator Console Hermes and task views to show active master goal, planner decision, current Hermes-planned task, recent task result, worker assignment and self-bootstrap loop status.
+- Dry-run validation completed three simulated docs-only rounds with no real Codex execution and no real notification send in the loop smoke.
+- Real pilot status: Hermes env and worker config were present, and SkyBridge API was healthy, but the configured Hermes `/v1/responses` endpoint refused the connection before a real planner task could be generated. No real Hermes-planned task, worker execution, PR or auto-merge action occurred.
+- Notification status: sent exactly one non-urgent bootstrap ntfy notification for the Hermes-unavailable blocker; WeCom skipped because the event was non-urgent.
+- Blocker before unattended Hermes self-ordering: restore the private Hermes tunnel/API availability, then rerun one real planner task creation before allowing the edge worker to execute a round. The remaining two rounds should stay docs-only until the first real round has a task, PR and CI record.
+
 ## 2026-05-25 Super Goal 061-080 Productization Sprint
 
 - Added the Operator Console product spec covering Overview, Runs, Iterations, PR/CI, Auto-merge, Notifications, Hermes, Sources/Adapters, Audit and Settings.
