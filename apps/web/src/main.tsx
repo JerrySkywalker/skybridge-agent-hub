@@ -412,12 +412,27 @@ function HermesPage({ apiBase }: { apiBase: string }) {
         <Kpi label="Tunnel" value={hermes?.tunnel.status ?? "unknown"} />
         <Kpi label="API health" value={hermes?.api.health ?? "unknown"} />
         <Kpi
+          label="Loop"
+          value={selfBootstrapStatus(data.tasks, data.summary)}
+        />
+        <Kpi
           label="Public exposure"
           value={hermes?.tunnel.public_exposure ? "yes" : "no"}
         />
       </section>
       <section className="dashboard-grid">
         <div className="dashboard-grid__main">
+          <SummaryCard
+            title="Self-bootstrap loop"
+            state={selfBootstrapStatus(data.tasks, data.summary)}
+            lines={[
+              `Active master goal: ${data.summary?.latest?.active_goal?.title ?? "none"}`,
+              `Planner decision: ${latestPlannerDecision(data.tasks)}`,
+              `Current task: ${latestHermesTask(data.tasks)?.title ?? "none"}`,
+              `Worker: ${latestHermesTask(data.tasks)?.assigned_worker_id ?? "unassigned"}`,
+              `Recent result: ${latestHermesTask(data.tasks)?.result?.summary ?? latestHermesTask(data.tasks)?.status ?? "none"}`,
+            ]}
+          />
           <SummaryCard
             title="Supervisor"
             state={hermes?.status ?? "placeholder"}
@@ -437,6 +452,14 @@ function HermesPage({ apiBase }: { apiBase: string }) {
               [
                 "Cloud supervisor runbook",
                 "docs/hermes/CLOUD_SUPERVISOR_RUNBOOK.md",
+              ],
+              [
+                "Self-bootstrap runbook",
+                "docs/orchestrator/HERMES_SELF_BOOTSTRAP_RUNBOOK.md",
+              ],
+              [
+                "Planner adapter",
+                "docs/orchestrator/HERMES_PLANNER_ADAPTER.md",
               ],
             ]}
           />
@@ -711,7 +734,7 @@ function TaskTable({
           <span>Task</span>
           <span>Status / risk</span>
           <span>Worker</span>
-          <span>Execution / validation</span>
+          <span>Planner / validation</span>
           <span>Project / PR</span>
         </div>
         {tasks.map((task) => {
@@ -738,7 +761,10 @@ function TaskTable({
               </span>
               <span>
                 {executionStatus}
-                <small>Validation: {validationStatus}</small>
+                <small>
+                  {task.planner_metadata?.decision ?? task.task_type ?? "executor"} · Validation:{" "}
+                  {task.validation?.join(", ") || validationStatus}
+                </small>
               </span>
               <span>
                 {project?.name ?? task.project_id}
@@ -771,6 +797,33 @@ function taskValidationStatus(task: TaskRecord): string {
   if (task.status === "completed") return "unknown";
   if (task.status === "failed") return "failed or skipped";
   return "pending";
+}
+
+function latestHermesTask(tasks: TaskRecord[]): TaskRecord | undefined {
+  return tasks.find((task) => task.source === "hermes-planner");
+}
+
+function latestPlannerDecision(tasks: TaskRecord[]): string {
+  return latestHermesTask(tasks)?.planner_metadata?.decision ?? "none";
+}
+
+function selfBootstrapStatus(
+  tasks: TaskRecord[],
+  summary: SummaryResponse | undefined,
+): string {
+  const hermesTasks = tasks.filter((task) => task.source === "hermes-planner");
+  const active = hermesTasks.find((task) =>
+    ["queued", "claimed", "running"].includes(task.status),
+  );
+  if (active) return active.status;
+  const blocked = hermesTasks.find((task) => task.status === "blocked");
+  if (blocked) return "blocked";
+  const completed = hermesTasks.filter((task) => task.status === "completed").length;
+  if (completed >= 3) return "3 rounds complete";
+  if (completed > 0) return `${completed}/3 complete`;
+  return summary?.latest?.active_goal?.goal_id === "self-bootstrap-smoke"
+    ? "ready"
+    : "idle";
 }
 
 function IterationList({

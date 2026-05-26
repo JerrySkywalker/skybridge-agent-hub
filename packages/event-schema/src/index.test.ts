@@ -148,8 +148,11 @@ describe("event schema", () => {
     });
 
     expect(decision.planner_adapter).toBe("rule-based-planner");
+    expect(decision.decision).toBe("continue");
+    expect(decision.task?.validation).toContain("corepack pnpm check");
     expect(decision.work_orders).toHaveLength(1);
     expect(decision.work_orders[0]?.kind).toBe("docs");
+    expect(decision.work_orders[0]?.task_type).toBe("docs");
     expect(decision.work_orders[0]?.constraints).toContain("no deployment");
   });
 

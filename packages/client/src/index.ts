@@ -13,6 +13,7 @@ import type {
   SourceCapability,
   Task,
   TaskEvent,
+  PlannerAdapterMetadata,
   TaskRisk,
   TaskSource,
   TaskStatus,
@@ -518,6 +519,11 @@ export class SkyBridgeClient {
     prompt_summary?: string;
     risk?: TaskRisk;
     source?: TaskSource;
+    task_type?: string;
+    planner_metadata?: PlannerAdapterMetadata;
+    allowed_paths?: string[];
+    blocked_paths?: string[];
+    validation?: string[];
     required_capabilities?: WorkerCapability[];
   }): Promise<TaskRecord> {
     const response = await fetch(this.url("/v1/tasks"), {
