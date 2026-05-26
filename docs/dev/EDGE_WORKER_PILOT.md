@@ -4,6 +4,12 @@ Status: prepared, not run from this implementation branch.
 
 The first real pilot must be docs-only because the edge worker executes `codex exec --sandbox danger-full-access` in a trusted local repository and then creates a draft PR. It should be launched from a clean operator shell after this branch is merged or from a disposable clone.
 
+## Pilot Note
+
+Use `super-141-docs-real-pilot` as the first real edge-worker task. The task is intentionally limited to this file so the worker can prove the real claim, Codex execution, validation, commit, push and draft-PR path without changing runtime code, secrets, deployment configuration or GitHub settings.
+
+Successful completion should leave exactly one reviewable documentation commit on an AI branch and local-only raw execution logs under `.agent/workers/<worker_id>/super-141-docs-real-pilot/`. Those logs are operator artifacts and must not be committed.
+
 ## Exact Next Command
 
 Start the local API in one terminal:
