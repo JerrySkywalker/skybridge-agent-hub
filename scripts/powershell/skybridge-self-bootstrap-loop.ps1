@@ -31,8 +31,21 @@ function Invoke-LoopNotification {
 
 $rounds = @()
 $stopReason = $null
+$loopRunDir = Join-Path ".\.agent\self-bootstrap" (Get-Date -Format "yyyyMMdd-HHmmss")
+if (-not $DryRun) { New-Item -ItemType Directory -Force -Path $loopRunDir | Out-Null }
 
 for ($round = 1; $round -le $MaxRounds; $round += 1) {
+  $compactStateFile = $null
+  if (-not $DryRun) {
+    $compactStateFile = Join-Path $loopRunDir ("compact-state-round-{0}.json" -f $round)
+    & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\build-planner-compact-state.ps1" `
+      -ApiBase $ApiBase `
+      -ProjectId $ProjectId `
+      -GoalId $GoalId `
+      -Json | Set-Content -LiteralPath $compactStateFile -Encoding UTF8
+    if ($LASTEXITCODE -ne 0) { throw "failed to build planner compact state for round $round" }
+  }
+
   $plannerArgs = @(
     "-File", ".\scripts\powershell\skybridge-hermes-planner.ps1",
     "-MasterGoalFile", $MasterGoalFile,
@@ -41,6 +54,7 @@ for ($round = 1; $round -le $MaxRounds; $round += 1) {
     "-GoalId", $GoalId,
     "-Json"
   )
+  if ($compactStateFile) { $plannerArgs += @("-CompactStateFile", $compactStateFile) }
   if ($DryRun) { $plannerArgs += "-DryRun" } else { $plannerArgs += "-CreateTask" }
 
   try {
