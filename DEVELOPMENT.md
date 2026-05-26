@@ -45,6 +45,9 @@ SKYBRIDGE_PUBLIC_URL=http://127.0.0.1:3000
 NTFY_TOPIC_URL=https://ntfy.sh/example-topic
 NTFY_TOKEN=
 VITE_SKYBRIDGE_API_BASE=http://127.0.0.1:8787
+SKYBRIDGE_API_BASE=http://127.0.0.1:8787
+SKYBRIDGE_WORKER_TOKEN=                 # local-only future remote worker token
+SKYBRIDGE_WORKER_TOKEN_FILE=            # optional local-only token file path
 ```
 
 By default, local server persistence uses repository-root `.data/skybridge.sqlite`, even when the server is started through a package script from `apps/server`. Set `SKYBRIDGE_DB_FILE` to override the SQLite file. `SKYBRIDGE_DATA_FILE` remains an optional legacy JSON migration source and defaults to repository-root `.data/skybridge-store.json`.

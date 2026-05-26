@@ -54,6 +54,20 @@ http://127.0.0.1:8787
 
 Cloud control plane deployments should use HTTPS and a worker token. The token boundary is intentionally separate from Hermes, Codex, GitHub or ntfy credentials.
 
+Worker connectivity uses these placeholder environment variables:
+
+```text
+SKYBRIDGE_API_BASE=https://skybridge.example.invalid
+SKYBRIDGE_WORKER_TOKEN=<local-only worker token>
+SKYBRIDGE_WORKER_TOKEN_FILE=C:\Users\operator\.skybridge\worker-token.txt
+```
+
+`SKYBRIDGE_API_BASE` selects the SkyBridge Server. Local development uses `http://127.0.0.1:8787`; cloud control should use HTTPS.
+
+`SKYBRIDGE_WORKER_TOKEN` or `SKYBRIDGE_WORKER_TOKEN_FILE` supplies future remote worker registration credentials. The repository includes only the boundary and local loader behavior. Production auth policy, token issuing, rotation and revocation remain future work.
+
+The worker token is for SkyBridge worker identity only. It must not be reused for Hermes, Codex, GitHub or notification providers.
+
 ## Adapter Roles
 
 Hermes is an optional `PlannerAdapter`. It may propose or update goals and tasks through SkyBridge APIs, but it is not a public control-plane dependency and should not be exposed directly.
