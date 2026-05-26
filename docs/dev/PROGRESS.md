@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-05-26 Goal 167B First Remote Worker Execution Pilot
+
+- Remote preflight used `$HOME\.skybridge\worker.laptop-zenbookduo.json` with `token_file_configured=true`; token values were not printed. `laptop-zenbookduo` registered and heartbeated through `https://skybridge.jerryskywalker.space` using direct bearer-token worker auth.
+- Initial compact status showed project `skybridge-agent-hub` paused, `remote-claim-smoke-001` blocked, `remote-claim-smoke-002` completed and no queued stale smoke task. Snapshots were written under `.agent/tmp/remote-status-before-167b.json` and `.agent/tmp/remote-status-after-167b.json`.
+- Created docs-only task `remote-docs-exec-pilot-001` for goal `remote-worker-smoke-goal` with `required_capabilities=["codex"]`, then started project control with `state=running`, `stop_requested=false`, `max_tasks=1`.
+- First `-PollOnce` proved remote heartbeat, control read, task claim/start and Codex docs execution, but exposed a worker bug: missing `validation_commands` was treated as one empty command. Fixed the worker to ignore empty validation commands, requeued the same cloud task and reran one `-PollOnce`.
+- Second `-PollOnce` completed Codex execution, skipped validation because no validation commands were configured, created draft child PR #55 and ran CI Guardian. CI Guardian blocked the task because PR #55 is draft and GitHub checks failed while downloading `pnpm/action-setup@v4` from GitHub codeload.
+- Child PR: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/55
+- Cloud task final status: `failed`, with result summary `CI Guardian failed or blocked.` and task result PR URL pointing to PR #55.
+- Project control was restored to `paused` with `stop_requested=false` and stop reason `operator_paused_after_167b_pilot`.
+- Evidence summary: the cloud control plane -> local worker claim -> Codex docs edit -> worker-owned draft PR path is proven; the full PR/CI/evidence completion loop is not fully proven yet because CI was blocked by GitHub Actions setup download failure and the task ended failed rather than completed.
+
 ## 2026-05-26 Super Goal 167 Remote Worker Execution Pilot Prep
 
 - Added `scripts/powershell/skybridge-status.ps1`, a compact cloud status command for narrow terminals. It queries `/v1/health`, project control, workers and project tasks, renders compact worker/task tables, and can write full JSON snapshots to `.agent/tmp` without printing worker tokens.
