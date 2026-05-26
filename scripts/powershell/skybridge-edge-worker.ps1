@@ -249,11 +249,33 @@ function Invoke-EdgeWorkerOnce {
   return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; steps = $steps }
 }
 
+function Test-NewWorkerProfileShape {
+  param($Candidate)
+  return (
+    $Candidate -and
+    -not [string]::IsNullOrWhiteSpace([string]$Candidate.worker_id) -and
+    $Candidate.project_ids -and
+    $Candidate.repo_paths -and
+    -not [string]::IsNullOrWhiteSpace([string]$Candidate.skybridge_api_base)
+  )
+}
+
+function Read-EdgeWorkerConfig {
+  param([string]$Path, [string]$SelectedProjectId)
+  $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+  $raw = Get-Content -Raw -LiteralPath $resolved | ConvertFrom-Json
+  if (Test-NewWorkerProfileShape -Candidate $raw) {
+    $profile = Read-WorkerProfile -Path $resolved.Path
+    return ConvertTo-EdgeWorkerConfig -Profile $profile -ProjectId $SelectedProjectId
+  }
+  return Read-SkyBridgeWorkerConfig -ConfigFile $resolved.Path
+}
+
 if ($WorkerProfileFile -or $env:SKYBRIDGE_WORKER_PROFILE) {
   $profile = Read-WorkerProfile -Path $WorkerProfileFile
   $config = ConvertTo-EdgeWorkerConfig -Profile $profile -ProjectId $ProjectId
 } else {
-  $config = Read-SkyBridgeWorkerConfig -ConfigFile $ConfigFile
+  $config = Read-EdgeWorkerConfig -Path $ConfigFile -SelectedProjectId $ProjectId
 }
 Assert-SkyBridgeWorkerApiSafety -Config $config
 if ($PollIntervalSeconds -gt 0) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue $PollIntervalSeconds -Force }

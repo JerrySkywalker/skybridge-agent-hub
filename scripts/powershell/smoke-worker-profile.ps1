@@ -31,6 +31,8 @@ if (-not ($profile.project_ids -contains "skybridge-agent-hub")) { throw "Expect
 $edgeConfig = Load-ProfileJson $ProfilePath -AsEdgeWorkerConfig
 if ($edgeConfig.project_id -ne "skybridge-agent-hub") { throw "Expected project-specific edge config." }
 if (-not $edgeConfig.api_base) { throw "Expected edge worker api_base." }
+if (-not $edgeConfig.repo_path) { throw "Expected edge worker repo_path." }
+if ($edgeConfig.profile_loaded -ne $true) { throw "Expected edge worker config to record profile_loaded." }
 if (-not $edgeConfig.codex_command) { throw "Expected edge worker codex_command." }
 
 $cloudPath = ".\config\worker-profile.cloud.example.json"
