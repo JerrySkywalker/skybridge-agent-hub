@@ -227,6 +227,8 @@ Worker profile and Goal Registry operations are documented in [docs/orchestrator
 
 Cloud server and first remote worker registration templates are documented in [docs/operations/SKYBRIDGE_CLOUD_TOPOLOGY.md](docs/operations/SKYBRIDGE_CLOUD_TOPOLOGY.md), [docs/operations/SKYBRIDGE_SERVER_API_DEPLOYMENT.md](docs/operations/SKYBRIDGE_SERVER_API_DEPLOYMENT.md) and [docs/orchestrator/FIRST_REMOTE_WORKER_REGISTRATION.md](docs/orchestrator/FIRST_REMOTE_WORKER_REGISTRATION.md).
 
+Remote worker reliability helpers include `skybridge-status.ps1`, `skybridge-control.ps1`, `skybridge-worker-status.ps1`, `skybridge-rerun-ci.ps1` and task evidence repair. Keep real worker tokens in local token files and use bounded `-PollOnce` workflows until the always-on remote loop is explicitly enabled.
+
 Validate the local cloud-control-plane foundations:
 
 ```powershell

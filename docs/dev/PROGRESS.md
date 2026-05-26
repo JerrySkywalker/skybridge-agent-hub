@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 168 Remote Worker Reliability
+
+- Added CI failure classification for green, pending, real failures, checkout HTTP 403, account-suspended text, transient checkout/fetch failures and unknown outcomes. The classifier uses fixture logs in smokes and does not call GitHub with real secrets.
+- Added `skybridge-rerun-ci.ps1`, a dry-run-first PR CI rerun helper that lists failed runs, reruns only when `-Apply` is explicit and stops after one batch.
+- Added task evidence repair support through `/v1/tasks/:taskId/evidence-repair` and `Repair-TaskEvidence`. Repairs append `task.evidence_repaired`, keep the original failed event, and can mark EvidenceSummary as `recovered=true` with `ci_status=passed_after_rerun`.
+- Improved `skybridge-status.ps1` with task/worker limits, active/problem-task default filtering, `-ShowCompleted`, `-ShowAll`, `-TaskId`, `-WorkerId`, PR and evidence columns, full-fidelity JSON output and `token_printed=false`.
+- Added `skybridge-control.ps1` for project status/start/pause/stop/set-max-tasks and `skybridge-worker-status.ps1` for profile-aware register/heartbeat/status checks with token-file support.
+- Server tests now isolate `SKYBRIDGE_WORKER_TOKEN`, `SKYBRIDGE_WORKER_TOKENS_FILE` and `SKYBRIDGE_REMOTE_API_BASE` so local no-auth tests are not polluted by a worker shell.
+- Operator guidance now recommends token files, compact status, project-control helper commands, one-shot worker checks, CI rerun/recovered-evidence workflow and no long-running remote loop yet.
+
 ## 2026-05-26 Goal 167B First Remote Worker Execution Pilot
 
 - Remote preflight used `$HOME\.skybridge\worker.laptop-zenbookduo.json` with `token_file_configured=true`; token values were not printed. `laptop-zenbookduo` registered and heartbeated through `https://skybridge.jerryskywalker.space` using direct bearer-token worker auth.

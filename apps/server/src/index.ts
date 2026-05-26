@@ -647,6 +647,42 @@ export async function createServer(
     return finishTask(request.params.taskId, request.body, "blocked", "task.blocked", reply, store, addStoredEvent);
   });
 
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>(
+    "/v1/tasks/:taskId/evidence-repair",
+    { preHandler: requireWorkerAuth },
+    async (request, reply) => {
+      const task = store.getTask(decodeURIComponent(request.params.taskId));
+      if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+      const evidenceSummary = safeEvidenceSummary(request.body.evidence_summary, task.result?.evidence_summary);
+      if (!evidenceSummary) return reply.code(400).send({ ok: false, error: "invalid_evidence_summary" });
+      const workerId = safeString(request.body.worker_id) ?? task.assigned_worker_id;
+      const updated: StoredTask = {
+        ...task,
+        result: {
+          ...task.result,
+          summary: safeString(request.body.summary) ?? task.result?.summary,
+          result_url: safeString(request.body.result_url) ?? task.result?.result_url,
+          pr_url: safeString(request.body.pr_url) ?? task.result?.pr_url,
+          error_summary: task.result?.error_summary,
+          evidence_summary: evidenceSummary,
+        },
+        updated_at: new Date().toISOString(),
+      };
+      await store.upsertTask(updated);
+      if (updated.goal_id) await updateGoalProgress(updated.goal_id, store);
+      await recordTaskEvent(
+        updated,
+        "task.evidence_repaired",
+        workerId,
+        "Task evidence repaired.",
+        addStoredEvent,
+        store,
+        updated.result ? { ...updated.result } : {},
+      );
+      return { ok: true, task: withTaskEvents(updated, store) };
+    },
+  );
+
   app.post<{ Params: { taskId: string } }>("/v1/tasks/:taskId/requeue", { preHandler: requireWorkerAuth }, async (request, reply) => {
     const task = store.getTask(decodeURIComponent(request.params.taskId));
     if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
@@ -3053,6 +3089,8 @@ function safeEvidenceSummary(input: unknown, fallback?: EvidenceSummary): Eviden
     validation_status: safeString(record.validation_status),
     ci_status: safeString(record.ci_status),
     risk_status: safeString(record.risk_status),
+    recovered: record.recovered === true,
+    recovery_status: safeString(record.recovery_status),
     summary,
     created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
   };

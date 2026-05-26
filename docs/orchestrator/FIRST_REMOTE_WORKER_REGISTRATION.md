@@ -6,7 +6,7 @@ This runbook validates the first remote worker registration and heartbeat agains
 https://skybridge.jerryskywalker.space
 ```
 
-No real token belongs in this repository. Keep worker tokens in a local shell variable or local token file only.
+No real token belongs in this repository. Prefer a local token file outside the repository so worker commands do not depend on inherited shell environment.
 
 ## Server Prerequisites
 
@@ -19,16 +19,17 @@ No real token belongs in this repository. Keep worker tokens in a local shell va
 
 ## Local Worker Token
 
-Use an environment variable:
+Preferred local token file:
+
+```powershell
+New-Item -ItemType Directory -Path "$HOME\.skybridge\secrets" -Force | Out-Null
+Set-Content -LiteralPath "$HOME\.skybridge\secrets\worker-token.txt" -Value "<local-only worker token>"
+```
+
+An environment variable also works for short-lived shells:
 
 ```powershell
 $env:SKYBRIDGE_WORKER_TOKEN = "<local-only worker token>"
-```
-
-Or use a local token file:
-
-```powershell
-Set-Content -LiteralPath "$HOME\.skybridge\worker-token.txt" -Value "<local-only worker token>"
 ```
 
 ## Local Worker Profile
@@ -49,6 +50,15 @@ Edit the local copy so that:
 - `reject_insecure_http_for_remote` is `true`;
 - `token_env_var` or `token_file` points at the local token source;
 - `allow_production_deploy` stays `false`.
+
+For token-file auth, keep the profile field pointed at the local-only path:
+
+```json
+{
+  "auth_mode": "bearer_token",
+  "token_file": "C:\\Users\\operator\\.skybridge\\secrets\\worker-token.txt"
+}
+```
 
 ## Smoke Command
 
@@ -72,6 +82,24 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-a
   -WorkerSmoke `
   -AuthFailureCheck `
   -Json
+```
+
+If using `token_file`, validate the actual worker profile directly:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-status.ps1 `
+  -Command register-heartbeat `
+  -ConfigFile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
+  -ProjectId skybridge-agent-hub
+```
+
+Inspect compact project state without printing the token:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
 Expected success shape:
