@@ -27,6 +27,7 @@ import {
   type TaskRisk,
   type TaskSource,
   type TaskStatus,
+  type PlannerDecisionAction,
   type Worker,
   type WorkerCapability,
   type WorkerStatus,
@@ -99,6 +100,7 @@ const TASK_SOURCES: TaskSource[] = [
   "manual",
   "planner",
   "rule_based",
+  "hermes-planner",
   "hermes",
   "codex",
   "opencode",
@@ -2479,6 +2481,11 @@ function parseTaskInput(input: Record<string, unknown> | undefined, store: Event
       status: "queued",
       risk: risk as TaskRisk,
       source: source as TaskSource,
+      task_type: safeString(input.task_type),
+      planner_metadata: safePlannerMetadata(input.planner_metadata),
+      allowed_paths: safePathArray(input.allowed_paths),
+      blocked_paths: safePathArray(input.blocked_paths),
+      validation: safeStringArray(input.validation),
       required_capabilities: safeStringArray(input.required_capabilities) ?? [],
       created_at: now,
       updated_at: now,
@@ -2664,9 +2671,45 @@ function slugId(prefix: string, value: string): string {
 }
 
 function safeLongString(input: unknown): string | undefined {
-  return typeof input === "string" && input.length > 0 && input.length <= 2000
+  return typeof input === "string" && input.length > 0 && input.length <= 8000
     ? input
     : undefined;
+}
+
+function safePathArray(input: unknown): string[] | undefined {
+  const values = safeStringArray(input);
+  if (!values) return undefined;
+  return values
+    .filter((value) => !/[<>:"|?*]/.test(value))
+    .map((value) => value.replace(/\\/g, "/"))
+    .slice(0, 50);
+}
+
+function safePlannerMetadata(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const record = redactUnsafePayload(input) as Record<string, unknown>;
+  const adapter = safeString(record.adapter);
+  const decision = safeString(record.decision);
+  if (!isPlannerDecisionAction(decision)) return undefined;
+  if (!adapter || !decision) return undefined;
+  return {
+    adapter,
+    decision,
+    reason: safeString(record.reason) ?? "not provided",
+    task_type: safeString(record.task_type),
+    allowed_paths: safePathArray(record.allowed_paths) ?? [],
+    blocked_paths: safePathArray(record.blocked_paths) ?? [],
+    validation: safeStringArray(record.validation) ?? [],
+    stop_criteria_status: safeStringArray(record.stop_criteria_status) ?? [],
+    source_run_id: safeString(record.source_run_id),
+    created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
+    raw_response_included: false as const,
+    secrets_included: false as const,
+  };
+}
+
+function isPlannerDecisionAction(input: string | undefined): input is PlannerDecisionAction {
+  return !!input && ["continue", "repair", "wait", "stop", "blocked"].includes(input);
 }
 
 function safeIsoString(input: unknown): string | undefined {

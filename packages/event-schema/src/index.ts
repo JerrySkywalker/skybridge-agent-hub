@@ -172,12 +172,17 @@ export interface WorkOrder {
   title: string;
   description: string;
   kind: "docs" | "code" | "test" | "ops" | "manual";
+  task_type?: string;
   risk: "low" | "medium" | "high";
   planner_adapter: string;
   created_at: string;
   constraints: string[];
   acceptance: string[];
   suggested_files: string[];
+  allowed_paths?: string[];
+  blocked_paths?: string[];
+  validation?: string[];
+  stop_criteria?: string[];
 }
 
 export type WorkerCapability =
@@ -206,10 +211,43 @@ export type TaskSource =
   | "manual"
   | "planner"
   | "rule_based"
+  | "hermes-planner"
   | "hermes"
   | "codex"
   | "opencode"
   | "custom";
+
+export type PlannerDecisionAction =
+  | "continue"
+  | "repair"
+  | "wait"
+  | "stop"
+  | "blocked";
+
+export interface PlannerTaskSpec {
+  title: string;
+  task_type: string;
+  risk: TaskRisk;
+  prompt: string;
+  allowed_paths: string[];
+  blocked_paths: string[];
+  validation: string[];
+}
+
+export interface PlannerAdapterMetadata {
+  adapter: string;
+  decision: PlannerDecisionAction;
+  reason: string;
+  task_type?: string;
+  allowed_paths: string[];
+  blocked_paths: string[];
+  validation: string[];
+  stop_criteria_status: string[];
+  source_run_id?: string;
+  created_at: string;
+  raw_response_included: false;
+  secrets_included: false;
+}
 
 export interface Project {
   project_id: string;
@@ -277,6 +315,11 @@ export interface Task {
   status: TaskStatus;
   risk: TaskRisk;
   source: TaskSource;
+  task_type?: string;
+  planner_metadata?: PlannerAdapterMetadata;
+  allowed_paths?: string[];
+  blocked_paths?: string[];
+  validation?: string[];
   required_capabilities: WorkerCapability[];
   assigned_worker_id?: string;
   claim?: TaskClaim;
@@ -298,9 +341,13 @@ export interface TaskEvent {
 export interface PlannerDecision {
   decision_id: string;
   planner_adapter: string;
+  decision: PlannerDecisionAction;
+  reason: string;
   input_summary: string;
+  task?: PlannerTaskSpec;
   work_orders: WorkOrder[];
   requires_human_review: boolean;
+  stop_criteria_status: string[];
   created_at: string;
 }
 
@@ -436,7 +483,13 @@ export const ADAPTER_CAPABILITIES: AdapterCapability[] = [
     stability: "dogfooding",
     optional: true,
     dogfooding: true,
-    capabilities: ["supervision", "nightly-report", "safe-run-smoke"],
+    capabilities: [
+      "supervision",
+      "nightly-report",
+      "safe-run-smoke",
+      "strict-json-planning",
+      "docs-only-self-bootstrap",
+    ],
     event_families: ["run", "tool", "message", "agent", "task"],
     notes:
       "Dogfooding planner/supervisor adapter; not required by SkyBridge Core.",
@@ -728,14 +781,31 @@ export function createRuleBasedPlannerDecision(input: {
       "The change can be reviewed independently.",
     ],
     suggested_files: ["README.md", "docs/"],
+    task_type: "docs",
+    allowed_paths: ["README.md", "docs/"],
+    blocked_paths: [".env", "config/*.secret.ps1", ".agent/", ".data/"],
+    validation: ["corepack pnpm check"],
+    stop_criteria: ["docs-only change is complete"],
   };
 
   return {
     decision_id: `pd_${slug || "docs_task"}`,
     planner_adapter: workOrder.planner_adapter,
+    decision: "continue",
+    reason: "A low-risk documentation task can safely advance the goal.",
     input_summary: summary,
+    task: {
+      title: workOrder.title,
+      task_type: workOrder.task_type ?? workOrder.kind,
+      risk: workOrder.risk,
+      prompt: workOrder.description,
+      allowed_paths: workOrder.allowed_paths ?? [],
+      blocked_paths: workOrder.blocked_paths ?? [],
+      validation: workOrder.validation ?? [],
+    },
     work_orders: [workOrder],
     requires_human_review: false,
+    stop_criteria_status: ["not_started"],
     created_at: now,
   };
 }

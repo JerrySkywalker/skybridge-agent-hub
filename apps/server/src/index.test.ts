@@ -736,6 +736,55 @@ describe("server api", () => {
     ).toBe("queued");
   });
 
+  it("stores Hermes planner task metadata without raw secrets", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-hermes", name: "Hermes project" },
+    });
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "task-hermes",
+        project_id: "proj-hermes",
+        title: "Docs from Hermes",
+        body: "Update docs only.",
+        prompt_summary: "Update docs only.",
+        risk: "low",
+        source: "hermes-planner",
+        task_type: "docs",
+        allowed_paths: ["docs/orchestrator/"],
+        blocked_paths: [".env", "config/*.secret.ps1"],
+        validation: ["corepack pnpm check"],
+        planner_metadata: {
+          adapter: "hermes-planner",
+          decision: "continue",
+          reason: "safe docs task",
+          token: "must-not-return",
+          raw_response: "must-not-return",
+          allowed_paths: ["docs/orchestrator/"],
+          blocked_paths: [".env"],
+          validation: ["corepack pnpm check"],
+          stop_criteria_status: ["in_progress"],
+        },
+      },
+    });
+
+    expect(create.statusCode).toBe(201);
+    const text = create.body;
+    expect(text).not.toContain("must-not-return");
+    expect(create.json<{ task: { source: string; planner_metadata: { raw_response_included: boolean; secrets_included: boolean }; validation: string[] } }>().task).toMatchObject({
+      source: "hermes-planner",
+      validation: ["corepack pnpm check"],
+      planner_metadata: {
+        raw_response_included: false,
+        secrets_included: false,
+      },
+    });
+  });
+
   it("prevents disabled and offline workers from claiming tasks", async () => {
     const server = await testServer();
     await server.inject({
