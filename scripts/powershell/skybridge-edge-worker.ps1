@@ -5,6 +5,7 @@ param(
   [switch]$Heartbeat,
   [switch]$PollOnce,
   [switch]$Loop,
+  [switch]$ClaimOnly,
   [switch]$DryRun,
   [switch]$Send,
   [switch]$Json
@@ -76,6 +77,10 @@ function Invoke-EdgeWorkerOnce {
     $claimed = Claim-Task -Config $Config -TaskId $next.task.task_id
     $steps += @{ step = "claim"; status = "claimed"; task = $claimed.task }
     Invoke-EdgeWorkerNotification -Config $Config -Severity "info" -Title "SkyBridge task claimed" -Message "Worker $($Config.worker_id) claimed $($next.task.task_id)." | Out-Null
+    if ($ClaimOnly) {
+      $steps += @{ step = "execute"; status = "skipped"; reason = "claim_only" }
+      return @{ ok = $true; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
+    }
 
     try {
       $started = Start-Task -Config $Config -TaskId $next.task.task_id
