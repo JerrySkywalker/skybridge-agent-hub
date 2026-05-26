@@ -206,6 +206,20 @@ SkyBridge Core now includes a durable worker pool and task queue. Machines or lo
 
 Hermes is an optional planner adapter. Codex, OpenCode and manual execution are optional executor adapters. The queue works without any one of them, so local smoke tests can use fixture/manual workers only.
 
+### Edge Worker
+
+The first Edge Worker is a local Windows PowerShell worker that registers with SkyBridge, heartbeats, polls queued tasks, claims compatible work and can execute one task through Codex CLI. It stores raw Codex and validation logs locally under `.agent/workers/` and reports only safe summaries and PR links back to SkyBridge.
+
+Start with dry-run and claim-only smokes:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-register.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-claim.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-codex-task-runner.ps1 -DryRun
+```
+
+See [docs/orchestrator/EDGE_WORKER_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_EXECUTION.md](docs/orchestrator/EDGE_WORKER_EXECUTION.md) and [docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md](docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md).
+
 ## API Examples
 
 Check server health:

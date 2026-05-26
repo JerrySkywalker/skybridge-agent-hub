@@ -1,0 +1,17 @@
+{
+  "worker_id": "homepc-edge-worker",
+  "name": "Home PC Edge Worker",
+  "project_id": "skybridge-agent-hub",
+  "repo_path": "V:/src/skybridge-agent-hub",
+  "api_base": "http://127.0.0.1:8787",
+  "poll_interval_seconds": 20,
+  "capabilities": ["codex-exec", "filesystem", "git", "tests", "docs"],
+  "allowed_task_types": ["docs"],
+  "blocked_task_types": ["deploy", "secrets", "production", "github-settings"],
+  "codex_command": "codex",
+  "codex_sandbox": "danger-full-access",
+  "max_task_runtime_minutes": 30,
+  "validation_commands": ["just check"],
+  "auto_merge_enabled": false,
+  "notification_enabled": false
+}

@@ -472,6 +472,12 @@ h2 {
   padding: 10px 0;
 }
 
+.data-table--tasks .data-table__head,
+.data-table--tasks .data-table__row {
+  grid-template-columns: 1.1fr 0.7fr 0.8fr 0.8fr 1.2fr;
+  min-width: 860px;
+}
+
 .data-table__head {
   border-bottom: 1px solid #dbe4ef;
   color: #52627a;

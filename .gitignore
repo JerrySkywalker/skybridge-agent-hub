@@ -15,6 +15,10 @@ config/hermes.env.ps1
 config/*.secret.ps1
 config/runner.json
 config/iteration-controller.json
+config/edge-worker.json
+config/edge-worker.*.json
+!config/edge-worker.example.json
+!config/edge-worker.homepc.example.json
 
 # build
 dist/
