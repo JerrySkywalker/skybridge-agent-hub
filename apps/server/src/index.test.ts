@@ -629,6 +629,60 @@ describe("server api", () => {
     expect(invalid.statusCode).toBe(400);
   });
 
+  it("updates project control state for worker loops", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-control", name: "Control project" },
+    });
+
+    const initial = await server.inject({
+      method: "GET",
+      url: "/v1/projects/proj-control/control",
+    });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json<{ control_state: { state: string } }>().control_state.state).toBe("stopped");
+
+    const update = await server.inject({
+      method: "PATCH",
+      url: "/v1/projects/proj-control/control",
+      payload: {
+        state: "running",
+        stop_requested: false,
+        max_tasks: 2,
+        current_worker_id: "worker-control",
+        current_task_id: "task-control",
+        last_heartbeat: "2026-05-26T00:00:00.000Z",
+      },
+    });
+    expect(update.statusCode).toBe(200);
+    expect(
+      update.json<{
+        control_state: {
+          state: string;
+          max_tasks: number;
+          current_worker_id: string;
+          current_task_id: string;
+          last_heartbeat: string;
+        };
+      }>().control_state,
+    ).toMatchObject({
+      state: "running",
+      max_tasks: 2,
+      current_worker_id: "worker-control",
+      current_task_id: "task-control",
+      last_heartbeat: "2026-05-26T00:00:00.000Z",
+    });
+
+    const invalid = await server.inject({
+      method: "PATCH",
+      url: "/v1/projects/proj-control/control",
+      payload: { state: "launching" },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
   it("runs task queue transitions and writes task events", async () => {
     const server = await testServer();
     await server.inject({

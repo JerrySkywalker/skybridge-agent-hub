@@ -5,6 +5,10 @@ param(
   [switch]$Heartbeat,
   [switch]$PollOnce,
   [switch]$Loop,
+  [int]$PollIntervalSeconds = 0,
+  [int]$MaxTasks = 0,
+  [int]$IdleTimeoutSeconds = 0,
+  [switch]$StopOnFailure,
   [switch]$ClaimOnly,
   [switch]$DryRun,
   [switch]$Send,
@@ -19,7 +23,7 @@ $ErrorActionPreference = "Stop"
 function Write-EdgeWorkerResult {
   param($Result)
   if ($Json) {
-    $Result | ConvertTo-Json -Depth 20
+    $Result | ConvertTo-Json -Depth 20 -Compress
   } else {
     $Result | Format-List
   }
@@ -34,6 +38,71 @@ function Invoke-EdgeWorkerNotification {
   if ($Send) { $args += "-Send" } else { $args += "-DryRun" }
   $output = & pwsh @args
   return ($output | ConvertFrom-Json)
+}
+
+function New-EdgeWorkerLoopLogDir {
+  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $dir = Join-Path ".\.agent\edge-worker-loop" $timestamp
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  return $dir
+}
+
+function Write-EdgeWorkerLoopLog {
+  param([string]$LogDir, [string]$Event, [hashtable]$Data = @{})
+  if ([string]::IsNullOrWhiteSpace($LogDir)) { return }
+  $record = @{
+    time = (Get-Date).ToUniversalTime().ToString("o")
+    event = $Event
+  }
+  foreach ($key in $Data.Keys) { $record[$key] = $Data[$key] }
+  Add-Content -LiteralPath (Join-Path $LogDir "loop.jsonl") -Value ($record | ConvertTo-Json -Depth 20 -Compress)
+}
+
+function Test-CommandAvailable {
+  param([string]$Command)
+  if ([string]::IsNullOrWhiteSpace($Command)) { return $false }
+  return $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
+}
+
+function Test-GitHubAuthAvailable {
+  try {
+    & gh auth status 1>$null 2>$null
+    return ($LASTEXITCODE -eq 0)
+  } catch {
+    return $false
+  }
+}
+
+function Test-RepoClean {
+  param($Config)
+  try {
+    $status = & git -C $Config.repo_path status --porcelain
+    return [string]::IsNullOrWhiteSpace(($status -join "`n"))
+  } catch {
+    return $false
+  }
+}
+
+function Resolve-CodexCommandForCheck {
+  param($Config)
+  if ($Config.codex_command) { return [string]$Config.codex_command }
+  return "codex"
+}
+
+function Test-EdgeWorkerReadiness {
+  param($Config)
+  $issues = @()
+  if (-not (Test-SkyBridgeServerAvailable -Config $Config)) { $issues += "skybridge_server_unavailable" }
+  if (-not $DryRun) {
+    if (-not (Test-CommandAvailable -Command (Resolve-CodexCommandForCheck -Config $Config))) { $issues += "codex_missing" }
+    if (-not (Test-CommandAvailable -Command "gh")) { $issues += "github_cli_missing" }
+    elseif (-not (Test-GitHubAuthAvailable)) { $issues += "github_auth_missing" }
+    if (-not (Test-RepoClean -Config $Config)) { $issues += "repo_dirty" }
+  }
+  return @{
+    ok = ($issues.Count -eq 0)
+    issues = @($issues)
+  }
 }
 
 function Invoke-EdgeWorkerOnce {
@@ -57,6 +126,18 @@ function Invoke-EdgeWorkerOnce {
   }
 
   if ($PollOnce) {
+    $control = $null
+    try { $control = (Get-ProjectControlState -Config $Config).control_state } catch {}
+    if ($control) {
+      $steps += @{ step = "control"; state = $control.state; stop_requested = [bool]$control.stop_requested }
+      if ($control.stop_requested -or $control.state -eq "stopped") {
+        return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; stop_reason = "control_stop_requested"; steps = $steps }
+      }
+      if ($control.state -eq "paused") {
+        return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; stop_reason = "control_paused"; steps = $steps }
+      }
+    }
+
     $next = Get-NextTask -Config $Config
     if (-not $next.task) {
       $steps += @{ step = "poll"; status = "empty"; skipped = @($next.skipped) }
@@ -156,6 +237,7 @@ function Invoke-EdgeWorkerOnce {
 }
 
 $config = Read-SkyBridgeWorkerConfig -ConfigFile $ConfigFile
+if ($PollIntervalSeconds -gt 0) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue $PollIntervalSeconds -Force }
 
 if (-not ($Register -or $Heartbeat -or $PollOnce -or $Loop)) {
   $PollOnce = $true
@@ -164,10 +246,148 @@ if (-not ($Register -or $Heartbeat -or $PollOnce -or $Loop)) {
 Invoke-EdgeWorkerNotification -Config $config -Severity "info" -Title "SkyBridge edge worker started" -Message "Worker $($config.worker_id) started." | Out-Null
 
 if ($Loop) {
-  while ($true) {
-    $result = Invoke-EdgeWorkerOnce -Config $config
-    Write-EdgeWorkerResult -Result $result
-    Start-Sleep -Seconds ([int]$config.poll_interval_seconds)
+  $Register = $true
+  $Heartbeat = $true
+  $PollOnce = $true
+  $logDir = New-EdgeWorkerLoopLogDir
+  $completedTasks = 0
+  $idleStartedAt = $null
+  $stopReason = $null
+  Write-EdgeWorkerLoopLog -LogDir $logDir -Event "loop_start" -Data @{
+    worker_id = $config.worker_id
+    project_id = $config.project_id
+    max_tasks = $MaxTasks
+    idle_timeout_seconds = $IdleTimeoutSeconds
+    dry_run = [bool]$DryRun
+  }
+
+  try {
+    if (-not $DryRun) {
+      Set-ProjectControlState -Config $config -Patch @{
+        state = "running"
+        stop_requested = $false
+        current_worker_id = $config.worker_id
+        max_tasks = $(if ($MaxTasks -gt 0) { $MaxTasks } else { $null })
+        degraded_reason = $null
+        stop_reason = $null
+      } | Out-Null
+    }
+
+    while ($true) {
+      $readiness = Test-EdgeWorkerReadiness -Config $config
+      if (-not $readiness.ok) {
+        $reason = ($readiness.issues -join ",")
+        Write-EdgeWorkerLoopLog -LogDir $logDir -Event "degraded" -Data @{ reason = $reason }
+        if (Test-SkyBridgeServerAvailable -Config $config) {
+          Set-ProjectControlState -Config $config -Patch @{
+            state = "paused"
+            degraded_reason = $reason
+            last_error = $reason
+            current_worker_id = $config.worker_id
+            last_heartbeat = (Get-Date).ToUniversalTime().ToString("o")
+          } | Out-Null
+        }
+        $stopReason = "degraded:$reason"
+        break
+      }
+
+      $result = $null
+      try {
+        $result = Invoke-EdgeWorkerOnce -Config $config
+      } catch {
+        $message = ($_.Exception.Message -replace "\s+", " ")
+        Write-EdgeWorkerLoopLog -LogDir $logDir -Event "loop_error" -Data @{ error = $message }
+        Set-ProjectControlState -Config $config -Patch @{
+          state = "paused"
+          last_error = $message.Substring(0, [Math]::Min(200, $message.Length))
+          current_worker_id = $config.worker_id
+          last_heartbeat = (Get-Date).ToUniversalTime().ToString("o")
+        } | Out-Null
+        if ($StopOnFailure) {
+          $stopReason = "failure"
+          break
+        }
+      }
+
+      if ($result) {
+        Write-EdgeWorkerResult -Result $result
+        $stepNames = @($result.steps | ForEach-Object { $_.step })
+        Write-EdgeWorkerLoopLog -LogDir $logDir -Event "iteration" -Data @{
+          ok = [bool]$result.ok
+          task_id = $result.task_id
+          stop_reason = $result.stop_reason
+          steps = @($stepNames)
+        }
+        if ($stepNames -contains "heartbeat") { Write-EdgeWorkerLoopLog -LogDir $logDir -Event "heartbeat" -Data @{ worker_id = $config.worker_id } }
+        if ($stepNames -contains "poll") { Write-EdgeWorkerLoopLog -LogDir $logDir -Event "task_poll" -Data @{ task_id = $result.task_id } }
+        if ($stepNames -contains "claim") { Write-EdgeWorkerLoopLog -LogDir $logDir -Event "task_claim" -Data @{ task_id = $result.task_id } }
+        if ($stepNames -contains "complete") {
+          $completedTasks++
+          Write-EdgeWorkerLoopLog -LogDir $logDir -Event "task_complete" -Data @{ task_id = $result.task_id; completed_tasks = $completedTasks }
+        }
+        if ($stepNames -contains "fail") { Write-EdgeWorkerLoopLog -LogDir $logDir -Event "task_fail" -Data @{ task_id = $result.task_id } }
+
+        $currentTaskId = if ($result.task_id) { $result.task_id } else { $null }
+        Set-ProjectControlState -Config $config -Patch @{
+          current_worker_id = $config.worker_id
+          current_task_id = $currentTaskId
+          loop_task_count = $completedTasks
+          last_heartbeat = (Get-Date).ToUniversalTime().ToString("o")
+          last_error = $(if ($result.ok) { $null } else { "last_task_failed" })
+        } | Out-Null
+
+        if ($result.stop_reason -eq "control_stop_requested" -or $result.stop_reason -eq "control_paused") {
+          $stopReason = $result.stop_reason
+          break
+        }
+        if (-not $result.ok -and $StopOnFailure) {
+          $stopReason = "failure"
+          break
+        }
+        if ($stepNames -contains "complete") {
+          $idleStartedAt = $null
+        } elseif ($stepNames -contains "poll" -and -not $idleStartedAt) {
+          $idleStartedAt = Get-Date
+        }
+      }
+
+      if ($MaxTasks -gt 0 -and $completedTasks -ge $MaxTasks) {
+        $stopReason = "max_tasks"
+        break
+      }
+      if ($IdleTimeoutSeconds -gt 0 -and $idleStartedAt) {
+        if (((Get-Date) - $idleStartedAt).TotalSeconds -ge $IdleTimeoutSeconds) {
+          $stopReason = "idle_timeout"
+          break
+        }
+      }
+      Start-Sleep -Seconds ([int]$config.poll_interval_seconds)
+    }
+  } finally {
+    if (-not $stopReason) { $stopReason = "loop_ended" }
+    Write-EdgeWorkerLoopLog -LogDir $logDir -Event "loop_stop" -Data @{ stop_reason = $stopReason; completed_tasks = $completedTasks }
+    if (Test-SkyBridgeServerAvailable -Config $config) {
+      try {
+        Set-ProjectControlState -Config $config -Patch @{
+          state = $(if ($stopReason -like "degraded:*") { "paused" } else { "stopped" })
+          stop_requested = $false
+          current_task_id = $null
+          current_worker_id = $config.worker_id
+          loop_task_count = $completedTasks
+          stop_reason = $stopReason
+          last_heartbeat = (Get-Date).ToUniversalTime().ToString("o")
+        } | Out-Null
+      } catch {}
+    }
+    Write-EdgeWorkerResult -Result @{
+      ok = $true
+      worker_id = $config.worker_id
+      loop = $true
+      log_dir = $logDir
+      completed_tasks = $completedTasks
+      stop_reason = $stopReason
+      dry_run = [bool]$DryRun
+    }
   }
 } else {
   Write-EdgeWorkerResult -Result (Invoke-EdgeWorkerOnce -Config $config)

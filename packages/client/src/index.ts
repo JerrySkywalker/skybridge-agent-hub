@@ -14,6 +14,7 @@ import type {
   Task,
   TaskEvent,
   PlannerAdapterMetadata,
+  ProjectControlState,
   TaskRisk,
   TaskSource,
   TaskStatus,
@@ -115,6 +116,7 @@ export interface ProjectSummary {
   repo?: string;
   description?: string;
   status?: string;
+  control_state?: ProjectControlState;
   run_count: number;
   active_runs: number;
   failed_runs: number;
@@ -125,6 +127,7 @@ export interface ProjectSummary {
 
 export type WorkerRecord = Worker;
 export type ProjectRecord = Project;
+export type ProjectControlRecord = ProjectControlState;
 export type GoalRecord = MasterGoal;
 export type TaskRecord = Task & {
   events?: TaskEvent[];
@@ -457,6 +460,30 @@ export class SkyBridgeClient {
       `/v1/projects/${encodeURIComponent(projectId)}`,
     );
     return json.project;
+  }
+
+  async getProjectControl(projectId: string): Promise<ProjectControlRecord> {
+    const json = await this.getJson<{ control_state: ProjectControlRecord }>(
+      `/v1/projects/${encodeURIComponent(projectId)}/control`,
+    );
+    return json.control_state;
+  }
+
+  async updateProjectControl(
+    projectId: string,
+    input: Partial<ProjectControlRecord>,
+  ): Promise<ProjectControlRecord> {
+    const response = await fetch(
+      this.url(`/v1/projects/${encodeURIComponent(projectId)}/control`),
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "project control update");
+    return ((await response.json()) as { control_state: ProjectControlRecord })
+      .control_state;
   }
 
   async createGoal(
