@@ -82,6 +82,32 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
 
 Add `-Send` only on `skybridge-self-bootstrap-loop.ps1` when one non-urgent final phone summary is desired. The CLI bridge intentionally keeps notification sends out of the short command path.
 
+## Planner State Feedback
+
+Real planner calls build a compact state snapshot with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\build-planner-compact-state.ps1 -Json
+```
+
+The self-bootstrap loop stores the snapshot under `.agent/self-bootstrap/<timestamp>/compact-state-round-<n>.json` and passes it to Hermes. These snapshots are local runtime artifacts and are not committed. They include completed tasks, open tasks, open PRs, merged PRs, changed files, CI status, auto-merge defaults, locked files, duplicate dedupe keys, `do_not_repeat` and remaining acceptance status.
+
+Hermes must not repeat any `do_not_repeat` dedupe key or create tasks that touch `locked_files` from open PRs. If acceptance is already met, Hermes should return `stop`; if PRs are still pending and no independent safe work exists, return `wait`.
+
+## PR Lifecycle Defaults
+
+- Child task PRs: auto PR plus auto-merge when the lifecycle classifier and merge policy mark them eligible.
+- Parent/super-goal PRs: auto PR plus manual merge by default.
+- High-risk PRs: auto PR for review only; no auto-merge and notify a human.
+- Duplicate, stale or conflicting PRs: block, update or close only according to `config/merge-coordinator-policy.example.json`.
+- Merge coordination starts in per-project serial mode.
+
+Run a safe coordinator preview:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-merge-coordinator.ps1 -Json
+```
+
 ## Pause Or Stop
 
 - Stop the edge worker loop with `Ctrl+C`.
@@ -105,3 +131,16 @@ Add `-Send` only on `skybridge-self-bootstrap-loop.ps1` when one non-urgent fina
 - No destructive remote commands.
 - Auto-merge remains policy-gated and disabled by default.
 - At most one non-urgent notification per round or one final summary, and only with explicit `-Send`.
+
+## Required Hermes Run Reporting
+
+All Hermes-related final reports should include:
+
+- endpoint used, such as `/v1/responses`, `/v1/chat/completions` or `/v1/runs`;
+- model name or configured model alias;
+- runtime mode, such as private loopback tunnel;
+- planner mode: real, dry-run or fixture;
+- whether session continuity was used;
+- whether tool execution was disabled, avoided or unavailable.
+
+Do not print `HERMES_API_KEY`.

@@ -6,7 +6,7 @@
 - Default future policy is child task PRs use auto PR plus auto-merge when eligible; parent/super-goal PRs use auto PR plus manual merge by default; high-risk PRs require human review and notification.
 - CI Guardian and auto-merge sweep now route auto-merge attempts through the PR lifecycle classifier before enabling GitHub auto-merge.
 - Live merge coordinator dry-run against the real repository returned zero open PRs, with no eligible, duplicate, stale, conflicting or high-risk PRs and no mutations applied.
-- Remaining work in this goal: complete runbook/API documentation and full validation.
+- Updated Hermes runbooks and API docs with compact planner state, PR lifecycle defaults, classifier/coordinator scripts and required Hermes reporting metadata. Remaining work in this goal: full validation and PR packaging.
 
 ## 2026-05-26 Super Goal 160B Real Hermes Self-Bootstrap Rerun
 
