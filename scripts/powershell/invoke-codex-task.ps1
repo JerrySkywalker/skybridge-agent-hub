@@ -238,7 +238,9 @@ function Invoke-CodexTask {
 function Invoke-TaskValidation {
   param($Config, $Task, $ExecutionResult)
 
-  $commands = @($Config.validation_commands)
+  $commands = @($Config.validation_commands | Where-Object {
+    -not [string]::IsNullOrWhiteSpace([string]$_)
+  })
   $runDir = if ($ExecutionResult.run_dir) { $ExecutionResult.run_dir } else { New-EdgeWorkerRunDirectory -Config $Config -Task $Task }
   if ($commands.Count -eq 0) {
     return [pscustomobject]@{
