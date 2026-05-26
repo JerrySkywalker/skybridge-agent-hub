@@ -1,0 +1,70 @@
+{
+  "enabled": true,
+  "default_child_pr_mode": "auto_pr_auto_merge",
+  "default_parent_pr_mode": "auto_pr_manual_merge",
+  "per_project_serial_merge": true,
+  "allowed_auto_merge_paths": [
+    "docs/**",
+    "goals/ready/**",
+    "goals/backlog/**",
+    "goals/done/**",
+    "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "CONTRIBUTING.md"
+  ],
+  "blocked_auto_merge_paths": [
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+    "**/*secret*",
+    "**/*secrets*",
+    "**/*credential*",
+    "**/*credentials*",
+    "**/*token*",
+    ".github/workflows/**",
+    "deploy/**",
+    "production/**",
+    "**/production/**",
+    "**/*prod*",
+    "**/openresty/**",
+    "**/authelia/**",
+    "**/1panel/**",
+    "**/docker-daemon/**",
+    "**/daemon.json"
+  ],
+  "required_checks": [
+    "AI branch validation",
+    "Project check",
+    "Docker build (server)",
+    "Docker build (web)"
+  ],
+  "duplicate_detection": {
+    "enabled": true,
+    "dedupe_key_markers": ["dedupe_key", "Task", "task_id"],
+    "file_overlap_threshold": 1,
+    "compare_open_prs": true,
+    "compare_recent_merged_prs": true,
+    "recent_merged_limit": 25
+  },
+  "stale_pr_policy": {
+    "behind_base_is_stale": true,
+    "pending_checks_minutes": 60,
+    "unchanged_days": 7,
+    "safe_update_branch": true
+  },
+  "conflict_policy": {
+    "block_conflicting_prs": true,
+    "close_duplicates": false,
+    "comment_before_close": true
+  },
+  "max_open_child_prs_per_project": 1,
+  "notification_policy": {
+    "notify_on_high_risk": true,
+    "notify_on_conflict": true,
+    "notify_on_duplicate": true,
+    "notify_on_auto_merge_enabled": false,
+    "max_non_urgent_per_run": 1
+  }
+}
