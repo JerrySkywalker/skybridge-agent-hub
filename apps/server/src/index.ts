@@ -2772,7 +2772,7 @@ async function finishTask(
     ...task,
     status,
     assigned_worker_id: workerId,
-      result: {
+    result: {
       summary: safeString(body.summary),
       result_url: safeString(body.result_url),
       pr_url: safeString(body.pr_url),
@@ -2867,6 +2867,7 @@ async function updateGoalProgress(goalId: string, store: EventStore): Promise<vo
       evidence_count: summary.evidence_count,
       updated_at: new Date().toISOString(),
     },
+    evidence_summary: summary.latest_evidence ?? goal.evidence_summary,
     status: goal.status === "active" && summary.completed > 0 ? "partially_completed" : goal.status,
     updated_at: new Date().toISOString(),
   });
