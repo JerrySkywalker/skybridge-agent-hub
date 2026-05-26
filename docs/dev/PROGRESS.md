@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 166 Cloud Server Remote Worker Smoke
+
+- Added safe cloud deployment wiring templates for `https://skybridge.jerryskywalker.space`: topology doc, server env example, SkyBridge compose template, OpenResty reverse proxy example and remote home PC worker profile example.
+- Added `smoke-remote-skybridge-api.ps1` for dry-run request construction, remote `/v1/health`, optional worker register/heartbeat and optional missing/wrong token rejection checks without printing tokens.
+- Added first remote worker registration runbook with DNS, HTTPS, token, profile, smoke command and 401/403/502/TLS troubleshooting.
+- Real remote smoke was skipped in this session because `SKYBRIDGE_REMOTE_API_BASE` and `SKYBRIDGE_WORKER_TOKEN` were not present in the local environment.
+- No production deployment, server config mutation, public Hermes exposure, real token commit, GitHub settings mutation or unattended auto-merge was performed.
+
 ## 2026-05-26 Super Goal 165 Direct Worker Connectivity
 
 - Added direct worker connectivity architecture and a first bearer-token auth boundary for worker-sensitive routes. Local development remains no-auth when no worker token is configured; remote workers use `auth_mode=bearer_token`.
