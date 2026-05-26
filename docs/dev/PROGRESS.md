@@ -1,5 +1,18 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 160B Real Hermes Self-Bootstrap Rerun
+
+- Preflight confirmed PR #35 (`1c0ffa2`) and PR #38 (`a6708fc`) were merged to `main`, Hermes API base/key were present without printing secret values, `/v1/responses` was available, and Edge Worker Codex resolution used PATH rather than a temporary `.agent` shim.
+- Preflight passed: Hermes cloud API smoke, Hermes cloud run smoke, Hermes planner dry-run smoke, self-bootstrap dry-run smoke, Edge Worker register/claim smokes and Codex task runner dry-run smoke.
+- Ran `skybridge-self-bootstrap-loop.ps1 -MaxRounds 3 -Send -Json` against `goals/master/self-bootstrap-smoke.md` on the live local SkyBridge API. The loop attempted and completed 3 real Hermes-planned docs-only/low-risk rounds.
+- Worker ID for all rounds: `edge-worker-super-141`. Codex resolved from PATH to the installed Windows PowerShell shim and each task validated with worker-owned `just check`; nested Codex did not own commit, push or PR creation.
+- Round 1 Hermes planner decision: `continue`; task `hermes-clarify-hermes-planneradapter-runbook-20260526043833`; result completed; draft PR #39 created: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/39; CI Guardian passed; auto-merge disabled.
+- Round 2 Hermes planner decision: `continue`; task `hermes-clarify-hermes-planneradapter-runbook-20260526044205`; result completed; draft PR #40 created: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/40; CI Guardian passed; auto-merge disabled.
+- Round 3 Hermes planner decision: `continue`; task `hermes-hermes-task-20260526044512`; result completed; draft PR #41 created: https://github.com/JerrySkywalker/skybridge-agent-hub/pull/41; CI Guardian passed; auto-merge disabled.
+- Child PR merge status: none were merged; all child PRs remained draft PRs because worker `auto_merge_enabled` stayed false.
+- Notification status: sent exactly one final non-urgent bootstrap ntfy summary; WeCom skipped because the notification was `info`.
+- Remaining blockers before unattended Hermes self-ordering: Planner state feedback is still too thin across rounds, so Hermes repeated the PlannerAdapter runbook task in rounds 1 and 2 and treated round 3 as a fresh first-round progress note. The loop should persist and pass compact completed-task/PR state into each subsequent planner prompt before unattended self-ordering. Auto-merge remains intentionally disabled for the worker until a separate policy-gated docs-only sweep enables it.
+
 ## 2026-05-26 Super Goal 142A Edge Worker Codex Invocation Hardening
 
 - Root cause confirmed: local `config/edge-worker.json` still pointed `codex_command` at deleted `.agent/super-141-real-pilot/codex-worker.cmd`, so the worker depended on a temporary Super 141 shim that no longer existed.
