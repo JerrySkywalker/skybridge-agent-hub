@@ -69,14 +69,21 @@ try {
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-blocked/block" @{ error_summary = "fixture block" } | Out-Null
 
   $compact = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project"
+  $compactCompleted = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -ShowCompleted
+  $compactTask = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -TaskId "status-task-completed"
+  $compactWorker = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -WorkerId "status-worker-online"
   $json = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -Json -OutputFile $jsonFile
   $parsed = $json | ConvertFrom-Json
 
-  foreach ($expected in @("SkyBridge:", "Control:", "status-worker-online", "status-task-queued", "status-task-completed", "status-task-blocked")) {
+  foreach ($expected in @("SkyBridge:", "Control:", "status-worker-online", "status-task-queued", "status-task-blocked")) {
     if (($compact -join "`n") -notmatch [regex]::Escape($expected)) {
       throw "Compact status output missing '$expected'."
     }
   }
+  if (($compact -join "`n") -match "status-task-completed") { throw "Default compact output should hide completed tasks." }
+  if (($compactCompleted -join "`n") -notmatch "status-task-completed") { throw "ShowCompleted should include completed tasks." }
+  if (($compactTask -join "`n") -notmatch "status-task-completed") { throw "TaskId detail should show the selected task." }
+  if (($compactWorker -join "`n") -notmatch "status-worker-online") { throw "WorkerId detail should show the selected worker." }
   if (-not (Test-Path -LiteralPath $jsonFile -PathType Leaf)) { throw "Expected JSON output file." }
   if ($parsed.project_id -ne "status-project") { throw "Expected JSON project id." }
   if (@($parsed.workers).Count -lt 2) { throw "Expected worker rows." }
@@ -87,6 +94,7 @@ try {
     ApiBase = $ApiBase
     CompactOutput = "passed"
     JsonOutput = "passed"
+    DetailFilters = "passed"
     Workers = @($parsed.workers).Count
     Tasks = @($parsed.tasks).Count
     TokenPrinted = $false

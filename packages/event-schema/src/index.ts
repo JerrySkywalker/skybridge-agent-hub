@@ -41,6 +41,7 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "task.failed",
   "task.blocked",
   "task.requeued",
+  "task.evidence_repaired",
   "node.connected",
   "node.heartbeat",
   "node.disconnected",
@@ -377,6 +378,8 @@ export interface EvidenceSummary {
   validation_status?: string;
   ci_status?: string;
   risk_status?: string;
+  recovered?: boolean;
+  recovery_status?: string;
   summary: string;
   created_at: string;
 }

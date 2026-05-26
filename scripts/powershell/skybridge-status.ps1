@@ -4,6 +4,12 @@ param(
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$TokenEnvVar,
   [string]$TokenFile,
+  [int]$TasksLimit = 12,
+  [int]$WorkersLimit = 12,
+  [switch]$ShowCompleted,
+  [switch]$ShowAll,
+  [string]$TaskId,
+  [string]$WorkerId,
   [switch]$Json,
   [string]$OutputFile
 )
@@ -51,16 +57,23 @@ function Format-RelativeTime {
 function Select-TaskSummary {
   param($Task)
   $taskId = if ($Task.task_id) { [string]$Task.task_id } else { "-" }
+  $result = $Task.result
+  $evidenceSummary = if ($result -and $result.evidence_summary) { $result.evidence_summary } else { $null }
+  $ciStatus = if ($evidenceSummary -and $evidenceSummary.ci_status) { [string]$evidenceSummary.ci_status } else { $null }
+  $recovered = if ($evidenceSummary -and $evidenceSummary.recovered -eq $true) { $true } else { $false }
+  $prUrl = if ($result -and $result.pr_url) { [string]$result.pr_url } elseif ($Task.pr_url) { [string]$Task.pr_url } else { $null }
   [pscustomobject]@{
     task_id = $taskId
     status = if ($Task.status) { [string]$Task.status } else { "queued" }
     title = if ($Task.title) { [string]$Task.title } else { "-" }
     worker_id = if ($Task.assigned_worker_id) { [string]$Task.assigned_worker_id } else { "-" }
     updated_at = if ($Task.updated_at) { [string]$Task.updated_at } else { $null }
-    pr_url = if ($Task.pr_url) { [string]$Task.pr_url } else { $null }
+    pr_url = $prUrl
     result_url = if ($Task.result_url) { [string]$Task.result_url } else { $null }
     error_summary = if ($Task.error_summary) { [string]$Task.error_summary } else { $null }
-    evidence_summary = $Task.evidence_summary
+    pr = if ($prUrl) { "pr" } else { "-" }
+    evidence_summary = $evidenceSummary
+    evidence = if ($recovered) { "recovered" } elseif ($ciStatus) { $ciStatus } else { "-" }
   }
 }
 
@@ -90,8 +103,9 @@ function Write-CompactStatus {
   if (@($Status.workers).Count -eq 0) {
     "  -"
   } else {
+    "  id                       status   seen         task"
     foreach ($worker in @($Status.workers | Sort-Object worker_id)) {
-      "  $(Shorten-StatusText $worker.worker_id 24) $(Shorten-StatusText $worker.status 8) $(Shorten-StatusText $worker.last_seen 12)"
+      "  $(Shorten-StatusText $worker.worker_id 24) $(Shorten-StatusText $worker.status 8) $(Shorten-StatusText $worker.last_seen 12) $(Shorten-StatusText $worker.current_task_id 24)"
     }
   }
   ""
@@ -99,10 +113,26 @@ function Write-CompactStatus {
   if (@($Status.tasks).Count -eq 0) {
     "  -"
   } else {
+    "  id                             status     worker             pr  evidence"
     foreach ($task in @($Status.tasks | Sort-Object task_id)) {
-      "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.status 10) $(Shorten-StatusText $task.worker_id 20)"
+      "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.status 10) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
     }
   }
+}
+
+function Select-CompactRows {
+  param(
+    [array]$Rows,
+    [int]$Limit
+  )
+  if ($Limit -lt 1) { return @() }
+  return @($Rows | Select-Object -First $Limit)
+}
+
+function Select-VisibleTasks {
+  param([array]$Tasks)
+  if ($ShowAll -or $ShowCompleted -or -not [string]::IsNullOrWhiteSpace($TaskId)) { return @($Tasks) }
+  return @($Tasks | Where-Object { $_.status -notin @("completed", "archived") })
 }
 
 $config = New-StatusApiConfig
@@ -116,7 +146,18 @@ try { $project = Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::Es
 $control = $null
 try { $control = (Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/control" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).control_state } catch {}
 $workers = (Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).workers
+if (-not [string]::IsNullOrWhiteSpace($WorkerId)) {
+  $workerResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($WorkerId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10
+  $workers = @($workerResponse.worker)
+}
 $tasks = (Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).tasks
+if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+  $taskResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10
+  $tasks = @($taskResponse.task)
+}
+
+$workerSummaries = @($workers | ForEach-Object { Select-WorkerSummary -Worker $_ })
+$taskSummaries = @($tasks | ForEach-Object { Select-TaskSummary -Task $_ })
 
 $status = [pscustomobject]@{
   ok = $true
@@ -130,8 +171,16 @@ $status = [pscustomobject]@{
   }
   project = $project.project
   control = if ($control) { $control } else { [pscustomobject]@{ state = "unknown"; stop_requested = $false } }
-  workers = @($workers | ForEach-Object { Select-WorkerSummary -Worker $_ })
-  tasks = @($tasks | ForEach-Object { Select-TaskSummary -Task $_ })
+  workers = if ($Json) { $workerSummaries } else { Select-CompactRows -Rows $workerSummaries -Limit $WorkersLimit }
+  tasks = if ($Json) { $taskSummaries } else { Select-CompactRows -Rows (Select-VisibleTasks -Tasks $taskSummaries) -Limit $TasksLimit }
+  filters = [pscustomobject]@{
+    tasks_limit = $TasksLimit
+    workers_limit = $WorkersLimit
+    show_completed = [bool]$ShowCompleted
+    show_all = [bool]$ShowAll
+    task_id = if ($TaskId) { $TaskId } else { $null }
+    worker_id = if ($WorkerId) { $WorkerId } else { $null }
+  }
 }
 
 if (-not [string]::IsNullOrWhiteSpace($OutputFile)) {
