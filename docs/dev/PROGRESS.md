@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 141 Post-merge Edge Worker Real Pilot
+
+- Confirmed `main` and `origin/main` include PR #30 at merge commit `1f32974`, with Edge Worker and Codex execution implementation present.
+- Preflight smokes passed: `smoke-edge-worker-register.ps1`, `smoke-edge-worker-claim.ps1` and `smoke-codex-task-runner.ps1 -DryRun`.
+- Ran a real local SkyBridge API on `http://127.0.0.1:8787` with a throwaway SQLite database under `.agent/super-141-real-pilot/`; no production deployment, secrets, env files, server-root config or GitHub settings were changed.
+- Registered/heartbeated worker `edge-worker-super-141`; worker status was `online`.
+- Successful pilot task: `super-141-worker-commit-proof`.
+- Child branch: `ai/edge-worker/super-141-worker-commit-proof-docs-only-worker-commit-proof`.
+- Child PR: #33, `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/33`, draft, docs-only.
+- Worker execution result: claimed task, started task, executed Codex command path, produced `docs/dev/EDGE_WORKER_REAL_PILOT.md`, ran worker validation, committed and pushed branch, opened draft PR, ran CI Guardian and completed the task.
+- Validation: worker-configured `just check` passed; explicit `skybridge-ci-guardian.ps1 -PR 33 -MaxRepairAttempts 0` returned `state=ci_green`.
+- Task result: `completed` with summary `Execution: completed. Validation: passed. PR: created. CI: passed.`
+- Notification result: no real notification sent; worker notifications were disabled and CI Guardian bootstrap notifications ran without `-Send`.
+- Pilot caveat: two earlier docs-only attempts (#31 and #32) were superseded because nested Codex followed the repository autonomous commit workflow and self-created PRs before the worker adapter could package the change. The final proof used a local `.agent/` command shim so real Codex execution still occurred while leaving the target docs file for the Edge Worker adapter to commit. Follow-up before Hermes planner dispatch: make `invoke-codex-task.ps1` robust to Windows Codex shims, preserve multi-word prompts without a local wrapper, and prevent nested Codex from self-committing when the worker owns PR packaging.
+
 ## 2026-05-25 Super Goal 061-080 Productization Sprint
 
 - Added the Operator Console product spec covering Overview, Runs, Iterations, PR/CI, Auto-merge, Notifications, Hermes, Sources/Adapters, Audit and Settings.
