@@ -177,7 +177,7 @@ SkyBridge uses a Core + Adapter Ring boundary:
 
 The server is the durable local/cloud hub. Adapters are responsible for turning source-specific payloads into the normalized event schema before the data reaches server APIs or UI packages. Core code should depend on neutral contracts such as PlannerAdapter, ExecutorAdapter, SCMProvider, NotificationProvider and RuntimeProvider, not on Hermes, Codex, GitHub or ntfy directly.
 
-See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md) and [docs/adapters/README.md](docs/adapters/README.md).
+See [docs/architecture/AGENT_AGNOSTIC_CORE.md](docs/architecture/AGENT_AGNOSTIC_CORE.md), [docs/architecture/CLOUD_CONTROL_PLANE.md](docs/architecture/CLOUD_CONTROL_PLANE.md) and [docs/adapters/README.md](docs/adapters/README.md).
 
 ## Event Model
 
@@ -222,6 +222,17 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-offline-beh
 ```
 
 See [docs/orchestrator/EDGE_WORKER_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md), [docs/orchestrator/CLI_CONTROL_RUNBOOK.md](docs/orchestrator/CLI_CONTROL_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_EXECUTION.md](docs/orchestrator/EDGE_WORKER_EXECUTION.md) and [docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md](docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md).
+
+Worker profile and Goal Registry operations are documented in [docs/orchestrator/WORKER_PROFILE_RUNBOOK.md](docs/orchestrator/WORKER_PROFILE_RUNBOOK.md) and [docs/orchestrator/GOAL_REGISTRY_RUNBOOK.md](docs/orchestrator/GOAL_REGISTRY_RUNBOOK.md).
+
+Validate the local cloud-control-plane foundations:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-profile.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-goal-registry.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-goal-import-export.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-goal-task-evidence.ps1
+```
 
 ## API Examples
 

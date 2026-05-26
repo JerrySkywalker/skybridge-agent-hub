@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 164 Cloud Control Plane Foundations
+
+- Added the cloud control plane architecture direction: SkyBridge Server is the authoritative state source, the Goal Registry is the durable objective registry, local workers are execution caches and direct SkyBridge API connectivity replaces SSH tunnel dependency for long-term worker operation.
+- Added worker profile examples and a profile loader. Real profiles belong under `$HOME\.skybridge\worker.<hostname>.json`; repo examples use placeholders only. `SKYBRIDGE_API_BASE`, `SKYBRIDGE_WORKER_TOKEN` and `SKYBRIDGE_WORKER_TOKEN_FILE` establish the remote worker-token boundary without implementing production auth.
+- Hardened Goal Registry metadata with source, priority, risk, lifecycle, acceptance criteria, evidence requirements, dedupe key, supersession fields, blocked/stale reasons, planner metadata, optional audit-only model backend metadata, completion note, progress summary and EvidenceSummary.
+- Added governance checks for blocked/completed/superseded goals and executable-task rejection for archived or superseded goals.
+- Added Markdown goal import/export scripts, worker profile smoke, goal registry smoke, goal import/export smoke and goal-task-evidence smoke.
+- Updated typed client helpers and Operator Console Goals view to show goal registry state, evidence count and active-goal overview data.
+- Production cloud deployment, worker token issuing/rotation/revocation and public remote auth remain deferred. Next recommended goal: Direct Cloud Server Connectivity and Worker Token Auth.
+
 ## 2026-05-26 Super Goal 162 Self-Bootstrap PR Lifecycle Rerun
 
 - Created branch `ai/super-162-self-bootstrap-pr-lifecycle-rerun` from latest `main` after PR #43 was merged, then fixed the lifecycle coordinator gap where green low-risk draft child PRs could not be marked ready before auto-merge.
