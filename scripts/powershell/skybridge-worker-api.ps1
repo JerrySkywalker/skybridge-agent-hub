@@ -24,24 +24,47 @@ function Read-SkyBridgeWorkerConfig {
   return $config
 }
 
+function Get-SkyBridgeWorkerToken {
+  param($Config)
+  $envVar = if ($Config.token_env_var) { [string]$Config.token_env_var } else { "SKYBRIDGE_WORKER_TOKEN" }
+  $token = [Environment]::GetEnvironmentVariable($envVar)
+  if ([string]::IsNullOrWhiteSpace($token) -and $env:SKYBRIDGE_WORKER_TOKEN) { $token = $env:SKYBRIDGE_WORKER_TOKEN }
+  if ([string]::IsNullOrWhiteSpace($token) -and $env:SKYBRIDGE_WORKER_TOKEN_FILE) {
+    if (Test-Path -LiteralPath $env:SKYBRIDGE_WORKER_TOKEN_FILE -PathType Leaf) {
+      $token = (Get-Content -Raw -LiteralPath $env:SKYBRIDGE_WORKER_TOKEN_FILE).Trim()
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace($token)) { return $null }
+  return $token
+}
+
 function Invoke-SkyBridgeApi {
   param(
     [Parameter(Mandatory = $true)][ValidateSet("GET", "POST", "PATCH", "DELETE")][string]$Method,
     [Parameter(Mandatory = $true)][string]$Path,
     $Body = $null,
     [Parameter(Mandatory = $true)][string]$ApiBase,
+    $Config = $null,
     [int]$TimeoutSeconds = 10
   )
 
   $uri = "$($ApiBase.TrimEnd('/'))$Path"
+  $headers = @{}
+  if ($Config -and $Config.auth_mode -eq "worker-token") {
+    $token = Get-SkyBridgeWorkerToken -Config $Config
+    if ([string]::IsNullOrWhiteSpace($token)) {
+      throw "SkyBridge worker token is required by auth_mode=worker-token. Set the configured token env var or SKYBRIDGE_WORKER_TOKEN_FILE."
+    }
+    $headers["Authorization"] = "Bearer $token"
+  }
   try {
     if ($null -eq $Body) {
       if ($Method -in @("POST", "PATCH")) {
-        return Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body "{}" -TimeoutSec $TimeoutSeconds
+        return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -ContentType "application/json" -Body "{}" -TimeoutSec $TimeoutSeconds
       }
-      return Invoke-RestMethod -Method $Method -Uri $uri -TimeoutSec $TimeoutSeconds
+      return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -TimeoutSec $TimeoutSeconds
     }
-    return Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
+    return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
   } catch {
     $message = $_.Exception.Message
     $responseText = $null
@@ -66,7 +89,7 @@ function Register-Worker {
     capabilities = @($Config.capabilities)
     labels = @("edge", "local", "windows")
     enabled = $true
-  }
+  } -Config $Config
 }
 
 function Send-WorkerHeartbeat {
@@ -75,23 +98,23 @@ function Send-WorkerHeartbeat {
     status_note = $StatusNote
     load = $Load
     seen_at = (Get-Date).ToUniversalTime().ToString("o")
-  }
+  } -Config $Config
 }
 
 function Get-ProjectControlState {
   param($Config)
-  Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base
+  Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base -Config $Config
 }
 
 function Set-ProjectControlState {
   param($Config, [hashtable]$Patch)
-  Invoke-SkyBridgeApi -Method PATCH -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base -Body $Patch
+  Invoke-SkyBridgeApi -Method PATCH -Path "/v1/projects/$([uri]::EscapeDataString($Config.project_id))/control" -ApiBase $Config.api_base -Body $Patch -Config $Config
 }
 
 function Test-SkyBridgeServerAvailable {
   param($Config)
   try {
-    Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $Config.api_base -TimeoutSeconds 5 | Out-Null
+    Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $Config.api_base -Config $Config -TimeoutSeconds 5 | Out-Null
     return $true
   } catch {
     return $false
@@ -100,7 +123,7 @@ function Test-SkyBridgeServerAvailable {
 
 function Get-QueuedTasks {
   param($Config)
-  Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?status=queued&project_id=$([uri]::EscapeDataString($Config.project_id))" -ApiBase $Config.api_base
+  Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?status=queued&project_id=$([uri]::EscapeDataString($Config.project_id))" -ApiBase $Config.api_base -Config $Config
 }
 
 function Get-TaskType {
@@ -159,26 +182,26 @@ function Claim-Task {
   param($Config, [Parameter(Mandatory = $true)][string]$TaskId)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/claim" -ApiBase $Config.api_base -Body @{
     worker_id = $Config.worker_id
-  }
+  } -Config $Config
 }
 
 function Start-Task {
   param($Config, [Parameter(Mandatory = $true)][string]$TaskId)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/start" -ApiBase $Config.api_base -Body @{
     worker_id = $Config.worker_id
-  }
+  } -Config $Config
 }
 
 function Complete-Task {
   param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
   $body = @{ worker_id = $Config.worker_id }
   foreach ($key in $Result.Keys) { $body[$key] = $Result[$key] }
-  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/complete" -ApiBase $Config.api_base -Body $body
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/complete" -ApiBase $Config.api_base -Body $body -Config $Config
 }
 
 function Fail-Task {
   param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
   $body = @{ worker_id = $Config.worker_id }
   foreach ($key in $Result.Keys) { $body[$key] = $Result[$key] }
-  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/fail" -ApiBase $Config.api_base -Body $body
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/fail" -ApiBase $Config.api_base -Body $body -Config $Config
 }

@@ -19,6 +19,7 @@ import {
   type IterationsSummary,
   type NotificationsSummary,
   type PrsSummary,
+  type GoalRecord,
   type ProjectSummary,
   type SummaryResponse,
   type TaskRecord,
@@ -37,6 +38,7 @@ type Route =
   | "overview"
   | "runs"
   | "iterations"
+  | "goals"
   | "workers"
   | "tasks"
   | "pr-ci"
@@ -51,6 +53,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "overview", label: "Overview" },
   { route: "runs", label: "Runs" },
   { route: "iterations", label: "Iterations" },
+  { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
   { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
@@ -124,6 +127,7 @@ function App() {
           />
         ) : null}
         {route === "iterations" ? <IterationsPage apiBase={apiBase} /> : null}
+        {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
@@ -185,6 +189,10 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
         <Kpi
           label="Latest iteration"
           value={summary?.latest?.iteration?.state ?? "idle"}
+        />
+        <Kpi
+          label="Active goals"
+          value={summary?.totals.active_goals ?? 0}
         />
         <Kpi
           label="Planner adapters"
@@ -266,6 +274,21 @@ function WorkerPoolPage({ apiBase }: { apiBase: string }) {
       </section>
       <LoopControlPanel projects={data.projects} tasks={data.tasks} />
       <WorkerTable workers={data.workers} tasks={data.tasks} />
+    </div>
+  );
+}
+
+function GoalsPage({ apiBase }: { apiBase: string }) {
+  const data = useProductData(apiBase);
+  return (
+    <div className="route-stack">
+      <section className="kpi-grid">
+        <Kpi label="Goals" value={data.goals.length} />
+        <Kpi label="Active" value={data.goals.filter((goal) => goal.status === "active").length} />
+        <Kpi label="Ready" value={data.goals.filter((goal) => goal.status === "ready").length} />
+        <Kpi label="Evidence" value={data.goals.reduce((sum, goal) => sum + (goal.task_summary?.evidence_count ?? 0), 0)} />
+      </section>
+      <GoalTable goals={data.goals} projects={data.projects} />
     </div>
   );
 }
@@ -565,6 +588,7 @@ function useProductData(apiBase: string) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
   const [summary, setSummary] = useState<SummaryResponse | undefined>();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [goals, setGoals] = useState<GoalRecord[]>([]);
   const [iterations, setIterations] = useState<IterationsSummary | undefined>();
   const [prs, setPrs] = useState<PrsSummary | undefined>();
   const [notifications, setNotifications] = useState<
@@ -584,9 +608,10 @@ function useProductData(apiBase: string) {
 
   useEffect(() => {
     let cancelled = false;
+    const projectsPromise = client.listProjects();
     void Promise.all([
       client.getSummary(),
-      client.listProjects(),
+      projectsPromise,
       client.getIterationsSummary(),
       client.getPrsSummary(),
       client.getNotificationsSummary(),
@@ -598,6 +623,9 @@ function useProductData(apiBase: string) {
       client.getWorkersSummary(),
       client.listTasks(),
       client.getTasksSummary(),
+      projectsPromise.then((items) =>
+        Promise.all(items.map((project) => client.listGoals(project.project_id))),
+      ),
     ])
       .then(
         ([
@@ -614,10 +642,12 @@ function useProductData(apiBase: string) {
           nextWorkersSummary,
           nextTasks,
           nextTasksSummary,
+          nextGoalsByProject,
         ]) => {
           if (cancelled) return;
           setSummary(nextSummary);
           setProjects(nextProjects);
+          setGoals(nextGoalsByProject.flat());
           setIterations(nextIterations);
           setPrs(nextPrs);
           setNotifications(nextNotifications);
@@ -644,6 +674,7 @@ function useProductData(apiBase: string) {
   return {
     summary,
     projects,
+    goals,
     iterations,
     prs,
     notifications,
@@ -657,6 +688,65 @@ function useProductData(apiBase: string) {
     tasksSummary,
     error,
   };
+}
+
+function GoalTable({
+  goals,
+  projects,
+}: {
+  goals: GoalRecord[];
+  projects: ProjectSummary[];
+}) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Goal Registry</p>
+          <h2>Server-side goals</h2>
+        </div>
+        <span className="skybridge-state">{goals.length}</span>
+      </div>
+      {goals.length === 0 ? <p className="skybridge-state-note">No goals recorded.</p> : null}
+      <div className="data-table data-table--tasks">
+        <div className="data-table__head">
+          <span>Goal</span>
+          <span>Status / risk</span>
+          <span>Priority</span>
+          <span>Evidence</span>
+          <span>Project / dedupe</span>
+        </div>
+        {goals.map((goal) => {
+          const project = projects.find((item) => item.project_id === goal.project_id);
+          return (
+            <div className="data-table__row" key={goal.goal_id}>
+              <span>
+                {goal.title}
+                <small>{goal.goal_id} · {goal.source ?? "manual"}</small>
+              </span>
+              <span>
+                <span className={badgeClass(goal.status === "blocked" || goal.status === "failed" ? "bad" : "ok")}>
+                  {goal.status}
+                </span>
+                <small>{goal.risk ?? "low"} risk · {goal.lifecycle ?? goal.status}</small>
+              </span>
+              <span>
+                {goal.priority ?? "normal"}
+                <small>{goal.blocked_reason ?? goal.stale_reason ?? "no blocker"}</small>
+              </span>
+              <span>
+                {goal.task_summary?.evidence_count ?? 0} evidence
+                <small>{goal.evidence_requirements?.[0] ?? goal.completion_note ?? "requirements pending"}</small>
+              </span>
+              <span>
+                {project?.name ?? goal.project_id}
+                <small>{goal.dedupe_key ?? "no dedupe key"}</small>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function WorkerTable({ workers, tasks }: { workers: WorkerRecord[]; tasks: TaskRecord[] }) {
@@ -1131,6 +1221,7 @@ function parseRoute(): Route {
 function titleForRoute(route: Route): string {
   if (route === "pr-ci") return "PR/CI";
   if (route === "hermes") return "Hermes Adapter";
+  if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "tasks") return "Task Queue";
   return route.charAt(0).toUpperCase() + route.slice(1);

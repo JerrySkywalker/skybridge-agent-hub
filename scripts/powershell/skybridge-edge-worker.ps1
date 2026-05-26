@@ -1,6 +1,8 @@
 [CmdletBinding(DefaultParameterSetName = "Once")]
 param(
   [string]$ConfigFile = ".\config\edge-worker.example.json",
+  [string]$WorkerProfileFile,
+  [string]$ProjectId,
   [switch]$Register,
   [switch]$Heartbeat,
   [switch]$PollOnce,
@@ -17,8 +19,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$edgeConfigFile = $ConfigFile
+$edgeWorkerProfileFile = $WorkerProfileFile
+$edgeProjectId = $ProjectId
+$edgeJson = $Json
+
 . (Join-Path $PSScriptRoot "skybridge-worker-api.ps1")
+. (Join-Path $PSScriptRoot "load-worker-profile.ps1")
 . (Join-Path $PSScriptRoot "invoke-codex-task.ps1")
+
+$ConfigFile = $edgeConfigFile
+$WorkerProfileFile = $edgeWorkerProfileFile
+$ProjectId = $edgeProjectId
+$Json = $edgeJson
 
 function Write-EdgeWorkerResult {
   param($Result)
@@ -236,7 +249,12 @@ function Invoke-EdgeWorkerOnce {
   return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; steps = $steps }
 }
 
-$config = Read-SkyBridgeWorkerConfig -ConfigFile $ConfigFile
+if ($WorkerProfileFile -or $env:SKYBRIDGE_WORKER_PROFILE) {
+  $profile = Read-WorkerProfile -Path $WorkerProfileFile
+  $config = ConvertTo-EdgeWorkerConfig -Profile $profile -ProjectId $ProjectId
+} else {
+  $config = Read-SkyBridgeWorkerConfig -ConfigFile $ConfigFile
+}
 if ($PollIntervalSeconds -gt 0) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue $PollIntervalSeconds -Force }
 
 if (-not ($Register -or $Heartbeat -or $PollOnce -or $Loop)) {

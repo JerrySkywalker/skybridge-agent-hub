@@ -1,0 +1,20 @@
+{
+  "worker_id": "worker-dev-example",
+  "display_name": "Example local worker",
+  "project_ids": ["skybridge-agent-hub"],
+  "repo_paths": {
+    "skybridge-agent-hub": "V:\\src\\skybridge-agent-hub"
+  },
+  "capabilities": ["codex-exec", "filesystem", "git", "tests", "docs"],
+  "executor_adapters": ["codex"],
+  "preferred_task_types": ["docs", "code", "test"],
+  "blocked_task_types": ["deploy", "secrets", "production"],
+  "max_parallel_tasks": 1,
+  "allow_auto_merge": false,
+  "allow_production_deploy": false,
+  "skybridge_api_base": "http://127.0.0.1:8787",
+  "auth_mode": "none",
+  "token_env_var": "SKYBRIDGE_WORKER_TOKEN",
+  "codex_command": "codex",
+  "codex_sandbox": "workspace-write"
+}

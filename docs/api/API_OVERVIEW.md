@@ -101,6 +101,39 @@ Worker responses do not include credentials or secret configuration.
 
 Projects contain master goals. Master goals are durable objectives that planner adapters can later decompose into tasks. Hermes may create goals or tasks through an adapter, but the APIs are neutral and also support manual or rule-based planners.
 
+Goals are now registry assets, not just labels for tasks. Supported registry metadata includes `source`, `priority`, `risk`, `status`, `lifecycle`, `acceptance_criteria`, `evidence_requirements`, `dedupe_key`, `supersedes`, `superseded_by`, `stale_reason`, `blocked_reason`, `planner_metadata`, optional audit-only `model_backend_metadata`, `completion_note`, `evidence_summary` and `progress_summary`.
+
+Goal lifecycle statuses:
+
+```text
+draft
+ready
+queued
+active
+partially_completed
+completed
+failed
+blocked
+superseded
+archived
+paused
+cancelled
+```
+
+Validation rules:
+
+- archived and superseded goals cannot receive new executable tasks;
+- blocked goals require `blocked_reason`;
+- completed goals require `completion_note` or an evidence summary;
+- superseded goals require `superseded_by` to reference an existing goal.
+
+`GET /v1/projects/:projectId/goals` and `GET /v1/goals/:goalId` include a `task_summary` object with queued/running/completed/failed/blocked counts plus evidence count. Task completion may include an `evidence_summary`; SkyBridge copies the latest summary to the goal and updates `progress_summary`. It does not auto-complete the goal.
+
+Markdown import/export is script-based:
+
+- `scripts/powershell/import-goal-markdown.ps1`
+- `scripts/powershell/export-goal-markdown.ps1`
+
 ## Task APIs
 
 Tasks move through this lifecycle:
@@ -114,6 +147,8 @@ queued -> blocked
 Supported statuses are `queued`, `claimed`, `running`, `completed`, `failed`, `blocked`, `cancelled` and `stale`. Completed and cancelled tasks cannot be claimed again. Disabled or offline workers cannot claim tasks.
 
 Task result fields are safe summaries and links only. Raw prompts, command output, patches, tokens and secrets must not be stored.
+
+`POST /v1/tasks/:taskId/complete` accepts an optional `evidence_summary` with `task_id`, `goal_id`, `pr_url`, `commit_sha`, `changed_files`, `validation_status`, `ci_status`, `risk_status`, `summary` and `created_at`.
 
 ## Safety Notes
 

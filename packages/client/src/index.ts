@@ -1,6 +1,7 @@
 import type {
   AdapterCapability,
   AdapterRole,
+  EvidenceSummary,
   IterationRun,
   MasterGoal,
   Project,
@@ -14,6 +15,8 @@ import type {
   Task,
   TaskEvent,
   PlannerAdapterMetadata,
+  GoalPriority,
+  GoalRisk,
   ProjectControlState,
   TaskRisk,
   TaskSource,
@@ -128,7 +131,21 @@ export interface ProjectSummary {
 export type WorkerRecord = Worker;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
-export type GoalRecord = MasterGoal;
+export interface GoalTaskSummary {
+  total: number;
+  queued: number;
+  claimed: number;
+  running: number;
+  completed: number;
+  failed: number;
+  blocked: number;
+  cancelled: number;
+  stale: number;
+  evidence_count: number;
+  latest_evidence?: EvidenceSummary;
+}
+
+export type GoalRecord = MasterGoal & { task_summary?: GoalTaskSummary };
 export type TaskRecord = Task & {
   events?: TaskEvent[];
   last_event?: TaskEvent;
@@ -493,6 +510,20 @@ export class SkyBridgeClient {
       title: string;
       summary?: string;
       status?: MasterGoal["status"];
+      source?: string;
+      priority?: GoalPriority;
+      risk?: GoalRisk;
+      lifecycle?: string;
+      acceptance_criteria?: string[];
+      evidence_requirements?: string[];
+      dedupe_key?: string;
+      supersedes?: string[];
+      superseded_by?: string;
+      stale_reason?: string;
+      blocked_reason?: string;
+      planner_metadata?: PlannerAdapterMetadata;
+      completion_note?: string;
+      evidence_summary?: EvidenceSummary;
     },
   ): Promise<GoalRecord> {
     const response = await fetch(
@@ -523,7 +554,25 @@ export class SkyBridgeClient {
 
   async updateGoal(
     goalId: string,
-    input: { title?: string; summary?: string; status?: MasterGoal["status"] },
+    input: {
+      title?: string;
+      summary?: string;
+      status?: MasterGoal["status"];
+      source?: string;
+      priority?: GoalPriority;
+      risk?: GoalRisk;
+      lifecycle?: string;
+      acceptance_criteria?: string[];
+      evidence_requirements?: string[];
+      dedupe_key?: string;
+      supersedes?: string[];
+      superseded_by?: string;
+      stale_reason?: string;
+      blocked_reason?: string;
+      planner_metadata?: PlannerAdapterMetadata;
+      completion_note?: string;
+      evidence_summary?: EvidenceSummary;
+    },
   ): Promise<GoalRecord> {
     const response = await fetch(
       this.url(`/v1/goals/${encodeURIComponent(goalId)}`),
@@ -598,6 +647,7 @@ export class SkyBridgeClient {
       summary?: string;
       result_url?: string;
       pr_url?: string;
+      evidence_summary?: EvidenceSummary;
     } = {},
   ): Promise<TaskRecord> {
     return this.postTaskAction(taskId, "complete", input);

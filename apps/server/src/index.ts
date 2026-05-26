@@ -21,6 +21,10 @@ import {
   type SkyBridgeEvent,
   type SkyBridgeSourcePlatform,
   type MasterGoal,
+  type EvidenceSummary,
+  type GoalPriority,
+  type GoalRisk,
+  type GoalStatus,
   type Project,
   type ProjectControlState,
   type Task,
@@ -84,7 +88,22 @@ const ITERATION_STATES: IterationState[] = [
   "failed",
 ];
 
-const GOAL_STATUSES = ["active", "paused", "completed", "blocked", "cancelled"] as const;
+const GOAL_STATUSES: GoalStatus[] = [
+  "draft",
+  "ready",
+  "queued",
+  "active",
+  "partially_completed",
+  "completed",
+  "failed",
+  "blocked",
+  "superseded",
+  "archived",
+  "paused",
+  "cancelled",
+];
+const GOAL_PRIORITIES: GoalPriority[] = ["low", "normal", "high", "urgent"];
+const GOAL_RISKS: GoalRisk[] = ["low", "medium", "high"];
 const PROJECT_STATUSES = ["active", "paused", "archived"] as const;
 const TASK_STATUSES: TaskStatus[] = [
   "queued",
@@ -453,11 +472,11 @@ export async function createServer(
     async (request, reply) => {
       const projectId = decodeURIComponent(request.params.projectId);
       if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
-      const parsed = parseGoalInput(projectId, request.body);
+      const parsed = parseGoalInput(projectId, request.body, store);
       if (!parsed.ok) return reply.code(400).send(parsed.response);
       await store.upsertGoal(parsed.goal);
       await addStoredEvent(coreEvent("goal.created", { project_id: projectId, goal_id: parsed.goal.goal_id, title: parsed.goal.title }));
-      return reply.code(201).send({ ok: true, goal: parsed.goal });
+      return reply.code(201).send({ ok: true, goal: withGoalSummary(parsed.goal, store) });
     },
   );
 
@@ -466,33 +485,26 @@ export async function createServer(
     async (request, reply) => {
       const projectId = decodeURIComponent(request.params.projectId);
       if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
-      return { goals: store.listGoals(projectId) };
+      return { goals: store.listGoals(projectId).map((goal) => withGoalSummary(goal, store)) };
     },
   );
 
   app.get<{ Params: { goalId: string } }>("/v1/goals/:goalId", async (request, reply) => {
     const goal = store.getGoal(decodeURIComponent(request.params.goalId));
     if (!goal) return reply.code(404).send({ ok: false, error: "goal_not_found" });
-    return { goal };
+    return { goal: withGoalSummary(goal, store) };
   });
 
-  app.patch<{ Params: { goalId: string }; Body: { status?: unknown; title?: unknown; summary?: unknown } }>(
+  app.patch<{ Params: { goalId: string }; Body: Record<string, unknown> }>(
     "/v1/goals/:goalId",
     async (request, reply) => {
       const goal = store.getGoal(decodeURIComponent(request.params.goalId));
       if (!goal) return reply.code(404).send({ ok: false, error: "goal_not_found" });
-      const status = safeString(request.body?.status);
-      if (status && !GOAL_STATUSES.includes(status as (typeof GOAL_STATUSES)[number]))
-        return reply.code(400).send({ ok: false, error: "invalid_goal_status" });
-      const updated: StoredMasterGoal = {
-        ...goal,
-        title: safeString(request.body?.title) ?? goal.title,
-        summary: safeString(request.body?.summary) ?? goal.summary,
-        status: (status as StoredMasterGoal["status"] | undefined) ?? goal.status,
-        updated_at: new Date().toISOString(),
-      };
+      const parsed = parseGoalPatch(goal, request.body, store);
+      if (!parsed.ok) return reply.code(400).send(parsed.response);
+      const updated = parsed.goal;
       await store.upsertGoal(updated);
-      return { ok: true, goal: updated };
+      return { ok: true, goal: withGoalSummary(updated, store) };
     },
   );
 
@@ -538,6 +550,11 @@ export async function createServer(
     const workerView = presentWorker(worker, store);
     if (!workerView.enabled || workerView.status !== "online")
       return reply.code(409).send({ ok: false, error: "worker_unavailable" });
+    if (task.goal_id) {
+      const goal = store.getGoal(task.goal_id);
+      if (goal && ["archived", "superseded"].includes(goal.status))
+        return reply.code(409).send({ ok: false, error: "goal_not_executable" });
+    }
     if (!["queued", "failed", "stale"].includes(task.status))
       return reply.code(409).send({ ok: false, error: "task_not_claimable" });
     const now = new Date().toISOString();
@@ -2510,16 +2527,15 @@ function safeNullableIsoString(input: unknown, fallback: string | undefined): st
   return safeIsoString(input) ?? fallback;
 }
 
-function parseGoalInput(projectId: string, input: Record<string, unknown> | undefined):
+function parseGoalInput(projectId: string, input: Record<string, unknown> | undefined, store: EventStore):
   | { ok: true; goal: StoredMasterGoal }
   | { ok: false; response: QueryErrorResponse } {
   const now = new Date().toISOString();
   if (!input || typeof input !== "object") return invalidQuery("body", "Expected a goal object.");
   const title = safeString(input.title);
   if (!title) return invalidQuery("title", "Expected a bounded goal title.");
-  const status = safeString(input.status) ?? "active";
-  if (!GOAL_STATUSES.includes(status as StoredMasterGoal["status"]))
-    return invalidQuery("status", "Expected a valid goal status.");
+  const parsed = parseGoalMetadata(input, undefined, store);
+  if (!parsed.ok) return parsed;
   return {
     ok: true,
     goal: {
@@ -2527,9 +2543,71 @@ function parseGoalInput(projectId: string, input: Record<string, unknown> | unde
       project_id: projectId,
       title,
       summary: safeString(input.summary),
-      status: status as StoredMasterGoal["status"],
+      ...parsed.metadata,
       created_at: now,
       updated_at: now,
+    },
+  };
+}
+
+function parseGoalPatch(goal: StoredMasterGoal, input: Record<string, unknown> | undefined, store: EventStore):
+  | { ok: true; goal: StoredMasterGoal }
+  | { ok: false; response: QueryErrorResponse } {
+  if (!input || typeof input !== "object") return invalidQuery("body", "Expected a goal patch object.");
+  const parsed = parseGoalMetadata(input, goal, store);
+  if (!parsed.ok) return parsed;
+  const updated: StoredMasterGoal = {
+    ...goal,
+    title: safeString(input.title) ?? goal.title,
+    summary: safeNullableString(input.summary, goal.summary),
+    ...parsed.metadata,
+    updated_at: new Date().toISOString(),
+  };
+  return { ok: true, goal: updated };
+}
+
+function parseGoalMetadata(
+  input: Record<string, unknown>,
+  existing: StoredMasterGoal | undefined,
+  store: EventStore,
+):
+  | { ok: true; metadata: Omit<Partial<StoredMasterGoal>, "goal_id" | "project_id" | "title" | "summary" | "created_at" | "updated_at"> & { status: GoalStatus } }
+  | { ok: false; response: QueryErrorResponse } {
+  const status = safeString(input.status) ?? existing?.status ?? "draft";
+  if (!GOAL_STATUSES.includes(status as GoalStatus)) return invalidQuery("status", "Expected a valid goal status.");
+  const priority = safeString(input.priority) ?? existing?.priority ?? "normal";
+  if (!GOAL_PRIORITIES.includes(priority as GoalPriority)) return invalidQuery("priority", "Expected a valid goal priority.");
+  const risk = safeString(input.risk) ?? existing?.risk ?? "low";
+  if (!GOAL_RISKS.includes(risk as GoalRisk)) return invalidQuery("risk", "Expected a valid goal risk.");
+  const supersededBy = safeNullableString(input.superseded_by, existing?.superseded_by);
+  const blockedReason = safeNullableString(input.blocked_reason, existing?.blocked_reason);
+  const completionNote = safeNullableString(input.completion_note, existing?.completion_note);
+  const evidenceSummary = safeEvidenceSummary(input.evidence_summary, existing?.evidence_summary);
+  if (status === "blocked" && !blockedReason) return invalidQuery("blocked_reason", "Blocked goals require a reason.");
+  if (status === "completed" && !completionNote && !evidenceSummary?.summary)
+    return invalidQuery("completion_note", "Completed goals require an evidence summary or completion note.");
+  if (status === "superseded" && !supersededBy) return invalidQuery("superseded_by", "Superseded goals require superseded_by.");
+  if (supersededBy && !store.getGoal(supersededBy)) return invalidQuery("superseded_by", "Superseding goal was not found.");
+  return {
+    ok: true,
+    metadata: {
+      status: status as GoalStatus,
+      source: safeNullableString(input.source, existing?.source),
+      priority: priority as GoalPriority,
+      risk: risk as GoalRisk,
+      lifecycle: safeNullableString(input.lifecycle, existing?.lifecycle) ?? status,
+      acceptance_criteria: safeStringArray(input.acceptance_criteria) ?? existing?.acceptance_criteria ?? [],
+      evidence_requirements: safeStringArray(input.evidence_requirements) ?? existing?.evidence_requirements ?? [],
+      dedupe_key: safeNullableString(input.dedupe_key, existing?.dedupe_key),
+      supersedes: safeStringArray(input.supersedes) ?? existing?.supersedes ?? [],
+      superseded_by: supersededBy,
+      stale_reason: safeNullableString(input.stale_reason, existing?.stale_reason),
+      blocked_reason: blockedReason,
+      planner_metadata: safePlannerMetadata(input.planner_metadata) ?? existing?.planner_metadata,
+      model_backend_metadata: safeModelBackendMetadata(input.model_backend_metadata) ?? existing?.model_backend_metadata,
+      completion_note: completionNote,
+      evidence_summary: evidenceSummary,
+      progress_summary: existing?.progress_summary,
     },
   };
 }
@@ -2567,7 +2645,10 @@ function parseTaskInput(input: Record<string, unknown> | undefined, store: Event
   if (!projectId) return { ok: false, response: invalidQuery("project_id", "Expected a project id.").response };
   if (!store.getProject(projectId)) return { ok: false, status: 404, response: { ok: false, error: "project_not_found" } };
   const goalId = safeString(input.goal_id);
-  if (goalId && !store.getGoal(goalId)) return { ok: false, status: 404, response: { ok: false, error: "goal_not_found" } };
+  const goal = goalId ? store.getGoal(goalId) : undefined;
+  if (goalId && !goal) return { ok: false, status: 404, response: { ok: false, error: "goal_not_found" } };
+  if (goal && ["archived", "superseded"].includes(goal.status))
+    return { ok: false, status: 409, response: { ok: false, error: "goal_not_executable" } };
   const risk = safeString(input.risk) ?? "low";
   const source = safeString(input.source) ?? "manual";
   if (!TASK_RISKS.includes(risk as TaskRisk)) return { ok: false, response: invalidQuery("risk", "Expected a valid task risk.").response };
@@ -2696,10 +2777,12 @@ async function finishTask(
       result_url: safeString(body.result_url),
       pr_url: safeString(body.pr_url),
       error_summary: safeString(body.error_summary),
+      evidence_summary: safeEvidenceSummary(body.evidence_summary),
     },
     updated_at: new Date().toISOString(),
   };
   await store.upsertTask(updated);
+  if (updated.goal_id) await updateGoalProgress(updated.goal_id, store);
   await recordTaskEvent(
     updated,
     eventType,
@@ -2741,6 +2824,53 @@ function summarizeTasks(store: EventStore) {
     stale: byStatus.stale ?? 0,
     latest_event: latestEvent,
   };
+}
+
+function withGoalSummary(goal: StoredMasterGoal, store: EventStore) {
+  return { ...goal, task_summary: summarizeGoalTasks(goal.goal_id, store) };
+}
+
+function summarizeGoalTasks(goalId: string, store: EventStore) {
+  const tasks = store.listTasks({ goalId });
+  const byStatus = countBy(tasks, (task) => task.status);
+  const evidence = tasks
+    .map((task) => task.result?.evidence_summary)
+    .filter((item): item is EvidenceSummary => !!item);
+  return {
+    total: tasks.length,
+    queued: byStatus.queued ?? 0,
+    claimed: byStatus.claimed ?? 0,
+    running: byStatus.running ?? 0,
+    completed: byStatus.completed ?? 0,
+    failed: byStatus.failed ?? 0,
+    blocked: byStatus.blocked ?? 0,
+    cancelled: byStatus.cancelled ?? 0,
+    stale: byStatus.stale ?? 0,
+    evidence_count: evidence.length,
+    latest_evidence: evidence.at(-1),
+  };
+}
+
+async function updateGoalProgress(goalId: string, store: EventStore): Promise<void> {
+  const goal = store.getGoal(goalId);
+  if (!goal) return;
+  const summary = summarizeGoalTasks(goalId, store);
+  await store.upsertGoal({
+    ...goal,
+    progress_summary: {
+      total_tasks: summary.total,
+      queued_tasks: summary.queued,
+      running_tasks: summary.running + summary.claimed,
+      completed_tasks: summary.completed,
+      failed_tasks: summary.failed,
+      blocked_tasks: summary.blocked,
+      evidence_count: summary.evidence_count,
+      updated_at: new Date().toISOString(),
+    },
+    evidence_summary: summary.latest_evidence ?? goal.evidence_summary,
+    status: goal.status === "active" && summary.completed > 0 ? "partially_completed" : goal.status,
+    updated_at: new Date().toISOString(),
+  });
 }
 
 function mergeProjectViews(projects: StoredProject[], derived: ReturnType<typeof summarizeProjects>) {
@@ -2808,6 +2938,41 @@ function safePlannerMetadata(input: unknown) {
     created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
     raw_response_included: false as const,
     secrets_included: false as const,
+  };
+}
+
+function safeModelBackendMetadata(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const record = redactUnsafePayload(input) as Record<string, unknown>;
+  const adapter = safeString(record.adapter);
+  if (!adapter) return undefined;
+  return {
+    adapter,
+    backend: safeString(record.backend),
+    model: safeString(record.model),
+    audit_only: true as const,
+    raw_response_included: false as const,
+    secrets_included: false as const,
+  };
+}
+
+function safeEvidenceSummary(input: unknown, fallback?: EvidenceSummary): EvidenceSummary | undefined {
+  if (input === null) return undefined;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return fallback;
+  const record = redactUnsafePayload(input) as Record<string, unknown>;
+  const summary = safeString(record.summary);
+  if (!summary) return fallback;
+  return {
+    task_id: safeString(record.task_id),
+    goal_id: safeString(record.goal_id),
+    pr_url: safeString(record.pr_url),
+    commit_sha: safeString(record.commit_sha),
+    changed_files: safePathArray(record.changed_files) ?? [],
+    validation_status: safeString(record.validation_status),
+    ci_status: safeString(record.ci_status),
+    risk_status: safeString(record.risk_status),
+    summary,
+    created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
   };
 }
 
