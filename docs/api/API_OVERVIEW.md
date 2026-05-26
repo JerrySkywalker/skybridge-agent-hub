@@ -1,5 +1,19 @@
 # API Overview
 
+## Edge Worker
+
+The edge worker uses the existing Worker Pool and Task Queue APIs:
+
+- `POST /v1/workers/register`
+- `POST /v1/workers/:workerId/heartbeat`
+- `GET /v1/tasks?status=queued&project_id=<project>`
+- `POST /v1/tasks/:taskId/claim`
+- `POST /v1/tasks/:taskId/start`
+- `POST /v1/tasks/:taskId/complete`
+- `POST /v1/tasks/:taskId/fail`
+
+Codex execution, validation logs and raw command output stay local under `.agent/workers/<worker>/<task>/`. Task result payloads contain only safe summaries, local operator paths and optional PR URLs.
+
 SkyBridge APIs are local-first and return safe derived metadata for an agent-agnostic control plane. They must not expose raw prompts, patches, stdout, stderr, tokens, cookies or production secrets.
 
 ## Product Summary APIs
