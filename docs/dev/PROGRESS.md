@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 162 Self-Bootstrap PR Lifecycle Rerun
+
+- Created branch `ai/super-162-self-bootstrap-pr-lifecycle-rerun` from latest `main` after PR #43 was merged, then fixed the lifecycle coordinator gap where green low-risk draft child PRs could not be marked ready before auto-merge.
+- Real Hermes used `/v1/responses` through `http://127.0.0.1:18642` with model `hermes-agent` and private server-agent runtime. Planner calls used real mode with compact state snapshots, no session continuity and no planner-side tool invocation requested.
+- First real call against the existing self-bootstrap goal returned `stop` because compact state already satisfied prior acceptance, proving Hermes avoided duplicate PlannerAdapter work.
+- Super 162 rerun used a local ignored master goal and `GoalId=super-162-self-bootstrap-pr-lifecycle-rerun`. Hermes planned one new low-risk docs task, worker `edge-worker-super-141` claimed it, Codex resolved from PATH, validation passed with `just check`, and draft child PR #44 was created.
+- Merge coordinator dry-run classified PR #44 as low-risk child docs work with no duplicates, then `-Apply` marked it ready. A second coordinator pass classified it `auto_merge_eligible=true` and enabled GitHub auto-merge. PR #44 auto-merged at `2026-05-26T07:04:37Z`.
+- A second real planner call read compact state with completed task `hermes-super-162-pr-20260526065837` in `do_not_repeat` and returned `stop` instead of repeating the task. No duplicate task was created.
+- Sent exactly one final non-urgent ntfy summary; WeCom skipped because the notification was non-urgent.
+- Follow-up blocker: the real Hermes evaluator returned invalid JSON missing `reason` after the completed child task, so the loop stopped safely after one execution round. Planner dedupe and PR lifecycle still completed, but evaluator schema repair should be hardened before unattended mode.
+
 ## 2026-05-26 Super Goal 161 PR Lifecycle And Planner Feedback
 
 - Added PR lifecycle terminology, merge coordinator policy, PR classifier, dry-run merge coordinator, compact planner state builder, planner dedupe contract, and fixture smokes for lifecycle and planner dedupe behavior.
