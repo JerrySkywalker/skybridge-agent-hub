@@ -216,9 +216,12 @@ Start with dry-run and claim-only smokes:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-register.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-claim.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-codex-task-runner.ps1 -DryRun
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-loop.ps1 -DryRun
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-edge-worker-control.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-offline-behavior.ps1
 ```
 
-See [docs/orchestrator/EDGE_WORKER_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_EXECUTION.md](docs/orchestrator/EDGE_WORKER_EXECUTION.md) and [docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md](docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md).
+See [docs/orchestrator/EDGE_WORKER_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md](docs/orchestrator/EDGE_WORKER_LOOP_RUNBOOK.md), [docs/orchestrator/CLI_CONTROL_RUNBOOK.md](docs/orchestrator/CLI_CONTROL_RUNBOOK.md), [docs/orchestrator/EDGE_WORKER_EXECUTION.md](docs/orchestrator/EDGE_WORKER_EXECUTION.md) and [docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md](docs/orchestrator/CODEX_EXECUTOR_ADAPTER.md).
 
 ## API Examples
 
