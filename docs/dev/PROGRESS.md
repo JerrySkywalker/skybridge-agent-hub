@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 171 Guided Goal Submission And Recovered Status Semantics
+
+- Improved `skybridge-status.ps1` recovered-task presentation. Raw `task.status` remains unchanged for history, but failed tasks with `evidence_summary.recovered=true` and `ci_status=passed_after_rerun` now expose `display_status=recovered`; task detail shows `raw_status`, `display_status`, `recovered`, `ci_status`, `pr_url` and summary.
+- Added `skybridge-guide.ps1`, a dry-run-first guided operator wrapper for status, submit preview/apply, run-once preview/apply, task inspection, worker inspection and project start/pause. It composes the existing operator scripts, prints next suggested commands and preserves `token_printed=false`.
+- Extended `skybridge-hermes-cli.ps1` with an `operator` facade for guided status, submit, run-once, inspect, pause and start commands.
+- Added local fixture smokes for recovered display semantics, guided operator flow and Hermes CLI facade routing. No real cloud mutation or long-running loop is required for these checks.
+- Long-running remote worker loop remains deferred; guided apply modes still require explicit `-Apply` and use bounded `PollOnce` behavior.
+
 ## 2026-05-27 Super Goal 170 First Real Operator Submit-And-Run
 
 - Polished the v0.37 operator UX: `skybridge-submit.ps1` now emits a copyable `skybridge-run-once.ps1` next command with API, project, goal, task and token-file/env context, and `skybridge-run-once.ps1` reports clearer submit-mode parameter errors.

@@ -192,15 +192,28 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
+For guided operator use, prefer `skybridge-guide.ps1`. It wraps the same safe primitives and prints the next suggested command after each step:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode status `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
+
 ## Standard Operator Workflow
 
-Use this sequence for one-shot remote work:
+Use this sequence for one-shot remote work. The guided command names map directly to the underlying scripts:
 
 1. Read compact status.
-2. Submit one goal/task.
-3. Run one bounded worker pass.
-4. Read compact status again.
-5. Inspect the child PR and task evidence.
+2. Preview one goal/task submission.
+3. Apply one goal/task submission.
+4. Preview one bounded worker pass.
+5. Apply one bounded worker pass.
+6. Inspect task evidence.
+7. Read compact status again.
+8. Pause project control.
 
 Status:
 
@@ -243,12 +256,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
 
 Do not start the long-running `-Loop` mode for remote work yet. Use `-PollOnce` only until repeated task reliability and operator recovery are validated.
 
-The Hermes/SkyBridge facade can call the same workflow:
+Guided equivalent:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1 `
-  -Area goal `
-  -Command submit `
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode submit-preview `
   -ApiBase https://skybridge.jerryskywalker.space `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
@@ -256,8 +268,22 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
   -TaskId remote-docs-task-001 `
   -TaskTitle "Remote docs task" `
   -TaskBody "Update one docs file with a short pilot note." `
-  -EnsureProject `
-  -EnsureGoal `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
+
+The Hermes/SkyBridge facade can call the same guided workflow through the `operator` area:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1 `
+  -Area operator `
+  -Command submit-preview `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -GoalId remote-worker-smoke-goal `
+  -GoalTitle "Remote worker smoke goal" `
+  -TaskId remote-docs-task-001 `
+  -TaskTitle "Remote docs task" `
+  -TaskBody "Update one docs file with a short pilot note." `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
@@ -270,7 +296,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-rerun-ci.ps1 `
   -PrNumber 57
 ```
 
-The rerun helper is dry-run by default. Add `-Apply` only for one bounded rerun batch. If checks later pass and the child PR merges, append recovered evidence instead of erasing the original failed task event. Recovered task evidence is visible in `skybridge-status.ps1` as `recovered`; the original failed event remains in task history.
+The rerun helper is dry-run by default. Add `-Apply` only for one bounded rerun batch. If checks later pass and the child PR merges, append recovered evidence instead of erasing the original failed task event. Recovered task evidence is visible in `skybridge-status.ps1` as `display_status=recovered` and `evidence=recovered`; the original failed event and raw task status remain in task history.
 
 Run a real remote smoke only when the explicit API base and token are present:
 
