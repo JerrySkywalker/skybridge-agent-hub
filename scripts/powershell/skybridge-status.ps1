@@ -41,17 +41,34 @@ function Shorten-StatusText {
 }
 
 function Format-RelativeTime {
-  param([string]$IsoTime)
-  if ([string]::IsNullOrWhiteSpace($IsoTime)) { return "-" }
+  param($TimeValue)
+  if ($null -eq $TimeValue -or [string]::IsNullOrWhiteSpace([string]$TimeValue)) { return "-" }
   try {
-    $seen = [datetimeoffset]::Parse($IsoTime)
+    $seen = $null
+    if ($TimeValue -is [datetimeoffset]) {
+      $seen = $TimeValue
+    } elseif ($TimeValue -is [datetime]) {
+      $dateTime = [datetime]$TimeValue
+      if ($dateTime.Kind -eq [DateTimeKind]::Unspecified) {
+        $dateTime = [datetime]::SpecifyKind($dateTime, [DateTimeKind]::Utc)
+      }
+      $seen = [datetimeoffset]$dateTime.ToUniversalTime()
+    } else {
+      $text = [string]$TimeValue
+      if ($text -notmatch "(Z|[+-]\d{2}:?\d{2})$") {
+        $dateTime = [datetime]::Parse($text, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal)
+        $seen = [datetimeoffset]$dateTime.ToUniversalTime()
+      } else {
+        $seen = [datetimeoffset]::Parse($text)
+      }
+    }
     $age = [datetimeoffset]::UtcNow - $seen.ToUniversalTime()
     if ($age.TotalSeconds -lt 90) { return "$([int][Math]::Max(0, $age.TotalSeconds))s ago" }
     if ($age.TotalMinutes -lt 90) { return "$([int]$age.TotalMinutes)m ago" }
     if ($age.TotalHours -lt 48) { return "$([int]$age.TotalHours)h ago" }
     return "$([int]$age.TotalDays)d ago"
   } catch {
-    return $IsoTime
+    return [string]$TimeValue
   }
 }
 
@@ -80,19 +97,12 @@ function Select-TaskSummary {
 
 function Select-WorkerSummary {
   param($Worker)
-  $seenAt = if ($Worker.last_seen_at) { [string]$Worker.last_seen_at } else { $null }
-  if ($Worker.status -in @("online", "stale") -and $Worker.updated_at) {
-    try {
-      $updated = [datetimeoffset]::Parse([string]$Worker.updated_at)
-      $seen = if ($seenAt) { [datetimeoffset]::Parse($seenAt) } else { [datetimeoffset]::MinValue }
-      if ($updated -gt $seen) { $seenAt = [string]$Worker.updated_at }
-    } catch {}
-  }
+  $seenAt = if ($Worker.last_seen_at) { $Worker.last_seen_at } else { $null }
   [pscustomobject]@{
     worker_id = if ($Worker.worker_id) { [string]$Worker.worker_id } else { "-" }
     status = if ($Worker.status) { [string]$Worker.status } else { "offline" }
-    last_seen_at = $seenAt
-    last_seen = if ($Worker.status -eq "online") { "0s ago" } else { Format-RelativeTime -IsoTime $seenAt }
+    last_seen_at = if ($seenAt) { [string]$seenAt } else { $null }
+    last_seen = if ($Worker.status -eq "online") { "0s ago" } else { Format-RelativeTime -TimeValue $seenAt }
     current_task_id = if ($Worker.current_task_id) { [string]$Worker.current_task_id } else { $null }
     auth_mode = if ($Worker.auth_mode) { [string]$Worker.auth_mode } else { $null }
     api_base = if ($Worker.api_base) { [string]$Worker.api_base } else { $null }
