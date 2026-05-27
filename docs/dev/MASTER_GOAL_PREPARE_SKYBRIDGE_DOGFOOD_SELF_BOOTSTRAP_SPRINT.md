@@ -15,6 +15,11 @@ This is a dogfood validation of the planner, proposal conversion, edge worker,
 child PR packaging and evidence reporting path. It is not a general unattended
 execution rollout.
 
+This document is the reviewed master goal plan record for the low-risk docs
+proposal `proposal-d90d09da925d2cf0` / `task_proposal-d90d09da925d2cf0`.
+It intentionally records the plan, safety limits, observed preflight/apply
+results and current blocker without adding new executable work.
+
 ## Scope
 
 - Project: `skybridge-agent-hub`
@@ -49,6 +54,9 @@ docs-only file list.
   GitHub settings or server root configuration.
 - Do not upload raw command output, raw Codex JSONL, patches, prompts or secrets
   to SkyBridge.
+- For this documentation task, do not run `git add`, `git commit`, `git push`
+  or `gh pr create`; the edge worker owns commit, push and draft PR creation
+  after validation.
 
 ## Acceptance Criteria
 
