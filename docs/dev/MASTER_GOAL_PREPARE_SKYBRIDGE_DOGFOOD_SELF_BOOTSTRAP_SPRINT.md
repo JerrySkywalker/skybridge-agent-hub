@@ -1,17 +1,104 @@
 # Prepare SkyBridge Dogfood Self-Bootstrap Sprint
 
-## Goal
+## Reviewed Plan
 
-Run the first bounded dogfood self-bootstrap sprint through `skybridge-supervise.ps1`: plan one safe proposal, convert it to one executable docs task, run it once through `laptop-zenbookduo`, package a child PR, and report evidence back to SkyBridge.
+Run the first bounded dogfood self-bootstrap sprint through `skybridge-supervise.ps1`.
+The sprint should prove the narrowest useful loop:
+
+1. Plan one safe proposal for this repository.
+2. Convert that proposal into one executable docs task.
+3. Run that task once through `laptop-zenbookduo`.
+4. Package the worker result as a child PR.
+5. Report PR, CI and task evidence back to SkyBridge.
+
+This is a dogfood validation of the planner, proposal conversion, edge worker,
+child PR packaging and evidence reporting path. It is not a general unattended
+execution rollout.
+
+## Scope
+
+- Project: `skybridge-agent-hub`
+- Master goal: `master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint`
+- Selected proposal: `proposal-d90d09da925d2cf0`
+- Selected task id: `task_proposal-d90d09da925d2cf0`
+- Proposal title: `Record master goal plan`
+- Risk: `low`
+- Task type: `docs`
+- Required capability: `codex`
+- Dedupe key: `master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint-record`
+
+Expected files from the reviewed proposal:
+
+- `docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md`
+- `docs/dev/PROGRESS.md`
+
+For this task execution, the focused required output is this master goal plan
+document. Additional documentation updates should stay within the proposal's
+docs-only file list.
 
 ## Safety Bounds
 
 - `MaxRounds=1`.
-- Only one proposal may be converted.
-- Only low-risk docs work may run.
-- Worker execution must use `PollOnce`, not a long-running loop.
-- Project control must return to `paused`.
-- Token values and token file contents must not be printed.
+- Convert at most one proposal.
+- Run only low-risk docs work.
+- Use `skybridge-run-once.ps1 -NoSubmit -Apply` for execution.
+- Use `PollOnce`; do not start or leave a long-running worker loop.
+- Restore project control to `paused` before stopping.
+- Do not print token values or token file contents.
+- Do not touch secrets, `.env` files, production config, deployment credentials,
+  GitHub settings or server root configuration.
+- Do not upload raw command output, raw Codex JSONL, patches, prompts or secrets
+  to SkyBridge.
+
+## Acceptance Criteria
+
+- The plan summary is documented.
+- Safety constraints and stop conditions are recorded.
+- Changed files are docs-only.
+- Validation command results are summarized.
+- Any blocker is recorded with the route, command boundary or dependency that
+  prevents completion.
+
+## Planned Execution Flow
+
+1. Preflight cloud state:
+   - check `https://skybridge.jerryskywalker.space`;
+   - confirm project control is paused;
+   - confirm `laptop-zenbookduo` can heartbeat through token-file auth;
+   - confirm no queued or running tasks would interfere.
+2. Preview supervisor selection:
+   - run the supervisor in dry-run mode;
+   - verify it selects one low-risk docs proposal;
+   - verify the generated run-once command uses the expected project, master
+     goal, task and worker profile.
+3. Apply the bounded supervisor:
+   - create or reuse planner persistence records;
+   - accept and convert only `proposal-d90d09da925d2cf0`;
+   - start project control only for the bounded run;
+   - run the worker once with `PollOnce`;
+   - pause project control in `finally`.
+4. Review worker output:
+   - verify the child PR changes docs only;
+   - verify CI status;
+   - record task evidence and PR URL in SkyBridge;
+   - treat recovered evidence as non-blocking when raw task history remains
+     failed but evidence shows CI passed after repair.
+
+## Stop Conditions
+
+Stop the sprint immediately if any of these occur:
+
+- no safe low-risk docs proposal is available;
+- more than one proposal would be converted;
+- the selected proposal expects non-docs files;
+- worker auth, heartbeat or project control cannot be verified safely;
+- cloud API routes required for planner persistence or proposal conversion are
+  unavailable;
+- child PR contents exceed the expected docs-only scope;
+- CI is blocked by a real failure that is not an already-classified transient or
+  recovered-evidence case;
+- any step would require secrets, production config, GitHub settings, server
+  root changes, force-push, or unattended auto-merge enablement.
 
 ## Preflight Result
 
@@ -25,31 +112,48 @@ Preflight against `https://skybridge.jerryskywalker.space` succeeded:
 - proposal risk was `low`;
 - task type was `docs`;
 - required capabilities included `codex`;
-- expected files were docs-only:
-  - `docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md`
-  - `docs/dev/PROGRESS.md`;
+- expected files were docs-only;
 - dry-run stop reason was `dry_run_preview_complete`.
+
+The dry-run supervisor output showed it would run:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
+  -ApiBase "https://skybridge.jerryskywalker.space" `
+  -ProjectId "skybridge-agent-hub" `
+  -TaskId "task_proposal-d90d09da925d2cf0" `
+  -GoalId "master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint" `
+  -NoSubmit `
+  -Apply `
+  -WorkerProfile "$HOME\.skybridge\worker.laptop-zenbookduo.json"
+```
 
 ## Apply Result
 
-The real supervisor apply did not reach proposal conversion or worker execution. The structured failed supervisor run was:
+The first real supervisor apply did not reach proposal conversion or worker
+execution. The structured failed supervisor run was:
 
 - `supervisor_run_id`: `supervisor-run-20260527045305-6522d2e0a752`
 - `status`: `failed`
 - `stop_reason`: `supervisor_error`
 - `current_round`: `1`
 
-The cloud server returned `404 Not Found` for `POST /v1/master-goals`, which means the deployed cloud server image does not currently expose the planner persistence endpoint required by `skybridge-plan.ps1 -Apply`.
+The cloud server returned `404 Not Found` for `POST /v1/master-goals`, which
+means the deployed cloud server image did not expose the planner persistence
+endpoint required by `skybridge-plan.ps1 -Apply`.
 
-No executable task was created, no child PR was opened, and no worker `PollOnce` execution ran. Project control was checked after the failed apply and remained:
+No executable task was created, no child PR was opened, and no worker `PollOnce`
+execution ran. Project control was checked after the failed apply and remained:
 
 - `state=paused`
 - `stop_requested=false`
 - `stop_reason=operator_paused`
 
-## Blocker
+## Initial Blocker Resolved
 
-The first dogfood self-bootstrap sprint is blocked on cloud server deployment/version alignment. The local branch contains the supervisor UX and safety improvements, but the cloud server must expose the Super 172 planner persistence routes before a real supervisor apply can convert a proposal.
+The first real apply was blocked on cloud server deployment/version alignment.
+The cloud server needed to expose the Super 172 planner persistence routes
+before a real supervisor apply could convert a proposal.
 
 Required route family:
 
@@ -58,4 +162,74 @@ Required route family:
 - `GET /v1/task-proposals`
 - `POST /v1/task-proposals/:proposalId/convert`
 
-After the cloud server is updated, rerun the same bounded apply command with `MaxRounds=1`.
+After the cloud server was updated, planner persistence succeeded and the
+bounded retry reached proposal conversion and worker claim/start.
+
+## Retry After Planner Persistence Deployment
+
+The cloud server was later updated and `skybridge-plan.ps1 -Apply` successfully
+persisted the master goal, planning session and task proposals. The retry
+preflight confirmed:
+
+- project control was `paused`;
+- `laptop-zenbookduo` could register-heartbeat online through token-file auth;
+- supervisor dry-run selected `proposal-d90d09da925d2cf0`;
+- the selected task id would be `task_proposal-d90d09da925d2cf0`;
+- the expected files remained limited to `docs/dev`.
+
+During the retry, two local supervisor/worker reliability gaps were fixed before
+the real apply:
+
+- the worker compatibility check now honors persisted `task_type=docs` instead
+  of inferring `code` from neutral task text;
+- `skybridge-run-once.ps1` now passes the requested task id into
+  `skybridge-edge-worker.ps1` and fails if PollOnce does not process that exact
+  task.
+
+The bounded retry apply ran as:
+
+- `supervisor_run_id`: `supervisor-run-20260527051547-c11fd86e34b0`
+- selected proposal: `proposal-d90d09da925d2cf0`
+- converted task: `task_proposal-d90d09da925d2cf0`
+- worker: `laptop-zenbookduo`
+- mode: `apply`
+- `MaxRounds`: `1`
+
+The worker successfully claimed and started the converted task. Codex edited
+`docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md`, but
+the Codex execution exited nonzero after repeated ChatGPT Codex websocket TLS
+handshake EOF errors. The task was marked failed by the worker with
+`error_summary=Codex exec failed or timed out.`
+
+Final observed state for the retry:
+
+- child PR URL: none;
+- CI status: none;
+- merge status: none;
+- cloud task status: `failed`;
+- evidence summary: none;
+- project control: `paused`;
+- stop reason: `task_failed`.
+
+This proves the cloud planner persistence -> proposal conversion -> targeted
+worker claim/start -> paused rollback path, but it does not yet prove the full
+dogfood self-bootstrap sprint because Codex execution transport failed before
+worker-owned child PR packaging.
+
+## Current Blocker
+
+The remaining blocker is Codex execution transport reliability. The worker-owned
+Codex run changed a docs-only file but exited nonzero after repeated
+`wss://chatgpt.com/backend-api/codex/responses` TLS handshake EOF errors. No
+child PR, CI run, merge or recovered evidence exists for
+`task_proposal-d90d09da925d2cf0`.
+
+## Evidence To Record After Codex Transport Recovers
+
+- Supervisor run id, mode, status and stop reason.
+- Selected proposal id and converted task id.
+- Worker id and one-shot execution result.
+- Child PR URL and changed-file summary.
+- CI classification.
+- Task evidence summary, including recovered-evidence status when applicable.
+- Final project control state, expected to be `paused`.
