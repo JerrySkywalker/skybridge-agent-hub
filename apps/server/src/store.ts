@@ -4,10 +4,13 @@ import { dirname } from "node:path";
 import type {
   IterationRun,
   MasterGoal,
+  PlanningMasterGoal,
+  PlanningSession,
   Project,
   SkyBridgeEvent,
   Task,
   TaskEvent,
+  TaskProposal,
   Worker,
   WorkerHeartbeat,
 } from "@skybridge-agent-hub/event-schema";
@@ -55,6 +58,9 @@ export interface StoredIterationEvent {
 export type StoredIterationRun = IterationRun & { events: StoredIterationEvent[] };
 export type StoredProject = Project;
 export type StoredMasterGoal = MasterGoal;
+export type StoredPlanningMasterGoal = PlanningMasterGoal;
+export type StoredPlanningSession = PlanningSession;
+export type StoredTaskProposal = TaskProposal;
 export type StoredWorker = Omit<Worker, "status" | "current_task_id" | "last_seen_at">;
 export type StoredWorkerHeartbeat = WorkerHeartbeat;
 export type StoredTask = Task;
@@ -67,6 +73,9 @@ interface LocalStoreData {
   iterations?: StoredIterationRun[];
   projects?: StoredProject[];
   masterGoals?: StoredMasterGoal[];
+  planningMasterGoals?: StoredPlanningMasterGoal[];
+  planningSessions?: StoredPlanningSession[];
+  taskProposals?: StoredTaskProposal[];
   workers?: StoredWorker[];
   workerHeartbeats?: StoredWorkerHeartbeat[];
   tasks?: StoredTask[];
@@ -93,6 +102,15 @@ export interface EventStore {
   listGoals(projectId?: string): StoredMasterGoal[];
   getGoal(goalId: string): StoredMasterGoal | undefined;
   upsertGoal(goal: StoredMasterGoal): Promise<void>;
+  listPlanningMasterGoals(projectId?: string): StoredPlanningMasterGoal[];
+  getPlanningMasterGoal(masterGoalId: string): StoredPlanningMasterGoal | undefined;
+  upsertPlanningMasterGoal(masterGoal: StoredPlanningMasterGoal): Promise<void>;
+  listPlanningSessions(masterGoalId?: string): StoredPlanningSession[];
+  getPlanningSession(planningSessionId: string): StoredPlanningSession | undefined;
+  upsertPlanningSession(session: StoredPlanningSession): Promise<void>;
+  listTaskProposals(filters?: { projectId?: string; masterGoalId?: string; status?: string }): StoredTaskProposal[];
+  getTaskProposal(proposalId: string): StoredTaskProposal | undefined;
+  upsertTaskProposal(proposal: StoredTaskProposal): Promise<void>;
   listWorkers(): StoredWorker[];
   getWorker(workerId: string): StoredWorker | undefined;
   upsertWorker(worker: StoredWorker): Promise<void>;
@@ -114,6 +132,9 @@ export class MemoryStore implements EventStore {
     iterations: [],
     projects: [],
     masterGoals: [],
+    planningMasterGoals: [],
+    planningSessions: [],
+    taskProposals: [],
     workers: [],
     workerHeartbeats: [],
     tasks: [],
@@ -197,6 +218,50 @@ export class MemoryStore implements EventStore {
 
   async upsertGoal(goal: StoredMasterGoal): Promise<void> {
     upsertBy(this.data.masterGoals, goal, (item) => item.goal_id);
+  }
+
+  listPlanningMasterGoals(projectId?: string): StoredPlanningMasterGoal[] {
+    return this.data.planningMasterGoals
+      .filter((goal) => !projectId || goal.project_id === projectId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getPlanningMasterGoal(masterGoalId: string): StoredPlanningMasterGoal | undefined {
+    return this.data.planningMasterGoals.find((goal) => goal.master_goal_id === masterGoalId);
+  }
+
+  async upsertPlanningMasterGoal(masterGoal: StoredPlanningMasterGoal): Promise<void> {
+    upsertBy(this.data.planningMasterGoals, masterGoal, (item) => item.master_goal_id);
+  }
+
+  listPlanningSessions(masterGoalId?: string): StoredPlanningSession[] {
+    return this.data.planningSessions
+      .filter((session) => !masterGoalId || session.master_goal_id === masterGoalId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getPlanningSession(planningSessionId: string): StoredPlanningSession | undefined {
+    return this.data.planningSessions.find((session) => session.planning_session_id === planningSessionId);
+  }
+
+  async upsertPlanningSession(session: StoredPlanningSession): Promise<void> {
+    upsertBy(this.data.planningSessions, session, (item) => item.planning_session_id);
+  }
+
+  listTaskProposals(filters: { projectId?: string; masterGoalId?: string; status?: string } = {}): StoredTaskProposal[] {
+    return this.data.taskProposals
+      .filter((proposal) => !filters.projectId || proposal.project_id === filters.projectId)
+      .filter((proposal) => !filters.masterGoalId || proposal.master_goal_id === filters.masterGoalId)
+      .filter((proposal) => !filters.status || proposal.status === filters.status)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getTaskProposal(proposalId: string): StoredTaskProposal | undefined {
+    return this.data.taskProposals.find((proposal) => proposal.proposal_id === proposalId);
+  }
+
+  async upsertTaskProposal(proposal: StoredTaskProposal): Promise<void> {
+    upsertBy(this.data.taskProposals, proposal, (item) => item.proposal_id);
   }
 
   listWorkers(): StoredWorker[] {
@@ -457,6 +522,109 @@ export class SqliteStore implements EventStore {
     `).run(...toGoalParams(goal));
   }
 
+  listPlanningMasterGoals(projectId?: string): StoredPlanningMasterGoal[] {
+    const rows = this.requireDb().prepare(`
+      SELECT master_goal_json FROM planning_master_goals
+      ${projectId ? "WHERE project_id = ?" : ""}
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(...(projectId ? [projectId] : [])) as Array<{ master_goal_json: string }>;
+    return rows.map((row) => JSON.parse(row.master_goal_json) as StoredPlanningMasterGoal);
+  }
+
+  getPlanningMasterGoal(masterGoalId: string): StoredPlanningMasterGoal | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT master_goal_json FROM planning_master_goals WHERE master_goal_id = ?
+    `).get(masterGoalId) as { master_goal_json: string } | undefined;
+    return row ? JSON.parse(row.master_goal_json) as StoredPlanningMasterGoal : undefined;
+  }
+
+  async upsertPlanningMasterGoal(masterGoal: StoredPlanningMasterGoal): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO planning_master_goals (master_goal_id, project_id, title, source, priority, created_at, updated_at, master_goal_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(master_goal_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        title = excluded.title,
+        source = excluded.source,
+        priority = excluded.priority,
+        updated_at = excluded.updated_at,
+        master_goal_json = excluded.master_goal_json
+    `).run(...toPlanningMasterGoalParams(masterGoal));
+  }
+
+  listPlanningSessions(masterGoalId?: string): StoredPlanningSession[] {
+    const rows = this.requireDb().prepare(`
+      SELECT session_json FROM planning_sessions
+      ${masterGoalId ? "WHERE master_goal_id = ?" : ""}
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(...(masterGoalId ? [masterGoalId] : [])) as Array<{ session_json: string }>;
+    return rows.map((row) => JSON.parse(row.session_json) as StoredPlanningSession);
+  }
+
+  getPlanningSession(planningSessionId: string): StoredPlanningSession | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT session_json FROM planning_sessions WHERE planning_session_id = ?
+    `).get(planningSessionId) as { session_json: string } | undefined;
+    return row ? JSON.parse(row.session_json) as StoredPlanningSession : undefined;
+  }
+
+  async upsertPlanningSession(session: StoredPlanningSession): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO planning_sessions (planning_session_id, master_goal_id, project_id, planner_mode, created_at, updated_at, session_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(planning_session_id) DO UPDATE SET
+        master_goal_id = excluded.master_goal_id,
+        project_id = excluded.project_id,
+        planner_mode = excluded.planner_mode,
+        updated_at = excluded.updated_at,
+        session_json = excluded.session_json
+    `).run(...toPlanningSessionParams(session));
+  }
+
+  listTaskProposals(filters: { projectId?: string; masterGoalId?: string; status?: string } = {}): StoredTaskProposal[] {
+    const rows = this.requireDb().prepare(`
+      SELECT proposal_json FROM task_proposals
+      WHERE (? IS NULL OR project_id = ?)
+        AND (? IS NULL OR master_goal_id = ?)
+        AND (? IS NULL OR status = ?)
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(
+      filters.projectId ?? null,
+      filters.projectId ?? null,
+      filters.masterGoalId ?? null,
+      filters.masterGoalId ?? null,
+      filters.status ?? null,
+      filters.status ?? null,
+    ) as Array<{ proposal_json: string }>;
+    return rows.map((row) => JSON.parse(row.proposal_json) as StoredTaskProposal);
+  }
+
+  getTaskProposal(proposalId: string): StoredTaskProposal | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT proposal_json FROM task_proposals WHERE proposal_id = ?
+    `).get(proposalId) as { proposal_json: string } | undefined;
+    return row ? JSON.parse(row.proposal_json) as StoredTaskProposal : undefined;
+  }
+
+  async upsertTaskProposal(proposal: StoredTaskProposal): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO task_proposals (
+        proposal_id, master_goal_id, planning_session_id, project_id, dedupe_key, status, risk, task_type, created_at, updated_at, proposal_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(proposal_id) DO UPDATE SET
+        master_goal_id = excluded.master_goal_id,
+        planning_session_id = excluded.planning_session_id,
+        project_id = excluded.project_id,
+        dedupe_key = excluded.dedupe_key,
+        status = excluded.status,
+        risk = excluded.risk,
+        task_type = excluded.task_type,
+        updated_at = excluded.updated_at,
+        proposal_json = excluded.proposal_json
+    `).run(...toTaskProposalParams(proposal));
+  }
+
   listWorkers(): StoredWorker[] {
     const rows = this.requireDb().prepare(`
       SELECT worker_json FROM workers ORDER BY updated_at DESC, rowid DESC
@@ -673,6 +841,54 @@ export class SqliteStore implements EventStore {
       );
       CREATE INDEX IF NOT EXISTS idx_master_goals_project_id ON master_goals(project_id);
       CREATE INDEX IF NOT EXISTS idx_master_goals_status ON master_goals(status);
+
+      CREATE TABLE IF NOT EXISTS planning_master_goals (
+        master_goal_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        source TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        master_goal_json TEXT NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_planning_master_goals_project_id ON planning_master_goals(project_id);
+
+      CREATE TABLE IF NOT EXISTS planning_sessions (
+        planning_session_id TEXT PRIMARY KEY,
+        master_goal_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        planner_mode TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        session_json TEXT NOT NULL,
+        FOREIGN KEY(master_goal_id) REFERENCES planning_master_goals(master_goal_id) ON DELETE CASCADE,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_planning_sessions_master_goal_id ON planning_sessions(master_goal_id);
+      CREATE INDEX IF NOT EXISTS idx_planning_sessions_project_id ON planning_sessions(project_id);
+
+      CREATE TABLE IF NOT EXISTS task_proposals (
+        proposal_id TEXT PRIMARY KEY,
+        master_goal_id TEXT NOT NULL,
+        planning_session_id TEXT,
+        project_id TEXT NOT NULL,
+        dedupe_key TEXT NOT NULL,
+        status TEXT NOT NULL,
+        risk TEXT NOT NULL,
+        task_type TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        proposal_json TEXT NOT NULL,
+        FOREIGN KEY(master_goal_id) REFERENCES planning_master_goals(master_goal_id) ON DELETE CASCADE,
+        FOREIGN KEY(planning_session_id) REFERENCES planning_sessions(planning_session_id) ON DELETE SET NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_task_proposals_project_id ON task_proposals(project_id);
+      CREATE INDEX IF NOT EXISTS idx_task_proposals_master_goal_id ON task_proposals(master_goal_id);
+      CREATE INDEX IF NOT EXISTS idx_task_proposals_status ON task_proposals(status);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_task_proposals_dedupe ON task_proposals(project_id, dedupe_key);
 
       CREATE TABLE IF NOT EXISTS workers (
         worker_id TEXT PRIMARY KEY,
@@ -967,6 +1183,47 @@ function toGoalParams(goal: StoredMasterGoal): unknown[] {
     goal.created_at,
     goal.updated_at,
     JSON.stringify(goal),
+  ];
+}
+
+function toPlanningMasterGoalParams(masterGoal: StoredPlanningMasterGoal): unknown[] {
+  return [
+    masterGoal.master_goal_id,
+    masterGoal.project_id,
+    masterGoal.title,
+    masterGoal.source,
+    masterGoal.priority,
+    masterGoal.created_at,
+    masterGoal.updated_at,
+    JSON.stringify(masterGoal),
+  ];
+}
+
+function toPlanningSessionParams(session: StoredPlanningSession): unknown[] {
+  return [
+    session.planning_session_id,
+    session.master_goal_id,
+    session.project_id,
+    session.planner_adapter.planner_mode,
+    session.created_at,
+    session.updated_at,
+    JSON.stringify(session),
+  ];
+}
+
+function toTaskProposalParams(proposal: StoredTaskProposal): unknown[] {
+  return [
+    proposal.proposal_id,
+    proposal.master_goal_id,
+    proposal.planning_session_id ?? null,
+    proposal.project_id,
+    proposal.dedupe_key,
+    proposal.status,
+    proposal.risk,
+    proposal.task_type,
+    proposal.created_at,
+    proposal.updated_at,
+    JSON.stringify(proposal),
   ];
 }
 

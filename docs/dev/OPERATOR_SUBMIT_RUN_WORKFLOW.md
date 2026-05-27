@@ -49,3 +49,16 @@ The standard guided sequence is:
 8. `pause`
 
 Preview modes remain the default. Apply modes require explicit `-Apply`, use `PollOnce` only, and should be limited to docs-only low-risk tasks until the remote always-on loop is separately piloted.
+
+## Master Goal Planning
+
+Super Goal 172 adds a planning step before task creation:
+
+1. `skybridge-plan.ps1 -DryRun` generates reviewable task proposals from a high-level master goal.
+2. `skybridge-plan.ps1 -Apply` stores the master goal, planning session and proposals, but does not create executable tasks.
+3. `skybridge-proposal.ps1 -Command list/show` lets the operator inspect risk, expected files and evidence requirements.
+4. `skybridge-proposal.ps1 -Command accept -Apply` marks a proposal ready for conversion.
+5. `skybridge-proposal.ps1 -Command convert -DryRun` previews the queued task shape.
+6. `skybridge-proposal.ps1 -Command convert -Apply` creates the normal SkyBridge task.
+
+The guide exposes the same flow through `plan-preview`, `plan-apply`, `proposals`, `proposal-show`, `proposal-accept` and `proposal-convert-preview`. This keeps high-level planning reviewable before any worker can claim work.

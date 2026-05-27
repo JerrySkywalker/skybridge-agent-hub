@@ -224,6 +224,7 @@ export type GoalStatus =
   | "archived"
   | "paused"
   | "cancelled";
+export type PlanningProposalStatus = "proposed" | "accepted" | "rejected" | "converted";
 export type TaskSource =
   | "manual"
   | "planner"
@@ -316,6 +317,63 @@ export interface MasterGoal {
   completion_note?: string;
   evidence_summary?: EvidenceSummary;
   progress_summary?: GoalProgressSummary;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanningMasterGoal {
+  master_goal_id: string;
+  project_id: string;
+  title: string;
+  description?: string;
+  source: string;
+  priority: GoalPriority;
+  constraints: string[];
+  acceptance_criteria: string[];
+  stop_conditions: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlannerAdapterAuditMetadata {
+  provider: string;
+  model?: string;
+  planner_mode: string;
+  prompt_version: string;
+  input_state_hash: string;
+  raw_response_included: false;
+  secrets_included: false;
+}
+
+export interface PlanningSession {
+  planning_session_id: string;
+  master_goal_id: string;
+  project_id: string;
+  planner_adapter: PlannerAdapterAuditMetadata;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskProposal {
+  proposal_id: string;
+  master_goal_id: string;
+  planning_session_id?: string;
+  project_id: string;
+  title: string;
+  body?: string;
+  prompt_summary?: string;
+  dedupe_key: string;
+  expected_files: string[];
+  acceptance_criteria: string[];
+  evidence_requirements: string[];
+  required_capabilities: WorkerCapability[];
+  risk: TaskRisk;
+  task_type: string;
+  depends_on: string[];
+  rationale: string;
+  status: PlanningProposalStatus;
+  created_by: string;
+  converted_task_id?: string;
   created_at: string;
   updated_at: string;
 }

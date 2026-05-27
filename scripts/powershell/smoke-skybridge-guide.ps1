@@ -38,12 +38,17 @@ try {
   $status = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode status -ApiBase $ApiBase -ProjectId guide-project -OutputDir $outputDir -Json | ConvertFrom-Json
   $submitPreview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode submit-preview -ApiBase $ApiBase -ProjectId guide-project -GoalId guide-goal -GoalTitle "Guide Goal" -TaskId guide-task -TaskTitle "Guide Task" -TaskBody "Docs dry run" -OutputDir $outputDir -Json | ConvertFrom-Json
   $runPreview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode run-once-preview -ApiBase $ApiBase -ProjectId guide-project -GoalId guide-goal -TaskId guide-existing-task -OutputDir $outputDir -Json | ConvertFrom-Json
+  $runPreviewSubmit = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode run-once-preview -ApiBase $ApiBase -ProjectId guide-project -GoalId guide-goal -GoalTitle "Guide Goal" -TaskId guide-task -TaskTitle "Guide Task" -TaskBody "Docs dry run" -OutputDir $outputDir -Json | ConvertFrom-Json
   $inspect = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode inspect-task -ApiBase $ApiBase -ProjectId guide-project -TaskId guide-existing-task -OutputDir $outputDir -Json | ConvertFrom-Json
 
   if ($status.mode -ne "status" -or $status.token_printed -ne $false) { throw "Expected guide status result." }
   if ($submitPreview.submit.mode -ne "dry-run" -or $submitPreview.task_id -ne "guide-task") { throw "Expected guide submit-preview dry run." }
   if ($runPreview.run_once.mode -ne "dry-run" -or $runPreview.run_once.project_paused -ne "would_pause") { throw "Expected guide run-once-preview." }
+  if ($runPreviewSubmit.next_command -notmatch [regex]::Escape("-GoalTitle `"Guide Goal`"") -or $runPreviewSubmit.next_command -notmatch [regex]::Escape("-TaskTitle `"Guide Task`"") -or $runPreviewSubmit.next_command -notmatch [regex]::Escape("-TaskBody `"Docs dry run`"")) {
+    throw "Expected copyable run-once apply command with submit context."
+  }
   if (@($inspect.status.tasks).Count -ne 1 -or $inspect.status.tasks[0].task_id -ne "guide-existing-task") { throw "Expected guide inspect-task." }
+  if (-not $inspect.task_detail -or $inspect.task_detail.raw_status -ne "queued" -or $inspect.task_detail.display_status -ne "queued") { throw "Expected useful inspect-task detail." }
   if (-not (Test-Path -LiteralPath (Join-Path $outputDir "skybridge-guide-status.json") -PathType Leaf)) { throw "Expected guide status snapshot." }
 
   [pscustomobject]@{

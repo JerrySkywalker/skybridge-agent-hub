@@ -6,6 +6,10 @@ param(
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$GoalId = "self-bootstrap-smoke",
   [string]$GoalTitle,
+  [string]$MasterGoalId,
+  [string]$ProposalId,
+  [string]$Description,
+  [string[]]$Constraints = @(),
   [string]$TaskId,
   [string]$TaskTitle,
   [string]$TaskBody,
@@ -41,6 +45,10 @@ function Invoke-OperatorGuide {
   $args = @("-File", ".\scripts\powershell\skybridge-guide.ps1", "-Mode", $Mode, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Json")
   if ($GoalId) { $args += @("-GoalId", $GoalId) }
   if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) }
+  if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+  if ($ProposalId) { $args += @("-ProposalId", $ProposalId) }
+  if ($Description) { $args += @("-Description", $Description) }
+  foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
   if ($TaskId) { $args += @("-TaskId", $TaskId) }
   if ($TaskTitle) { $args += @("-TaskTitle", $TaskTitle) }
   if ($TaskBody) { $args += @("-TaskBody", $TaskBody) }
@@ -62,6 +70,12 @@ switch ("$Area $Command") {
   "operator inspect-worker" { Invoke-OperatorGuide -Mode "inspect-worker" }
   "operator pause" { Invoke-OperatorGuide -Mode "pause" }
   "operator start" { Invoke-OperatorGuide -Mode "start" }
+  "operator plan-preview" { Invoke-OperatorGuide -Mode "plan-preview" }
+  "operator plan-apply" { Invoke-OperatorGuide -Mode "plan-apply" }
+  "operator proposals" { Invoke-OperatorGuide -Mode "proposals" }
+  "operator proposal-show" { Invoke-OperatorGuide -Mode "proposal-show" }
+  "operator proposal-accept" { Invoke-OperatorGuide -Mode "proposal-accept" }
+  "operator proposal-convert-preview" { Invoke-OperatorGuide -Mode "proposal-convert-preview" }
   "goal submit" {
     $args = @("-File", ".\scripts\powershell\skybridge-submit.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalId", $GoalId, "-EnsureProject", "-EnsureGoal", "-Json")
     if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) } else { $args += @("-GoalTitle", $GoalId) }

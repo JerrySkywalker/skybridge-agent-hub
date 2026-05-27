@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 172 Master Goal Planner
+
+- Added a lightweight planning model: `planning_master_goals`, `planning_sessions` and `task_proposals`. This keeps high-level planning separate from the existing executable Goal Registry while still allowing proposal conversion into normal queued tasks.
+- Added `skybridge-plan.ps1`, a deterministic rule-based planner that builds compact project state and emits 1-5 reviewable task proposals with dedupe keys, expected files, acceptance criteria, evidence requirements, risk, required capabilities and rationale. Dry-run is default; `-Apply` creates planning records only.
+- Added `skybridge-proposal.ps1` for proposal list/show/accept/reject/convert. Conversion previews are dry-run by default, high-risk proposals require `-AllowHighRisk`, and converted tasks carry expected files into allowed paths plus planner metadata.
+- Added the disabled Hermes planner seam through planner adapter audit metadata: provider, model, planner mode, prompt version and input state hash. CI and smokes do not call Hermes.
+- Extended `skybridge-guide.ps1` and `skybridge-hermes-cli.ps1 -Area operator` with plan/proposal modes. `inspect-task` now surfaces useful task detail, and run-once preview next commands preserve submit context when available.
+- Added local planner/proposal smokes. No real cloud task creation, Codex execution or worker loop is required.
+
 ## 2026-05-27 Super Goal 171 Guided Goal Submission And Recovered Status Semantics
 
 - Improved `skybridge-status.ps1` recovered-task presentation. Raw `task.status` remains unchanged for history, but failed tasks with `evidence_summary.recovered=true` and `ci_status=passed_after_rerun` now expose `display_status=recovered`; task detail shows `raw_status`, `display_status`, `recovered`, `ci_status`, `pr_url` and summary.
