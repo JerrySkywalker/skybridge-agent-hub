@@ -17,6 +17,7 @@ param(
   [string]$ProposalId,
   [string]$Description,
   [string[]]$Constraints = @(),
+  [switch]$DryRun,
   [switch]$Apply,
   [switch]$Json,
   [string]$OutputDir = ".agent/tmp"
@@ -110,6 +111,7 @@ switch ($Mode) {
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "dry-run-submit"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $payload.goal.id; task_id = $payload.task.id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "submit-apply"; submit = $payload }
   }
   "submit-apply" {
+    if ($DryRun) { throw "submit-apply does not accept -DryRun. Use submit-preview for dry-run behavior." }
     if (-not $Apply) { throw "submit-apply requires explicit -Apply." }
     if ([string]::IsNullOrWhiteSpace($TaskTitle)) { throw "submit-apply requires -TaskTitle." }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-submit.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-EnsureProject", "-EnsureGoal", "-Apply", "-Json")
@@ -140,6 +142,7 @@ switch ($Mode) {
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "dry-run-once"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $payload.task_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-apply"; next_note = $nextNote; run_once = $payload }
   }
   "run-once-apply" {
+    if ($DryRun) { throw "run-once-apply does not accept -DryRun. Use run-once-preview for dry-run behavior." }
     if (-not $Apply) { throw "run-once-apply requires explicit -Apply." }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-run-once.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Apply", "-Json", "-OutputDir", $OutputDir)
     if ($WorkerProfile) { $args += @("-WorkerProfile", $WorkerProfile) }
@@ -170,6 +173,7 @@ switch ($Mode) {
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "pause"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "status"; control = $payload }
   }
   "start" {
+    if ($DryRun) { throw "start does not accept -DryRun. Omit -Apply to preview start intent through status/plan modes." }
     if (-not $Apply) { throw "start requires explicit -Apply." }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "start", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MaxTasks", "1", "-Json")
     $payload = Invoke-GuideJsonScript -Arguments $args
@@ -187,6 +191,7 @@ switch ($Mode) {
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "plan-preview"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; master_goal_id = $payload.master_goal.master_goal_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "plan-apply"; plan = $payload }
   }
   "plan-apply" {
+    if ($DryRun) { throw "plan-apply does not accept -DryRun. Use plan-preview for dry-run behavior." }
     if (-not $Apply) { throw "plan-apply requires explicit -Apply." }
     if ([string]::IsNullOrWhiteSpace($TaskTitle) -and [string]::IsNullOrWhiteSpace($GoalTitle)) { throw "plan-apply requires -GoalTitle or -TaskTitle as the master goal title." }
     $planTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }

@@ -97,6 +97,14 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -GoalTitle "Improve operator workflow"
 ```
 
+Preview modes are dry-run by default. `skybridge-guide.ps1 -Mode plan-preview` does not require `-DryRun`; the switch is accepted for compatibility but has no extra effect. Apply modes still require explicit `-Apply`.
+
+Rule-based proposal dedupe keys are stable per master goal and proposal kind. For a master goal id such as `prepare-skybridge-self-bootstrap-supervisor-loop`, examples are:
+
+- `prepare-skybridge-self-bootstrap-supervisor-loop-record`
+- `prepare-skybridge-self-bootstrap-supervisor-loop-runbook`
+- `prepare-skybridge-self-bootstrap-supervisor-loop-smoke`
+
 Minimum guided modes:
 
 - `plan-preview`

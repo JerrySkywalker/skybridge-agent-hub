@@ -217,6 +217,8 @@ Use this sequence for one-shot remote work. The guided command names map directl
 9. Read compact status again.
 10. Pause project control.
 
+Guide preview modes are already dry-run. `skybridge-guide.ps1 -Mode plan-preview` accepts `-DryRun` for operator muscle memory, but it is not required; apply modes still require explicit `-Apply`.
+
 Status:
 
 ```powershell
