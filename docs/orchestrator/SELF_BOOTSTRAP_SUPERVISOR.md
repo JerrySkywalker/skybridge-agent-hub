@@ -96,6 +96,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
 - Real execution requires `-Apply`.
 - Execution uses `skybridge-run-once.ps1 -NoSubmit -Apply`, which passes the selected task id to the edge worker, uses `PollOnce`, fails if that exact target task is not processed, and restores project control to paused.
 - The supervisor also attempts to pause project control in `finally`.
+- Worker Codex execution classifies websocket, TLS handshake, EOF, connection reset and transport-error messages as Codex transport failures. These failures are retried at most once by default, and persistent failures record `execution_error_class`, `retry_count` and unrecovered evidence instead of retrying indefinitely.
 - No Hermes planner call is made in this goal; `PlannerMode` remains `rule-based`.
 - Long-running worker loops remain deferred.
 

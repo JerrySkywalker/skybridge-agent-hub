@@ -183,12 +183,49 @@ function Invoke-EdgeWorkerOnce {
       $started = Start-Task -Config $Config -TaskId $next.task.task_id
       $steps += @{ step = "start"; status = "running"; task = $started.task }
 
-      $execution = Invoke-CodexTask -Config $Config -Task $claimed.task
-      $steps += @{ step = "execute"; result = $execution }
+      $maxTransportRetries = if ($null -ne $Config.codex_transport_max_retries) { [int]$Config.codex_transport_max_retries } else { 1 }
+      if ($maxTransportRetries -lt 0) { $maxTransportRetries = 0 }
+      $execution = $null
+      $classification = $null
+      $retryCount = 0
+      for ($attempt = 0; $attempt -le $maxTransportRetries; $attempt++) {
+        if ($attempt -gt 0) {
+          Reset-CodexTaskWorkspace -Config $Config -Task $claimed.task | Out-Null
+          $retryCount = $attempt
+          $steps += @{ step = "execute_retry"; retry_count = $attempt; reason = $classification.execution_error_class }
+        }
+        $execution = Invoke-CodexTask -Config $Config -Task $claimed.task
+        $classification = Get-CodexExecutionFailureClassification -ExecutionResult $execution
+        if ($execution -and (Get-Member -InputObject $execution -Name execution_error_class -MemberType NoteProperty -ErrorAction SilentlyContinue)) {
+          $execution.execution_error_class = $classification.execution_error_class
+        } else {
+          $execution | Add-Member -NotePropertyName execution_error_class -NotePropertyValue $classification.execution_error_class -Force
+        }
+        if ($execution -and (Get-Member -InputObject $execution -Name retriable -MemberType NoteProperty -ErrorAction SilentlyContinue)) {
+          $execution.retriable = [bool]$classification.retriable
+        } else {
+          $execution | Add-Member -NotePropertyName retriable -NotePropertyValue ([bool]$classification.retriable) -Force
+        }
+        if ($execution -and (Get-Member -InputObject $execution -Name retry_count -MemberType NoteProperty -ErrorAction SilentlyContinue)) {
+          $execution.retry_count = $retryCount
+        } else {
+          $execution | Add-Member -NotePropertyName retry_count -NotePropertyValue $retryCount -Force
+        }
+        if ($execution.ok -or -not $classification.retriable -or $attempt -ge $maxTransportRetries) { break }
+      }
+      $steps += @{ step = "execute"; result = $execution; classification = $classification; retry_count = $retryCount }
       if (-not $execution.ok) {
+        $summaryText = if ($classification.execution_error_class -in @("codex_transport_eof", "codex_transport_error")) {
+          "Codex transport failed after $retryCount retry."
+        } else {
+          ($execution.error_summary ?? $execution.summary)
+        }
         $failed = Fail-Task -Config $Config -TaskId $next.task.task_id -Result @{
-          error_summary = (($execution.error_summary ?? $execution.summary) -replace "\s+", " ").Substring(0, [Math]::Min(240, (($execution.error_summary ?? $execution.summary) -replace "\s+", " ").Length))
+          error_summary = ($summaryText -replace "\s+", " ").Substring(0, [Math]::Min(240, ($summaryText -replace "\s+", " ").Length))
           result_url = $execution.last_message_path
+          execution_error_class = $classification.execution_error_class
+          retry_count = $retryCount
+          recovered = $false
         }
         $steps += @{ step = "fail"; task = $failed.task }
         Invoke-EdgeWorkerNotification -Config $Config -Severity "urgent" -Title "SkyBridge task failed" -Message "Task $($next.task.task_id) failed during Codex execution." | Out-Null

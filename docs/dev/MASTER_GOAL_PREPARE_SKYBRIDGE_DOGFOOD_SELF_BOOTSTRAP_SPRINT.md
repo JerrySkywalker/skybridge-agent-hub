@@ -232,6 +232,65 @@ Codex run changed a docs-only file but exited nonzero after repeated
 child PR, CI run, merge or recovered evidence exists for
 `task_proposal-d90d09da925d2cf0`.
 
+## Codex Transport Recovery Retry
+
+The follow-up retry added bounded Codex transport recovery before re-running the
+dogfood task:
+
+- websocket, TLS handshake, EOF, connection reset and transport-error messages
+  are classified as Codex transport failures;
+- classified transport failures are retriable;
+- the worker retries Codex execution at most once by default;
+- retry failure evidence records `execution_error_class`, `retry_count` and
+  `recovered=false`;
+- non-transport execution, validation, build or CI failures are not classified
+  as Codex transport failures.
+
+The cloud preflight before retry confirmed:
+
+- project control was `paused`;
+- no queued or running tasks were visible;
+- `task_proposal-59a0236fb69800cd` remained `blocked`;
+- `task_proposal-d90d09da925d2cf0` was the only targeted failed task;
+- `laptop-zenbookduo` could register-heartbeat through token-file auth.
+
+The targeted retry requeued only `task_proposal-d90d09da925d2cf0` and ran
+`skybridge-run-once.ps1 -NoSubmit -Apply` against that task id. Codex succeeded
+on the first attempt in this retry, so the real run used `retry_count=0`; local
+smoke coverage separately proved the one-retry path with `retry_count=1` and
+`execution_error_class=codex_transport_eof`.
+
+## Recovered Sprint Result
+
+The bounded retry completed the first dogfood self-bootstrap sprint through the
+recovered-evidence path:
+
+- target task: `task_proposal-d90d09da925d2cf0`;
+- selected proposal: `proposal-d90d09da925d2cf0`;
+- worker: `laptop-zenbookduo`;
+- child PR: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/69`;
+- changed file: `docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md`;
+- CI status: all required GitHub Actions checks passed;
+- merge status: PR #69 merged by lifecycle policy;
+- merge commit: `81399f6afff508b47f53ccaeeba4fbad8cfe6305`;
+- project control final state: `paused`.
+
+The task raw status remains `failed` by design because the original Codex
+transport failure is preserved in task history. Evidence repair appended the
+recovered result:
+
+- `evidence_summary.recovered=true`;
+- `ci_status=passed_after_pending`;
+- `recovery_status=merged_after_pending_checks`;
+- `risk_status=low_docs_only`;
+- `validation_status=passed`.
+
+This proves the bounded cloud planning -> proposal conversion -> targeted local
+worker claim/start -> Codex docs edit -> child PR -> GitHub Actions green ->
+policy merge -> recovered evidence loop. It does not enable long-running worker
+loops; the next step should still be bounded multi-round supervision or planner
+activation behind explicit operator gates.
+
 ## Evidence To Record After Codex Transport Recovers
 
 - Supervisor run id, mode, status and stop reason.
