@@ -80,9 +80,16 @@ function Select-TaskSummary {
   $ciStatus = if ($evidenceSummary -and $evidenceSummary.ci_status) { [string]$evidenceSummary.ci_status } else { $null }
   $recovered = if ($evidenceSummary -and $evidenceSummary.recovered -eq $true) { $true } else { $false }
   $prUrl = if ($result -and $result.pr_url) { [string]$result.pr_url } elseif ($Task.pr_url) { [string]$Task.pr_url } else { $null }
+  $rawStatus = if ($Task.status) { [string]$Task.status } else { "queued" }
+  $displayStatus = $rawStatus
+  if ($rawStatus -eq "failed" -and $recovered) {
+    $displayStatus = if ($ciStatus -eq "passed_after_rerun") { "recovered" } else { "failed/recovered" }
+  }
   [pscustomobject]@{
     task_id = $taskId
-    status = if ($Task.status) { [string]$Task.status } else { "queued" }
+    status = $rawStatus
+    raw_status = $rawStatus
+    display_status = $displayStatus
     title = if ($Task.title) { [string]$Task.title } else { "-" }
     worker_id = if ($Task.assigned_worker_id) { [string]$Task.assigned_worker_id } else { "-" }
     updated_at = if ($Task.updated_at) { [string]$Task.updated_at } else { $null }
@@ -91,6 +98,9 @@ function Select-TaskSummary {
     error_summary = if ($Task.error_summary) { [string]$Task.error_summary } else { $null }
     pr = if ($prUrl) { "pr" } else { "-" }
     evidence_summary = $evidenceSummary
+    recovered = $recovered
+    ci_status = $ciStatus
+    summary = if ($result -and $result.summary) { [string]$result.summary } elseif ($Task.error_summary) { [string]$Task.error_summary } else { $null }
     evidence = if ($recovered) { "recovered" } elseif ($ciStatus) { $ciStatus } else { "-" }
   }
 }
@@ -134,8 +144,20 @@ function Write-CompactStatus {
   } else {
     "  id                             status     worker             pr  evidence"
     foreach ($task in @($Status.tasks | Sort-Object task_id)) {
-      "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.status 10) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
+      "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.display_status 10) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
     }
+  }
+  if (-not [string]::IsNullOrWhiteSpace($TaskId) -and @($Status.tasks).Count -gt 0) {
+    $task = @($Status.tasks)[0]
+    ""
+    "Task Detail:"
+    "  task_id:        $($task.task_id)"
+    "  raw_status:     $($task.raw_status)"
+    "  display_status: $($task.display_status)"
+    "  recovered:      $($task.recovered)"
+    "  ci_status:      $(if ($task.ci_status) { $task.ci_status } else { '-' })"
+    "  pr_url:         $(if ($task.pr_url) { $task.pr_url } else { '-' })"
+    "  summary:        $(if ($task.summary) { $task.summary } else { '-' })"
   }
 }
 

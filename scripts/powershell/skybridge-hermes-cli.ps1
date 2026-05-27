@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][ValidateSet("goal","project","workers","worker","tasks","task","loop")][string]$Area,
+  [Parameter(Mandatory = $true)][ValidateSet("goal","project","workers","worker","tasks","task","loop","operator")][string]$Area,
   [Parameter(Mandatory = $true)][string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -36,7 +36,32 @@ function Invoke-JsonScript {
   return ($output | ConvertFrom-Json)
 }
 
+function Invoke-OperatorGuide {
+  param([string]$Mode)
+  $args = @("-File", ".\scripts\powershell\skybridge-guide.ps1", "-Mode", $Mode, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Json")
+  if ($GoalId) { $args += @("-GoalId", $GoalId) }
+  if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) }
+  if ($TaskId) { $args += @("-TaskId", $TaskId) }
+  if ($TaskTitle) { $args += @("-TaskTitle", $TaskTitle) }
+  if ($TaskBody) { $args += @("-TaskBody", $TaskBody) }
+  if ($TaskBodyFile) { $args += @("-TaskBodyFile", $TaskBodyFile) }
+  if ($WorkerProfile) { $args += @("-WorkerProfile", $WorkerProfile) }
+  if ($TokenEnvVar) { $args += @("-TokenEnvVar", $TokenEnvVar) }
+  if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+  if ($Apply) { $args += "-Apply" }
+  Write-CliResult (Invoke-JsonScript -Arguments $args)
+}
+
 switch ("$Area $Command") {
+  "operator status" { Invoke-OperatorGuide -Mode "status" }
+  "operator submit-preview" { Invoke-OperatorGuide -Mode "submit-preview" }
+  "operator submit-apply" { Invoke-OperatorGuide -Mode "submit-apply" }
+  "operator run-once-preview" { Invoke-OperatorGuide -Mode "run-once-preview" }
+  "operator run-once-apply" { Invoke-OperatorGuide -Mode "run-once-apply" }
+  "operator inspect-task" { Invoke-OperatorGuide -Mode "inspect-task" }
+  "operator inspect-worker" { Invoke-OperatorGuide -Mode "inspect-worker" }
+  "operator pause" { Invoke-OperatorGuide -Mode "pause" }
+  "operator start" { Invoke-OperatorGuide -Mode "start" }
   "goal submit" {
     $args = @("-File", ".\scripts\powershell\skybridge-submit.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalId", $GoalId, "-EnsureProject", "-EnsureGoal", "-Json")
     if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) } else { $args += @("-GoalTitle", $GoalId) }
@@ -134,6 +159,6 @@ switch ("$Area $Command") {
     Write-CliResult ((& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @args) | ConvertFrom-Json)
   }
   default {
-    throw "Unsupported command. Supported: goal submit, project run, project start, project pause, project resume, project stop, project status, workers list, tasks list, task show, loop run-once, loop run-max-rounds."
+    throw "Unsupported command. Supported: operator status, operator submit-preview, operator run-once-preview, operator inspect-task, goal submit, project run, project start, project pause, project resume, project stop, project status, workers list, tasks list, task show, loop run-once, loop run-max-rounds."
   }
 }

@@ -27,7 +27,7 @@ Super Goal 168 adds the missing repair and operator workflow around this pilot:
 - CI Guardian fixture classification distinguishes checkout HTTP 403, account-suspended text, transient checkout/fetch failures, real test/build failures, pending checks and green recovery.
 - `skybridge-rerun-ci.ps1` provides a dry-run-first helper for one bounded rerun batch instead of indefinite retries.
 - `/v1/tasks/:taskId/evidence-repair` appends a `task.evidence_repaired` event and updates EvidenceSummary with `recovered=true` and statuses such as `passed_after_rerun`, while preserving the original failed event.
-- `skybridge-status.ps1` shows recovered evidence in compact task output.
+- `skybridge-status.ps1` shows recovered evidence in compact task output and derives `display_status=recovered` for failed tasks whose EvidenceSummary has `recovered=true` and `ci_status=passed_after_rerun`.
 - `skybridge-control.ps1` replaces manual project-control `Invoke-RestMethod` snippets for status/start/pause/stop/max-task changes.
 
 Interpretation for `remote-docs-exec-pilot-002`: the initial failed task event remains historically accurate because CI was blocked at first. The later green checks and merged child PR should be recorded as recovered evidence rather than by deleting or rewriting the original failure.
@@ -50,4 +50,4 @@ The first real use of the v0.37 operator workflow created and executed task `ope
 - `skybridge-run-once.ps1 -NoSubmit -Apply` executed one `-PollOnce` worker pass and restored project control to paused.
 - Child PR #60 passed GitHub Actions and merged through the low-risk child PR lifecycle policy.
 
-The execution path is now proven from operator CLI submission through local worker execution and PR merge. After the cloud server was updated to the latest main image, the evidence repair endpoint accepted recovered evidence for `operator-real-docs-task-170`; status remains failed by design while compact status shows `evidence=recovered`.
+The execution path is now proven from operator CLI submission through local worker execution and PR merge. After the cloud server was updated to the latest main image, the evidence repair endpoint accepted recovered evidence for `operator-real-docs-task-170`; raw status remains failed by design while compact status now presents the operator-facing task state as recovered.

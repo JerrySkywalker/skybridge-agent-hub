@@ -59,6 +59,7 @@ try {
     @{ task_id = "status-task-running"; project_id = "status-project"; title = "Running"; risk = "low"; source = "manual" },
     @{ task_id = "status-task-completed"; project_id = "status-project"; title = "Completed"; risk = "low"; source = "manual" },
     @{ task_id = "status-task-failed"; project_id = "status-project"; title = "Failed"; risk = "low"; source = "manual" },
+    @{ task_id = "status-task-recovered"; project_id = "status-project"; title = "Recovered"; risk = "low"; source = "manual" },
     @{ task_id = "status-task-blocked"; project_id = "status-project"; title = "Blocked"; risk = "low"; source = "manual" }
   )) {
     Invoke-SkyBridgeJson "POST" "/v1/tasks" $task | Out-Null
@@ -69,11 +70,26 @@ try {
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-completed/complete" @{ summary = "done" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-failed/claim" @{ worker_id = "status-worker-online" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-failed/fail" @{ error_summary = "fixture failure" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-recovered/claim" @{ worker_id = "status-worker-online" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-recovered/fail" @{ error_summary = "fixture transient failure" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-recovered/evidence-repair" @{
+    summary = "Recovered after rerun"
+    evidence_summary = @{
+      task_id = "status-task-recovered"
+      pr_url = "https://github.com/example/repo/pull/1"
+      validation_status = "passed"
+      ci_status = "passed_after_rerun"
+      risk_status = "low"
+      recovered = $true
+      summary = "Recovered fixture"
+    }
+  } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-task-blocked/block" @{ error_summary = "fixture block" } | Out-Null
 
   $compact = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project"
   $compactCompleted = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -ShowCompleted
   $compactTask = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -TaskId "status-task-completed"
+  $compactRecoveredTask = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -TaskId "status-task-recovered"
   $compactWorker = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -WorkerId "status-worker-online"
   $json = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -Json -OutputFile $jsonFile
   $parsed = $json | ConvertFrom-Json
@@ -86,6 +102,7 @@ try {
   if (($compact -join "`n") -match "status-task-completed") { throw "Default compact output should hide completed tasks." }
   if (($compactCompleted -join "`n") -notmatch "status-task-completed") { throw "ShowCompleted should include completed tasks." }
   if (($compactTask -join "`n") -notmatch "status-task-completed") { throw "TaskId detail should show the selected task." }
+  if (($compactRecoveredTask -join "`n") -notmatch "display_status:\s+recovered") { throw "Recovered task detail should show display_status=recovered." }
   if (($compactWorker -join "`n") -notmatch "status-worker-online") { throw "WorkerId detail should show the selected worker." }
   if (-not (Test-Path -LiteralPath $jsonFile -PathType Leaf)) { throw "Expected JSON output file." }
   if ($parsed.project_id -ne "status-project") { throw "Expected JSON project id." }
@@ -100,6 +117,10 @@ try {
     throw "Expected minute-scale relative time for stale heartbeat, got '$($staleWorker.last_seen)'. Workers: $workerDebug"
   }
   if (@($parsed.tasks | Where-Object { $_.status -eq "completed" }).Count -lt 1) { throw "Expected completed task row." }
+  $recoveredTask = @($parsed.tasks | Where-Object { $_.task_id -eq "status-task-recovered" })[0]
+  if ($recoveredTask.raw_status -ne "failed" -or $recoveredTask.display_status -ne "recovered" -or $recoveredTask.recovered -ne $true) {
+    throw "Expected recovered display semantics for failed recovered task."
+  }
   if ($parsed.token_printed -ne $false) { throw "Expected token_printed=false." }
 
   [pscustomobject]@{
