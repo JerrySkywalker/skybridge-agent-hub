@@ -39,6 +39,13 @@ function New-Slug {
   return "$Prefix-$($slug.Substring(0, [Math]::Min(48, $slug.Length)))"
 }
 
+function New-StableSlug {
+  param([string]$Text, [string]$Fallback = "master-goal")
+  $slug = (($Text ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  if ([string]::IsNullOrWhiteSpace($slug)) { $slug = $Fallback }
+  return $slug.Substring(0, [Math]::Min(72, $slug.Length))
+}
+
 function Get-HashText {
   param([string]$Text)
   $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -53,6 +60,7 @@ function Get-HashText {
 function New-RuleBasedProposals {
   param($State)
   $base = "$ProjectId/$MasterGoalId"
+  $dedupePrefix = New-StableSlug -Text $MasterGoalId -Fallback (New-StableSlug -Text $Title)
   $docsFile = "docs/dev/$($MasterGoalId.ToUpperInvariant() -replace '[^A-Z0-9]+', '_').md"
   @(
     [pscustomobject]@{
@@ -60,7 +68,7 @@ function New-RuleBasedProposals {
       title = "Record master goal plan"
       body = "Create or update $docsFile with the reviewed plan for '$Title'."
       prompt_summary = "Document the reviewed master goal plan."
-      dedupe_key = "$MasterGoalId:docs-record"
+      dedupe_key = "$dedupePrefix-record"
       expected_files = @($docsFile, "docs/dev/PROGRESS.md")
       acceptance_criteria = @("Plan summary is documented.", "Safety constraints and stop conditions are recorded.")
       evidence_requirements = @("Changed files are docs-only.", "Validation command results are summarized.")
@@ -77,7 +85,7 @@ function New-RuleBasedProposals {
       title = "Update operator runbook"
       body = "Update the relevant runbook with operator steps for '$Title'."
       prompt_summary = "Document operator workflow changes for the master goal."
-      dedupe_key = "$MasterGoalId:operator-runbook"
+      dedupe_key = "$dedupePrefix-runbook"
       expected_files = @("docs/orchestrator/WORKER_PROFILE_RUNBOOK.md")
       acceptance_criteria = @("Runbook includes preview-first workflow.", "No secrets or production deployment steps are introduced.")
       evidence_requirements = @("Docs validation passes.", "Updated section is linked from progress notes if meaningful.")
@@ -94,7 +102,7 @@ function New-RuleBasedProposals {
       title = "Add local smoke coverage"
       body = "Add local smoke coverage for the first implementation slice of '$Title'."
       prompt_summary = "Add safe local smoke coverage."
-      dedupe_key = "$MasterGoalId:local-smoke"
+      dedupe_key = "$dedupePrefix-smoke"
       expected_files = @("scripts/powershell/smoke-$($MasterGoalId.ToLowerInvariant() -replace '[^a-z0-9]+', '-').ps1")
       acceptance_criteria = @("Smoke uses a local test server or fixture.", "Smoke does not require real cloud credentials.", "Smoke does not run real Codex by default.")
       evidence_requirements = @("Smoke output shows token_printed=false where applicable.", "validate-powershell.ps1 passes.")

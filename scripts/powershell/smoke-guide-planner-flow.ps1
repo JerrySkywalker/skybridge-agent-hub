@@ -34,7 +34,7 @@ try {
   Wait-SkyBridgeHealth | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/projects" @{ project_id = "guide-plan-project"; name = "Guide Planner Project" } | Out-Null
 
-  $preview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode plan-preview -ApiBase $ApiBase -ProjectId guide-plan-project -MasterGoalId guide-master -GoalTitle "Guide planner smoke goal" -OutputDir $outputDir -Json | ConvertFrom-Json
+  $preview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode plan-preview -ApiBase $ApiBase -ProjectId guide-plan-project -MasterGoalId guide-master -GoalTitle "Guide planner smoke goal" -DryRun -OutputDir $outputDir -Json | ConvertFrom-Json
   $apply = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode plan-apply -ApiBase $ApiBase -ProjectId guide-plan-project -MasterGoalId guide-master -GoalTitle "Guide planner smoke goal" -Apply -OutputDir $outputDir -Json | ConvertFrom-Json
   $list = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 -Mode proposals -ApiBase $ApiBase -ProjectId guide-plan-project -MasterGoalId guide-master -OutputDir $outputDir -Json | ConvertFrom-Json
   $proposalId = @($list.proposals.proposals)[0].proposal_id

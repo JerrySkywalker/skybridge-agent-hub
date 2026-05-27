@@ -42,6 +42,33 @@ try {
     -DryRun `
     -Json | ConvertFrom-Json
   if ($dryRun.mode -ne "dry-run" -or @($dryRun.proposals).Count -lt 1) { throw "Expected planner dry-run proposals." }
+  $dryRunAgain = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-plan.ps1 `
+    -ApiBase $ApiBase `
+    -ProjectId planner-project `
+    -MasterGoalId master-planner-goal `
+    -Title "Master planner smoke goal" `
+    -Description "Create safe task proposals." `
+    -DryRun `
+    -Json | ConvertFrom-Json
+  $otherDryRun = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-plan.ps1 `
+    -ApiBase $ApiBase `
+    -ProjectId planner-project `
+    -MasterGoalId other-master-planner-goal `
+    -Title "Other master planner smoke goal" `
+    -Description "Create safe task proposals." `
+    -DryRun `
+    -Json | ConvertFrom-Json
+  $keys = @($dryRun.proposals | ForEach-Object { [string]$_.dedupe_key })
+  $keysAgain = @($dryRunAgain.proposals | ForEach-Object { [string]$_.dedupe_key })
+  $otherKeys = @($otherDryRun.proposals | ForEach-Object { [string]$_.dedupe_key })
+  if (@($keys | Where-Object { [string]::IsNullOrWhiteSpace($_) -or $_ -match "^-" }).Count -gt 0) {
+    throw "Expected nonblank dedupe keys that do not start with '-'."
+  }
+  if (($keys -join "|") -ne ($keysAgain -join "|")) { throw "Expected stable dedupe keys for the same master goal." }
+  if (@($keys | Where-Object { $otherKeys -contains $_ }).Count -gt 0) { throw "Expected different master goals to have distinct dedupe keys." }
+  foreach ($expected in @("master-planner-goal-record", "master-planner-goal-runbook", "master-planner-goal-smoke")) {
+    if ($keys -notcontains $expected) { throw "Expected dedupe key '$expected'." }
+  }
 
   $apply = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-plan.ps1 `
     -ApiBase $ApiBase `
@@ -63,6 +90,7 @@ try {
     DryRun = "passed"
     Apply = "passed"
     ProposalCount = @($stored.proposals).Count
+    DedupeKeys = $keys
     TokenPrinted = $false
   } | Format-List
 } finally {
