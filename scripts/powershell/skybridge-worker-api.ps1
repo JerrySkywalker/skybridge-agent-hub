@@ -169,6 +169,9 @@ function Get-QueuedTasks {
 
 function Get-TaskType {
   param($Task)
+  if ($Task -and -not [string]::IsNullOrWhiteSpace([string]$Task.task_type)) {
+    return [string]$Task.task_type
+  }
   $text = @($Task.title, $Task.prompt_summary, $Task.body, (@($Task.required_capabilities) -join " ")) -join " "
   if ($text -match "(?i)\bdocs?\b|documentation|readme") { return "docs" }
   if ($text -match "(?i)\btest\b|typecheck|lint|validation") { return "test" }
@@ -197,10 +200,27 @@ function Test-TaskCompatible {
 }
 
 function Get-NextTask {
-  param($Config)
+  param($Config, [string]$TaskId)
   $response = Get-QueuedTasks -Config $Config
+  $tasks = @($response.tasks)
+  if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+    $matches = @($tasks | Where-Object { $_.task_id -eq $TaskId })
+    if ($matches.Count -lt 1) {
+      return [pscustomobject]@{
+        task = $null
+        task_type = $null
+        skipped = @([pscustomobject]@{
+          task_id = $TaskId
+          title = $null
+          reason = "target_task_not_queued"
+          task_type = $null
+        })
+      }
+    }
+    $tasks = $matches
+  }
   $skipped = @()
-  foreach ($task in @($response.tasks)) {
+  foreach ($task in @($tasks)) {
     $compatibility = Test-TaskCompatible -Task $task -Config $Config
     if ($compatibility.compatible) {
       return [pscustomobject]@{

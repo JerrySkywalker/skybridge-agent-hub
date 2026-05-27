@@ -33,7 +33,12 @@ function Select-SupervisorProposal {
   $safe = @($eligible | Where-Object { $_.risk -eq "low" })
   if (@($safe).Count -gt 0) {
     $docs = @($safe | Where-Object { $_.task_type -eq "docs" })
-    if (@($docs).Count -gt 0) { return @($docs)[0] }
+    if (@($docs).Count -gt 0) {
+      return @($docs | Sort-Object `
+        @{ Expression = { if (@($_.expected_files | Where-Object { $_ -like "docs/dev/*" }).Count -gt 0) { 0 } else { 1 } } }, `
+        @{ Expression = { if ([string]$_.dedupe_key -match "-record$") { 0 } else { 1 } } }, `
+        @{ Expression = { [string]$_.dedupe_key } })[0]
+    }
     return @($safe)[0]
   }
   if ($AllowHighRisk) {

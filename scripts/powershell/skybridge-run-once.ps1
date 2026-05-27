@@ -83,6 +83,7 @@ $projectStarted = "skipped"
 $workerChecked = "skipped"
 $pollOnce = "skipped"
 $projectPaused = "skipped"
+$pollOnceResult = $null
 
 try {
   if (-not $NoSubmit) {
@@ -122,8 +123,20 @@ try {
     $workerChecked = "register-heartbeat"
 
     $edgeArgs = @("-File", ".\scripts\powershell\skybridge-edge-worker.ps1", "-ConfigFile", $WorkerProfile, "-ProjectId", $ProjectId, "-PollOnce", "-Json")
-    Invoke-RunOnceJson -Arguments $edgeArgs | Out-Null
-    $pollOnce = "completed"
+    if ($TaskId) { $edgeArgs += @("-TaskId", $TaskId) }
+    $pollOnceResult = Invoke-RunOnceJson -Arguments $edgeArgs
+    $pollOnce = if ($pollOnceResult.task_id) {
+      "completed:$($pollOnceResult.task_id)"
+    } elseif ($pollOnceResult.stop_reason) {
+      "skipped:$($pollOnceResult.stop_reason)"
+    } else {
+      "no_task"
+    }
+    if ($NoSubmit -and $TaskId -and $pollOnceResult.task_id -ne $TaskId) {
+      $reasons = @($pollOnceResult.steps | Where-Object { $_.step -eq "poll" } | ForEach-Object { @($_.skipped | ForEach-Object { $_.reason }) }) -join ","
+      if ([string]::IsNullOrWhiteSpace($reasons)) { $reasons = $pollOnce }
+      throw "PollOnce did not process target task $TaskId. Result: $reasons"
+    }
   } else {
     $projectStarted = "would_start"
     $workerChecked = if ($WorkerProfile) { "would_register_heartbeat" } else { "skipped_no_worker_profile" }
@@ -159,6 +172,7 @@ Write-RunOnceResult ([pscustomobject]@{
   project_started = $projectStarted
   worker_checked = $workerChecked
   poll_once = $pollOnce
+  poll_once_result = $pollOnceResult
   project_paused = $projectPaused
   output_dir = $OutputDir
   snapshots = [pscustomobject]@{
