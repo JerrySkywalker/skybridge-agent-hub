@@ -64,7 +64,7 @@ The deterministic policy can output:
 - `stop_task_failed`
 - `ask_human`
 
-The first selector prefers low-risk proposals with `required_capabilities` including `codex`, docs task type, not converted/rejected, and non-duplicate dedupe keys. High-risk proposals require `-AllowHighRisk` and should stay out of real cloud execution until the safety policy is expanded.
+The first selector prefers low-risk proposals with `required_capabilities` including `codex`, docs task type, not converted/rejected, and non-duplicate dedupe keys. When several low-risk docs proposals are available, docs/dev record proposals are preferred before runbook follow-ups so the first sprint records the reviewed plan before expanding operator guidance. High-risk proposals require `-AllowHighRisk` and should stay out of real cloud execution until the safety policy is expanded.
 
 Recovered task evidence is not blocking: raw `failed` plus `evidence_summary.recovered=true` and `ci_status=passed_after_rerun` is treated as recovered for supervisor decisions.
 
@@ -94,7 +94,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
 - `MaxRounds` defaults to `1` and must be greater than zero.
 - Each round may convert and run at most one proposal.
 - Real execution requires `-Apply`.
-- Execution uses `skybridge-run-once.ps1 -NoSubmit -Apply`, which uses `PollOnce` and restores project control to paused.
+- Execution uses `skybridge-run-once.ps1 -NoSubmit -Apply`, which passes the selected task id to the edge worker, uses `PollOnce`, fails if that exact target task is not processed, and restores project control to paused.
 - The supervisor also attempts to pause project control in `finally`.
 - No Hermes planner call is made in this goal; `PlannerMode` remains `rule-based`.
 - Long-running worker loops remain deferred.

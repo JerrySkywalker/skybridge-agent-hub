@@ -50,6 +50,7 @@ try {
   if ($IsWindows) { $startProcessParams.WindowStyle = "Hidden" }
   $serverProcess = Start-Process @startProcessParams
   Wait-SkyBridgeHealth | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/projects" @{ project_id = "skybridge-agent-hub"; name = "SkyBridge Agent Hub" } | Out-Null
 
   @{
     worker_id = "profile-normalized-worker"
@@ -81,6 +82,28 @@ try {
   $profileWorker = Invoke-SkyBridgeJson "GET" "/v1/workers/profile-normalized-worker"
   if ($profileWorker.worker.status -ne "online") { throw "Expected normalized profile worker to be online." }
 
+  Invoke-SkyBridgeJson "POST" "/v1/tasks" @{
+    task_id = "profile-normalized-docs-task"
+    project_id = "skybridge-agent-hub"
+    title = "Neutral item"
+    prompt_summary = "Neutral item"
+    body = "Neutral item"
+    task_type = "docs"
+    required_capabilities = @("codex-exec")
+  } | Out-Null
+  Invoke-SkyBridgeJson "PATCH" "/v1/projects/skybridge-agent-hub/control" @{ state = "running"; stop_requested = $false; max_tasks = 1 } | Out-Null
+  $pollPreview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps1 `
+    -ConfigFile $profilePath `
+    -ProjectId skybridge-agent-hub `
+    -TaskId profile-normalized-docs-task `
+    -PollOnce `
+    -DryRun `
+    -Json | ConvertFrom-Json
+  $claimStep = @($pollPreview.steps | Where-Object { $_.step -eq "claim" })[0]
+  if (-not $claimStep -or $claimStep.preview.task_id -ne "profile-normalized-docs-task") {
+    throw "Expected task_type=docs target task to be claim-preview compatible."
+  }
+
   @{
     worker_id = "legacy-runtime-worker"
     name = "Legacy runtime worker"
@@ -105,6 +128,7 @@ try {
     ApiBase = $ApiBase
     NewFormatProfileDirect = $true
     LegacyRuntimeConfig = $true
+    TaskTypeDocsPreview = $true
     TokenPrinted = $false
     ProfileWorkerStatus = $profileWorker.worker.status
     LegacyWorkerStatus = $legacyWorker.worker.status

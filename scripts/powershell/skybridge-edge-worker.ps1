@@ -3,6 +3,7 @@ param(
   [string]$ConfigFile = ".\config\edge-worker.example.json",
   [string]$WorkerProfileFile,
   [string]$ProjectId,
+  [string]$TaskId,
   [switch]$Register,
   [switch]$Heartbeat,
   [switch]$PollOnce,
@@ -22,6 +23,7 @@ $ErrorActionPreference = "Stop"
 $edgeConfigFile = $ConfigFile
 $edgeWorkerProfileFile = $WorkerProfileFile
 $edgeProjectId = $ProjectId
+$edgeTaskId = $TaskId
 $edgeJson = $Json
 
 . (Join-Path $PSScriptRoot "skybridge-worker-api.ps1")
@@ -31,6 +33,7 @@ $edgeJson = $Json
 $ConfigFile = $edgeConfigFile
 $WorkerProfileFile = $edgeWorkerProfileFile
 $ProjectId = $edgeProjectId
+$TaskId = $edgeTaskId
 $Json = $edgeJson
 
 function Write-EdgeWorkerResult {
@@ -119,7 +122,7 @@ function Test-EdgeWorkerReadiness {
 }
 
 function Invoke-EdgeWorkerOnce {
-  param($Config)
+  param($Config, [string]$TargetTaskId)
 
   $steps = @()
   if ($Register) {
@@ -151,10 +154,10 @@ function Invoke-EdgeWorkerOnce {
       }
     }
 
-    $next = Get-NextTask -Config $Config
+    $next = Get-NextTask -Config $Config -TaskId $TargetTaskId
     if (-not $next.task) {
       $steps += @{ step = "poll"; status = "empty"; skipped = @($next.skipped) }
-      return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; steps = $steps }
+      return @{ ok = $true; worker_id = $Config.worker_id; target_task_id = $TargetTaskId; dry_run = [bool]$DryRun; steps = $steps }
     }
 
     $claimPreview = @{
@@ -165,7 +168,7 @@ function Invoke-EdgeWorkerOnce {
     }
     if ($DryRun) {
       $steps += @{ step = "claim"; status = "preview"; preview = $claimPreview }
-      return @{ ok = $true; worker_id = $Config.worker_id; dry_run = $true; steps = $steps }
+      return @{ ok = $true; worker_id = $Config.worker_id; target_task_id = $TargetTaskId; dry_run = $true; steps = $steps }
     }
 
     $claimed = Claim-Task -Config $Config -TaskId $next.task.task_id
@@ -246,7 +249,7 @@ function Invoke-EdgeWorkerOnce {
     }
   }
 
-  return @{ ok = $true; worker_id = $Config.worker_id; dry_run = [bool]$DryRun; steps = $steps }
+  return @{ ok = $true; worker_id = $Config.worker_id; target_task_id = $TargetTaskId; dry_run = [bool]$DryRun; steps = $steps }
 }
 
 function Test-NewWorkerProfileShape {
@@ -334,7 +337,7 @@ if ($Loop) {
 
       $result = $null
       try {
-        $result = Invoke-EdgeWorkerOnce -Config $config
+        $result = Invoke-EdgeWorkerOnce -Config $config -TargetTaskId $TaskId
       } catch {
         $message = ($_.Exception.Message -replace "\s+", " ")
         Write-EdgeWorkerLoopLog -LogDir $logDir -Event "loop_error" -Data @{ error = $message }
@@ -431,5 +434,5 @@ if ($Loop) {
     }
   }
 } else {
-  Write-EdgeWorkerResult -Result (Invoke-EdgeWorkerOnce -Config $config)
+  Write-EdgeWorkerResult -Result (Invoke-EdgeWorkerOnce -Config $config -TargetTaskId $TaskId)
 }

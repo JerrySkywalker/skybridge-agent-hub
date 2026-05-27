@@ -35,15 +35,29 @@ try {
   $recovered | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $recoveredFile -Encoding UTF8
   $recoveredResult = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervisor-policy.ps1 -FixtureFile $recoveredFile -Json | ConvertFrom-Json
 
+  $orderedDocs = @{
+    control = @{ state = "paused"; stop_requested = $false }
+    workers = @(@{ worker_id = "policy-worker"; status = "online" })
+    proposals = @(
+      @{ proposal_id = "policy-runbook"; dedupe_key = "goal-runbook"; risk = "low"; task_type = "docs"; status = "proposed"; required_capabilities = @("codex"); expected_files = @("docs/orchestrator/WORKER_PROFILE_RUNBOOK.md") },
+      @{ proposal_id = "policy-record"; dedupe_key = "goal-record"; risk = "low"; task_type = "docs"; status = "proposed"; required_capabilities = @("codex"); expected_files = @("docs/dev/MASTER_GOAL.md", "docs/dev/PROGRESS.md") }
+    )
+  }
+  $orderedFile = Join-Path $tempDir "ordered-docs.json"
+  $orderedDocs | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $orderedFile -Encoding UTF8
+  $orderedResult = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervisor-policy.ps1 -FixtureFile $orderedFile -Json | ConvertFrom-Json
+
   if ($baseResult.selected_proposal_id -ne "policy-docs" -or $baseResult.decision.decision -ne "continue") { throw "Expected low-risk docs proposal selection." }
   if ($highResult.decision.decision -ne "ask_human" -or $highResult.decision.stop_reason -ne "high_risk_requires_review") { throw "Expected high-risk proposal to require human review." }
   if ($recoveredResult.latest_task_display_status -ne "recovered" -or $recoveredResult.decision.decision -ne "continue") { throw "Expected recovered task evidence to continue." }
-  if ($baseResult.token_printed -ne $false -or $highResult.token_printed -ne $false -or $recoveredResult.token_printed -ne $false) { throw "Expected token_printed=false." }
+  if ($orderedResult.selected_proposal_id -ne "policy-record") { throw "Expected docs/dev record proposal to be preferred before runbook proposal." }
+  if ($baseResult.token_printed -ne $false -or $highResult.token_printed -ne $false -or $recoveredResult.token_printed -ne $false -or $orderedResult.token_printed -ne $false) { throw "Expected token_printed=false." }
 
   [pscustomobject]@{
     SelectLowRisk = "passed"
     HighRiskBlocked = "passed"
     RecoveredEvidence = "passed"
+    DocsDevPreferred = "passed"
     TokenPrinted = $false
   } | Format-List
 } finally {
