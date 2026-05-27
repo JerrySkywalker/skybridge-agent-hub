@@ -10,6 +10,7 @@ param(
   [string]$ProposalId,
   [string]$Description,
   [string[]]$Constraints = @(),
+  [int]$MaxRounds = 3,
   [string]$TaskId,
   [string]$TaskTitle,
   [string]$TaskBody,
@@ -18,7 +19,6 @@ param(
   [string]$TokenEnvVar,
   [string]$TokenFile,
   [string]$MasterGoalFile = ".\goals\master\self-bootstrap-smoke.md",
-  [int]$MaxRounds = 3,
   [int]$MaxTasks = 0,
   [switch]$Apply,
   [switch]$DryRun,
@@ -57,6 +57,8 @@ function Invoke-OperatorGuide {
   if ($TokenEnvVar) { $args += @("-TokenEnvVar", $TokenEnvVar) }
   if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
   if ($Apply) { $args += "-Apply" }
+  if ($DryRun) { $args += "-DryRun" }
+  if ($MaxRounds -gt 0) { $args += @("-MaxRounds", [string]$MaxRounds) }
   Write-CliResult (Invoke-JsonScript -Arguments $args)
 }
 
@@ -76,6 +78,8 @@ switch ("$Area $Command") {
   "operator proposal-show" { Invoke-OperatorGuide -Mode "proposal-show" }
   "operator proposal-accept" { Invoke-OperatorGuide -Mode "proposal-accept" }
   "operator proposal-convert-preview" { Invoke-OperatorGuide -Mode "proposal-convert-preview" }
+  "operator supervise-preview" { Invoke-OperatorGuide -Mode "supervise-preview" }
+  "operator supervise-apply" { Invoke-OperatorGuide -Mode "supervise-apply" }
   "goal submit" {
     $args = @("-File", ".\scripts\powershell\skybridge-submit.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalId", $GoalId, "-EnsureProject", "-EnsureGoal", "-Json")
     if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) } else { $args += @("-GoalTitle", $GoalId) }

@@ -138,3 +138,18 @@ Planner metadata includes:
 - Token values are never printed.
 
 This planning layer prepares the self-bootstrap supervisor loop by making task creation reviewable, deduped and evidence-oriented before execution.
+
+## Bounded Supervisor Loop
+
+`skybridge-supervise.ps1` composes planning, proposal selection, proposal conversion and optional `run-once` execution into one bounded loop. It defaults to dry-run and `MaxRounds=1`.
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervise.ps1 `
+  -ApiBase http://127.0.0.1:8787 `
+  -ProjectId skybridge-agent-hub `
+  -MasterGoalId master-goal-example `
+  -GoalTitle "Improve operator workflow" `
+  -DryRun
+```
+
+Apply mode requires explicit `-Apply`, selects at most one low-risk proposal per round, and restores project control to paused before exiting. See `docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md` for the stop reasons and decision policy.
