@@ -41,3 +41,13 @@ Super Goal 169 adds the CLI workflow that should replace handwritten task/contro
 - `skybridge-hermes-cli.ps1` can route `goal submit`, `project status/start/pause`, `worker status/heartbeat`, and `loop run-once` to the dedicated operator helpers.
 
 This is the bridge toward Hermes Web/CLI guided goal submission while keeping the worker execution path agent-agnostic.
+
+## 2026-05-27 Operator Submit-And-Run Proof
+
+The first real use of the v0.37 operator workflow created and executed task `operator-real-docs-task-170` without handwritten API calls:
+
+- `skybridge-submit.ps1 -Apply` created the docs-only task.
+- `skybridge-run-once.ps1 -NoSubmit -Apply` executed one `-PollOnce` worker pass and restored project control to paused.
+- Child PR #60 passed GitHub Actions and merged through the low-risk child PR lifecycle policy.
+
+The execution path is now proven from operator CLI submission through local worker execution and PR merge. The task recovery record still depends on deploying `/v1/tasks/:taskId/evidence-repair` to the cloud server.
