@@ -32,15 +32,9 @@ function Get-StrictJsonText {
 
 function Test-PlannerDecisionSchema {
   param($Decision)
-  $allowed = @("continue", "repair", "wait", "stop", "blocked")
-  if ($allowed -notcontains [string]$Decision.decision) { throw "Invalid evaluation decision: $($Decision.decision)" }
+  $allowed = @("continue", "stop", "ask_human", "retry_once", "repair_evidence", "summarize")
+  if ($allowed -notcontains [string]$Decision.recommendation) { throw "Invalid evaluation recommendation: $($Decision.recommendation)" }
   if ([string]::IsNullOrWhiteSpace($Decision.reason)) { throw "Evaluation decision missing reason." }
-  if ($Decision.decision -in @("continue", "repair") -and $null -ne $Decision.task) {
-    foreach ($field in @("title", "task_type", "risk", "prompt")) {
-      if ([string]::IsNullOrWhiteSpace($Decision.task.$field)) { throw "Evaluation task missing $field." }
-    }
-  }
-  if ($null -eq $Decision.stop_criteria_status) { $Decision | Add-Member -NotePropertyName stop_criteria_status -NotePropertyValue @() -Force }
 }
 
 function ConvertFrom-StrictPlannerJson {
@@ -69,10 +63,8 @@ function Invoke-HermesPlanner {
 function New-DryRunEvaluationDecision {
   param($Task)
   return [pscustomobject]@{
-    decision = if ($Task.status -eq "completed") { "continue" } elseif ($Task.status -eq "failed") { "repair" } else { "wait" }
+    recommendation = if ($Task.status -eq "completed") { "continue" } elseif ($Task.status -eq "failed") { "repair_evidence" } else { "summarize" }
     reason = "Dry-run evaluation based on task status $($Task.status)."
-    task = $null
-    stop_criteria_status = @("latest_task=$($Task.status)")
   }
 }
 
@@ -88,7 +80,11 @@ function Invoke-HermesEvaluation {
     planner_metadata = $Task.planner_metadata
   } | ConvertTo-Json -Depth 12
   $prompt = @"
-Return only strict JSON using the SkyBridge planner schema. Decide whether the self-bootstrap loop should continue, repair, wait, stop or blocked after this task result.
+Return only strict JSON with:
+- recommendation: one of continue, stop, ask_human, retry_once, repair_evidence, summarize
+- reason: concise advisory rationale
+
+Hermes is advisory only. SkyBridge deterministic policy is final. Do not execute commands.
 
 Task result summary:
 $summary
@@ -101,22 +97,14 @@ $taskResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks/$([uri]::Escape
 $task = $taskResponse.task
 $decision = if ($DryRun) { New-DryRunEvaluationDecision -Task $task } else { Invoke-HermesEvaluation -Task $task }
 
-if ($GoalId -and $decision.decision -in @("stop", "blocked")) {
-  $status = if ($decision.decision -eq "blocked") { "blocked" } else { "completed" }
-  try {
-    Invoke-SkyBridgeApi -Method PATCH -Path "/v1/goals/$([uri]::EscapeDataString($GoalId))" -ApiBase $ApiBase -Body @{ status = $status; summary = [string]$decision.reason } | Out-Null
-  } catch {}
-}
-
-if ($decision.decision -eq "repair" -and $task.status -eq "failed") {
-  try { Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/requeue" -ApiBase $ApiBase | Out-Null } catch {}
-}
-
 $result = [pscustomobject]@{
   ok = $true
   dry_run = [bool]$DryRun
   task_id = $TaskId
   task_status = $task.status
+  hermes_recommendation = $decision.recommendation
+  policy_decision = "not_evaluated_by_this_script"
+  final_decision = "skybridge_policy_required"
   decision = $decision
   hermes_api_key_value_included = $false
 }

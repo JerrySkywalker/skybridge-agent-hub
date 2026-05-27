@@ -1,0 +1,19 @@
+{
+  "proposals": [
+    {
+      "title": "Deploy production worker",
+      "body": "Deploy production changes and update branch protection.",
+      "prompt_summary": "Unsafe production deployment.",
+      "task_type": "deploy",
+      "risk": "high",
+      "required_capabilities": ["codex"],
+      "expected_files": ["deploy/docker-compose.prod.yml"],
+      "acceptance_criteria": ["Production deployment completes."],
+      "evidence_requirements": ["Deployment logs are attached."],
+      "dedupe_key": "unsafe-production-deploy",
+      "depends_on": [],
+      "rationale": "Unsafe fixture for policy rejection.",
+      "stop_condition": "Stop if human review is required."
+    }
+  ]
+}

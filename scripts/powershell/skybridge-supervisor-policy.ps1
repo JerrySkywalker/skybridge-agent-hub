@@ -28,7 +28,8 @@ function Select-SupervisorProposal {
   $eligible = @($Proposals | Where-Object {
     $_.status -notin @("converted", "rejected") -and
     ($duplicateKeys -notcontains $_.dedupe_key) -and
-    (@($_.required_capabilities) -contains "codex")
+    (@($_.required_capabilities) -contains "codex") -and
+    ($_.policy_decision -in @($null, "accepted_for_preview", "accepted_for_execution"))
   })
   $safe = @($eligible | Where-Object { $_.risk -eq "low" })
   if (@($safe).Count -gt 0) {

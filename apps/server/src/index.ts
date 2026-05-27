@@ -2881,6 +2881,7 @@ function parseTaskProposalInput(
     task_type: safeString(input.task_type) ?? "docs",
     depends_on: safeStringArray(input.depends_on) ?? [],
     rationale: safeString(input.rationale) ?? "Rule-based planner proposal.",
+    stop_condition: safeString(input.stop_condition),
     status: status as PlanningProposalStatus,
     created_by: safeString(input.created_by) ?? createdBy,
     created_at: now,
@@ -2897,9 +2898,12 @@ function safePlannerAdapterAuditMetadata(input: unknown): PlannerAdapterAuditMet
   return {
     provider,
     model: safeString(record.model),
+    runtime_mode: safeString(record.runtime_mode),
     planner_mode: plannerMode,
+    tool_execution_mode: safeString(record.tool_execution_mode),
     prompt_version: safeString(record.prompt_version) ?? "v1",
     input_state_hash: safeString(record.input_state_hash) ?? "unknown",
+    session_id: safeString(record.session_id),
     raw_response_included: false,
     secrets_included: false,
   };

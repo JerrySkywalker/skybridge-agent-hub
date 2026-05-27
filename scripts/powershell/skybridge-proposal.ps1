@@ -54,6 +54,29 @@ function Write-ProposalResult {
   "TokenPrinted: false"
 }
 
+function Test-ProposalExecutionPolicy {
+  param($Proposal, [array]$AllProposals, [switch]$AllowHighRisk)
+  $reasons = New-Object System.Collections.Generic.List[string]
+  $decision = "accepted_for_execution"
+  $sameKey = @($AllProposals | Where-Object { $_.dedupe_key -eq $Proposal.dedupe_key -and $_.proposal_id -ne $Proposal.proposal_id })
+  if (@($sameKey).Count -gt 0) { $decision = "rejected_duplicate"; $reasons.Add("dedupe_key is duplicated") | Out-Null }
+  if ($Proposal.risk -ne "low" -and -not $AllowHighRisk) { $decision = "rejected_high_risk"; $reasons.Add("risk must be low unless explicitly allowed") | Out-Null }
+  if ($Proposal.task_type -notin @("docs", "local-smoke")) { $decision = "ask_human"; $reasons.Add("task_type must be docs or local-smoke") | Out-Null }
+  if (@($Proposal.required_capabilities) -notcontains "codex") { $decision = "ask_human"; $reasons.Add("required_capabilities must include codex") | Out-Null }
+  if (@($Proposal.acceptance_criteria).Count -eq 0 -or @($Proposal.evidence_requirements).Count -eq 0) { $decision = "ask_human"; $reasons.Add("acceptance_criteria and evidence_requirements are required") | Out-Null }
+  foreach ($file in @($Proposal.expected_files)) {
+    $normalized = ([string]$file).Replace("\", "/")
+    if (-not ($normalized -like "docs/*" -or $normalized -like "scripts/powershell/smoke-*.ps1") -or $normalized -like ".agent/*" -or $normalized -like ".data/*" -or $normalized -like ".env*" -or $normalized -like "deploy/*") {
+      $decision = "rejected_expected_files"; $reasons.Add("expected file is outside allowed docs/local-smoke paths: $normalized") | Out-Null
+    }
+  }
+  $text = (@($Proposal.title, $Proposal.body, $Proposal.prompt_summary, $Proposal.rationale, @($Proposal.expected_files)) -join " ")
+  if ($text -match "(?i)(production deploy|docker daemon|branch protection|github settings|/opt/skybridge-agent-hub|commit \.env|token file|private key)") {
+    $decision = "ask_human"; $reasons.Add("proposal mentions a blocked high-risk surface") | Out-Null
+  }
+  [pscustomobject]@{ decision = $decision; reasons = @($reasons.ToArray()) }
+}
+
 $script:Config = New-ProposalApiConfig
 if ($script:Config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-SkyBridgeWorkerToken -Config $script:Config))) {
   throw "SkyBridge worker token is required by the selected TokenEnvVar or TokenFile."
@@ -90,7 +113,11 @@ switch ($Command) {
   "convert" {
     if ([string]::IsNullOrWhiteSpace($ProposalId)) { throw "proposal convert requires -ProposalId." }
     $proposal = (Invoke-ProposalApi -Method GET -Path "/v1/task-proposals/$([uri]::EscapeDataString($ProposalId))").proposal
-    if ($proposal.risk -eq "high" -and -not $AllowHighRisk) { throw "High-risk proposals require -AllowHighRisk before conversion." }
+    $allProposals = @((Invoke-ProposalApi -Method GET -Path "/v1/task-proposals?project_id=$([uri]::EscapeDataString($ProjectId))").proposals)
+    $policy = Test-ProposalExecutionPolicy -Proposal $proposal -AllProposals $allProposals -AllowHighRisk:$AllowHighRisk
+    if ($policy.decision -ne "accepted_for_execution") {
+      throw "Proposal $ProposalId failed execution policy: $($policy.decision) ($(@($policy.reasons) -join '; '))."
+    }
     if ($effectiveDryRun) {
       $task = [pscustomobject]@{
         task_id = if ($TaskId) { $TaskId } else { "task_$ProposalId" }
@@ -105,12 +132,12 @@ switch ($Command) {
         validation = @($proposal.evidence_requirements)
         required_capabilities = @($proposal.required_capabilities)
       }
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; proposal = $proposal; task = $task }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; validation = $policy; proposal = $proposal; task = $task }
     } else {
       $body = @{ allow_high_risk = [bool]$AllowHighRisk }
       if ($TaskId) { $body.task_id = $TaskId }
       $payload = Invoke-ProposalApi -Method POST -Path "/v1/task-proposals/$([uri]::EscapeDataString($ProposalId))/convert" -Body $body
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; proposal = $payload.proposal; task = $payload.task }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; validation = $policy; proposal = $payload.proposal; task = $payload.task }
     }
   }
 }

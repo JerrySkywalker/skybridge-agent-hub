@@ -32,9 +32,10 @@ try {
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\scripts\powershell\skybridge-hermes-evaluate-result.ps1" -TaskId "eval-task" -ApiBase $apiBase -DryRun -Json
   if ($LASTEXITCODE -ne 0) { throw "Hermes evaluate dry-run failed." }
   $result = $output | ConvertFrom-Json
-  if ($result.decision.decision -ne "continue") { throw "Expected continue evaluation." }
-  $summary = @{ ok = $true; decision = $result.decision.decision; dry_run = $true }
-  if ($Json) { $summary | ConvertTo-Json -Depth 8 } else { Write-Host "[smoke-hermes-evaluate-result] ok=$($summary.ok) decision=$($summary.decision)" }
+  if ($result.hermes_recommendation -ne "continue") { throw "Expected continue evaluation." }
+  if ($result.final_decision -ne "skybridge_policy_required") { throw "Expected SkyBridge policy to remain final." }
+  $summary = @{ ok = $true; recommendation = $result.hermes_recommendation; final_decision = $result.final_decision; dry_run = $true }
+  if ($Json) { $summary | ConvertTo-Json -Depth 8 } else { Write-Host "[smoke-hermes-evaluate-result] ok=$($summary.ok) recommendation=$($summary.recommendation)" }
 } finally {
   if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
   Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
