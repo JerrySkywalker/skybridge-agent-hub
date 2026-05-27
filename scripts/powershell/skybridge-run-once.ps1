@@ -52,6 +52,17 @@ function Write-RunOnceResult {
 }
 
 $effectiveDryRun = $DryRun -or -not $Apply
+if (-not $NoSubmit) {
+  if ([string]::IsNullOrWhiteSpace($TaskTitle)) {
+    if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
+      throw "skybridge-run-once submit mode requires -TaskTitle when -TaskId is supplied. Add -TaskTitle/-GoalTitle or use -NoSubmit for an existing queued task."
+    }
+    throw "skybridge-run-once submit mode requires -TaskTitle. Use -NoSubmit to run against an existing queued task."
+  }
+  if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($GoalId)) {
+    throw "skybridge-run-once submit mode requires -GoalTitle or -GoalId. Use -NoSubmit to run against an existing queued task."
+  }
+}
 if (-not $effectiveDryRun -and -not $AllowDirty -and -not (Test-GitClean)) {
   throw "Working tree is dirty. Commit/stash changes or pass -AllowDirty explicitly."
 }
