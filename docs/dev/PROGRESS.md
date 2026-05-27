@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 174 Dogfood Self-Bootstrap Sprint
+
+- Preflight against `https://skybridge.jerryskywalker.space` succeeded: project control was paused, `laptop-zenbookduo` heartbeated online through token-file auth, no queued/running tasks were visible, and supervisor dry-run selected low-risk docs proposal `proposal-d90d09da925d2cf0`.
+- The selected proposal was `Record master goal plan` for `master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint`, with expected files limited to `docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md` and `docs/dev/PROGRESS.md`.
+- Added supervisor UX polish so `skybridge-supervise.ps1` and guided supervisor modes can derive a deterministic `master-goal-*` id from `-GoalTitle` when `-MasterGoalId` is omitted.
+- Real supervisor apply was attempted with `MaxRounds=1`, but the cloud server returned `404 Not Found` for `POST /v1/master-goals`. This indicates the deployed cloud server does not yet expose the planner persistence routes required for supervisor apply.
+- No proposal was converted, no executable task was created, no worker `PollOnce` execution ran, and no child PR was opened. Project control was verified after the failed apply as `paused` with `stop_requested=false`.
+- First dogfood self-bootstrap sprint remains blocked on cloud server deployment/version alignment for the planner persistence route family.
+
 ## 2026-05-27 Super Goal 173 Self-Bootstrap Supervisor Loop
 
 - Added `skybridge-supervise.ps1`, a dry-run-first bounded supervisor that composes project status, rule-based planning, proposal selection, proposal conversion and optional one-shot worker execution.

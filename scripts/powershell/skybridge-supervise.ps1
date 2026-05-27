@@ -51,8 +51,22 @@ function New-MasterGoalId {
 function Invoke-SupervisorJsonScript {
   param([string[]]$Arguments)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $($Arguments -join ' ')" }
+  if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $(Format-SafeArguments -Arguments $Arguments)" }
   return ($output | ConvertFrom-Json)
+}
+
+function Format-SafeArguments {
+  param([string[]]$Arguments)
+  $safe = New-Object System.Collections.Generic.List[string]
+  for ($i = 0; $i -lt $Arguments.Count; $i++) {
+    $arg = [string]$Arguments[$i]
+    $safe.Add($arg) | Out-Null
+    if ($arg -in @("-TokenFile", "-TokenEnvVar") -and ($i + 1) -lt $Arguments.Count) {
+      $i++
+      $safe.Add("<redacted>") | Out-Null
+    }
+  }
+  return ($safe.ToArray() -join " ")
 }
 
 function Add-AuthArgs {
@@ -173,6 +187,7 @@ $run = [pscustomobject]@{
 
 $rounds = New-Object System.Collections.Generic.List[object]
 $latestTask = $null
+$supervisorError = $null
 
 try {
   $run.status = "running"
@@ -303,6 +318,10 @@ try {
       $run.stop_reason = "max_rounds_reached"
     }
   }
+} catch {
+  $supervisorError = $_
+  $run.status = "failed"
+  $run.stop_reason = "supervisor_error"
 } finally {
   if (-not $effectiveDryRun) {
     try {
@@ -319,14 +338,16 @@ if ($run.status -eq "running") {
 }
 
 $result = [pscustomobject]@{
-  ok = $true
+  ok = ($null -eq $supervisorError)
   api_base = $ApiBase
   project_id = $ProjectId
   master_goal_id = $MasterGoalId
   token_printed = $false
   supervisor_run = $run
   rounds = @($rounds.ToArray())
+  error = if ($supervisorError) { [string]$supervisorError.Exception.Message } else { $null }
 }
 
 $result | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $OutputDir "skybridge-supervise-result.json") -Encoding UTF8
 Write-SupervisorResult -Result $result
+if ($supervisorError) { exit 1 }
