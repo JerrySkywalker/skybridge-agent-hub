@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 173 Self-Bootstrap Supervisor Loop
+
+- Added `skybridge-supervise.ps1`, a dry-run-first bounded supervisor that composes project status, rule-based planning, proposal selection, proposal conversion and optional one-shot worker execution.
+- Added a lightweight supervisor run/round/decision output model with stop reasons, selected proposal/task, PR/CI/evidence fields and `token_printed=false`.
+- Added deterministic supervisor policy coverage for low-risk docs selection, high-risk human review, worker availability and recovered evidence semantics.
+- Extended `skybridge-guide.ps1` and `skybridge-hermes-cli.ps1 -Area operator` with supervisor preview/apply/status routing.
+- Added local fixture smokes for supervisor dry-run, policy, apply-without-Codex conversion, guide supervisor flow and Hermes CLI supervisor facade. Real cloud mutation and long-running worker loops remain deferred.
+
 ## 2026-05-27 Super Goal 172 Master Goal Planner
 
 - Added a lightweight planning model: `planning_master_goals`, `planning_sessions` and `task_proposals`. This keeps high-level planning separate from the existing executable Goal Registry while still allowing proposal conversion into normal queued tasks.

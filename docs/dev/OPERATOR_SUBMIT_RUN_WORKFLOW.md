@@ -62,3 +62,5 @@ Super Goal 172 adds a planning step before task creation:
 6. `skybridge-proposal.ps1 -Command convert -Apply` creates the normal SkyBridge task.
 
 The guide exposes the same flow through `plan-preview`, `plan-apply`, `proposals`, `proposal-show`, `proposal-accept` and `proposal-convert-preview`. This keeps high-level planning reviewable before any worker can claim work.
+
+Super Goal 173 adds a bounded supervisor on top of the same primitives. `skybridge-supervise.ps1` reads project state, plans or loads proposals, chooses one safe low-risk proposal, converts it to one task, and can run it once through the local worker when `-Apply` is explicit. Dry-run remains the default, `MaxRounds` is bounded, and long-running worker loops remain deferred.
