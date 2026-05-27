@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-05-26 Super Goal 169 Operator Goal Submission Workflow
+
+- Added `skybridge-submit.ps1`, a dry-run-first operator command that can ensure a project/goal and create one task with default `required_capabilities=["codex"]`, token env/file support, JSON output and no token printing.
+- Added `skybridge-run-once.ps1`, a one-shot operator workflow that records status snapshots, optionally submits a task, starts project control with `max_tasks=1`, register-heartbeats the worker, runs the edge worker with `-PollOnce`, and restores project control to `paused` in `finally`.
+- Fixed compact worker status timestamps so an online worker no longer displays a stale relative time immediately after heartbeat. Remote status reads also use a longer timeout for cloud task lists.
+- Extended `skybridge-hermes-cli.ps1` as a facade for goal submit/list, task create/list/show, project status/start/pause, worker status/heartbeat and run-once routing.
+- Added local smokes for submit, run-once and the combined operator workflow. Real cloud checks were limited to status, heartbeat, submit dry-run and run-once dry-run; no remote task was created.
+- Long-running remote `-Loop` remains deferred. The standard workflow is status -> submit -> run-once -> status -> inspect PR/evidence.
+
 ## 2026-05-26 Super Goal 168 Remote Worker Reliability
 
 - Added CI failure classification for green, pending, real failures, checkout HTTP 403, account-suspended text, transient checkout/fetch failures and unknown outcomes. The classifier uses fixture logs in smokes and does not call GitHub with real secrets.

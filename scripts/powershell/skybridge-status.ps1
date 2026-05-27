@@ -10,6 +10,7 @@ param(
   [switch]$ShowAll,
   [string]$TaskId,
   [string]$WorkerId,
+  [int]$TimeoutSeconds = 30,
   [switch]$Json,
   [string]$OutputFile
 )
@@ -79,11 +80,19 @@ function Select-TaskSummary {
 
 function Select-WorkerSummary {
   param($Worker)
+  $seenAt = if ($Worker.last_seen_at) { [string]$Worker.last_seen_at } else { $null }
+  if ($Worker.status -in @("online", "stale") -and $Worker.updated_at) {
+    try {
+      $updated = [datetimeoffset]::Parse([string]$Worker.updated_at)
+      $seen = if ($seenAt) { [datetimeoffset]::Parse($seenAt) } else { [datetimeoffset]::MinValue }
+      if ($updated -gt $seen) { $seenAt = [string]$Worker.updated_at }
+    } catch {}
+  }
   [pscustomobject]@{
     worker_id = if ($Worker.worker_id) { [string]$Worker.worker_id } else { "-" }
     status = if ($Worker.status) { [string]$Worker.status } else { "offline" }
-    last_seen_at = if ($Worker.last_seen_at) { [string]$Worker.last_seen_at } else { $null }
-    last_seen = Format-RelativeTime -IsoTime $Worker.last_seen_at
+    last_seen_at = $seenAt
+    last_seen = if ($Worker.status -eq "online") { "0s ago" } else { Format-RelativeTime -IsoTime $seenAt }
     current_task_id = if ($Worker.current_task_id) { [string]$Worker.current_task_id } else { $null }
     auth_mode = if ($Worker.auth_mode) { [string]$Worker.auth_mode } else { $null }
     api_base = if ($Worker.api_base) { [string]$Worker.api_base } else { $null }
@@ -140,19 +149,19 @@ if ($config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-
   throw "SkyBridge worker token is required by the selected TokenEnvVar or TokenFile."
 }
 
-$health = Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10
+$health = Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
 $project = $null
-try { $project = Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10 } catch {}
+try { $project = Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds } catch {}
 $control = $null
-try { $control = (Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/control" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).control_state } catch {}
-$workers = (Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).workers
+try { $control = (Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/control" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).control_state } catch {}
+$workers = (Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).workers
 if (-not [string]::IsNullOrWhiteSpace($WorkerId)) {
-  $workerResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($WorkerId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10
+  $workerResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($WorkerId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
   $workers = @($workerResponse.worker)
 }
-$tasks = (Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10).tasks
+$tasks = (Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).tasks
 if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
-  $taskResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds 10
+  $taskResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
   $tasks = @($taskResponse.task)
 }
 

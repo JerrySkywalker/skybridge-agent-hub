@@ -31,3 +31,13 @@ Super Goal 168 adds the missing repair and operator workflow around this pilot:
 - `skybridge-control.ps1` replaces manual project-control `Invoke-RestMethod` snippets for status/start/pause/stop/max-task changes.
 
 Interpretation for `remote-docs-exec-pilot-002`: the initial failed task event remains historically accurate because CI was blocked at first. The later green checks and merged child PR should be recorded as recovered evidence rather than by deleting or rewriting the original failure.
+
+## 2026-05-26 Operator Workflow Follow-Up
+
+Super Goal 169 adds the CLI workflow that should replace handwritten task/control API calls:
+
+- `skybridge-submit.ps1` creates one goal/task only with `-Apply`; default behavior is dry-run.
+- `skybridge-run-once.ps1` captures status before/after, optionally submits a task, starts project control with `max_tasks=1`, register-heartbeats the worker, invokes the edge worker with `-PollOnce`, and restores project control to paused.
+- `skybridge-hermes-cli.ps1` can route `goal submit`, `project status/start/pause`, `worker status/heartbeat`, and `loop run-once` to the dedicated operator helpers.
+
+This is the bridge toward Hermes Web/CLI guided goal submission while keeping the worker execution path agent-agnostic.
