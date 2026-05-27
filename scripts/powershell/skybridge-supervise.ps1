@@ -41,6 +41,13 @@ function New-SupervisorId {
   return "$Prefix-$now-$(Get-HashText "$ProjectId/$MasterGoalId/$now")"
 }
 
+function New-MasterGoalId {
+  param([string]$Title)
+  $slug = (($Title ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  if ([string]::IsNullOrWhiteSpace($slug)) { throw "skybridge-supervise requires -MasterGoalId or a non-empty -GoalTitle to derive one." }
+  return "master-goal-$($slug.Substring(0, [Math]::Min(72, $slug.Length)))"
+}
+
 function Invoke-SupervisorJsonScript {
   param([string[]]$Arguments)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments
@@ -142,8 +149,8 @@ function Write-SupervisorResult {
 }
 
 if ($MaxRounds -lt 1) { throw "skybridge-supervise requires -MaxRounds greater than zero." }
-if (-not $MasterGoalId) { throw "skybridge-supervise requires -MasterGoalId." }
 if (-not $GoalTitle) { throw "skybridge-supervise requires -GoalTitle." }
+if (-not $MasterGoalId) { $MasterGoalId = New-MasterGoalId -Title $GoalTitle }
 if ($Apply -and $DryRun) { throw "Use either -Apply or -DryRun, not both." }
 if ($Apply -and -not $NoRun -and -not $WorkerProfile) { throw "skybridge-supervise -Apply requires -WorkerProfile unless -NoRun is supplied." }
 

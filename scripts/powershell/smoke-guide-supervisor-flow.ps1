@@ -40,7 +40,6 @@ try {
     -Mode supervise-preview `
     -ApiBase $ApiBase `
     -ProjectId guide-supervisor-project `
-    -MasterGoalId guide-supervisor-master `
     -GoalTitle "Guide supervisor smoke goal" `
     -OutputDir $outputDir `
     -Json | ConvertFrom-Json
@@ -53,6 +52,8 @@ try {
     -Json | ConvertFrom-Json
 
   if ($preview.mode -ne "supervise-preview" -or $preview.supervise.supervisor_run.mode -ne "dry-run") { throw "Expected guide supervise-preview dry run." }
+  if ($preview.master_goal_id -ne "master-goal-guide-supervisor-smoke-goal") { throw "Expected derived master goal id." }
+  if ($preview.next_command -notmatch "master-goal-guide-supervisor-smoke-goal") { throw "Expected next command to preserve derived master goal id." }
   if ($preview.next_command -notmatch "supervise-apply") { throw "Expected next supervise-apply command." }
   if ($status.mode -ne "supervise-status" -or $status.token_printed -ne $false) { throw "Expected guide supervise-status." }
   if ($preview.token_printed -ne $false) { throw "Expected token_printed=false." }

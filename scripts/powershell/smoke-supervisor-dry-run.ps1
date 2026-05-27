@@ -39,7 +39,6 @@ try {
   $result = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervise.ps1 `
     -ApiBase $ApiBase `
     -ProjectId supervisor-dry-project `
-    -MasterGoalId supervisor-dry-master `
     -GoalTitle "Supervisor dry-run goal" `
     -DryRun `
     -OutputDir $outputDir `
@@ -48,6 +47,7 @@ try {
   $round = @($result.rounds)[0]
 
   if ($result.supervisor_run.mode -ne "dry-run") { throw "Expected dry-run supervisor mode." }
+  if ($result.master_goal_id -ne "master-goal-supervisor-dry-run-goal") { throw "Expected derived master goal id." }
   if ($result.supervisor_run.status -ne "completed") { throw "Expected completed dry-run preview." }
   if ($round.selected_proposal_id -notmatch "^proposal-") { throw "Expected selected proposal." }
   if ($round.proposal.risk -ne "low" -or $round.proposal.task_type -ne "docs") { throw "Expected low-risk docs proposal." }

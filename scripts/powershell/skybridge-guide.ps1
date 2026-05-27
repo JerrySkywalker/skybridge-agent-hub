@@ -68,6 +68,13 @@ function New-GuideNextCommand {
   return ($parts -join " ")
 }
 
+function New-GuideMasterGoalId {
+  param([string]$Title)
+  $slug = (($Title ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  if ([string]::IsNullOrWhiteSpace($slug)) { return $null }
+  return "master-goal-$($slug.Substring(0, [Math]::Min(72, $slug.Length)))"
+}
+
 function Write-GuideResult {
   param($Result)
   if ($Json) {
@@ -234,9 +241,9 @@ switch ($Mode) {
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "proposal-convert-preview"; api_base = $ApiBase; project_id = $ProjectId; proposal_id = $ProposalId; task_id = $payload.task.task_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-preview"; proposal = $payload.proposal; task = $payload.task }
   }
   "supervise-preview" {
-    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { throw "supervise-preview requires -MasterGoalId." }
     if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "supervise-preview requires -GoalTitle or -TaskTitle as the master goal title." }
     $superviseTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { $MasterGoalId = New-GuideMasterGoalId -Title $superviseTitle }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-supervise.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MasterGoalId", $MasterGoalId, "-GoalTitle", $superviseTitle, "-MaxRounds", [string]$MaxRounds, "-DryRun", "-Json", "-OutputDir", $OutputDir)
     if ($Description) { $args += @("-Description", $Description) }
     if ($WorkerProfile) { $args += @("-WorkerProfile", $WorkerProfile) }
@@ -248,9 +255,9 @@ switch ($Mode) {
   "supervise-apply" {
     if ($DryRun) { throw "supervise-apply does not accept -DryRun. Use supervise-preview for dry-run behavior." }
     if (-not $Apply) { throw "supervise-apply requires explicit -Apply." }
-    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { throw "supervise-apply requires -MasterGoalId." }
     if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "supervise-apply requires -GoalTitle or -TaskTitle as the master goal title." }
     $superviseTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { $MasterGoalId = New-GuideMasterGoalId -Title $superviseTitle }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-supervise.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MasterGoalId", $MasterGoalId, "-GoalTitle", $superviseTitle, "-MaxRounds", [string]$MaxRounds, "-Apply", "-Json", "-OutputDir", $OutputDir)
     if ($Description) { $args += @("-Description", $Description) }
     if ($WorkerProfile) { $args += @("-WorkerProfile", $WorkerProfile) }
