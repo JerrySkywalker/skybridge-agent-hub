@@ -1,0 +1,49 @@
+{
+  "proposals": [
+    {
+      "title": "Document Hermes-assisted supervisor sprint",
+      "body": "Update docs/dev/HERMES_ASSISTED_SELF_BOOTSTRAP_SPRINT.md and docs/dev/PROGRESS.md with a bounded Hermes-assisted preview record.",
+      "prompt_summary": "Document the Hermes-assisted self-bootstrap sprint preview.",
+      "task_type": "docs",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": [
+        "docs/dev/HERMES_ASSISTED_SELF_BOOTSTRAP_SPRINT.md",
+        "docs/dev/PROGRESS.md"
+      ],
+      "acceptance_criteria": [
+        "The sprint report records Hermes planner metadata without secrets.",
+        "The progress log summarizes the bounded preview result."
+      ],
+      "evidence_requirements": [
+        "Changed files are docs-only.",
+        "Validation commands are summarized."
+      ],
+      "dedupe_key": "hermes-assisted-self-bootstrap-sprint-record",
+      "depends_on": [],
+      "rationale": "Start with a docs-only record before any additional automation changes.",
+      "stop_condition": "Stop if execution would edit outside the expected docs files."
+    },
+    {
+      "title": "Clarify multiround supervisor runbook",
+      "body": "Update docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md with the bounded Hermes advisory workflow.",
+      "prompt_summary": "Clarify Hermes advisory multiround supervisor behavior.",
+      "task_type": "docs",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": ["docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md"],
+      "acceptance_criteria": [
+        "Runbook states Hermes cannot execute shell or bypass policy.",
+        "Runbook states MaxRounds is bounded and PollOnce-only."
+      ],
+      "evidence_requirements": [
+        "Docs validation passes.",
+        "No production deployment steps are added."
+      ],
+      "dedupe_key": "hermes-assisted-self-bootstrap-supervisor-runbook",
+      "depends_on": ["hermes-assisted-self-bootstrap-sprint-record"],
+      "rationale": "Operator-facing multiround behavior needs deterministic safety notes.",
+      "stop_condition": "Stop if the change requires secrets, deployment, GitHub settings or branch protection."
+    }
+  ]
+}

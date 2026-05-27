@@ -8,13 +8,17 @@ param(
   [string]$WorkerProfile,
   [string]$TokenEnvVar,
   [string]$TokenFile,
-  [int]$MaxRounds = 1,
+  [int]$MaxRounds = 2,
   [switch]$Apply,
   [switch]$DryRun,
   [switch]$Json,
   [string]$OutputDir = ".agent/tmp",
-  [ValidateSet("rule-based")]
+  [ValidateSet("rule-based", "hermes-preview", "hermes-apply")]
   [string]$PlannerMode = "rule-based",
+  [string]$PlannerFixtureFile,
+  [ValidateSet("none", "fixture")]
+  [string]$EvaluatorMode = "none",
+  [string]$EvaluatorFixtureFile,
   [switch]$AllowHighRisk,
   [switch]$StopAfterPlan,
   [switch]$StopAfterProposal,
@@ -98,7 +102,8 @@ function Select-SupervisorProposal {
   $eligible = @($proposalRows | Where-Object {
     $_.status -notin @("converted", "rejected") -and
     ($duplicateKeys -notcontains $_.dedupe_key) -and
-    (@($_.required_capabilities) -contains "codex")
+    (@($_.required_capabilities) -contains "codex") -and
+    ($_.policy_decision -in @($null, "accepted_for_preview", "accepted_for_execution"))
   })
   $safe = @($eligible | Where-Object { $_.risk -eq "low" })
   if (@($safe).Count -gt 0) {
@@ -116,6 +121,44 @@ function Select-SupervisorProposal {
     if (@($high).Count -gt 0) { return @($high)[0] }
   }
   return $null
+}
+
+function Test-NoActiveResidue {
+  param($Status)
+  $active = @($Status.tasks | Where-Object { $_.raw_status -in @("queued", "running", "claimed") -or $_.status -in @("queued", "running", "claimed") })
+  if (@($active).Count -gt 0) {
+    return [pscustomobject]@{ ok = $false; task_ids = @($active | ForEach-Object { $_.task_id }) }
+  }
+  return [pscustomobject]@{ ok = $true; task_ids = @() }
+}
+
+function Get-HermesAdvisoryDecision {
+  param($Round, $Task)
+  if ($EvaluatorMode -eq "none") {
+    return [pscustomobject]@{
+      hermes_recommendation = "not_requested"
+      policy_decision = $Round.decision.decision
+      final_decision = $Round.decision.decision
+      reason = "Hermes evaluator was not requested."
+    }
+  }
+  $recommendation = "summarize"
+  $reason = "Fixture advisory recommendation."
+  if ($EvaluatorFixtureFile -and (Test-Path -LiteralPath $EvaluatorFixtureFile -PathType Leaf)) {
+    $fixture = Get-Content -Raw -LiteralPath $EvaluatorFixtureFile | ConvertFrom-Json
+    $recommendation = [string]$fixture.recommendation
+    $reason = [string]$fixture.reason
+  }
+  if ($recommendation -notin @("continue", "stop", "ask_human", "retry_once", "repair_evidence", "summarize")) {
+    $recommendation = "ask_human"
+    $reason = "Invalid Hermes recommendation was downgraded to ask_human."
+  }
+  [pscustomobject]@{
+    hermes_recommendation = $recommendation
+    policy_decision = $Round.decision.decision
+    final_decision = $Round.decision.decision
+    reason = $reason
+  }
 }
 
 function Get-SupervisorDecision {
@@ -200,9 +243,11 @@ try {
     $run.current_round = $roundIndex
     $statusArgs = Add-AuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ShowAll", "-Json", "-OutputFile", (Join-Path $OutputDir "supervisor-status-round-$roundIndex.json"))
     $status = Invoke-SupervisorJsonScript -Arguments $statusArgs
+    $residue = Test-NoActiveResidue -Status $status
 
     $planArgs = Add-AuthArgs @("-File", ".\scripts\powershell\skybridge-plan.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MasterGoalId", $MasterGoalId, "-Title", $GoalTitle, "-PlannerMode", $PlannerMode, "-Json", "-OutputFile", (Join-Path $OutputDir "supervisor-plan-round-$roundIndex.json"))
     if ($Description) { $planArgs += @("-Description", $Description) }
+    if ($PlannerFixtureFile) { $planArgs += @("-FixtureFile", $PlannerFixtureFile) }
     if ($effectiveDryRun) { $planArgs += "-DryRun" } else { $planArgs += "-Apply" }
     $plan = Invoke-SupervisorJsonScript -Arguments $planArgs
 
@@ -220,6 +265,7 @@ try {
         control_state = $status.control.state
         stop_requested = $status.control.stop_requested
         workers_online = @($status.workers | Where-Object { $_.status -eq "online" }).Count
+        active_residue_task_ids = @($residue.task_ids)
         task_count = @($status.tasks).Count
         proposal_count = @($proposals).Count
       }
@@ -232,9 +278,19 @@ try {
       ci_status = $null
       task_status = $null
       evidence_status = $null
+      hermes_advisory = $null
       proposal = $selected
       task = $null
       run_once = $null
+    }
+
+    if (-not $residue.ok) {
+      $round.action = "stop"
+      $round.decision = [pscustomobject]@{ decision = "ask_human"; stop_reason = "active_task_residue"; reason = "Queued/running task residue exists: $(@($residue.task_ids) -join ', ')." }
+      $round.hermes_advisory = Get-HermesAdvisoryDecision -Round $round -Task $latestTask
+      $rounds.Add($round)
+      $run.status = "blocked"; $run.stop_reason = "active_task_residue"
+      break
     }
 
     if ($StopAfterPlan) {
@@ -247,6 +303,7 @@ try {
 
     if ($decision.decision -ne "continue") {
       $round.action = if ($decision.decision -eq "ask_human") { "ask_human" } else { "stop" }
+      $round.hermes_advisory = Get-HermesAdvisoryDecision -Round $round -Task $latestTask
       $rounds.Add($round)
       $run.status = if ($decision.decision -eq "ask_human") { "blocked" } else { "stopped" }
       $run.stop_reason = $decision.stop_reason
@@ -277,6 +334,7 @@ try {
         would_run = $true
         command = "pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 -ApiBase `"$ApiBase`" -ProjectId `"$ProjectId`" -TaskId `"$taskId`" -GoalId `"$MasterGoalId`" -NoSubmit -Apply -WorkerProfile `"$WorkerProfile`""
       }
+      $round.hermes_advisory = Get-HermesAdvisoryDecision -Round $round -Task $latestTask
       $rounds.Add($round)
       $run.status = "completed"; $run.stop_reason = "dry_run_preview_complete"
       break
@@ -293,6 +351,7 @@ try {
 
     if ($StopAfterConvert -or $NoRun) {
       $round.decision = [pscustomobject]@{ decision = "stop_completed"; stop_reason = if ($NoRun) { "no_run" } else { "stop_after_convert" }; reason = "Converted one proposal and skipped execution by operator flag." }
+      $round.hermes_advisory = Get-HermesAdvisoryDecision -Round $round -Task $round.task
       $rounds.Add($round)
       $run.status = "completed"; $run.stop_reason = $round.decision.stop_reason
       break
@@ -310,6 +369,7 @@ try {
     $round.pr_url = $latestTask.pr_url
     $round.ci_status = $latestTask.ci_status
     $round.evidence_status = $latestTask.evidence
+    $round.hermes_advisory = Get-HermesAdvisoryDecision -Round $round -Task $latestTask
     $rounds.Add($round)
 
     $afterDecision = Get-SupervisorDecision -Status $status -Proposals $proposals -SelectedProposal $selected -LatestTask $latestTask -AllowHighRisk:$AllowHighRisk

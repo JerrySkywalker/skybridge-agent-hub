@@ -338,9 +338,12 @@ export interface PlanningMasterGoal {
 export interface PlannerAdapterAuditMetadata {
   provider: string;
   model?: string;
+  runtime_mode?: string;
   planner_mode: string;
+  tool_execution_mode?: string;
   prompt_version: string;
   input_state_hash: string;
+  session_id?: string;
   raw_response_included: false;
   secrets_included: false;
 }
@@ -371,6 +374,7 @@ export interface TaskProposal {
   task_type: string;
   depends_on: string[];
   rationale: string;
+  stop_condition?: string;
   status: PlanningProposalStatus;
   created_by: string;
   converted_task_id?: string;
