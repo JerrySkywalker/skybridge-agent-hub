@@ -41,11 +41,32 @@ function New-SupervisorId {
   return "$Prefix-$now-$(Get-HashText "$ProjectId/$MasterGoalId/$now")"
 }
 
+function New-MasterGoalId {
+  param([string]$Title)
+  $slug = (($Title ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  if ([string]::IsNullOrWhiteSpace($slug)) { throw "skybridge-supervise requires -MasterGoalId or a non-empty -GoalTitle to derive one." }
+  return "master-goal-$($slug.Substring(0, [Math]::Min(72, $slug.Length)))"
+}
+
 function Invoke-SupervisorJsonScript {
   param([string[]]$Arguments)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $($Arguments -join ' ')" }
+  if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $(Format-SafeArguments -Arguments $Arguments)" }
   return ($output | ConvertFrom-Json)
+}
+
+function Format-SafeArguments {
+  param([string[]]$Arguments)
+  $safe = New-Object System.Collections.Generic.List[string]
+  for ($i = 0; $i -lt $Arguments.Count; $i++) {
+    $arg = [string]$Arguments[$i]
+    $safe.Add($arg) | Out-Null
+    if ($arg -in @("-TokenFile", "-TokenEnvVar") -and ($i + 1) -lt $Arguments.Count) {
+      $i++
+      $safe.Add("<redacted>") | Out-Null
+    }
+  }
+  return ($safe.ToArray() -join " ")
 }
 
 function Add-AuthArgs {
@@ -142,8 +163,8 @@ function Write-SupervisorResult {
 }
 
 if ($MaxRounds -lt 1) { throw "skybridge-supervise requires -MaxRounds greater than zero." }
-if (-not $MasterGoalId) { throw "skybridge-supervise requires -MasterGoalId." }
 if (-not $GoalTitle) { throw "skybridge-supervise requires -GoalTitle." }
+if (-not $MasterGoalId) { $MasterGoalId = New-MasterGoalId -Title $GoalTitle }
 if ($Apply -and $DryRun) { throw "Use either -Apply or -DryRun, not both." }
 if ($Apply -and -not $NoRun -and -not $WorkerProfile) { throw "skybridge-supervise -Apply requires -WorkerProfile unless -NoRun is supplied." }
 
@@ -166,6 +187,7 @@ $run = [pscustomobject]@{
 
 $rounds = New-Object System.Collections.Generic.List[object]
 $latestTask = $null
+$supervisorError = $null
 
 try {
   $run.status = "running"
@@ -296,6 +318,10 @@ try {
       $run.stop_reason = "max_rounds_reached"
     }
   }
+} catch {
+  $supervisorError = $_
+  $run.status = "failed"
+  $run.stop_reason = "supervisor_error"
 } finally {
   if (-not $effectiveDryRun) {
     try {
@@ -312,14 +338,16 @@ if ($run.status -eq "running") {
 }
 
 $result = [pscustomobject]@{
-  ok = $true
+  ok = ($null -eq $supervisorError)
   api_base = $ApiBase
   project_id = $ProjectId
   master_goal_id = $MasterGoalId
   token_printed = $false
   supervisor_run = $run
   rounds = @($rounds.ToArray())
+  error = if ($supervisorError) { [string]$supervisorError.Exception.Message } else { $null }
 }
 
 $result | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $OutputDir "skybridge-supervise-result.json") -Encoding UTF8
 Write-SupervisorResult -Result $result
+if ($supervisorError) { exit 1 }

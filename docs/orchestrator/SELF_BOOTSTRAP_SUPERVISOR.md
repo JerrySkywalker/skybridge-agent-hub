@@ -32,6 +32,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervise.ps1 
   -DryRun
 ```
 
+If `-MasterGoalId` is omitted, the command derives a deterministic id from `-GoalTitle`, such as `master-goal-prepare-self-bootstrap-supervisor`.
+
 ## Apply
 
 Apply mode can create planning records, accept one selected proposal, convert it to one executable task and optionally run it once:
