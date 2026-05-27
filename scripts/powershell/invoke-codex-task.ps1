@@ -18,6 +18,48 @@ function Get-SafeTaskBranchName {
   return "$prefix$($Task.task_id)-$slug"
 }
 
+function Get-CodexExecutionLogText {
+  param($ExecutionResult)
+  $parts = New-Object System.Collections.Generic.List[string]
+  foreach ($path in @($ExecutionResult.error_log_path, $ExecutionResult.log_path, $ExecutionResult.last_message_path)) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$path) -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+      try { $parts.Add((Get-Content -Raw -LiteralPath $path)) | Out-Null } catch {}
+    }
+  }
+  if ($ExecutionResult.error_summary) { $parts.Add([string]$ExecutionResult.error_summary) | Out-Null }
+  if ($ExecutionResult.summary) { $parts.Add([string]$ExecutionResult.summary) | Out-Null }
+  return ($parts.ToArray() -join "`n")
+}
+
+function Get-CodexExecutionFailureClassification {
+  param($ExecutionResult)
+  if ($ExecutionResult -and $ExecutionResult.ok) {
+    return [pscustomobject]@{ execution_error_class = $null; retriable = $false; reason = "success" }
+  }
+  $text = Get-CodexExecutionLogText -ExecutionResult $ExecutionResult
+  $hasWebsocket = $text -match "(?i)\bwebsocket\b|wss://"
+  $hasTlsEof = $text -match "(?i)tls handshake.*\beof\b|\beof\b.*tls handshake"
+  if ($hasWebsocket -and $hasTlsEof) {
+    return [pscustomobject]@{ execution_error_class = "codex_transport_eof"; retriable = $true; reason = "websocket_tls_handshake_eof" }
+  }
+  if ($text -match "(?i)\bwebsocket\b|TLS handshake|\bEOF\b|connection reset|transport error|failed to connect") {
+    return [pscustomobject]@{ execution_error_class = "codex_transport_error"; retriable = $true; reason = "codex_transport_error" }
+  }
+  return [pscustomobject]@{ execution_error_class = "codex_execution_failed"; retriable = $false; reason = "not_transport" }
+}
+
+function Reset-CodexTaskWorkspace {
+  param($Config, $Task)
+  $branch = Get-SafeTaskBranchName -Config $Config -Task $Task
+  git -C $Config.repo_path fetch origin main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed before Codex retry cleanup" }
+  git -C $Config.repo_path switch -C $branch origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git switch task branch failed before Codex retry cleanup" }
+  git -C $Config.repo_path reset --hard origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git reset task branch failed before Codex retry cleanup" }
+  return [pscustomobject]@{ ok = $true; branch = $branch }
+}
+
 function Test-ObjectProperty {
   param($InputObject, [Parameter(Mandatory = $true)][string]$Name)
   return $null -ne ($InputObject.PSObject.Properties[$Name])

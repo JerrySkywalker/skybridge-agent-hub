@@ -123,6 +123,7 @@ function ConvertTo-EdgeWorkerConfig {
     allow_production_deploy = [bool]$Profile.allow_production_deploy
     codex_command = $Profile.codex_command
     codex_sandbox = $Profile.codex_sandbox
+    codex_transport_max_retries = 1
     poll_interval_seconds = if ($Profile.poll_interval_seconds) { [int]$Profile.poll_interval_seconds } else { 30 }
     max_task_runtime_minutes = if ($Profile.max_task_runtime_minutes) { [int]$Profile.max_task_runtime_minutes } else { 30 }
     notification_enabled = if ($Profile.notification_enabled) { [bool]$Profile.notification_enabled } else { $false }

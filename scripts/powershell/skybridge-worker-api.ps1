@@ -19,6 +19,7 @@ function Read-SkyBridgeWorkerConfig {
   if ([string]::IsNullOrWhiteSpace($config.codex_sandbox)) { $config | Add-Member -NotePropertyName codex_sandbox -NotePropertyValue "workspace-write" -Force }
   if (-not $config.poll_interval_seconds) { $config | Add-Member -NotePropertyName poll_interval_seconds -NotePropertyValue 30 -Force }
   if (-not $config.max_task_runtime_minutes) { $config | Add-Member -NotePropertyName max_task_runtime_minutes -NotePropertyValue 30 -Force }
+  if ($null -eq $config.codex_transport_max_retries) { $config | Add-Member -NotePropertyName codex_transport_max_retries -NotePropertyValue 1 -Force }
   if ($null -eq $config.auto_merge_enabled) { $config | Add-Member -NotePropertyName auto_merge_enabled -NotePropertyValue $false -Force }
   if ($null -eq $config.notification_enabled) { $config | Add-Member -NotePropertyName notification_enabled -NotePropertyValue $false -Force }
   if ([string]$config.auth_mode -eq "worker-token") { $config.auth_mode = "bearer_token" }
