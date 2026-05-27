@@ -32,7 +32,14 @@ Preflight against `https://skybridge.jerryskywalker.space` succeeded:
 
 ## Apply Result
 
-The real supervisor apply did not reach proposal conversion or worker execution. The cloud server returned `404 Not Found` for `POST /v1/master-goals`, which means the deployed cloud server image does not currently expose the planner persistence endpoint required by `skybridge-plan.ps1 -Apply`.
+The real supervisor apply did not reach proposal conversion or worker execution. The structured failed supervisor run was:
+
+- `supervisor_run_id`: `supervisor-run-20260527045305-6522d2e0a752`
+- `status`: `failed`
+- `stop_reason`: `supervisor_error`
+- `current_round`: `1`
+
+The cloud server returned `404 Not Found` for `POST /v1/master-goals`, which means the deployed cloud server image does not currently expose the planner persistence endpoint required by `skybridge-plan.ps1 -Apply`.
 
 No executable task was created, no child PR was opened, and no worker `PollOnce` execution ran. Project control was checked after the failed apply and remained:
 
