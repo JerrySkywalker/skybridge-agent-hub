@@ -50,4 +50,4 @@ The first real use of the v0.37 operator workflow created and executed task `ope
 - `skybridge-run-once.ps1 -NoSubmit -Apply` executed one `-PollOnce` worker pass and restored project control to paused.
 - Child PR #60 passed GitHub Actions and merged through the low-risk child PR lifecycle policy.
 
-The execution path is now proven from operator CLI submission through local worker execution and PR merge. The task recovery record still depends on deploying `/v1/tasks/:taskId/evidence-repair` to the cloud server.
+The execution path is now proven from operator CLI submission through local worker execution and PR merge. After the cloud server was updated to the latest main image, the evidence repair endpoint accepted recovered evidence for `operator-real-docs-task-170`; status remains failed by design while compact status shows `evidence=recovered`.

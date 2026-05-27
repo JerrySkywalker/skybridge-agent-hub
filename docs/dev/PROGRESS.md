@@ -8,8 +8,9 @@
 - `skybridge-submit.ps1 -Apply` created real low-risk docs-only task `operator-real-docs-task-170` under goal `operator-real-goal-170`; token values were not printed.
 - `skybridge-run-once.ps1 -NoSubmit -Apply` started control with `max_tasks=1`, heartbeat-registered `laptop-zenbookduo`, ran the edge worker with `-PollOnce`, and restored control to `paused`.
 - Worker-created child PR #60 changed only `docs/dev/OPERATOR_SUBMIT_RUN_WORKFLOW.md`. GitHub Actions passed: AI branch validation, PR CI, Docker server and Docker web. Merge coordinator marked it ready, classified it low-risk/eligible, and enabled auto-merge; PR #60 merged with commit `536837c28870daeab84b5e438e1e3b3700879fda`.
-- Cloud task `operator-real-docs-task-170` remains `failed` because CI Guardian recorded pending CI as blocked before checks completed. Evidence repair was attempted after merge but the cloud server returned 404 for `/v1/tasks/operator-real-docs-task-170/evidence-repair`, so recovered evidence cannot be reflected until the cloud server is updated with the repair endpoint.
-- Proof status: operator submit -> run-once -> local worker claim -> Codex docs edit -> worker-owned child PR -> GitHub Actions green -> policy merge is proven. Remaining blocker: deploy evidence repair support to the cloud server before repeated operator runs rely on recovered task status.
+- Cloud task `operator-real-docs-task-170` remains `failed` because CI Guardian recorded pending CI as blocked before checks completed. This failed status is preserved by design as task history.
+- Follow-up recovery: after the cloud server was updated to the latest main image, `/v1/tasks/operator-real-docs-task-170/evidence-repair` accepted recovered evidence with `ok=true`. `skybridge-status.ps1` now shows the task as `status=failed` with `evidence=recovered`.
+- Proof status: operator submit -> run-once -> local worker claim -> Codex docs edit -> worker-owned child PR -> GitHub Actions green -> policy merge -> recovered evidence is proven. This completes the Super 170 recovery story while preserving the original failed event history.
 
 ## 2026-05-26 Super Goal 169 Operator Goal Submission Workflow
 
