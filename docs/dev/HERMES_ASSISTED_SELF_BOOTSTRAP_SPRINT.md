@@ -66,6 +66,31 @@ Bounded apply did not run because the real Hermes preview gate did not produce v
 - No queued/running task residue was introduced.
 - Parent PR remains manual/draft-only.
 
+## Verification
+
+Passed local verification:
+
+- `smoke-supervisor-loop.ps1`
+- `smoke-supervisor-policy.ps1`
+- `smoke-supervisor-dry-run.ps1`
+- `smoke-guide-supervisor-flow.ps1`
+- `smoke-master-goal-planner.ps1`
+- `smoke-task-proposals.ps1`
+- `smoke-proposal-conversion.ps1`
+- `smoke-guide-planner-flow.ps1`
+- `smoke-skybridge-guide.ps1`
+- `smoke-guided-operator-workflow.ps1`
+- `smoke-recovered-status-display.ps1`
+- `smoke-worker-profile.ps1`
+- `smoke-edge-worker-profile-normalization.ps1`
+- `smoke-codex-transport-retry.ps1`
+- `smoke-hermes-planner-adapter.ps1`
+- `smoke-hermes-proposal-validation.ps1`
+- `smoke-hermes-assisted-supervisor-preview.ps1`
+- `smoke-supervisor-multiround-policy.ps1`
+- `validate-powershell.ps1`
+- `just check`
+
 ## Proof Status
 
 Hermes-assisted multi-round self-bootstrap is not proven yet. The local implementation and fixture-backed policy smokes are in place, but the real Hermes preview stopped at endpoint connectivity before SkyBridge could validate real Hermes proposals.

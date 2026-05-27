@@ -6,6 +6,7 @@
 - Preflight confirmed PR #70 was merged, tag `v0.43.0-first-dogfood-self-bootstrap-sprint` exists, cloud project `skybridge-agent-hub` was paused with no queued/running residue, `task_proposal-d90d09da925d2cf0` was recovered through PR #69, `task_proposal-59a0236fb69800cd` remained blocked, and `laptop-zenbookduo` could register-heartbeat online.
 - Real `hermes-preview` attempted against the configured local Hermes profile, but the endpoint refused the connection. No proposals were faked, no task was converted, no worker PollOnce apply ran, and project control was restored to `paused`.
 - Added sprint report: `docs/dev/HERMES_ASSISTED_SELF_BOOTSTRAP_SPRINT.md`.
+- Verification passed for the requested supervisor/planner/guide/worker/Hermes smokes, `validate-powershell.ps1`, and `just check`.
 
 ## 2026-05-27 Super Goal 174 Dogfood Self-Bootstrap Sprint
 
