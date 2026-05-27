@@ -22,6 +22,8 @@ import {
   type SkyBridgeEvent,
   type SkyBridgeSourcePlatform,
   type MasterGoal,
+  type PlannerAdapterAuditMetadata,
+  type PlanningProposalStatus,
   type EvidenceSummary,
   type GoalPriority,
   type GoalRisk,
@@ -50,10 +52,13 @@ import {
   type StoredEvent,
   type StoredIterationRun,
   type StoredMasterGoal,
+  type StoredPlanningMasterGoal,
+  type StoredPlanningSession,
   type StoredNotification,
   type StoredProject,
   type StoredTask,
   type StoredTaskEvent,
+  type StoredTaskProposal,
   type StoredWorker,
   type StoredWorkerHeartbeat,
 } from "./store.js";
@@ -117,6 +122,7 @@ const TASK_STATUSES: TaskStatus[] = [
   "stale",
 ];
 const TASK_RISKS: TaskRisk[] = ["low", "medium", "high"];
+const PROPOSAL_STATUSES: PlanningProposalStatus[] = ["proposed", "accepted", "rejected", "converted"];
 const TASK_SOURCES: TaskSource[] = [
   "manual",
   "planner",
@@ -568,6 +574,125 @@ export async function createServer(
       return { ok: true, goal: withGoalSummary(updated, store) };
     },
   );
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/master-goals", async (request, reply) => {
+    const parsed = parsePlanningMasterGoalInput(request.body, store);
+    if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+    await store.upsertPlanningMasterGoal(parsed.masterGoal);
+    await addStoredEvent(coreEvent("goal.created", { project_id: parsed.masterGoal.project_id, master_goal_id: parsed.masterGoal.master_goal_id, title: parsed.masterGoal.title }));
+    return reply.code(201).send({ ok: true, master_goal: parsed.masterGoal });
+  });
+
+  app.get<{ Params: { projectId: string } }>("/v1/projects/:projectId/master-goals", async (request, reply) => {
+    const projectId = decodeURIComponent(request.params.projectId);
+    if (!store.getProject(projectId)) return reply.code(404).send({ ok: false, error: "project_not_found" });
+    return { master_goals: store.listPlanningMasterGoals(projectId) };
+  });
+
+  app.get<{ Params: { masterGoalId: string } }>("/v1/master-goals/:masterGoalId", async (request, reply) => {
+    const masterGoal = store.getPlanningMasterGoal(decodeURIComponent(request.params.masterGoalId));
+    if (!masterGoal) return reply.code(404).send({ ok: false, error: "master_goal_not_found" });
+    return { master_goal: masterGoal };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/planning-sessions", async (request, reply) => {
+    const parsed = parsePlanningSessionInput(request.body, store);
+    if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+    await store.upsertPlanningSession(parsed.session);
+    for (const proposal of parsed.proposals) {
+      await store.upsertTaskProposal(proposal);
+    }
+    await addStoredEvent(coreEvent("plan.updated", {
+      project_id: parsed.session.project_id,
+      master_goal_id: parsed.session.master_goal_id,
+      planning_session_id: parsed.session.planning_session_id,
+      proposal_count: parsed.proposals.length,
+    }));
+    return reply.code(201).send({ ok: true, planning_session: parsed.session, proposals: parsed.proposals });
+  });
+
+  app.get<{ Querystring: { project_id?: string; master_goal_id?: string; status?: string } }>("/v1/task-proposals", async (request, reply) => {
+    if (request.query.status && !PROPOSAL_STATUSES.includes(request.query.status as PlanningProposalStatus))
+      return reply.code(400).send({ ok: false, error: "invalid_proposal_status" });
+    return {
+      proposals: store.listTaskProposals({
+        projectId: request.query.project_id,
+        masterGoalId: request.query.master_goal_id,
+        status: request.query.status,
+      }),
+    };
+  });
+
+  app.get<{ Params: { masterGoalId: string } }>("/v1/master-goals/:masterGoalId/proposals", async (request, reply) => {
+    const masterGoalId = decodeURIComponent(request.params.masterGoalId);
+    if (!store.getPlanningMasterGoal(masterGoalId)) return reply.code(404).send({ ok: false, error: "master_goal_not_found" });
+    return { proposals: store.listTaskProposals({ masterGoalId }) };
+  });
+
+  app.get<{ Params: { proposalId: string } }>("/v1/task-proposals/:proposalId", async (request, reply) => {
+    const proposal = store.getTaskProposal(decodeURIComponent(request.params.proposalId));
+    if (!proposal) return reply.code(404).send({ ok: false, error: "proposal_not_found" });
+    return { proposal };
+  });
+
+  app.patch<{ Params: { proposalId: string }; Body: Record<string, unknown> }>("/v1/task-proposals/:proposalId", async (request, reply) => {
+    const proposal = store.getTaskProposal(decodeURIComponent(request.params.proposalId));
+    if (!proposal) return reply.code(404).send({ ok: false, error: "proposal_not_found" });
+    const status = safeString(request.body.status);
+    if (!status || !PROPOSAL_STATUSES.includes(status as PlanningProposalStatus))
+      return reply.code(400).send({ ok: false, error: "invalid_proposal_status" });
+    const updated: StoredTaskProposal = { ...proposal, status: status as PlanningProposalStatus, updated_at: new Date().toISOString() };
+    await store.upsertTaskProposal(updated);
+    return { ok: true, proposal: updated };
+  });
+
+  app.post<{ Params: { proposalId: string }; Body: Record<string, unknown> }>("/v1/task-proposals/:proposalId/convert", async (request, reply) => {
+    const proposal = store.getTaskProposal(decodeURIComponent(request.params.proposalId));
+    if (!proposal) return reply.code(404).send({ ok: false, error: "proposal_not_found" });
+    if (proposal.risk === "high" && request.body.allow_high_risk !== true)
+      return reply.code(409).send({ ok: false, error: "high_risk_requires_allow_high_risk" });
+    if (!["accepted", "proposed"].includes(proposal.status))
+      return reply.code(409).send({ ok: false, error: "proposal_not_convertible" });
+    const project = store.getProject(proposal.project_id);
+    if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
+    const taskId = safeString(request.body.task_id) ?? `task_${proposal.proposal_id}`;
+    if (store.getTask(taskId)) return reply.code(409).send({ ok: false, error: "task_already_exists" });
+    const now = new Date().toISOString();
+    const task: StoredTask = {
+      task_id: taskId,
+      project_id: proposal.project_id,
+      title: proposal.title,
+      body: proposal.body,
+      prompt_summary: proposal.prompt_summary ?? proposal.body,
+      status: "queued",
+      risk: proposal.risk,
+      source: "planner",
+      task_type: proposal.task_type,
+      allowed_paths: proposal.expected_files,
+      validation: proposal.evidence_requirements,
+      required_capabilities: proposal.required_capabilities,
+      planner_metadata: {
+        adapter: proposal.created_by,
+        decision: "continue",
+        reason: proposal.rationale,
+        task_type: proposal.task_type,
+        allowed_paths: proposal.expected_files,
+        blocked_paths: [],
+        validation: proposal.evidence_requirements,
+        stop_criteria_status: [],
+        created_at: now,
+        raw_response_included: false,
+        secrets_included: false,
+      },
+      created_at: now,
+      updated_at: now,
+    };
+    await store.upsertTask(task);
+    const updatedProposal: StoredTaskProposal = { ...proposal, status: "converted", converted_task_id: task.task_id, updated_at: now };
+    await store.upsertTaskProposal(updatedProposal);
+    await recordTaskEvent(task, "task.created", undefined, "Task converted from proposal.", addStoredEvent, store);
+    return reply.code(201).send({ ok: true, proposal: updatedProposal, task: withTaskEvents(task, store) });
+  });
 
   app.post<{ Body: Record<string, unknown> }>("/v1/tasks", async (request, reply) => {
     const parsed = parseTaskInput(request.body, store);
@@ -2661,6 +2786,123 @@ function parseGoalPatch(goal: StoredMasterGoal, input: Record<string, unknown> |
     updated_at: new Date().toISOString(),
   };
   return { ok: true, goal: updated };
+}
+
+function parsePlanningMasterGoalInput(input: Record<string, unknown> | undefined, store: EventStore):
+  | { ok: true; masterGoal: StoredPlanningMasterGoal }
+  | { ok: false; status?: number; response: QueryErrorResponse | { ok: false; error: string } } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return { ok: false, response: invalidQuery("body", "Expected a master goal object.").response };
+  const projectId = safeString(input.project_id);
+  const title = safeString(input.title);
+  if (!projectId) return { ok: false, response: invalidQuery("project_id", "Expected a project id.").response };
+  if (!title) return { ok: false, response: invalidQuery("title", "Expected a bounded master goal title.").response };
+  if (!store.getProject(projectId)) return { ok: false, status: 404, response: { ok: false, error: "project_not_found" } };
+  const priority = safeString(input.priority) ?? "normal";
+  if (!GOAL_PRIORITIES.includes(priority as GoalPriority)) return { ok: false, response: invalidQuery("priority", "Expected a valid goal priority.").response };
+  return {
+    ok: true,
+    masterGoal: {
+      master_goal_id: safeString(input.master_goal_id) ?? slugId("master_goal", title),
+      project_id: projectId,
+      title,
+      description: safeLongString(input.description),
+      source: safeString(input.source) ?? "manual",
+      priority: priority as GoalPriority,
+      constraints: safeStringArray(input.constraints) ?? [],
+      acceptance_criteria: safeStringArray(input.acceptance_criteria) ?? [],
+      stop_conditions: safeStringArray(input.stop_conditions) ?? [],
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
+function parsePlanningSessionInput(input: Record<string, unknown> | undefined, store: EventStore):
+  | { ok: true; session: StoredPlanningSession; proposals: StoredTaskProposal[] }
+  | { ok: false; status?: number; response: QueryErrorResponse | { ok: false; error: string } } {
+  const now = new Date().toISOString();
+  if (!input || typeof input !== "object") return { ok: false, response: invalidQuery("body", "Expected a planning session object.").response };
+  const masterGoalId = safeString(input.master_goal_id);
+  const projectId = safeString(input.project_id);
+  if (!masterGoalId) return { ok: false, response: invalidQuery("master_goal_id", "Expected a master goal id.").response };
+  if (!projectId) return { ok: false, response: invalidQuery("project_id", "Expected a project id.").response };
+  const masterGoal = store.getPlanningMasterGoal(masterGoalId);
+  if (!masterGoal) return { ok: false, status: 404, response: { ok: false, error: "master_goal_not_found" } };
+  if (masterGoal.project_id !== projectId) return { ok: false, response: invalidQuery("project_id", "Project does not match master goal.").response };
+  const plannerAdapter = safePlannerAdapterAuditMetadata(input.planner_adapter);
+  if (!plannerAdapter) return { ok: false, response: invalidQuery("planner_adapter", "Expected planner adapter metadata.").response };
+  const planningSessionId = safeString(input.planning_session_id) ?? slugId("planning_session", masterGoal.title);
+  const session: StoredPlanningSession = {
+    planning_session_id: planningSessionId,
+    master_goal_id: masterGoalId,
+    project_id: projectId,
+    planner_adapter: plannerAdapter,
+    created_at: now,
+    updated_at: now,
+  };
+  const rawProposals = Array.isArray(input.proposals) ? input.proposals : [];
+  const proposals: StoredTaskProposal[] = [];
+  for (const rawProposal of rawProposals.slice(0, 20)) {
+    if (!rawProposal || typeof rawProposal !== "object" || Array.isArray(rawProposal)) continue;
+    const parsed = parseTaskProposalInput(rawProposal as Record<string, unknown>, masterGoal, planningSessionId, plannerAdapter.provider);
+    if (parsed) proposals.push(parsed);
+  }
+  return { ok: true, session, proposals };
+}
+
+function parseTaskProposalInput(
+  input: Record<string, unknown>,
+  masterGoal: StoredPlanningMasterGoal,
+  planningSessionId: string,
+  createdBy: string,
+): StoredTaskProposal | undefined {
+  const now = new Date().toISOString();
+  const title = safeString(input.title);
+  const dedupeKey = safeString(input.dedupe_key);
+  const risk = safeString(input.risk) ?? "low";
+  if (!title || !dedupeKey || !TASK_RISKS.includes(risk as TaskRisk)) return undefined;
+  const status = safeString(input.status) ?? "proposed";
+  if (!PROPOSAL_STATUSES.includes(status as PlanningProposalStatus)) return undefined;
+  return {
+    proposal_id: safeString(input.proposal_id) ?? slugId("proposal", title),
+    master_goal_id: masterGoal.master_goal_id,
+    planning_session_id: planningSessionId,
+    project_id: masterGoal.project_id,
+    title,
+    body: safeLongString(input.body),
+    prompt_summary: safeString(input.prompt_summary),
+    dedupe_key: dedupeKey,
+    expected_files: safePathArray(input.expected_files) ?? [],
+    acceptance_criteria: safeStringArray(input.acceptance_criteria) ?? [],
+    evidence_requirements: safeStringArray(input.evidence_requirements) ?? [],
+    required_capabilities: safeStringArray(input.required_capabilities) ?? ["codex"],
+    risk: risk as TaskRisk,
+    task_type: safeString(input.task_type) ?? "docs",
+    depends_on: safeStringArray(input.depends_on) ?? [],
+    rationale: safeString(input.rationale) ?? "Rule-based planner proposal.",
+    status: status as PlanningProposalStatus,
+    created_by: safeString(input.created_by) ?? createdBy,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function safePlannerAdapterAuditMetadata(input: unknown): PlannerAdapterAuditMetadata | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const record = redactUnsafePayload(input) as Record<string, unknown>;
+  const provider = safeString(record.provider);
+  const plannerMode = safeString(record.planner_mode);
+  if (!provider || !plannerMode) return undefined;
+  return {
+    provider,
+    model: safeString(record.model),
+    planner_mode: plannerMode,
+    prompt_version: safeString(record.prompt_version) ?? "v1",
+    input_state_hash: safeString(record.input_state_hash) ?? "unknown",
+    raw_response_included: false,
+    secrets_included: false,
+  };
 }
 
 function parseGoalMetadata(

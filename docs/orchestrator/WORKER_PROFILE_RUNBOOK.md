@@ -207,13 +207,15 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
 Use this sequence for one-shot remote work. The guided command names map directly to the underlying scripts:
 
 1. Read compact status.
-2. Preview one goal/task submission.
-3. Apply one goal/task submission.
-4. Preview one bounded worker pass.
-5. Apply one bounded worker pass.
-6. Inspect task evidence.
-7. Read compact status again.
-8. Pause project control.
+2. Optionally run `plan-preview` for a high-level master goal.
+3. Optionally run `plan-apply` and review proposals before converting one.
+4. Preview one goal/task submission or proposal conversion.
+5. Apply one goal/task submission or proposal conversion.
+6. Preview one bounded worker pass.
+7. Apply one bounded worker pass.
+8. Inspect task evidence.
+9. Read compact status again.
+10. Pause project control.
 
 Status:
 

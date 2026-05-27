@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start")]
+  [ValidateSet("status", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start", "plan-preview", "plan-apply", "proposals", "proposal-show", "proposal-accept", "proposal-convert-preview")]
   [string]$Mode = "status",
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -13,6 +13,10 @@ param(
   [string]$TaskTitle,
   [string]$TaskBody,
   [string]$TaskBodyFile,
+  [string]$MasterGoalId,
+  [string]$ProposalId,
+  [string]$Description,
+  [string[]]$Constraints = @(),
   [switch]$Apply,
   [switch]$Json,
   [string]$OutputDir = ".agent/tmp"
@@ -44,7 +48,13 @@ function New-GuideNextCommand {
     "-ProjectId `"$ProjectId`""
   )
   if ($GoalId) { $parts += "-GoalId `"$GoalId`"" }
+  if ($GoalTitle -and ($NextMode -like "run-once*" -or $NextMode -like "plan-*")) { $parts += "-GoalTitle `"$GoalTitle`"" }
   if ($TaskId) { $parts += "-TaskId `"$TaskId`"" }
+  if ($TaskTitle -and ($NextMode -like "run-once*" -or $NextMode -like "plan-*")) { $parts += "-TaskTitle `"$TaskTitle`"" }
+  if ($TaskBody -and $NextMode -like "run-once*") { $parts += "-TaskBody `"$TaskBody`"" }
+  if ($TaskBodyFile -and $NextMode -like "run-once*") { $parts += "-TaskBodyFile `"$TaskBodyFile`"" }
+  if ($MasterGoalId) { $parts += "-MasterGoalId `"$MasterGoalId`"" }
+  if ($ProposalId) { $parts += "-ProposalId `"$ProposalId`"" }
   if ($WorkerProfile) { $parts += "-WorkerProfile `"$WorkerProfile`"" }
   elseif ($NextMode -like "run-once*") { $parts += "-WorkerProfile `"`$HOME\.skybridge\worker.<hostname>.json`"" }
   if ($TokenFile) { $parts += "-TokenFile `"$TokenFile`"" }
@@ -66,6 +76,15 @@ function Write-GuideResult {
   "Action:       $($Result.action)"
   "TokenPrinted: false"
   if ($Result.next_command) { "Next:         $($Result.next_command)" }
+  if ($Result.next_note) { "Note:         $($Result.next_note)" }
+  if ($Result.task_detail) {
+    "RawStatus:    $($Result.task_detail.raw_status)"
+    "Display:      $($Result.task_detail.display_status)"
+    "Recovered:    $($Result.task_detail.recovered)"
+    "CI:           $(if ($Result.task_detail.ci_status) { $Result.task_detail.ci_status } else { '-' })"
+    "PR:           $(if ($Result.task_detail.pr_url) { $Result.task_detail.pr_url } else { '-' })"
+    "Summary:      $(if ($Result.task_detail.summary) { $Result.task_detail.summary } else { '-' })"
+  }
 }
 
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
@@ -114,7 +133,11 @@ switch ($Mode) {
     if ($TaskBodyFile) { $args += @("-TaskBodyFile", $TaskBodyFile) }
     if ([string]::IsNullOrWhiteSpace($TaskTitle)) { $args += "-NoSubmit" }
     $payload = Invoke-GuideJsonScript -Arguments $args
-    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "dry-run-once"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $payload.task_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-apply"; run_once = $payload }
+    $nextNote = $null
+    if ([string]::IsNullOrWhiteSpace($TaskTitle)) {
+      $nextNote = "Run submit-apply first, then run-once-apply against the accepted queued task with -NoSubmit semantics."
+    }
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "dry-run-once"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $payload.task_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-apply"; next_note = $nextNote; run_once = $payload }
   }
   "run-once-apply" {
     if (-not $Apply) { throw "run-once-apply requires explicit -Apply." }
@@ -133,7 +156,8 @@ switch ($Mode) {
     if ([string]::IsNullOrWhiteSpace($TaskId)) { throw "inspect-task requires -TaskId." }
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TaskId", $TaskId, "-Json")
     $payload = Invoke-GuideJsonScript -Arguments $args
-    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "inspect-task"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "status"; status = $payload }
+    $taskDetail = @($payload.tasks)[0]
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "inspect-task"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "status"; task_detail = $taskDetail; status = $payload }
   }
   "inspect-worker" {
     if ([string]::IsNullOrWhiteSpace($WorkerProfile)) { throw "inspect-worker requires -WorkerProfile." }
@@ -150,6 +174,55 @@ switch ($Mode) {
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "start", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MaxTasks", "1", "-Json")
     $payload = Invoke-GuideJsonScript -Arguments $args
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "start"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-preview"; control = $payload }
+  }
+  "plan-preview" {
+    if ([string]::IsNullOrWhiteSpace($TaskTitle) -and [string]::IsNullOrWhiteSpace($GoalTitle)) { throw "plan-preview requires -GoalTitle or -TaskTitle as the master goal title." }
+    $planTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-plan.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Title", $planTitle, "-DryRun", "-Json", "-OutputFile", (Join-Path $OutputDir "skybridge-guide-plan-preview.json"))
+    if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+    if ($Description) { $args += @("-Description", $Description) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $MasterGoalId = $payload.master_goal.master_goal_id
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "plan-preview"; api_base = $ApiBase; project_id = $ProjectId; goal_id = $GoalId; task_id = $TaskId; master_goal_id = $payload.master_goal.master_goal_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "plan-apply"; plan = $payload }
+  }
+  "plan-apply" {
+    if (-not $Apply) { throw "plan-apply requires explicit -Apply." }
+    if ([string]::IsNullOrWhiteSpace($TaskTitle) -and [string]::IsNullOrWhiteSpace($GoalTitle)) { throw "plan-apply requires -GoalTitle or -TaskTitle as the master goal title." }
+    $planTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-plan.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Title", $planTitle, "-Apply", "-Json", "-OutputFile", (Join-Path $OutputDir "skybridge-guide-plan-apply.json"))
+    if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+    if ($Description) { $args += @("-Description", $Description) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $MasterGoalId = $payload.master_goal.master_goal_id
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "plan-apply"; api_base = $ApiBase; project_id = $ProjectId; master_goal_id = $payload.master_goal.master_goal_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "proposals"; plan = $payload }
+  }
+  "proposals" {
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-proposal.ps1", "-Command", "list", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Json")
+    if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "proposals"; api_base = $ApiBase; project_id = $ProjectId; master_goal_id = $MasterGoalId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "proposal-convert-preview"; proposals = $payload }
+  }
+  "proposal-show" {
+    if ([string]::IsNullOrWhiteSpace($ProposalId)) { throw "proposal-show requires -ProposalId." }
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-proposal.ps1", "-Command", "show", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ProposalId", $ProposalId, "-Json")
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "proposal-show"; api_base = $ApiBase; project_id = $ProjectId; proposal_id = $ProposalId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "proposal-convert-preview"; proposal = $payload.proposal }
+  }
+  "proposal-accept" {
+    if ([string]::IsNullOrWhiteSpace($ProposalId)) { throw "proposal-accept requires -ProposalId." }
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-proposal.ps1", "-Command", "accept", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ProposalId", $ProposalId, "-Json")
+    if ($Apply) { $args += "-Apply" } else { $args += "-DryRun" }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "proposal-accept"; api_base = $ApiBase; project_id = $ProjectId; proposal_id = $ProposalId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "proposal-convert-preview"; proposal = $payload.proposal }
+  }
+  "proposal-convert-preview" {
+    if ([string]::IsNullOrWhiteSpace($ProposalId)) { throw "proposal-convert-preview requires -ProposalId." }
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-proposal.ps1", "-Command", "convert", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ProposalId", $ProposalId, "-DryRun", "-Json")
+    if ($TaskId) { $args += @("-TaskId", $TaskId) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "proposal-convert-preview"; api_base = $ApiBase; project_id = $ProjectId; proposal_id = $ProposalId; task_id = $payload.task.task_id; token_printed = $false; next_command = New-GuideNextCommand -NextMode "run-once-preview"; proposal = $payload.proposal; task = $payload.task }
   }
 }
 
