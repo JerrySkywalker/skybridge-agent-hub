@@ -221,6 +221,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
   -TaskId remote-docs-task-001 `
   -TaskTitle "Remote docs task" `
   -TaskBody "Update one docs file with a short pilot note." `
+  -EnsureProject `
+  -EnsureGoal `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -DryRun
 ```
@@ -250,9 +252,12 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
   -ApiBase https://skybridge.jerryskywalker.space `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
+  -GoalTitle "Remote worker smoke goal" `
   -TaskId remote-docs-task-001 `
   -TaskTitle "Remote docs task" `
   -TaskBody "Update one docs file with a short pilot note." `
+  -EnsureProject `
+  -EnsureGoal `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 

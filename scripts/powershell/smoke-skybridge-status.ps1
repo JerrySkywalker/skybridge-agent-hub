@@ -50,6 +50,9 @@ try {
   Invoke-SkyBridgeJson "POST" "/v1/workers/register" @{ worker_id = "status-worker-online"; name = "Online worker" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/workers/status-worker-online/heartbeat" @{ status_note = "ready" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/workers/register" @{ worker_id = "status-worker-offline"; name = "Offline worker" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/workers/register" @{ worker_id = "status-worker-stale"; name = "Stale worker" } | Out-Null
+  $staleSeenAt = (Get-Date).ToUniversalTime().AddMinutes(-5).ToString("o")
+  Invoke-SkyBridgeJson "POST" "/v1/workers/status-worker-stale/heartbeat" @{ status_note = "stale"; seen_at = $staleSeenAt } | Out-Null
 
   foreach ($task in @(
     @{ task_id = "status-task-queued"; project_id = "status-project"; title = "Queued"; risk = "low"; source = "manual" },
@@ -90,6 +93,11 @@ try {
   $onlineWorker = @($parsed.workers | Where-Object { $_.worker_id -eq "status-worker-online" })[0]
   if (-not $onlineWorker.last_seen -or $onlineWorker.last_seen -notmatch "^[0-9]+s ago$|^[0-1]m ago$") {
     throw "Expected recent relative time after heartbeat, got '$($onlineWorker.last_seen)'."
+  }
+  $staleWorker = @($parsed.workers | Where-Object { $_.worker_id -eq "status-worker-stale" })[0]
+  if (-not $staleWorker.last_seen -or $staleWorker.last_seen -notmatch "^[2-9]m ago$|^1[0-5]m ago$") {
+    $workerDebug = @($parsed.workers | ForEach-Object { "$($_.worker_id):$($_.status):$($_.last_seen)" }) -join ", "
+    throw "Expected minute-scale relative time for stale heartbeat, got '$($staleWorker.last_seen)'. Workers: $workerDebug"
   }
   if (@($parsed.tasks | Where-Object { $_.status -eq "completed" }).Count -lt 1) { throw "Expected completed task row." }
   if ($parsed.token_printed -ne $false) { throw "Expected token_printed=false." }

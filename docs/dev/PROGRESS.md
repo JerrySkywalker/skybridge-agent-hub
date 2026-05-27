@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 170 First Real Operator Submit-And-Run
+
+- Polished the v0.37 operator UX: `skybridge-submit.ps1` now emits a copyable `skybridge-run-once.ps1` next command with API, project, goal, task and token-file/env context, and `skybridge-run-once.ps1` reports clearer submit-mode parameter errors.
+- Fixed compact worker timestamp handling for PowerShell-converted JSON dates. Online and stale worker heartbeats now display fresh relative times instead of local-timezone-skewed values.
+- Preflight against `https://skybridge.jerryskywalker.space` confirmed project control was `paused`, `laptop-zenbookduo` could register-heartbeat online through token-file auth, and no queued/claimed/running historical task would interfere.
+- `skybridge-submit.ps1 -Apply` created real low-risk docs-only task `operator-real-docs-task-170` under goal `operator-real-goal-170`; token values were not printed.
+- `skybridge-run-once.ps1 -NoSubmit -Apply` started control with `max_tasks=1`, heartbeat-registered `laptop-zenbookduo`, ran the edge worker with `-PollOnce`, and restored control to `paused`.
+- Worker-created child PR #60 changed only `docs/dev/OPERATOR_SUBMIT_RUN_WORKFLOW.md`. GitHub Actions passed: AI branch validation, PR CI, Docker server and Docker web. Merge coordinator marked it ready, classified it low-risk/eligible, and enabled auto-merge; PR #60 merged with commit `536837c28870daeab84b5e438e1e3b3700879fda`.
+- Cloud task `operator-real-docs-task-170` remains `failed` because CI Guardian recorded pending CI as blocked before checks completed. Evidence repair was attempted after merge but the cloud server returned 404 for `/v1/tasks/operator-real-docs-task-170/evidence-repair`, so recovered evidence cannot be reflected until the cloud server is updated with the repair endpoint.
+- Proof status: operator submit -> run-once -> local worker claim -> Codex docs edit -> worker-owned child PR -> GitHub Actions green -> policy merge is proven. Remaining blocker: deploy evidence repair support to the cloud server before repeated operator runs rely on recovered task status.
+
 ## 2026-05-26 Super Goal 169 Operator Goal Submission Workflow
 
 - Added `skybridge-submit.ps1`, a dry-run-first operator command that can ensure a project/goal and create one task with default `required_capabilities=["codex"]`, token env/file support, JSON output and no token printing.

@@ -82,6 +82,23 @@ function Write-SubmitResult {
   "TokenPrinted: false"
 }
 
+function New-SubmitNextCommand {
+  $parts = @(
+    "pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1",
+    "-ApiBase `"$ApiBase`"",
+    "-ProjectId `"$ProjectId`"",
+    "-GoalId `"$GoalId`"",
+    "-TaskId `"$TaskId`"",
+    "-WorkerProfile `"`$HOME\.skybridge\worker.<hostname>.json`"",
+    "-NoSubmit"
+  )
+  if ($TokenFile) { $parts += "-TokenFile `"$TokenFile`"" }
+  elseif ($TokenEnvVar) { $parts += "-TokenEnvVar `"$TokenEnvVar`"" }
+  else { $parts += "# add -TokenFile or -TokenEnvVar for remote worker auth" }
+  $parts += "-DryRun"
+  return ($parts -join " ")
+}
+
 if ([string]::IsNullOrWhiteSpace($TaskTitle)) { throw "skybridge-submit requires -TaskTitle." }
 if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($GoalId)) { throw "skybridge-submit requires -GoalTitle or -GoalId." }
 if (-not [string]::IsNullOrWhiteSpace($TaskBodyFile)) {
@@ -164,5 +181,5 @@ Write-SubmitResult ([pscustomobject]@{
   project = [pscustomobject]@{ id = $ProjectId; action = $projectAction }
   goal = [pscustomobject]@{ id = $GoalId; title = $GoalTitle; action = $goalAction }
   task = [pscustomobject]@{ id = $TaskId; title = $TaskTitle; action = $taskAction; required_capabilities = @($RequiredCapabilities); risk = $Risk; source = $Source }
-  next_command = "pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 -ProjectId $ProjectId -GoalId $GoalId -TaskId $TaskId -NoSubmit -Apply"
+  next_command = New-SubmitNextCommand
 })
