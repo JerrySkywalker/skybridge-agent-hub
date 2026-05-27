@@ -1,5 +1,12 @@
 # Progress Log
 
+## 2026-05-27 Super Goal 175 Hermes-assisted Multi-round Self-Bootstrap Sprint
+
+- Implemented gated Hermes-assisted planning foundations on branch `ai/super-175-hermes-assisted-multiround-self-bootstrap`: `rule-based`, `hermes-preview`, and `hermes-apply` planner modes; strict Hermes proposal parsing; policy validation outputs; advisory evaluator records; default supervisor `MaxRounds=2`; active task residue checks; and fixture smokes.
+- Preflight confirmed PR #70 was merged, tag `v0.43.0-first-dogfood-self-bootstrap-sprint` exists, cloud project `skybridge-agent-hub` was paused with no queued/running residue, `task_proposal-d90d09da925d2cf0` was recovered through PR #69, `task_proposal-59a0236fb69800cd` remained blocked, and `laptop-zenbookduo` could register-heartbeat online.
+- Real `hermes-preview` attempted against the configured local Hermes profile, but the endpoint refused the connection. No proposals were faked, no task was converted, no worker PollOnce apply ran, and project control was restored to `paused`.
+- Added sprint report: `docs/dev/HERMES_ASSISTED_SELF_BOOTSTRAP_SPRINT.md`.
+
 ## 2026-05-27 Super Goal 174 Dogfood Self-Bootstrap Sprint
 
 - Preflight against `https://skybridge.jerryskywalker.space` succeeded: project control was paused, `laptop-zenbookduo` heartbeated online through token-file auth, no queued/running tasks were visible, and supervisor dry-run selected low-risk docs proposal `proposal-d90d09da925d2cf0`.
