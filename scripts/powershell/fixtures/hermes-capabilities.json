@@ -1,0 +1,12 @@
+{
+  "platform": "hermes",
+  "model": "hermes-fixture-model",
+  "runtime": {
+    "mode": "fixture",
+    "tool_execution": "disabled"
+  },
+  "features": {
+    "responses_api": true,
+    "runs": false
+  }
+}
