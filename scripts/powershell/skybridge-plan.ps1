@@ -6,6 +6,8 @@ param(
   [string]$Title,
   [string]$Description,
   [string[]]$Constraints = @(),
+  [string]$ConstraintsFile,
+  [string]$ConstraintsJson,
   [string[]]$AcceptanceCriteria = @("Task proposals are reviewed before executable tasks are created."),
   [string[]]$StopConditions = @("Stop before any high-risk or production deployment work."),
   [string]$TokenEnvVar,
@@ -56,6 +58,44 @@ function Get-HashText {
   } finally {
     $sha.Dispose()
   }
+}
+
+function ConvertTo-StringArray {
+  param($Value)
+  $items = @()
+  if ($null -eq $Value) { return @() }
+  foreach ($item in @($Value)) {
+    if ($null -eq $item) { continue }
+    if ($item -is [string]) {
+      if (-not [string]::IsNullOrWhiteSpace($item)) { $items += $item }
+    } elseif ($item.PSObject.Properties["constraints"]) {
+      $items += ConvertTo-StringArray -Value $item.constraints
+    } else {
+      $text = [string]$item
+      if (-not [string]::IsNullOrWhiteSpace($text)) { $items += $text }
+    }
+  }
+  return @($items)
+}
+
+function Read-ConstraintsInput {
+  param([string[]]$InlineConstraints, [string]$File, [string]$JsonText)
+  $items = @($InlineConstraints | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+  if ($File) {
+    if (-not (Test-Path -LiteralPath $File -PathType Leaf)) { throw "ConstraintsFile not found: $File" }
+    $raw = Get-Content -Raw -LiteralPath $File
+    if (-not [string]::IsNullOrWhiteSpace($raw)) {
+      try {
+        $items += ConvertTo-StringArray -Value ($raw | ConvertFrom-Json)
+      } catch {
+        $items += @($raw -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+      }
+    }
+  }
+  if ($JsonText) {
+    $items += ConvertTo-StringArray -Value ($JsonText | ConvertFrom-Json)
+  }
+  return @($items)
 }
 
 function New-RuleBasedProposals {
@@ -171,6 +211,34 @@ function ConvertFrom-StrictProposalJson {
   }
 }
 
+function Normalize-HermesProposalTaskTypes {
+  param([array]$Proposals)
+  foreach ($proposal in @($Proposals)) {
+    $raw = ([string]$proposal.task_type).Trim()
+    $normalized = $raw.ToLowerInvariant()
+    $files = @($proposal.expected_files | ForEach-Object { ([string]$_).Replace("\", "/") })
+    $newType = $normalized
+    switch ($normalized) {
+      "smoke" { $newType = "local-smoke" }
+      "doc" { $newType = "docs" }
+      "documentation" { $newType = "docs" }
+      "test" {
+        $safeSmokeFiles = @($files | Where-Object { $_ -like "scripts/powershell/smoke-*.ps1" })
+        if ($files.Count -gt 0 -and $safeSmokeFiles.Count -eq $files.Count) { $newType = "local-smoke" }
+      }
+      default { $newType = $normalized }
+    }
+    if ($newType -ne $raw) {
+      $proposal | Add-Member -NotePropertyName original_task_type -NotePropertyValue $raw -Force
+      $proposal.task_type = $newType
+    }
+    if ($normalized -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config")) {
+      $proposal | Add-Member -NotePropertyName blocked_task_type -NotePropertyValue $normalized -Force
+    }
+  }
+  return $Proposals
+}
+
 function Invoke-HermesProposalPlanner {
   param($State)
   $loader = Join-Path $PSScriptRoot "load-hermes-env.ps1"
@@ -181,7 +249,7 @@ function Invoke-HermesProposalPlanner {
   $constraintsText = (@($Constraints) + @(
     "Return strict JSON only.",
     "Do not execute commands or modify files.",
-    "Only propose docs or safe local-smoke tasks.",
+    "Use only task_type values docs or local-smoke.",
     "Expected files must stay under docs/ or scripts/powershell/smoke-*.ps1.",
     "No production deployment, secrets, GitHub settings, branch protection or server root config."
   )) -join "`n- "
@@ -229,7 +297,9 @@ function Test-ProposalPolicy {
       $decision = "rejected_duplicate"; $reasons.Add("dedupe_key is missing or duplicated") | Out-Null
     }
     $seen[$dedupe] = $true
-    if ($taskType -notin @("docs", "local-smoke")) {
+    if ($taskType -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config") -or $proposal.blocked_task_type) {
+      $decision = "ask_human"; $reasons.Add("task_type is blocked for Hermes-assisted automation") | Out-Null
+    } elseif ($taskType -notin @("docs", "local-smoke")) {
       $decision = "ask_human"; $reasons.Add("task_type must be docs or local-smoke") | Out-Null
     }
     if ($risk -ne "low") {
@@ -284,6 +354,8 @@ if ([string]::IsNullOrWhiteSpace($Title)) { throw "skybridge-plan requires -Titl
 if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { $MasterGoalId = New-Slug -Prefix "master-goal" -Text $Title }
 if ($PlannerMode -eq "hermes-apply" -and -not $Apply) { throw "hermes-apply requires -Apply." }
 if ($PlannerMode -eq "hermes-preview" -and $Apply) { throw "hermes-preview is preview-only; use hermes-apply for persistence." }
+$effectiveConstraints = @(Read-ConstraintsInput -InlineConstraints $Constraints -File $ConstraintsFile -JsonText $ConstraintsJson)
+$Constraints = $effectiveConstraints
 
 $script:Config = New-PlanApiConfig
 if ($script:Config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-SkyBridgeWorkerToken -Config $script:Config))) {
@@ -315,7 +387,7 @@ $masterGoal = [pscustomobject]@{
   description = $Description
   source = "manual"
   priority = "normal"
-  constraints = @($Constraints)
+  constraints = @($effectiveConstraints)
   acceptance_criteria = @($AcceptanceCriteria)
   stop_conditions = @($StopConditions)
 }
@@ -345,6 +417,7 @@ if ($PlannerMode -eq "rule-based") {
   $proposals = @(ConvertFrom-StrictProposalJson -Text (Get-StrictJsonText -Response $response))
 }
 
+$proposals = @(Normalize-HermesProposalTaskTypes -Proposals $proposals)
 $policyMode = if ($PlannerMode -eq "hermes-apply") { "execution" } else { "preview" }
 $proposals = @(Test-ProposalPolicy -Proposals $proposals -ExistingProposals @($existingProposalsPayload.proposals) -Mode $policyMode)
 $persistableProposals = if ($PlannerMode -eq "hermes-apply") {
@@ -360,7 +433,7 @@ $session = [pscustomobject]@{
   master_goal_id = $MasterGoalId
   project_id = $ProjectId
   planner_adapter = $plannerAdapter
-  proposals = [object[]]@($persistableProposals)
+  proposals = [object[]]@($proposals)
 }
 
 $masterGoalAction = "would_create"
@@ -374,7 +447,14 @@ if (-not $effectiveDryRun) {
     $masterGoalAction = "created"
   }
   if (@($persistableProposals).Count -eq 0) { throw "No proposals passed SkyBridge validation for persistence." }
-  $applied = Invoke-PlanApi -Method POST -Path "/v1/planning-sessions" -Body $session
+  $sessionForApi = [pscustomobject]@{
+    planning_session_id = $plannerAdapter.session_id
+    master_goal_id = $MasterGoalId
+    project_id = $ProjectId
+    planner_adapter = $plannerAdapter
+    proposals = [object[]]@($persistableProposals)
+  }
+  $applied = Invoke-PlanApi -Method POST -Path "/v1/planning-sessions" -Body $sessionForApi
   $sessionAction = "created"
   $persistableProposals = @($applied.proposals)
 }
