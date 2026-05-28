@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [Parameter(Mandatory = $true)][ValidateSet("goal","project","workers","worker","tasks","task","loop","operator")][string]$Area,
+  [Parameter(Mandatory = $true)][ValidateSet("goal","project","workers","worker","tasks","task","loop","operator","hermes")][string]$Area,
   [Parameter(Mandatory = $true)][string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -10,6 +10,11 @@ param(
   [string]$ProposalId,
   [string]$Description,
   [string[]]$Constraints = @(),
+  [string]$ConstraintsFile,
+  [string]$ConstraintsJson,
+  [string]$HermesEnvFile,
+  [string]$HermesApiBase,
+  [string]$OutputFile,
   [int]$MaxRounds = 3,
   [string]$TaskId,
   [string]$TaskTitle,
@@ -49,6 +54,10 @@ function Invoke-OperatorGuide {
   if ($ProposalId) { $args += @("-ProposalId", $ProposalId) }
   if ($Description) { $args += @("-Description", $Description) }
   foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+  if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
+  if ($ConstraintsJson) { $args += @("-ConstraintsJson", $ConstraintsJson) }
+  if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+  if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
   if ($TaskId) { $args += @("-TaskId", $TaskId) }
   if ($TaskTitle) { $args += @("-TaskTitle", $TaskTitle) }
   if ($TaskBody) { $args += @("-TaskBody", $TaskBody) }
@@ -80,6 +89,47 @@ switch ("$Area $Command") {
   "operator proposal-convert-preview" { Invoke-OperatorGuide -Mode "proposal-convert-preview" }
   "operator supervise-preview" { Invoke-OperatorGuide -Mode "supervise-preview" }
   "operator supervise-apply" { Invoke-OperatorGuide -Mode "supervise-apply" }
+  "operator hermes-health" { Invoke-OperatorGuide -Mode "hermes-health" }
+  "operator hermes-preview" { Invoke-OperatorGuide -Mode "hermes-preview" }
+  "operator hermes-preview-summary" { Invoke-OperatorGuide -Mode "hermes-preview-summary" }
+  "hermes health" {
+    $args = @("-File", ".\scripts\powershell\skybridge-hermes-health.ps1", "-Json")
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    Write-CliResult (Invoke-JsonScript -Arguments $args)
+  }
+  "hermes preview" {
+    if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "hermes preview requires -GoalTitle or -TaskTitle." }
+    $previewTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    $args = @("-File", ".\scripts\powershell\skybridge-hermes-preview.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Title", $previewTitle, "-Json")
+    if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+    if ($Description) { $args += @("-Description", $Description) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
+    if ($ConstraintsJson) { $args += @("-ConstraintsJson", $ConstraintsJson) }
+    if ($TokenEnvVar) { $args += @("-TokenEnvVar", $TokenEnvVar) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    if ($OutputFile) { $args += @("-OutputFile", $OutputFile) }
+    Write-CliResult (Invoke-JsonScript -Arguments $args)
+  }
+  "hermes preview-summary" {
+    if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "hermes preview-summary requires -GoalTitle or -TaskTitle." }
+    $previewTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    $args = @("-File", ".\scripts\powershell\skybridge-hermes-preview.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Title", $previewTitle, "-Json", "-SummaryOnly")
+    if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
+    if ($Description) { $args += @("-Description", $Description) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
+    if ($ConstraintsJson) { $args += @("-ConstraintsJson", $ConstraintsJson) }
+    if ($TokenEnvVar) { $args += @("-TokenEnvVar", $TokenEnvVar) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    if ($OutputFile) { $args += @("-SummaryOutputFile", $OutputFile) }
+    Write-CliResult (Invoke-JsonScript -Arguments $args)
+  }
   "goal submit" {
     $args = @("-File", ".\scripts\powershell\skybridge-submit.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalId", $GoalId, "-EnsureProject", "-EnsureGoal", "-Json")
     if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) } else { $args += @("-GoalTitle", $GoalId) }
@@ -177,6 +227,6 @@ switch ("$Area $Command") {
     Write-CliResult ((& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @args) | ConvertFrom-Json)
   }
   default {
-    throw "Unsupported command. Supported: operator status, operator submit-preview, operator run-once-preview, operator inspect-task, goal submit, project run, project start, project pause, project resume, project stop, project status, workers list, tasks list, task show, loop run-once, loop run-max-rounds."
+    throw "Unsupported command. Supported: operator status, operator hermes-health, operator hermes-preview, hermes health, hermes preview, goal submit, project run, project start, project pause, project resume, project stop, project status, workers list, tasks list, task show, loop run-once, loop run-max-rounds."
   }
 }

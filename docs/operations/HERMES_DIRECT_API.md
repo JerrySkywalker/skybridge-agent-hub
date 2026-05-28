@@ -11,6 +11,13 @@ Windows / Codex / SkyBridge scripts
 
 The old local SSH tunnel path, `http://127.0.0.1:18642`, is still useful as a rollback path, but it is deprecated for routine preview work because it depends on an operator-local tunnel process.
 
+Current tunnel mode can be inspected without printing secrets:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.ps1 `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
+```
+
 ## Requirements
 
 - DNS: `hermes-api.jerryskywalker.space` must resolve to the SkyBridge host.
@@ -84,6 +91,14 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
 ```
 
 Confirm no SSH tunnel is required, `/v1/capabilities` succeeds, `hermes-preview` succeeds, proposals are visible in both `proposals` and `planning_session.proposals`, no cloud task is created, and project control remains paused.
+
+The preview wrapper saves full JSON when `-OutputFile` is supplied. Add:
+
+```powershell
+-SummaryOutputFile .agent/tmp/hermes-preview-summary.json
+```
+
+to save a compact quality report with endpoint, provider, model, runtime mode, planner mode, tool execution mode, prompt version, input state hash, decision counts and per-proposal risk/type/files/rationale. `.agent` files stay local and untracked.
 
 ## Rollback
 

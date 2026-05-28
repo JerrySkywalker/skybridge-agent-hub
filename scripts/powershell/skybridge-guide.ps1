@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start", "plan-preview", "plan-apply", "proposals", "proposal-show", "proposal-accept", "proposal-convert-preview", "supervise-preview", "supervise-apply", "supervise-status")]
+  [ValidateSet("status", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start", "plan-preview", "plan-apply", "proposals", "proposal-show", "proposal-accept", "proposal-convert-preview", "supervise-preview", "supervise-apply", "supervise-status", "hermes-health", "hermes-preview", "hermes-preview-summary")]
   [string]$Mode = "status",
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -17,6 +17,10 @@ param(
   [string]$ProposalId,
   [string]$Description,
   [string[]]$Constraints = @(),
+  [string]$ConstraintsFile,
+  [string]$ConstraintsJson,
+  [string]$HermesEnvFile,
+  [string]$HermesApiBase,
   [int]$MaxRounds = 1,
   [switch]$AllowHighRisk,
   [switch]$NoRun,
@@ -58,6 +62,9 @@ function New-GuideNextCommand {
   if ($TaskBody -and $NextMode -like "run-once*") { $parts += "-TaskBody `"$TaskBody`"" }
   if ($TaskBodyFile -and $NextMode -like "run-once*") { $parts += "-TaskBodyFile `"$TaskBodyFile`"" }
   if ($MasterGoalId) { $parts += "-MasterGoalId `"$MasterGoalId`"" }
+  if ($ConstraintsFile -and $NextMode -like "hermes-preview*") { $parts += "-ConstraintsFile `"$ConstraintsFile`"" }
+  if ($HermesEnvFile -and $NextMode -like "hermes-*") { $parts += "-HermesEnvFile `"$HermesEnvFile`"" }
+  if ($HermesApiBase -and $NextMode -like "hermes-*") { $parts += "-HermesApiBase `"$HermesApiBase`"" }
   if ($ProposalId) { $parts += "-ProposalId `"$ProposalId`"" }
   if ($NextMode -like "supervise*") { $parts += "-MaxRounds $MaxRounds" }
   if ($WorkerProfile) { $parts += "-WorkerProfile `"$WorkerProfile`"" }
@@ -271,6 +278,48 @@ switch ($Mode) {
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ShowAll", "-Json", "-OutputFile", $snapshot)
     $payload = Invoke-GuideJsonScript -Arguments $args
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "supervise-status"; api_base = $ApiBase; project_id = $ProjectId; master_goal_id = $MasterGoalId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "supervise-preview"; status = $payload }
+  }
+  "hermes-health" {
+    $args = @("-File", ".\scripts\powershell\skybridge-hermes-health.ps1", "-Json")
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $nextNote = if ($payload.direct_https -eq $true) { "Direct HTTPS Hermes API is configured for this check." } else { "Hermes API is not using direct HTTPS; tunnel fallback may still be required." }
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "hermes-health"; api_base = $ApiBase; project_id = $ProjectId; token_printed = $false; next_command = New-GuideNextCommand -NextMode "hermes-preview"; next_note = $nextNote; hermes = $payload }
+  }
+  "hermes-preview" {
+    if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "hermes-preview requires -GoalTitle or -TaskTitle as the master goal title." }
+    $previewTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { $MasterGoalId = New-GuideMasterGoalId -Title $previewTitle }
+    $previewOutput = Join-Path $OutputDir "skybridge-guide-hermes-preview.json"
+    $summaryOutput = Join-Path $OutputDir "hermes-preview-summary.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-hermes-preview.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MasterGoalId", $MasterGoalId, "-Title", $previewTitle, "-Json", "-OutputFile", $previewOutput, "-SummaryOutputFile", $summaryOutput)
+    if ($Description) { $args += @("-Description", $Description) }
+    if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
+    if ($ConstraintsJson) { $args += @("-ConstraintsJson", $ConstraintsJson) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $nextNote = "Preview only: review proposals; do not convert or run workers until an apply sprint is explicitly authorized."
+    if ($payload.summary.direct_https -ne $true) { $nextNote = "$nextNote Direct HTTPS is not configured for this run; tunnel fallback may still be in use." }
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "hermes-preview"; api_base = $ApiBase; project_id = $ProjectId; master_goal_id = $MasterGoalId; token_printed = $false; output_file = $previewOutput; summary_output_file = $summaryOutput; next_command = New-GuideNextCommand -NextMode "hermes-preview-summary"; next_note = $nextNote; preview = $payload }
+  }
+  "hermes-preview-summary" {
+    if ([string]::IsNullOrWhiteSpace($GoalTitle) -and [string]::IsNullOrWhiteSpace($TaskTitle)) { throw "hermes-preview-summary requires -GoalTitle or -TaskTitle as the master goal title." }
+    $previewTitle = if ($GoalTitle) { $GoalTitle } else { $TaskTitle }
+    if ([string]::IsNullOrWhiteSpace($MasterGoalId)) { $MasterGoalId = New-GuideMasterGoalId -Title $previewTitle }
+    $summaryOutput = Join-Path $OutputDir "hermes-preview-summary.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-hermes-preview.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-MasterGoalId", $MasterGoalId, "-Title", $previewTitle, "-Json", "-SummaryOnly", "-SummaryOutputFile", $summaryOutput)
+    if ($Description) { $args += @("-Description", $Description) }
+    if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
+    if ($ConstraintsJson) { $args += @("-ConstraintsJson", $ConstraintsJson) }
+    foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $nextNote = "Summary only: no proposal conversion, worker PollOnce or project control mutation was run."
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "hermes-preview-summary"; api_base = $ApiBase; project_id = $ProjectId; master_goal_id = $MasterGoalId; token_printed = $false; summary_output_file = $summaryOutput; next_command = New-GuideNextCommand -NextMode "status"; next_note = $nextNote; summary = $payload }
   }
 }
 

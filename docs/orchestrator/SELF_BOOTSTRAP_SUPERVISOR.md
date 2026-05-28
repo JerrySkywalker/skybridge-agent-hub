@@ -89,6 +89,21 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
   -GoalTitle "Prepare self-bootstrap supervisor"
 ```
 
+Hermes-assisted preview can also be run without entering the supervisor apply path:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode hermes-preview `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -MasterGoalId master-goal-hermes-assisted-self-bootstrap-preview `
+  -GoalTitle "Hermes-assisted SkyBridge self-bootstrap preview" `
+  -ConstraintsFile .agent/tmp/hermes-preview-constraints.json `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+```
+
+Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are preview-only. They do not convert proposals, do not run workers and do not mutate project control. If the configured Hermes base is not direct HTTPS, the guide reports that tunnel fallback may still be in use.
+
 ## Safety
 
 - `MaxRounds` defaults to `1` and must be greater than zero.
@@ -97,7 +112,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
 - Execution uses `skybridge-run-once.ps1 -NoSubmit -Apply`, which passes the selected task id to the edge worker, uses `PollOnce`, fails if that exact target task is not processed, and restores project control to paused.
 - The supervisor also attempts to pause project control in `finally`.
 - Worker Codex execution classifies websocket, TLS handshake, EOF, connection reset and transport-error messages as Codex transport failures. These failures are retried at most once by default, and persistent failures record `execution_error_class`, `retry_count` and unrecovered evidence instead of retrying indefinitely.
-- No Hermes planner call is made in this goal; `PlannerMode` remains `rule-based`.
+- Hermes planner calls are allowed only in explicit Hermes preview/apply planner modes. The hardened preview wrapper remains dry-run and uses policy-normalized `docs`/`local-smoke` proposals.
 - Long-running worker loops remain deferred.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.
