@@ -1,0 +1,64 @@
+{
+  "proposals": [
+    {
+      "title": "Create worker readiness smoke script",
+      "body": "Add a local smoke script that verifies worker readiness with fixtures.",
+      "prompt_summary": "Add worker readiness smoke coverage.",
+      "task_type": "smoke",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": ["scripts/powershell/smoke-worker-readiness.ps1"],
+      "acceptance_criteria": ["Smoke runs locally."],
+      "evidence_requirements": ["Smoke output is summarized."],
+      "dedupe_key": "worker-readiness-smoke",
+      "depends_on": [],
+      "rationale": "A local smoke improves confidence before apply.",
+      "stop_condition": "Stop before cloud mutation."
+    },
+    {
+      "title": "Document sprint progress checkpoint",
+      "body": "Update sprint docs with the latest checkpoint.",
+      "prompt_summary": "Document a progress checkpoint.",
+      "task_type": "docs",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": ["docs/dev/PROGRESS.md"],
+      "acceptance_criteria": ["Progress entry is documented."],
+      "evidence_requirements": ["Docs-only diff."],
+      "dedupe_key": "sprint-progress-checkpoint",
+      "depends_on": [],
+      "rationale": "The operator needs a concise checkpoint.",
+      "stop_condition": "Stop if non-doc files are required."
+    },
+    {
+      "title": "Deploy Hermes proxy",
+      "body": "Deploy production proxy changes.",
+      "prompt_summary": "Deploy server config.",
+      "task_type": "deploy",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": ["docs/operations/HERMES_DIRECT_API.md"],
+      "acceptance_criteria": ["Deployment is complete."],
+      "evidence_requirements": ["Production config changed."],
+      "dedupe_key": "deploy-hermes-proxy",
+      "depends_on": [],
+      "rationale": "This is intentionally unsafe for policy smoke.",
+      "stop_condition": "Stop before production deployment."
+    },
+    {
+      "title": "Test unsafe generated file",
+      "body": "Add a test outside allowed smoke paths.",
+      "prompt_summary": "Add unsafe test file.",
+      "task_type": "test",
+      "risk": "low",
+      "required_capabilities": ["codex"],
+      "expected_files": ["packages/client/src/generated-test.ts"],
+      "acceptance_criteria": ["Test is added."],
+      "evidence_requirements": ["Test passes."],
+      "dedupe_key": "unsafe-test-file",
+      "depends_on": [],
+      "rationale": "This verifies policy rejection for unsafe expected files.",
+      "stop_condition": "Stop if file path is outside allowed preview paths."
+    }
+  ]
+}

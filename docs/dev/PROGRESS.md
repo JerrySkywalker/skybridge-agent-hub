@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-28 Super Goal 176 Hermes Direct API and Preview Workflow Hardening
+
+- Preflight on branch `ai/super-176-hermes-direct-api-preview-hardening` confirmed `main` was up to date at PR #71 merge commit `131f01c`, `gh pr list` returned no open PRs, and SkyBridge cloud status was read-only healthy.
+- Cloud project `skybridge-agent-hub` remained `paused` with `stop_requested=false`; status showed one historical blocked task and no running task. No project-control mutation, task conversion, worker PollOnce or real cloud task creation was run.
+- Current Hermes env still pointed at tunnel mode, `http://127.0.0.1:18642`, with a 64-character key. The tunnel capabilities check was refused in this session, so direct HTTPS is documented but not proven configured.
+- Added direct HTTPS Hermes API runbook and OpenResty example for `https://hermes-api.jerryskywalker.space -> 127.0.0.1:8642`, preserving bearer auth, avoiding Dashboard exposure, and supporting long planning responses/streaming.
+- Added `skybridge-hermes-health.ps1` and `skybridge-hermes-preview.ps1`. Preview wrapper defaults to `hermes-preview`, dry-run only, no proposal persistence, no task creation, no worker run, no project-control mutation, and `token_printed=false`.
+- Hardened constraints with `-ConstraintsFile` and `-ConstraintsJson`; wrappers pass merged constraints as JSON to avoid PowerShell `pwsh -File` array-binding drift into acceptance criteria or stop conditions.
+- Normalized Hermes proposal output so top-level `proposals` and `planning_session.proposals` contain the same policy-validated proposals during preview. The preview wrapper emits a compact proposal table and a quality summary/report.
+- Normalized Hermes task types before policy validation: `smoke -> local-smoke`, `doc`/`documentation -> docs`, safe smoke-path `test -> local-smoke`; blocked surfaces such as deploy, production, secrets, GitHub settings, branch protection and server config remain human-gated or rejected.
+
 ## 2026-05-27 Super Goal 175 Hermes-assisted Multi-round Self-Bootstrap Sprint
 
 - Implemented gated Hermes-assisted planning foundations on branch `ai/super-175-hermes-assisted-multiround-self-bootstrap`: `rule-based`, `hermes-preview`, and `hermes-apply` planner modes; strict Hermes proposal parsing; policy validation outputs; advisory evaluator records; default supervisor `MaxRounds=2`; active task residue checks; and fixture smokes.

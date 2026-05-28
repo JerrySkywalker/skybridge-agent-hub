@@ -231,7 +231,7 @@ Remote worker reliability helpers include `skybridge-status.ps1`, `skybridge-con
 
 For one-shot operator work, use `skybridge-guide.ps1` for the guided status -> submit-preview -> submit-apply -> run-once-preview -> run-once-apply -> inspect-task flow. The guide wraps `skybridge-submit.ps1` and `skybridge-run-once.ps1`, keeps preview as the default, uses `-PollOnce` only and leaves long-running remote loops deferred.
 
-Master goal planning is documented in [docs/orchestrator/MASTER_GOAL_PLANNER.md](docs/orchestrator/MASTER_GOAL_PLANNER.md). Use `skybridge-plan.ps1` to generate reviewable task proposals from a high-level goal, then `skybridge-proposal.ps1` to review, accept and convert proposals into normal queued tasks.
+Master goal planning is documented in [docs/orchestrator/MASTER_GOAL_PLANNER.md](docs/orchestrator/MASTER_GOAL_PLANNER.md). Use `skybridge-plan.ps1` to generate reviewable task proposals from a high-level goal, then `skybridge-proposal.ps1` to review, accept and convert proposals into normal queued tasks. Hermes preview operators should prefer `skybridge-hermes-preview.ps1` and the direct API runbook in [docs/operations/HERMES_DIRECT_API.md](docs/operations/HERMES_DIRECT_API.md).
 
 The bounded self-bootstrap supervisor is documented in [docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md](docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md). Use `skybridge-supervise.ps1` to preview or apply one safe plan -> proposal -> convert -> run-once round with explicit limits; it is dry-run by default and does not start a long-running worker loop.
 

@@ -33,6 +33,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-plan.ps1 `
 
 Add `-Apply` to create the master goal, planning session and proposals. Apply does not create executable tasks.
 
+Use `-ConstraintsFile` or `-ConstraintsJson` for multi-value constraints when invoking through `pwsh -File` wrappers. Repeated inline `-Constraints` is still accepted, but JSON/file input avoids positional binding surprises.
+
 ## Review Proposals
 
 ```powershell
@@ -126,7 +128,27 @@ Planner metadata includes:
 - `prompt_version`
 - `input_state_hash`
 
-`-PlannerMode hermes` is present as a disabled seam. Future Hermes integration should build the same compact project state, call Hermes privately, validate the response into task proposals and store only redacted audit metadata. Hermes API must remain private and must not become a public worker dependency.
+Hermes-assisted planning uses:
+
+- `-PlannerMode hermes-preview`: dry-run advisory preview only; it cannot persist proposals or create tasks.
+- `-PlannerMode hermes-apply`: planning-record persistence only; it still does not create executable tasks.
+
+For daily Hermes preview, prefer the wrapper:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -MasterGoalId master-goal-example `
+  -Title "Improve operator workflow" `
+  -ConstraintsFile .agent/tmp/hermes-preview-constraints.json `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -OutputFile .agent/tmp/hermes-preview.json
+```
+
+Preview output keeps `project_state` as state only and exposes policy-validated proposals in both top-level `proposals` and `planning_session.proposals`. Hermes task types are normalized before policy validation: `smoke` becomes `local-smoke`, `doc` and `documentation` become `docs`, and safe smoke-path `test` proposals can become `local-smoke`. Deploy, production, secrets, GitHub settings, branch protection and server config proposals are blocked or human-gated.
+
+Hermes API must remain private and authenticated. The daily target is direct HTTPS through `https://hermes-api.jerryskywalker.space`; local SSH tunnel mode is a fallback only. See `docs/operations/HERMES_DIRECT_API.md`.
 
 ## Safety
 

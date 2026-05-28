@@ -46,6 +46,34 @@ Hermes cannot execute shell commands or modify files through this path. `tool_ex
 
 No fake preview output was created. The only saved preview artifacts are local snapshots under `.agent/tmp`, which are intentionally untracked.
 
+## Super Goal 176 Hardening
+
+After the tunnel later recovered, a real `hermes-preview` produced useful advisory proposals but exposed workflow gaps: local tunnel fragility, long manual command lines, PowerShell constraints binding risk, inconsistent proposal locations, and Hermes returning `task_type=smoke` where SkyBridge policy expects `local-smoke`.
+
+The hardened preview path is:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.ps1 `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -MasterGoalId master-goal-hermes-assisted-self-bootstrap-preview `
+  -Title "Hermes-assisted SkyBridge self-bootstrap preview" `
+  -Description "Use Hermes as an advisory planner to propose safe docs-only or local-smoke tasks for a bounded SkyBridge self-bootstrap sprint." `
+  -ConstraintsFile .agent/tmp/hermes-preview-constraints.json `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -OutputFile .agent/tmp/hermes-preview-176.json `
+  -SummaryOutputFile .agent/tmp/hermes-preview-summary.json
+```
+
+`-ConstraintsFile` is preferred over repeated inline `-Constraints` when crossing `pwsh -File` boundaries. The wrapper merges inline, file and JSON constraints, validates Hermes health unless skipped, calls `skybridge-plan.ps1 -PlannerMode hermes-preview -DryRun`, and prints a compact proposal table plus counts.
+
+Preview JSON now exposes policy-validated proposals in both top-level `proposals` and `planning_session.proposals`. `project_state` remains state-only and is not the only place proposals appear. Hermes proposal task types are normalized before policy validation: `smoke` becomes `local-smoke`, `doc` and `documentation` become `docs`, and unsafe task types such as deploy, production, secrets, GitHub settings, branch protection and server config remain blocked or human-gated.
+
+Daily operation should move from the SSH tunnel to the direct HTTPS API described in `docs/operations/HERMES_DIRECT_API.md`. Until `https://hermes-api.jerryskywalker.space` is configured and verified, tunnel mode remains a fallback only.
+
 ## Apply Sprint
 
 Bounded apply did not run because the real Hermes preview gate did not produce valid low-risk proposals.
@@ -97,6 +125,7 @@ Hermes-assisted multi-round self-bootstrap is not proven yet. The local implemen
 
 Next safe retry:
 
-1. Restore or tunnel the configured Hermes endpoint.
-2. Re-run `hermes-preview` only.
-3. Proceed to `hermes-apply -MaxRounds 2` only if preview returns low-risk docs/local-smoke proposals accepted by SkyBridge validation and cloud state remains residue-free.
+1. Configure or verify direct HTTPS Hermes API, falling back to the SSH tunnel only if necessary.
+2. Run `skybridge-hermes-health.ps1`.
+3. Re-run `skybridge-hermes-preview.ps1` only.
+4. Proceed to a separate Hermes-assisted apply sprint only if preview returns low-risk docs/local-smoke proposals accepted by SkyBridge validation and cloud state remains residue-free.
