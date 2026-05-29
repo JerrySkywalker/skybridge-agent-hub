@@ -15,6 +15,9 @@ param(
   [ValidateSet("rule-based", "hermes-preview", "hermes-apply")]
   [string]$PlannerMode = "rule-based",
   [string]$FixtureFile,
+  [ValidateSet("compact", "full")]
+  [string]$StateMode = "compact",
+  [int]$TimeoutSeconds = 120,
   [switch]$DryRun,
   [switch]$Apply,
   [switch]$Json,
@@ -239,6 +242,78 @@ function Normalize-HermesProposalTaskTypes {
   return $Proposals
 }
 
+function ConvertTo-TaskSummary {
+  param($Task)
+  $metadata = $Task.planner_metadata
+  $result = $Task.result
+  [pscustomobject]@{
+    task_id = $Task.task_id
+    title = $Task.title
+    status = $Task.status
+    risk = if ($metadata) { $metadata.risk } else { $null }
+    task_type = if ($metadata) { $metadata.task_type } else { $Task.task_type }
+    dedupe_key = if ($metadata) { $metadata.dedupe_key } else { $Task.dedupe_key }
+    assigned_worker_id = $Task.assigned_worker_id
+    pr_url = if ($result) { $result.pr_url } else { $null }
+    evidence_status = if ($result -and $result.evidence_summary) { $result.evidence_summary.recovery_status } else { $null }
+    changed_files = if ($metadata) { @($metadata.expected_files) } else { @() }
+  }
+}
+
+function ConvertTo-WorkerSummary {
+  param($Worker)
+  [pscustomobject]@{
+    worker_id = $Worker.worker_id
+    status = $Worker.status
+    hostname = $Worker.hostname
+    capabilities = @($Worker.capabilities)
+    current_task_id = $Worker.current_task_id
+    last_heartbeat_at = $Worker.last_heartbeat_at
+  }
+}
+
+function New-CompactPlannerState {
+  param($Health, $Project, $Control, [array]$Tasks, [array]$Workers)
+  $taskList = @($Tasks)
+  $active = @($taskList | Where-Object { $_.status -in @("queued", "claimed", "running") })
+  $recent = @($taskList | Select-Object -First 10 | ForEach-Object { ConvertTo-TaskSummary -Task $_ })
+  $blocked = @($taskList | Where-Object { $_.status -eq "blocked" } | Select-Object -First 10 | ForEach-Object { ConvertTo-TaskSummary -Task $_ })
+  $recovered = @($taskList | Where-Object { $_.status -eq "recovered" -or ($_.result -and $_.result.evidence_summary -and $_.result.evidence_summary.recovered -eq $true) } | Select-Object -First 10 | ForEach-Object { ConvertTo-TaskSummary -Task $_ })
+  $statusSummary = @{}
+  foreach ($group in @($taskList | Group-Object -Property status)) { $statusSummary[$group.Name] = $group.Count }
+  [pscustomobject]@{
+    schema = "skybridge.planner_compact_state.v1"
+    health = [pscustomobject]@{
+      ok = $Health.ok
+      service = $Health.service
+      version = $Health.version
+    }
+    project = [pscustomobject]@{
+      project_id = $Project.project_id
+      name = $Project.name
+      status = $Project.status
+    }
+    control = [pscustomobject]@{
+      state = $Control.state
+      max_tasks = $Control.max_tasks
+      updated_at = $Control.updated_at
+    }
+    active_task_count = $active.Count
+    queued_task_count = @($active | Where-Object { $_.status -eq "queued" }).Count
+    running_task_count = @($active | Where-Object { $_.status -in @("claimed", "running") }).Count
+    task_status_summary = $statusSummary
+    recent_tasks = @($recent)
+    blocked_tasks = @($blocked)
+    recovered_tasks = @($recovered)
+    workers = @($Workers | Select-Object -First 10 | ForEach-Object { ConvertTo-WorkerSummary -Worker $_ })
+    recent_pr_evidence = @($recent | Where-Object { $_.pr_url } | Select-Object -First 10)
+    raw_task_events_included = $false
+    raw_prompts_included = $false
+    raw_logs_included = $false
+    secrets_included = $false
+  }
+}
+
 function Invoke-HermesProposalPlanner {
   param($State)
   $loader = Join-Path $PSScriptRoot "load-hermes-env.ps1"
@@ -277,7 +352,7 @@ $stateJson
     input = $prompt
     response_format = @{ type = "json_object" }
   }
-  Invoke-RestMethod -Method POST -Uri "$($env:HERMES_API_BASE.TrimEnd('/'))/v1/responses" -Headers @{ Authorization = "Bearer $env:HERMES_API_KEY"; "Content-Type" = "application/json" } -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 20) -TimeoutSec 120
+  Invoke-RestMethod -Method POST -Uri "$($env:HERMES_API_BASE.TrimEnd('/'))/v1/responses" -Headers @{ Authorization = "Bearer $env:HERMES_API_KEY"; "Content-Type" = "application/json" } -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
 }
 
 function Test-ProposalPolicy {
@@ -371,12 +446,17 @@ $workers = Invoke-PlanApi -Method GET -Path "/v1/workers"
 $existingProposalsPayload = $null
 try { $existingProposalsPayload = Invoke-PlanApi -Method GET -Path "/v1/task-proposals?project_id=$([uri]::EscapeDataString($ProjectId))" } catch {}
 
-$state = [pscustomobject]@{
-  health = $health
-  project = $project.project
-  control = $control.control_state
-  recent_tasks = @($tasks.tasks | Select-Object -First 10)
-  workers = @($workers.workers | Select-Object -First 10)
+$state = if ($StateMode -eq "full") {
+  [pscustomobject]@{
+    schema = "skybridge.planner_full_state.v1"
+    health = $health
+    project = $project.project
+    control = $control.control_state
+    recent_tasks = @($tasks.tasks | Select-Object -First 10)
+    workers = @($workers.workers | Select-Object -First 10)
+  }
+} else {
+  New-CompactPlannerState -Health $health -Project $project.project -Control $control.control_state -Tasks @($tasks.tasks) -Workers @($workers.workers)
 }
 $stateHash = Get-HashText (($state | ConvertTo-Json -Depth 20 -Compress))
 $now = (Get-Date).ToUniversalTime().ToString("o")
