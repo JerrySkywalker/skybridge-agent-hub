@@ -45,6 +45,12 @@ try {
 
   if ($smoke.task_type -ne "local-smoke" -or $smoke.original_task_type -ne "smoke") { throw "Expected smoke to normalize to local-smoke." }
   if ($docs.task_type -ne "docs") { throw "Expected docs to remain docs." }
+  if (@($smoke.original_required_capabilities) -notcontains "powershell" -or @($smoke.original_required_capabilities) -notcontains "windows") { throw "Expected original smoke capabilities to be preserved." }
+  if (@($smoke.normalized_required_capabilities) -notcontains "codex" -or @($smoke.normalized_required_capabilities) -notcontains "powershell" -or @($smoke.normalized_required_capabilities) -notcontains "windows") { throw "Expected smoke capabilities to add codex and keep powershell/windows." }
+  if (@($docs.original_required_capabilities) -notcontains "git" -or @($docs.original_required_capabilities) -notcontains "docs") { throw "Expected original docs capabilities to be preserved." }
+  if (@($docs.normalized_required_capabilities) -notcontains "codex") { throw "Expected docs capabilities to add codex." }
+  if ($smoke.policy_decision -ne "accepted_for_preview") { throw "Expected normalized smoke to pass preview policy." }
+  if ($docs.policy_decision -ne "accepted_for_preview") { throw "Expected normalized docs to pass preview policy." }
   if ($deploy.policy_decision -notin @("ask_human", "rejected_high_risk")) { throw "Expected deploy to be blocked for human review." }
   if ($unsafeTest.policy_decision -notin @("ask_human", "rejected_expected_files")) { throw "Expected unsafe expected_files to be rejected or ask_human." }
 
@@ -52,7 +58,9 @@ try {
     ok = $true
     smoke_task_type = $smoke.task_type
     smoke_original_task_type = $smoke.original_task_type
+    smoke_capabilities = @($smoke.normalized_required_capabilities)
     docs_task_type = $docs.task_type
+    docs_capabilities = @($docs.normalized_required_capabilities)
     deploy_decision = $deploy.policy_decision
     unsafe_test_decision = $unsafeTest.policy_decision
     token_printed = $false

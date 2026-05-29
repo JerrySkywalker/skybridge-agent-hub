@@ -242,6 +242,29 @@ function Normalize-HermesProposalTaskTypes {
   return $Proposals
 }
 
+function Normalize-HermesProposalCapabilities {
+  param([array]$Proposals)
+  foreach ($proposal in @($Proposals)) {
+    $original = @($proposal.required_capabilities | ForEach-Object {
+      $capability = ([string]$_).Trim()
+      if (-not [string]::IsNullOrWhiteSpace($capability)) { $capability.ToLowerInvariant() }
+    } | Where-Object { $_ } | Select-Object -Unique)
+    $normalized = @($original)
+    $taskType = ([string]$proposal.task_type).Trim().ToLowerInvariant()
+    $files = @($proposal.expected_files | ForEach-Object { ([string]$_).Replace("\", "/") })
+    $docsOnly = $files.Count -gt 0 -and @($files | Where-Object { $_ -like "docs/*" }).Count -eq $files.Count
+    $safeSmokeOnly = $files.Count -gt 0 -and @($files | Where-Object { $_ -like "scripts/powershell/smoke-*.ps1" }).Count -eq $files.Count
+
+    if (($taskType -eq "docs" -and $docsOnly) -or ($taskType -eq "local-smoke" -and $safeSmokeOnly)) {
+      if ($normalized -notcontains "codex") { $normalized += "codex" }
+    }
+
+    $proposal | Add-Member -NotePropertyName original_required_capabilities -NotePropertyValue @($original) -Force
+    $proposal | Add-Member -NotePropertyName normalized_required_capabilities -NotePropertyValue @($normalized | Select-Object -Unique) -Force
+  }
+  return $Proposals
+}
+
 function ConvertTo-TaskSummary {
   param($Task)
   $metadata = $Task.planner_metadata
@@ -325,6 +348,7 @@ function Invoke-HermesProposalPlanner {
     "Return strict JSON only.",
     "Do not execute commands or modify files.",
     "Use only task_type values docs or local-smoke.",
+    "Executable proposals must include codex in required_capabilities; docs proposals may also include docs/git, and local-smoke proposals may also include powershell/windows.",
     "Expected files must stay under docs/ or scripts/powershell/smoke-*.ps1.",
     "No production deployment, secrets, GitHub settings, branch protection or server root config."
   )) -join "`n- "
@@ -365,7 +389,8 @@ function Test-ProposalPolicy {
     $risk = [string]$proposal.risk
     $taskType = [string]$proposal.task_type
     $files = @($proposal.expected_files | ForEach-Object { ([string]$_).Replace("\", "/") })
-    $caps = @($proposal.required_capabilities | ForEach-Object { [string]$_ })
+    $capsSource = if ($proposal.PSObject.Properties["normalized_required_capabilities"]) { $proposal.normalized_required_capabilities } else { $proposal.required_capabilities }
+    $caps = @($capsSource | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
     $dedupe = [string]$proposal.dedupe_key
 
     if ([string]::IsNullOrWhiteSpace($dedupe) -or $seen.ContainsKey($dedupe) -or ($existingKeys -contains $dedupe)) {
@@ -498,6 +523,7 @@ if ($PlannerMode -eq "rule-based") {
 }
 
 $proposals = @(Normalize-HermesProposalTaskTypes -Proposals $proposals)
+$proposals = @(Normalize-HermesProposalCapabilities -Proposals $proposals)
 $policyMode = if ($PlannerMode -eq "hermes-apply") { "execution" } else { "preview" }
 $proposals = @(Test-ProposalPolicy -Proposals $proposals -ExistingProposals @($existingProposalsPayload.proposals) -Mode $policyMode)
 $persistableProposals = if ($PlannerMode -eq "hermes-apply") {
