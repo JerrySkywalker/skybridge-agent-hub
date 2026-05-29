@@ -658,6 +658,9 @@ export async function createServer(
     const taskId = safeString(request.body.task_id) ?? `task_${proposal.proposal_id}`;
     if (store.getTask(taskId)) return reply.code(409).send({ ok: false, error: "task_already_exists" });
     const now = new Date().toISOString();
+    const requiredCapabilities = proposal.normalized_required_capabilities && proposal.normalized_required_capabilities.length > 0
+      ? proposal.normalized_required_capabilities
+      : proposal.required_capabilities;
     const task: StoredTask = {
       task_id: taskId,
       project_id: proposal.project_id,
@@ -670,7 +673,7 @@ export async function createServer(
       task_type: proposal.task_type,
       allowed_paths: proposal.expected_files,
       validation: proposal.evidence_requirements,
-      required_capabilities: proposal.required_capabilities,
+      required_capabilities: requiredCapabilities,
       planner_metadata: {
         adapter: proposal.created_by,
         decision: "continue",
@@ -2874,10 +2877,13 @@ function parseTaskProposalInput(
     prompt_summary: safeString(input.prompt_summary),
     dedupe_key: dedupeKey,
     expected_files: safePathArray(input.expected_files) ?? [],
-    acceptance_criteria: safeStringArray(input.acceptance_criteria) ?? [],
-    evidence_requirements: safeStringArray(input.evidence_requirements) ?? [],
-    required_capabilities: safeStringArray(input.required_capabilities) ?? ["codex"],
-    risk: risk as TaskRisk,
+      acceptance_criteria: safeStringArray(input.acceptance_criteria) ?? [],
+      evidence_requirements: safeStringArray(input.evidence_requirements) ?? [],
+      required_capabilities: safeStringArray(input.required_capabilities) ?? ["codex"],
+      original_required_capabilities: safeStringArray(input.original_required_capabilities),
+      normalized_required_capabilities: safeStringArray(input.normalized_required_capabilities),
+      capability_normalization_reason: safeString(input.capability_normalization_reason),
+      risk: risk as TaskRisk,
     task_type: safeString(input.task_type) ?? "docs",
     depends_on: safeStringArray(input.depends_on) ?? [],
     rationale: safeString(input.rationale) ?? "Rule-based planner proposal.",

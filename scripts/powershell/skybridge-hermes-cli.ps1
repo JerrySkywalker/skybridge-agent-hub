@@ -21,6 +21,7 @@ param(
   [string]$TaskBody,
   [string]$TaskBodyFile,
   [string]$WorkerProfile,
+  [string]$WorkerId,
   [string]$TokenEnvVar,
   [string]$TokenFile,
   [string]$MasterGoalFile = ".\goals\master\self-bootstrap-smoke.md",
@@ -59,6 +60,7 @@ function Invoke-OperatorGuide {
   if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
   if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
   if ($TaskId) { $args += @("-TaskId", $TaskId) }
+  if ($WorkerId) { $args += @("-WorkerId", $WorkerId) }
   if ($TaskTitle) { $args += @("-TaskTitle", $TaskTitle) }
   if ($TaskBody) { $args += @("-TaskBody", $TaskBody) }
   if ($TaskBodyFile) { $args += @("-TaskBodyFile", $TaskBodyFile) }
@@ -73,6 +75,12 @@ function Invoke-OperatorGuide {
 
 switch ("$Area $Command") {
   "operator status" { Invoke-OperatorGuide -Mode "status" }
+  "operator status-active" { Invoke-OperatorGuide -Mode "status-active" }
+  "operator status-recent" { Invoke-OperatorGuide -Mode "status-recent" }
+  "operator status-worker" { Invoke-OperatorGuide -Mode "status-worker" }
+  "operator status-task" { Invoke-OperatorGuide -Mode "status-task" }
+  "operator status-failed" { Invoke-OperatorGuide -Mode "status-failed" }
+  "operator status-recovered" { Invoke-OperatorGuide -Mode "status-recovered" }
   "operator submit-preview" { Invoke-OperatorGuide -Mode "submit-preview" }
   "operator submit-apply" { Invoke-OperatorGuide -Mode "submit-apply" }
   "operator run-once-preview" { Invoke-OperatorGuide -Mode "run-once-preview" }

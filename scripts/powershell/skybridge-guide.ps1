@@ -1,10 +1,11 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start", "plan-preview", "plan-apply", "proposals", "proposal-show", "proposal-accept", "proposal-convert-preview", "supervise-preview", "supervise-apply", "supervise-status", "hermes-health", "hermes-preview", "hermes-preview-summary")]
+  [ValidateSet("status", "status-active", "status-recent", "status-worker", "status-task", "status-failed", "status-recovered", "submit-preview", "submit-apply", "run-once-preview", "run-once-apply", "inspect-task", "inspect-worker", "pause", "start", "plan-preview", "plan-apply", "proposals", "proposal-show", "proposal-accept", "proposal-convert-preview", "supervise-preview", "supervise-apply", "supervise-status", "hermes-health", "hermes-preview", "hermes-preview-summary")]
   [string]$Mode = "status",
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$WorkerProfile,
+  [string]$WorkerId,
   [string]$TokenEnvVar,
   [string]$TokenFile,
   [string]$GoalId,
@@ -58,6 +59,7 @@ function New-GuideNextCommand {
   if ($GoalId) { $parts += "-GoalId `"$GoalId`"" }
   if ($GoalTitle -and ($NextMode -like "run-once*" -or $NextMode -like "plan-*" -or $NextMode -like "supervise*")) { $parts += "-GoalTitle `"$GoalTitle`"" }
   if ($TaskId) { $parts += "-TaskId `"$TaskId`"" }
+  if ($WorkerId) { $parts += "-WorkerId `"$WorkerId`"" }
   if ($TaskTitle -and ($NextMode -like "run-once*" -or $NextMode -like "plan-*" -or $NextMode -like "supervise*")) { $parts += "-TaskTitle `"$TaskTitle`"" }
   if ($TaskBody -and $NextMode -like "run-once*") { $parts += "-TaskBody `"$TaskBody`"" }
   if ($TaskBodyFile -and $NextMode -like "run-once*") { $parts += "-TaskBodyFile `"$TaskBodyFile`"" }
@@ -115,6 +117,45 @@ switch ($Mode) {
     $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Json", "-OutputFile", $snapshot)
     $payload = Invoke-GuideJsonScript -Arguments $args
     $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status"; api_base = $ApiBase; project_id = $ProjectId; task_id = $TaskId; goal_id = $GoalId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "submit-preview"; status = $payload }
+  }
+  "status-active" {
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-active.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-ActiveOnly", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-active"; api_base = $ApiBase; project_id = $ProjectId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-recent"; status = $payload }
+  }
+  "status-recent" {
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-recent.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-RecentTasks", "10", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-recent"; api_base = $ApiBase; project_id = $ProjectId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-active"; status = $payload }
+  }
+  "status-worker" {
+    if ([string]::IsNullOrWhiteSpace($WorkerId)) { throw "status-worker requires -WorkerId." }
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-worker.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-WorkerId", $WorkerId, "-TaskLimit", "20", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-worker"; api_base = $ApiBase; project_id = $ProjectId; worker_id = $WorkerId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-recent"; status = $payload }
+  }
+  "status-task" {
+    if ([string]::IsNullOrWhiteSpace($TaskId)) { throw "status-task requires -TaskId." }
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-task.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TaskId", $TaskId, "-EventLimit", "10", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $taskDetail = @($payload.tasks)[0]
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-task"; api_base = $ApiBase; project_id = $ProjectId; task_id = $TaskId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-recent"; task_detail = $taskDetail; status = $payload }
+  }
+  "status-failed" {
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-failed.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TaskStatus", "failed", "-ExcludeRecovered", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-failed"; api_base = $ApiBase; project_id = $ProjectId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-recovered"; status = $payload }
+  }
+  "status-recovered" {
+    $snapshot = Join-Path $OutputDir "skybridge-guide-status-recovered.json"
+    $args = Add-CommonAuthArgs @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-RecoveredOnly", "-TaskLimit", "20", "-Json", "-OutputFile", $snapshot)
+    $payload = Invoke-GuideJsonScript -Arguments $args
+    $result = [pscustomobject]@{ ok = $true; mode = $Mode; action = "status-recovered"; api_base = $ApiBase; project_id = $ProjectId; token_printed = $false; output_file = $snapshot; next_command = New-GuideNextCommand -NextMode "status-failed"; status = $payload }
   }
   "submit-preview" {
     if ([string]::IsNullOrWhiteSpace($TaskTitle)) { throw "submit-preview requires -TaskTitle." }

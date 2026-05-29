@@ -64,7 +64,7 @@ The deterministic policy can output:
 - `stop_task_failed`
 - `ask_human`
 
-The first selector prefers low-risk proposals with `required_capabilities` including `codex`, docs task type, not converted/rejected, and non-duplicate dedupe keys. When several low-risk docs proposals are available, docs/dev record proposals are preferred before runbook follow-ups so the first sprint records the reviewed plan before expanding operator guidance. High-risk proposals require `-AllowHighRisk` and should stay out of real cloud execution until the safety policy is expanded.
+The first selector prefers low-risk proposals whose normalized execution capabilities include `codex`, docs task type, not converted/rejected, and non-duplicate dedupe keys. `task_type` names the work class; `required_capabilities` names executable tools. Legacy docs proposals that include `required_capabilities=["docs"]` are normalized to `codex`, `git` and `gh` when expected files are under `docs/`. Safe local-smoke proposals under `scripts/powershell/smoke-*.ps1` are normalized to `codex`, `powershell` and `windows` only after the safe-local-smoke gate passes. When several low-risk docs proposals are available, docs/dev record proposals are preferred before runbook follow-ups so the first sprint records the reviewed plan before expanding operator guidance. High-risk proposals require `-AllowHighRisk` and should stay out of real cloud execution until the safety policy is expanded.
 
 Recovered task evidence is not blocking: raw `failed` plus `evidence_summary.recovered=true` and `ci_status=passed_after_rerun` is treated as recovered for supervisor decisions.
 
@@ -113,6 +113,6 @@ Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are p
 - The supervisor also attempts to pause project control in `finally`.
 - Worker Codex execution classifies websocket, TLS handshake, EOF, connection reset and transport-error messages as Codex transport failures. These failures are retried at most once by default, and persistent failures record `execution_error_class`, `retry_count` and unrecovered evidence instead of retrying indefinitely.
 - Hermes planner calls are allowed only in explicit Hermes preview/apply planner modes. The hardened preview wrapper remains dry-run and uses policy-normalized `docs`/`local-smoke` proposals.
-- Long-running worker loops remain deferred.
+- Bounded worker loops require explicit `MaxTasks`, idle timeout and stop-on-failure settings. Query status with `-ActiveOnly`, `-RecentTasks`, `-TaskStatus`, `-WorkerId`, `-TaskId`, `-RecoveredOnly` or `-ExcludeRecovered` before starting a batch.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.

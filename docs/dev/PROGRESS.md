@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-05-29 Super Goal 180 Capability Alignment and Status Query Hardening
+
+- Started from latest `main` after v0.49.0 and created branch `ai/super-180-capability-alignment-status-query-hardening`.
+- Preflight confirmed cloud project control `paused`, `stop_requested=false`, no queued/running tasks, direct Hermes health `ok=true`/`direct_https=true`, `laptop-zenbookduo` heartbeat online, and historical `task_proposal-59a0236fb69800cd` still blocked.
+- Added proposal/task capability normalization semantics: `task_type` stays distinct from executable `required_capabilities`, `original_required_capabilities` is preserved, `normalized_required_capabilities` and `capability_normalization_reason` are emitted, docs tasks under `docs/` normalize to `codex`, `git`, `gh`, and safe local-smoke tasks under `scripts/powershell/smoke-*.ps1` normalize to `codex`, `powershell`, `windows`.
+- Hardened worker matching so legacy `required_capabilities=["docs"]` no longer blocks low-risk docs tasks on `laptop-zenbookduo`, while production, deploy, secret, GitHub settings, branch protection, server config and server root config remain blocked.
+- Refactored `skybridge-status.ps1` for growing task history with `-TaskLimit`, `-RecentTasks`, `-TaskStatus`, `-ActiveOnly`, `-WorkerId`, `-RecoveredOnly`, `-IncludeRecovered`, `-ExcludeRecovered`, `-TaskId`, `-EventLimit`, `-IncludeEvents`, `-Since`, `-Until`, `-SortBy`, `-Descending` and `-SummaryOnly`. Default output is now compact recent status; `-ShowAll` remains available.
+- Added guide and Hermes CLI status aliases for active, recent, worker, task, failed and recovered views.
+
 ## 2026-05-29 Super Goal 179 Always-on Worker Loop Pilot
 
 - Started from latest `main` after v0.48.0 and created branch `ai/super-179-always-on-worker-loop-pilot`.

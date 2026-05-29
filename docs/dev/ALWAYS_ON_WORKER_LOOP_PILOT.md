@@ -108,4 +108,4 @@ The loop claimed exactly one task, Codex completed without transport retry, chan
 
 PR #79 passed AI branch validation, Project check, Docker build server and Docker build web, then merged at `39e554b4c3fe704133bb0f3d0b0c46b442c43330`. Evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`, the PR URL and changed file list for `always-on-worker-loop-pilot-docs-179b`.
 
-The pilot is proven for one low-risk docs task. Before larger batches, task preparation should align `required_capabilities` with the worker profile or teach the profile/selector to advertise documentation capability explicitly.
+The pilot is proven for one low-risk docs task. Before larger batches, task preparation should align `required_capabilities` with executable worker tools. `docs` is a `task_type`, not a hard worker capability; docs tasks should normalize toward `codex`, `git` and `gh` when their expected files are under `docs/`.
