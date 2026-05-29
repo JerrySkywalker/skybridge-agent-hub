@@ -204,6 +204,74 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
+## Status Query Examples
+
+Use `skybridge-status.ps1` for safe compact views. It prints task and worker summaries, never token values.
+
+Active tasks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -ActiveOnly
+```
+
+Recent tasks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -RecentTasks 10
+```
+
+One worker:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -WorkerId laptop-zenbookduo `
+  -TaskLimit 20
+```
+
+One task with detail:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskId remote-docs-task-001 `
+  -EventLimit 10
+```
+
+Unrecovered failed tasks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskStatus failed `
+  -ExcludeRecovered
+```
+
+Recovered tasks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -RecoveredOnly `
+  -TaskLimit 20
+```
+
 ## Standard Operator Workflow
 
 Use this sequence for one-shot remote work. The guided command names map directly to the underlying scripts:
