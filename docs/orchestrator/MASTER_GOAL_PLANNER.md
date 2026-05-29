@@ -148,7 +148,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
 
 Preview output keeps `project_state` as state only and exposes policy-validated proposals in both top-level `proposals` and `planning_session.proposals`. Hermes task types are normalized before policy validation: `smoke` becomes `local-smoke`, `doc` and `documentation` become `docs`, and safe smoke-path `test` proposals can become `local-smoke`. Deploy, production, secrets, GitHub settings, branch protection and server config proposals are blocked or human-gated.
 
-Hermes API must remain private and authenticated. The daily target is direct HTTPS through `https://hermes-api.jerryskywalker.space`; local SSH tunnel mode is a fallback only. See `docs/operations/HERMES_DIRECT_API.md`.
+Hermes API must remain private and authenticated. The daily target is direct HTTPS through `https://api.hermes.jerryskywalker.space`; local SSH tunnel mode is a fallback only. See `docs/operations/HERMES_DIRECT_API.md`.
 
 ## Safety
 

@@ -4,7 +4,7 @@ Hermes preview should use a direct HTTPS API endpoint for daily operation:
 
 ```text
 Windows / Codex / SkyBridge scripts
-  -> https://hermes-api.jerryskywalker.space
+  -> https://api.hermes.jerryskywalker.space
   -> OpenResty
   -> 127.0.0.1:8642 Hermes API server
 ```
@@ -20,8 +20,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
 
 ## Requirements
 
-- DNS: `hermes-api.jerryskywalker.space` must resolve to the SkyBridge host.
-- TLS: terminate HTTPS in OpenResty with a valid certificate for `hermes-api.jerryskywalker.space`.
+- DNS: `api.hermes.jerryskywalker.space` must resolve to the SkyBridge host.
+- TLS: terminate HTTPS in OpenResty with a valid certificate for `api.hermes.jerryskywalker.space`.
 - Backend: proxy only the Hermes API server at `127.0.0.1:8642`.
 - Dashboard: do not expose the Hermes Dashboard through this hostname.
 - Auth: preserve `Authorization: Bearer <HERMES_API_KEY>` and keep bearer auth mandatory.
@@ -38,7 +38,7 @@ Use [openresty-hermes-api.example.conf](openresty-hermes-api.example.conf) as th
 Update the local Hermes env file after the HTTPS route is configured:
 
 ```powershell
-$env:HERMES_API_BASE = "https://hermes-api.jerryskywalker.space"
+$env:HERMES_API_BASE = "https://api.hermes.jerryskywalker.space"
 $env:HERMES_API_KEY = "<existing local key value>"
 $env:HERMES_MODEL = "<optional model>"
 ```

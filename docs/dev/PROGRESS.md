@@ -1,5 +1,18 @@
 # Progress Log
 
+## 2026-05-29 Super Goal 177 Hermes-assisted Single Apply Sprint
+
+- Preflight passed on branch `ai/super-177-hermes-proposal-persistence-single-apply`: `main` was up to date at Super 176 merge commit `0252f37`, no open PRs were listed, SkyBridge cloud health was OK, project control was `paused`, and no queued/running task residue existed.
+- Hermes health used direct HTTPS at `https://api.hermes.jerryskywalker.space` with `direct_https=true`, platform `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`; SkyBridge planner metadata still records `tool_execution_mode=disabled` for safety.
+- Real `hermes-preview` succeeded with planner mode `hermes-preview`, runtime mode `real-api`, 4 proposals, 3 accepted low-risk docs proposals, and 1 local-smoke `ask_human` proposal. Tokens were not printed.
+- Real `hermes-apply` persisted master goal `master-goal-hermes-assisted-self-bootstrap-preview`, planning session `planning-session-36e4ecc246bc2996`, and 3 executable-policy docs proposals. It created no executable task and did not run a worker.
+- Selected exactly one low-risk docs proposal: `proposal-4212a5e1447212c0`, `Update sprint progress after master goal doc merged`, dedupe key `proposal-progress-after-pr69-20260529`, expected file `docs/dev/PROGRESS.md`.
+- Converted exactly one task: `task_proposal-4212a5e1447212c0`. Before execution it was the only queued/running task; historical `task_proposal-59a0236fb69800cd` remained blocked and was not run.
+- Ran exactly one PollOnce through `laptop-zenbookduo`. Codex succeeded without transport retry (`retry_count=0`), changed only `docs/dev/PROGRESS.md`, and opened child PR [#73](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/73).
+- Child PR #73 passed AI branch validation, Project check, Docker build server and Docker build web. It was marked ready, merged as low-risk docs-only with commit `c69aa6c209b61481cb8067bc58e4191faf76309d`, and its branch was deleted.
+- CI Guardian had recorded the task as failed while checks were pending, so evidence repair was applied. `task_proposal-4212a5e1447212c0` now has `evidence_summary.recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`, PR #73 and the merge commit.
+- Project control was restored to `paused` with `stop_requested=false`. No long-running worker loop, local-smoke proposal, production deployment, GitHub settings change, branch protection change, secret commit or extra task execution occurred. Hermes-assisted single apply is proven through proposal persistence -> selected docs proposal conversion -> targeted PollOnce -> child PR checks -> merge -> evidence repair.
+
 ## 2026-05-29 Sprint Pause After Master Goal Doc Merge
 
 - Master goal doc PR [#69](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/69) merged after GitHub Actions passed and lifecycle policy approved the docs-only child task. The recovered task evidence now points at the merged master goal doc work.
