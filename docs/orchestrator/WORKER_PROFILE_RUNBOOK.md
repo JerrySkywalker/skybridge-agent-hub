@@ -82,6 +82,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps
 
 `-WorkerProfileFile` and `SKYBRIDGE_WORKER_PROFILE` remain supported aliases for explicitly selecting a profile. Legacy runtime configs that already contain `project_id`, `repo_path` and `api_base` are still supported for compatibility.
 
+Bounded loop exits now restore project control to `paused`, clear `stop_requested`, and record `stop_reason`. This applies to normal caps, idle timeout and failure-stop exits, so operators can inspect the final state without leaving the cloud project in a stopped state.
+
 ## API Base And Worker Token
 
 Local development uses:
@@ -258,7 +260,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
   -DryRun
 ```
 
-Do not start the long-running `-Loop` mode for remote work yet. Use `-PollOnce` only until repeated task reliability and operator recovery are validated.
+Use `-Loop` only with explicit bounds (`-MaxTasks`, `-IdleTimeoutSeconds`, `-StopOnFailure`) and only after confirming the queue contains safe tasks for the selected worker profile. Use `-PollOnce` for single-task recovery or when the queue contents are not fully understood.
 
 Guided equivalent:
 
