@@ -72,26 +72,44 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
 
 Preview JSON now exposes policy-validated proposals in both top-level `proposals` and `planning_session.proposals`. `project_state` remains state-only and is not the only place proposals appear. Hermes proposal task types are normalized before policy validation: `smoke` becomes `local-smoke`, `doc` and `documentation` become `docs`, and unsafe task types such as deploy, production, secrets, GitHub settings, branch protection and server config remain blocked or human-gated.
 
-Daily operation should move from the SSH tunnel to the direct HTTPS API described in `docs/operations/HERMES_DIRECT_API.md`. Until `https://hermes-api.jerryskywalker.space` is configured and verified, tunnel mode remains a fallback only.
+Daily operation should move from the SSH tunnel to the direct HTTPS API described in `docs/operations/HERMES_DIRECT_API.md`. Super Goal 177 verified `https://api.hermes.jerryskywalker.space`; tunnel mode remains a fallback only.
 
 ## Apply Sprint
 
-Bounded apply did not run because the real Hermes preview gate did not produce valid low-risk proposals.
+Super Goal 177 proved the first Hermes-assisted proposal persistence and single apply sprint. This was intentionally not a multi-round supervisor run.
 
-- MaxRounds intended: 2.
-- Rounds attempted: 0 real apply rounds.
-- Rounds completed: 0.
-- Selected proposal ids: none.
-- Converted task ids: none.
-- Child PR URLs: none.
-- Child PR CI/merge status: not applicable.
-- Evidence repair: not applicable.
+- Hermes endpoint: `https://api.hermes.jerryskywalker.space`.
+- Direct HTTPS: `true`.
+- Hermes health: `ok=true`.
+- Hermes platform/model: `hermes-agent` health; planner request model recorded as `default`.
+- Hermes runtime mode: `server_agent` in health; planner adapter runtime mode `real-api`.
+- Planner modes: `hermes-preview` for preflight, then `hermes-apply` for proposal persistence.
+- Planner tool execution mode: `disabled` in SkyBridge planner metadata.
+- Master goal id: `master-goal-hermes-assisted-self-bootstrap-preview`.
+- Persisted planning session: `planning-session-36e4ecc246bc2996`.
+- Persisted proposals: 3 docs proposals accepted for execution policy.
+- Selected proposal: `proposal-4212a5e1447212c0`, `Update sprint progress after master goal doc merged`.
+- Selected dedupe key: `proposal-progress-after-pr69-20260529`.
+- Selected expected files: `docs/dev/PROGRESS.md`.
+- Converted task id: `task_proposal-4212a5e1447212c0`.
+- Worker id: `laptop-zenbookduo`.
+- Execution mode: one targeted `PollOnce`; no long-running loop.
+- Codex transport retry count: `0`.
+- Child PR: [#73](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/73).
+- Child PR changed files: `docs/dev/PROGRESS.md` only.
+- Child PR CI: AI branch validation, Project check, Docker build server and Docker build web passed.
+- Child PR merge: merged with commit `c69aa6c209b61481cb8067bc58e4191faf76309d`.
+- Evidence repair: applied because CI Guardian initially failed the task while checks were pending; repaired status is `recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`.
+
+The local-smoke proposal was not selected. The historical blocked task `task_proposal-59a0236fb69800cd` was not unblocked or run.
 
 ## Final State
 
 - Project control restored to `paused`.
 - `stop_requested=false`.
-- No queued/running task residue was introduced.
+- No queued/running task residue remained after the single apply.
+- Selected task `task_proposal-4212a5e1447212c0` is raw `failed` with recovered evidence by design, because CI Guardian observed pending checks before they passed.
+- Historical blocked task `task_proposal-59a0236fb69800cd` remains blocked.
 - Parent PR remains manual/draft-only.
 
 ## Verification
@@ -121,11 +139,13 @@ Passed local verification:
 
 ## Proof Status
 
-Hermes-assisted multi-round self-bootstrap is not proven yet. The local implementation and fixture-backed policy smokes are in place, but the real Hermes preview stopped at endpoint connectivity before SkyBridge could validate real Hermes proposals.
+Hermes-assisted single apply is proven. Hermes direct HTTPS health and preview worked, Hermes apply persisted proposals, SkyBridge selected and converted exactly one low-risk docs proposal, `laptop-zenbookduo` executed exactly one targeted task through PollOnce, child PR #73 passed checks and merged, and evidence repair captured the recovered task state.
+
+Hermes-assisted multi-round apply remains deferred.
 
 Next safe retry:
 
-1. Configure or verify direct HTTPS Hermes API, falling back to the SSH tunnel only if necessary.
-2. Run `skybridge-hermes-health.ps1`.
-3. Re-run `skybridge-hermes-preview.ps1` only.
-4. Proceed to a separate Hermes-assisted apply sprint only if preview returns low-risk docs/local-smoke proposals accepted by SkyBridge validation and cloud state remains residue-free.
+1. Keep direct HTTPS Hermes health green.
+2. Decide whether to retire, re-scope or explicitly unblock `task_proposal-59a0236fb69800cd`.
+3. Run another preview before any additional apply.
+4. Proceed to a separate Hermes-assisted multi-round apply sprint only after confirming no queued/running residue and keeping `MaxParallel=1`.
