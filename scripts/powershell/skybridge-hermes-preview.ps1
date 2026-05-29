@@ -15,11 +15,16 @@ param(
   [string]$OutputFile,
   [switch]$Json,
   [switch]$SummaryOnly,
-  [int]$TimeoutSeconds = 120,
+  [int]$TimeoutSeconds = 600,
+  [int]$MaxHermesAttempts = 3,
+  [int]$RetryDelaySeconds = 10,
+  [ValidateSet("compact", "full")]
+  [string]$StateMode = "compact",
   [switch]$SkipHermesHealthCheck,
   [string]$SummaryOutputFile,
   [string]$PlannerFixtureFile,
-  [string]$HealthFixtureFile
+  [string]$HealthFixtureFile,
+  [string]$PlanScriptPath = ".\scripts\powershell\skybridge-plan.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,9 +65,39 @@ function Read-PreviewConstraints {
 
 function Invoke-JsonScript {
   param([string[]]$Arguments)
-  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $($Arguments -join ' ')" }
+  $output = @(& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1)
+  if ($LASTEXITCODE -ne 0) {
+    $message = ($output | ForEach-Object { [string]$_ }) -join "`n"
+    throw "Command failed: pwsh $($Arguments -join ' ')`n$message"
+  }
   return ($output | ConvertFrom-Json)
+}
+
+function Test-TransientHermesError {
+  param([string]$Message)
+  if ([string]::IsNullOrWhiteSpace($Message)) { return $false }
+  return $Message -match "(?i)(\b502\b|\b503\b|\b504\b|gateway time-out|gateway timeout|timed?\s*out|connection reset|connection was reset|eof|unexpected end|temporarily unavailable)"
+}
+
+function Invoke-HermesPlanWithRetry {
+  param([string[]]$Arguments, [int]$MaxAttempts, [int]$DelaySeconds)
+  $attempts = [Math]::Max(1, $MaxAttempts)
+  for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+    try {
+      $plan = Invoke-JsonScript -Arguments $Arguments
+      return [pscustomobject]@{
+        plan = $plan
+        attempts = $attempt
+        retry_needed = ($attempt -gt 1)
+        last_error = $null
+      }
+    } catch {
+      $message = $_.Exception.Message
+      $transient = Test-TransientHermesError -Message $message
+      if (-not $transient -or $attempt -ge $attempts) { throw }
+      Start-Sleep -Seconds $DelaySeconds
+    }
+  }
 }
 
 if ($HermesEnvFile) {
@@ -86,14 +121,16 @@ $constraintArray = @(Read-PreviewConstraints)
 $constraintJson = $constraintArray | ConvertTo-Json -Depth 8 -Compress
 
 $planArgs = @(
-  "-File", ".\scripts\powershell\skybridge-plan.ps1",
+  "-File", $PlanScriptPath,
   "-ApiBase", $ApiBase,
   "-ProjectId", $ProjectId,
   "-Title", $Title,
   "-PlannerMode", "hermes-preview",
   "-DryRun",
   "-Json",
-  "-ConstraintsJson", $constraintJson
+  "-ConstraintsJson", $constraintJson,
+  "-StateMode", $StateMode,
+  "-TimeoutSeconds", [string]$TimeoutSeconds
 )
 if ($MasterGoalId) { $planArgs += @("-MasterGoalId", $MasterGoalId) }
 if ($Description) { $planArgs += @("-Description", $Description) }
@@ -101,7 +138,8 @@ if ($TokenEnvVar) { $planArgs += @("-TokenEnvVar", $TokenEnvVar) }
 if ($TokenFile) { $planArgs += @("-TokenFile", $TokenFile) }
 if ($PlannerFixtureFile) { $planArgs += @("-FixtureFile", $PlannerFixtureFile) }
 
-$plan = Invoke-JsonScript -Arguments $planArgs
+$planAttempt = Invoke-HermesPlanWithRetry -Arguments $planArgs -MaxAttempts $MaxHermesAttempts -DelaySeconds $RetryDelaySeconds
+$plan = $planAttempt.plan
 $proposals = @($plan.proposals)
 $accepted = @($proposals | Where-Object { $_.policy_decision -eq "accepted_for_preview" -or $_.policy_decision -eq "accepted_for_execution" })
 $askHuman = @($proposals | Where-Object { $_.policy_decision -eq "ask_human" })
@@ -120,6 +158,9 @@ $summary = [pscustomobject]@{
   tool_execution_mode = $plan.planner_adapter.tool_execution_mode
   prompt_version = $plan.planner_adapter.prompt_version
   input_state_hash = $plan.planner_adapter.input_state_hash
+  state_mode = $StateMode
+  hermes_attempts = $planAttempt.attempts
+  retry_needed = $planAttempt.retry_needed
   proposal_count = $proposals.Count
   accepted_for_preview_count = $accepted.Count
   ask_human_count = $askHuman.Count

@@ -20,7 +20,10 @@ foreach ($expected in @(
 foreach ($expected in @(
   "server 127.0.0.1:8642",
   "proxy_set_header Authorization `$http_authorization",
-  "proxy_read_timeout 300s",
+  "proxy_connect_timeout 60s",
+  "proxy_read_timeout 600s",
+  "proxy_send_timeout 600s",
+  "send_timeout 600s",
   "proxy_buffering off",
   "proxy_request_buffering off",
   "X-Accel-Buffering no"

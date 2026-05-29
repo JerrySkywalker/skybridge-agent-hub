@@ -25,7 +25,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
 - Backend: proxy only the Hermes API server at `127.0.0.1:8642`.
 - Dashboard: do not expose the Hermes Dashboard through this hostname.
 - Auth: preserve `Authorization: Bearer <HERMES_API_KEY>` and keep bearer auth mandatory.
-- Streaming: keep long proxy timeouts and disable buffering for planning calls and SSE-style responses.
+- Streaming: keep long proxy timeouts and disable buffering for planning calls and SSE-style responses. The example uses `proxy_read_timeout 600s`, `proxy_send_timeout 600s`, `proxy_connect_timeout 60s`, `send_timeout 600s`, `proxy_buffering off` and `proxy_request_buffering off`.
 
 Authelia is not required for API clients because Hermes bearer authentication is the API-level gate. An optional IP allowlist is recommended. An optional extra shared header can be added later if Hermes clients need a second gate.
 
@@ -73,7 +73,7 @@ $body = @{
   response_format = @{ type = "json_object" }
 } | ConvertTo-Json -Depth 10
 Invoke-RestMethod -Method Post -Uri "$env:HERMES_API_BASE/v1/responses" `
-  -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 120
+  -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 600
 ```
 
 Preview wrapper:
@@ -87,6 +87,10 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
   -Description "Use Hermes as an advisory planner to propose safe docs-only or local-smoke tasks for a bounded SkyBridge self-bootstrap sprint." `
   -ConstraintsFile .agent/tmp/hermes-preview-constraints.json `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -StateMode compact `
+  -MaxHermesAttempts 3 `
+  -RetryDelaySeconds 10 `
+  -TimeoutSeconds 600 `
   -OutputFile .agent/tmp/hermes-preview-176.json
 ```
 
@@ -99,6 +103,16 @@ The preview wrapper saves full JSON when `-OutputFile` is supplied. Add:
 ```
 
 to save a compact quality report with endpoint, provider, model, runtime mode, planner mode, tool execution mode, prompt version, input state hash, decision counts and per-proposal risk/type/files/rationale. `.agent` files stay local and untracked.
+
+## Capabilities OK, Responses 504
+
+If `/v1/capabilities` succeeds but `/v1/responses` returns `502`, `503` or `504`, treat it as a proxy or long-response path problem before changing planner policy.
+
+1. Run `skybridge-hermes-health.ps1` to confirm bearer auth, DNS and the capabilities route.
+2. Run the small responses test above with `-TimeoutSec 600`.
+3. Confirm the OpenResty route uses the timeout and streaming settings from the example: `proxy_read_timeout 600s`, `proxy_send_timeout 600s`, `proxy_connect_timeout 60s`, `send_timeout 600s`, `proxy_buffering off`, `proxy_request_buffering off`, `gzip off` and `X-Accel-Buffering no`.
+4. Prefer `skybridge-hermes-preview.ps1 -StateMode compact -MaxHermesAttempts 3 -TimeoutSeconds 600` for real preview. Compact state avoids sending full task event histories through `/v1/responses`.
+5. If the tiny responses test passes but real preview still times out, inspect OpenResty and Hermes API logs for upstream timeout, request body size, worker timeout or streaming flush errors. Do not expose the Dashboard or bypass bearer auth during diagnosis.
 
 ## Rollback
 

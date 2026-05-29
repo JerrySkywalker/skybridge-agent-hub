@@ -149,3 +149,9 @@ Next safe retry:
 2. Decide whether to retire, re-scope or explicitly unblock `task_proposal-59a0236fb69800cd`.
 3. Run another preview before any additional apply.
 4. Proceed to a separate Hermes-assisted multi-round apply sprint only after confirming no queued/running residue and keeping `MaxParallel=1`.
+
+## Super Goal 178R Preview 504 Recovery
+
+The first multi-round reliability sprint attempt was blocked before proposal persistence by OpenResty `504 Gateway Time-out` responses from the direct HTTPS `/v1/responses` path. Health and capabilities remained green, and a tiny responses probe succeeded, so the failure is specific to long-running real planner responses.
+
+The repair branch added transient-only Hermes preview retry, compact planner state as the default real preview input, 600 second preview timeout support, and OpenResty diagnosis guidance. No `hermes-apply`, task conversion, worker `PollOnce` or project-control mutation was run. See `docs/dev/HERMES_ASSISTED_MULTIROUND_RELIABILITY_SPRINT.md` for the current recovery status and next server-side action.

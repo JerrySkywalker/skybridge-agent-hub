@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-05-29 Super Goal 178R Hermes Preview 504 Recovery
+
+- Continued on `ai/super-178-hermes-assisted-multiround-reliability-sprint` after the prior Phase 178A stop. The branch started clean.
+- Hermes direct HTTPS health succeeded at `https://api.hermes.jerryskywalker.space` with `ok=true`, `direct_https=true`, platform/model `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`, and `token_printed=false`.
+- A tiny direct HTTPS `/v1/responses` probe succeeded in 2.8 seconds, confirming bearer auth, DNS/TLS/proxy routing and basic responses handling.
+- The real multi-round `hermes-preview` initially recovered once, producing 6 proposals with 4 accepted docs proposals and 2 local-smoke `ask_human` proposals. The hardening retry using compact state, `MaxHermesAttempts=3`, `RetryDelaySeconds=10` and `TimeoutSeconds=600` still ended in OpenResty `504 Gateway Time-out` during `/v1/responses`.
+- Added bounded Hermes preview retry for transient proxy/transport failures only, default compact planner state, a configurable Hermes planner timeout, and smokes for retry and compact-state behavior.
+- Hardened the Hermes direct API runbook and OpenResty example for 600 second planning/streaming timeouts and disabled request/response buffering, with a diagnosis path for capabilities OK but responses 504.
+- No `hermes-apply`, proposal persistence, proposal conversion, worker `PollOnce`, project-control start, cloud task creation, production deployment, server config mutation or secret printing occurred in this recovery pass.
+- Final cloud status remained safe: project control `paused`, no queued/running task residue, and historical `task_proposal-59a0236fb69800cd` still blocked. The multi-round reliability sprint is not proven yet; the next action is server-side verification of the live OpenResty/Hermes long-response route against the documented timeout and buffering settings.
+
 ## 2026-05-29 Super Goal 177 Hermes-assisted Single Apply Sprint
 
 - Preflight passed on branch `ai/super-177-hermes-proposal-persistence-single-apply`: `main` was up to date at Super 176 merge commit `0252f37`, no open PRs were listed, SkyBridge cloud health was OK, project control was `paused`, and no queued/running task residue existed.
