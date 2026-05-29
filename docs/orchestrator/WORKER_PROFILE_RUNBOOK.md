@@ -204,7 +204,9 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
-For larger task history, prefer explicit status filters:
+## Status Query Examples
+
+Use `skybridge-status.ps1` for safe compact views. It prints task and worker summaries, never token values. For larger task history, prefer explicit filters:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
@@ -218,6 +220,20 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -RecentTasks 10
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -WorkerId laptop-zenbookduo `
+  -TaskLimit 20
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskId remote-docs-task-001 `
+  -EventLimit 10
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
   -ApiBase https://skybridge.jerryskywalker.space `
