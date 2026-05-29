@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-05-29 Goal 178T Hermes Capability Normalization and Resume
+
+- Started from latest `main` after PR #75 merged and created branch `ai/goal-178t-hermes-capability-normalization-resume`.
+- Added Hermes proposal capability normalization: `original_required_capabilities` is preserved, `normalized_required_capabilities` is added, docs proposals under `docs/` and local-smoke proposals under `scripts/powershell/smoke-*.ps1` receive `codex` when Hermes omits it, and policy validation uses the normalized list without weakening blocked task-type or unsafe-file gates.
+- Updated the Hermes prompt to ask executable proposals to include `codex`, and added/extended smokes for capability normalization and policy decisions.
+- Real preview before this branch's normalization change: 7 proposals, 4 accepted, 2 ask-human, 1 rejected. Real preview after normalization: 8 proposals, 8 accepted, 0 ask-human, 0 rejected.
+- `hermes-apply` persisted planning session `planning-session-a2e63e1b5456ef84` with 6 executable-policy proposals and created no executable tasks by itself.
+- Selected two low-risk docs proposals with complete acceptance/evidence fields. Round 1 converted `proposal-331d222d4d38a3af` into `task_proposal-331d222d4d38a3af`; `laptop-zenbookduo` ran one targeted PollOnce; child PR [#76](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/76) changed only `docs/failed-task-patterns.md`, passed checks, merged at `fb4ffc41e4385cd3123e1010032ef50ebd7dd3d6`, and evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`.
+- Round 2 converted `proposal-ca9b20ca044e8119` into `task_proposal-ca9b20ca044e8119`; `laptop-zenbookduo` ran one targeted PollOnce; child PR [#77](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/77) changed only `docs/ci-recovery-runbook.md`, passed checks, merged at `a6bed1bab86abb45e245946a34e1c6d4f3659353`, and evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`.
+- Stopped after two completed rounds rather than converting weaker proposals with empty acceptance/evidence fields. No local-smoke proposal was executed, no long-running worker loop was started, no production/GitHub-settings/server-root mutation occurred, and historical `task_proposal-59a0236fb69800cd` was not run directly.
+- Project control remained/restored `paused` after each PollOnce. Hermes-assisted multi-round reliability sprint is proven for two bounded low-risk docs rounds.
+
 ## 2026-05-29 Super Goal 178R Hermes Preview 504 Recovery
 
 - Continued on `ai/super-178-hermes-assisted-multiround-reliability-sprint` after the prior Phase 178A stop. The branch started clean.
