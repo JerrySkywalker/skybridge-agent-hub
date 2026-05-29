@@ -450,7 +450,7 @@ if ($Loop) {
     if (Test-SkyBridgeServerAvailable -Config $config) {
       try {
         Set-ProjectControlState -Config $config -Patch @{
-          state = $(if ($stopReason -like "degraded:*") { "paused" } else { "stopped" })
+          state = "paused"
           stop_requested = $false
           current_task_id = $null
           current_worker_id = $config.worker_id

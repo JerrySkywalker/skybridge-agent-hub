@@ -1,5 +1,18 @@
 # Progress Log
 
+## 2026-05-29 Super Goal 179 Always-on Worker Loop Pilot
+
+- Started from latest `main` after v0.48.0 and created branch `ai/super-179-always-on-worker-loop-pilot`.
+- Preflight confirmed cloud health OK, project control `paused`, `stop_requested=false`, no queued/running task residue, direct Hermes health `ok=true`/`direct_https=true`, and `laptop-zenbookduo` able to register heartbeat online.
+- Added a worker-loop control hardening change: bounded `skybridge-edge-worker.ps1 -Loop` exits now finalize project control as `paused` instead of `stopped`, with `stop_requested=false`, final `loop_task_count` and `stop_reason` recorded.
+- Added `smoke-worker-loop-control.ps1`, which runs a local empty-queue loop with `MaxTasks=1`, bounded idle timeout and non-dry-run control mutation, then asserts final control state is `paused`.
+- Prepared a one-task docs-only pilot batch. The first queued task was blocked before execution because its required capabilities included `docs`, which `laptop-zenbookduo` does not advertise. The corrected task `always-on-worker-loop-pilot-docs-179b` required `codex` and `git`, had `allowed_paths=["docs/dev/ALWAYS_ON_WORKER_LOOP_PILOT.md"]`, and was the only queued/running task before the real loop.
+- Ran the real bounded loop with `MaxTasks=1`, `IdleTimeoutSeconds=120`, `PollIntervalSeconds=5`, and `StopOnFailure`. The loop claimed exactly one task, Codex completed without transport retry, changed only `docs/dev/ALWAYS_ON_WORKER_LOOP_PILOT.md`, opened child PR [#79](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/79), then stopped on CI Guardian pending/blocked status as expected under `StopOnFailure`.
+- Child PR #79 passed AI branch validation, Project check, Docker build server and Docker build web. It was marked ready and merged at `39e554b4c3fe704133bb0f3d0b0c46b442c43330`.
+- Evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`, changed file `docs/dev/ALWAYS_ON_WORKER_LOOP_PILOT.md`, and PR #79 for `always-on-worker-loop-pilot-docs-179b`.
+- Final control stayed/restored `paused` with `stop_requested=false`; no production deployment, server config mutation, GitHub settings change, branch protection change, secret commit, local-smoke execution, unbounded loop or direct execution of historical `task_proposal-59a0236fb69800cd` occurred.
+- Result: the bounded always-on worker loop pilot is proven for one low-risk docs task, with a follow-up needed to align task proposal capabilities with actual worker profiles before larger batches.
+
 ## 2026-05-29 Goal 178T Hermes Capability Normalization and Resume
 
 - Started from latest `main` after PR #75 merged and created branch `ai/goal-178t-hermes-capability-normalization-resume`.

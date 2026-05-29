@@ -1,6 +1,6 @@
 # Always-On Worker Loop Pilot
 
-Status: bounded pilot plan for `laptop-zenbookduo`.
+Status: bounded pilot proven for `laptop-zenbookduo` on 2026-05-29.
 
 This pilot exercises the always-on Edge Worker loop in the smallest useful real mode: one local trusted laptop, a low-risk docs-only task queue, a hard task cap, an idle timeout and stop-on-failure enabled. It is intended to prove that the worker can stay available long enough to claim and finish bounded work, package child PRs and then return the project to a paused state without becoming an unbounded background executor.
 
@@ -24,14 +24,14 @@ Out of scope:
 
 ## Pilot Bounds
 
-Start project control with a small `MaxTasks` value before launching the loop. For the first pilot, use `MaxTasks=2` at the project-control layer and pass the same cap to the worker loop:
+Start project control with a small `MaxTasks` value before launching the loop. The first real pilot used `MaxTasks=1`; later pilots may use up to `MaxTasks=3` only when the queued tasks are already validated as low-risk docs or explicitly safe local-smoke work.
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1 `
   -Area project `
   -Command start `
   -ProjectId skybridge-agent-hub `
-  -MaxTasks 2
+  -MaxTasks 1
 ```
 
 Then launch the real loop only after a dry run, with an idle timeout and stop-on-failure:
@@ -40,7 +40,7 @@ Then launch the real loop only after a dry run, with an idle timeout and stop-on
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps1 `
   -ConfigFile .\config\edge-worker.json `
   -Loop `
-  -MaxTasks 2 `
+  -MaxTasks 1 `
   -PollIntervalSeconds 30 `
   -IdleTimeoutSeconds 600 `
   -StopOnFailure `
@@ -49,7 +49,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps
 
 The loop must stop when any of these happens:
 
-- two tasks are completed or otherwise terminal under the pilot cap;
+- the configured task cap is reached;
 - no eligible work appears before `IdleTimeoutSeconds=600`;
 - project control is paused or stopped;
 - the worker detects degraded real-run state before claiming new work;
@@ -90,3 +90,22 @@ Final operator checks should confirm:
 - no secrets, `.env` files, production config or raw command logs were uploaded to SkyBridge.
 
 The pilot is successful only if `laptop-zenbookduo` proves bounded always-on behavior and leaves the system in an inspectable paused state.
+
+## 2026-05-29 Pilot Result
+
+The first real pilot used the cloud SkyBridge queue and `laptop-zenbookduo` with:
+
+- `MaxTasks=1`
+- `IdleTimeoutSeconds=120`
+- `PollIntervalSeconds=5`
+- `StopOnFailure=true`
+- project `skybridge-agent-hub`
+- goal `master-goal-always-on-worker-loop-pilot`
+
+The first queued task, `always-on-worker-loop-pilot-docs-179`, was blocked before execution because its required capabilities included `docs`, while the worker profile advertises `codex`, `git`, `gh`, `node`, `pnpm`, `powershell`, `windows` and `laptop`. The corrected task, `always-on-worker-loop-pilot-docs-179b`, required `codex` and `git`, restricted `allowed_paths` to `docs/dev/ALWAYS_ON_WORKER_LOOP_PILOT.md`, and was the only queued/running task before the loop.
+
+The loop claimed exactly one task, Codex completed without transport retry, changed only `docs/dev/ALWAYS_ON_WORKER_LOOP_PILOT.md`, and opened child PR [#79](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/79). CI Guardian stopped the loop while checks were pending, so the cloud task initially recorded `failed` and the loop exited with `stop_reason=failure`; the loop finalizer still restored project control to `paused` with `stop_requested=false`.
+
+PR #79 passed AI branch validation, Project check, Docker build server and Docker build web, then merged at `39e554b4c3fe704133bb0f3d0b0c46b442c43330`. Evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`, the PR URL and changed file list for `always-on-worker-loop-pilot-docs-179b`.
+
+The pilot is proven for one low-risk docs task. Before larger batches, task preparation should align `required_capabilities` with the worker profile or teach the profile/selector to advertise documentation capability explicitly.
