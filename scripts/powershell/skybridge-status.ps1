@@ -28,6 +28,10 @@ param(
   [string[]]$ReviewStatus = @(),
   [switch]$ApprovedOnly,
   [switch]$PendingReviewOnly,
+  [switch]$ShowCampaigns,
+  [string]$CampaignId,
+  [switch]$ShowCampaignSteps,
+  [int]$CampaignLimit = 10,
   [switch]$ShowLeases,
   [switch]$ShowLocks,
   [switch]$Hygiene,
@@ -146,6 +150,13 @@ function Get-StatusColorName {
       if ($valueText -match "stale|expired|abandoned|inconsistent") { return "red" }
       if ($valueText -match "active") { return "yellow" }
       if ($valueText -match "released") { return "green" }
+      return "dim"
+    }
+    "campaign" {
+      if ($valueText -match "failed|aborted") { return "red" }
+      if ($valueText -match "held|needs_human|blocked") { return "yellow" }
+      if ($valueText -match "running|completed|recovered") { return "green" }
+      if ($valueText -match "ready|paused") { return "cyan" }
       return "dim"
     }
     default { return "dim" }
@@ -449,6 +460,57 @@ function Get-HygieneReport {
   }
 }
 
+function Select-CampaignSummary {
+  param($Campaign)
+  [pscustomobject]@{
+    campaign_id = $Campaign.campaign_id
+    project_id = $Campaign.project_id
+    title = $Campaign.title
+    status = $Campaign.status
+    current_step_id = $Campaign.current_step_id
+    source = $Campaign.source
+    created_at = $Campaign.created_at
+    updated_at = $Campaign.updated_at
+  }
+}
+
+function Select-CampaignStepSummary {
+  param($Step)
+  [pscustomobject]@{
+    campaign_step_id = $Step.campaign_step_id
+    campaign_id = $Step.campaign_id
+    goal_id = $Step.goal_id
+    title = $Step.title
+    order = $Step.order
+    status = $Step.status
+    dependencies = @($Step.dependencies)
+    markdown_path = $Step.markdown_path
+    markdown_hash = $Step.markdown_hash
+    linked_task_ids = @($Step.linked_task_ids)
+    linked_pr_urls = @($Step.linked_pr_urls)
+    evidence_summary = $Step.evidence_summary
+    last_gate_result = $Step.last_gate_result
+    started_at = $Step.started_at
+    completed_at = $Step.completed_at
+  }
+}
+
+function Get-CampaignSummaryCounts {
+  param([array]$Campaigns)
+  $rows = @($Campaigns)
+  [pscustomobject]@{
+    total = $rows.Count
+    draft = @($rows | Where-Object { $_.status -eq "draft" }).Count
+    ready = @($rows | Where-Object { $_.status -eq "ready" }).Count
+    running = @($rows | Where-Object { $_.status -eq "running" }).Count
+    paused = @($rows | Where-Object { $_.status -eq "paused" }).Count
+    held = @($rows | Where-Object { $_.status -eq "held" }).Count
+    completed = @($rows | Where-Object { $_.status -eq "completed" }).Count
+    failed = @($rows | Where-Object { $_.status -eq "failed" }).Count
+    aborted = @($rows | Where-Object { $_.status -eq "aborted" }).Count
+  }
+}
+
 function Write-CompactStatus {
   param($Status)
   "SkyBridge"
@@ -515,6 +577,17 @@ function Write-CompactStatus {
     "  converted_unexecuted_props:   $(Colorize-StatusValue -Kind proposal -Value $Status.hygiene_summary.converted_unexecuted_proposals)"
     "  derived_executed_props:       $(Colorize-StatusValue -Kind proposal -Value $Status.hygiene_summary.derived_executed_proposals)"
   }
+  if ($Status.campaign_summary) {
+    ""
+    "Campaign Summary:"
+    "  draft:     $($Status.campaign_summary.draft)"
+    "  ready:     $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.ready)"
+    "  running:   $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.running)"
+    "  paused:    $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.paused)"
+    "  held:      $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.held)"
+    "  completed: $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.completed)"
+    "  failed:    $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.failed)"
+  }
   if ($SummaryOnly) { return }
   ""
   "Workers:"
@@ -557,6 +630,28 @@ function Write-CompactStatus {
       }
     }
   }
+  if ($Status.filters.show_campaigns) {
+    ""
+    "Campaigns:"
+    if (@($Status.campaigns).Count -eq 0) { "  none" } else {
+      "  id                         status      current_step              title"
+      foreach ($campaign in @($Status.campaigns)) {
+        $campaignStatus = Colorize-StatusValue -Kind campaign -Value (Shorten-StatusText $campaign.status 10)
+        "  $(Shorten-StatusText $campaign.campaign_id 26) $campaignStatus $(Shorten-StatusText $campaign.current_step_id 25) $(Shorten-StatusText $campaign.title 44)"
+      }
+    }
+  }
+  if ($Status.filters.show_campaign_steps) {
+    ""
+    "Campaign Steps:"
+    if (@($Status.campaign_steps).Count -eq 0) { "  none" } else {
+      "  order status       goal_id                              title"
+      foreach ($step in @($Status.campaign_steps | Sort-Object campaign_id, order)) {
+        $stepStatus = Colorize-StatusValue -Kind campaign -Value (Shorten-StatusText $step.status 11)
+        "  $(Shorten-StatusText $step.order 5) $stepStatus $(Shorten-StatusText $step.goal_id 35) $(Shorten-StatusText $step.title 44)"
+      }
+    }
+  }
   if ($Status.hygiene_findings -and @($Status.hygiene_findings).Count -gt 0) {
     ""
     "Hygiene Findings:"
@@ -595,6 +690,9 @@ function Join-FilterDescription {
   if ($Until) { $parts += "until=$Until" }
   if ($ShowAll) { $parts += "show-all" }
   if ($ShowProposals) { $parts += "show-proposals" }
+  if ($ShowCampaigns) { $parts += "show-campaigns" }
+  if ($ShowCampaignSteps) { $parts += "show-campaign-steps" }
+  if ($CampaignId) { $parts += "campaign=$CampaignId" }
   if ($ShowLeases) { $parts += "show-leases" }
   if ($ShowLocks) { $parts += "show-locks" }
   if ($Hygiene) { $parts += "hygiene" }
@@ -619,6 +717,7 @@ if ($config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-
 if ($RecentTasks -gt 0) { $TaskLimit = $RecentTasks }
 if ($TaskLimit -lt 1) { $TaskLimit = 10 }
 if ($ProposalLimit -lt 1) { $ProposalLimit = 10 }
+if ($CampaignLimit -lt 1) { $CampaignLimit = 10 }
 $sinceDate = if ($Since) { ConvertTo-StatusDate -Value $Since } else { $null }
 $untilDate = if ($Until) { ConvertTo-StatusDate -Value $Until } else { $null }
 $warnings = @()
@@ -724,6 +823,38 @@ if ($ShowProposals -or $Hygiene -or $NeedsReview -or $NeedsReconciliation -or $R
   $shownProposals = @($shownProposals) | Where-Object { $null -ne $_ }
 }
 
+$allCampaignSummaries = @()
+$shownCampaigns = @()
+$campaignStepSummaries = @()
+$campaignGateSummary = $null
+if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) {
+  try {
+    if ($CampaignId) {
+      $campaignPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+      $allCampaignSummaries = @($campaignPayload.campaign | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignSummary -Campaign $_ })
+      $campaignStepSummaries = @($campaignPayload.steps | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignStepSummary -Step $_ })
+      try {
+        $gatePayload = Invoke-SkyBridgeApi -Method POST -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))/advance-preview" -Body @{} -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+        $campaignGateSummary = $gatePayload.gate
+      } catch {
+        $warnings += "Campaign advance-preview unavailable for $CampaignId."
+      }
+    } else {
+      $campaignPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+      $allCampaignSummaries = @($campaignPayload.campaigns | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignSummary -Campaign $_ })
+      if ($ShowCampaignSteps) {
+        foreach ($campaign in @($allCampaignSummaries | Select-Object -First $CampaignLimit)) {
+          $stepsPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($campaign.campaign_id))/steps" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+          $campaignStepSummaries += @($stepsPayload.steps | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignStepSummary -Step $_ })
+        }
+      }
+    }
+    $shownCampaigns = if ($ShowAll -or $CampaignId) { @($allCampaignSummaries) } else { @($allCampaignSummaries | Select-Object -First $CampaignLimit) }
+  } catch {
+    $warnings += "Campaign endpoints unavailable or failed: $($_.Exception.Message)"
+  }
+}
+
 $hygieneReport = if ($Hygiene) { Get-HygieneReport -Tasks $allTaskSummaries -Proposals $allProposalSummaries -Workers $workerSummaries } else { $null }
 
 $status = [pscustomobject]@{
@@ -750,12 +881,16 @@ $status = [pscustomobject]@{
   }
   task_summary = Get-TaskSummaryCounts -Tasks $allTaskSummaries -Matching $sortedTasks -Shown $shownTasks -Truncated $truncated
   proposal_summary = if ($ShowProposals -or $Hygiene -or $ReconcileProposals) { Get-ProposalSummaryCounts -Proposals $allProposalSummaries } else { $null }
+  campaign_summary = if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) { Get-CampaignSummaryCounts -Campaigns $allCampaignSummaries } else { $null }
   hygiene_summary = if ($hygieneReport) { $hygieneReport.summary } else { $null }
   hygiene_findings = if ($hygieneReport) { @($hygieneReport.findings) } else { $null }
   recommended_actions = if ($hygieneReport) { @($hygieneReport.recommended_actions) } else { $null }
   workers = $shownWorkers
   tasks = @($shownTasks)
   proposals = if ($ShowProposals -or $Hygiene -or $ReconcileProposals) { @($shownProposals) } else { $null }
+  campaigns = if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) { @($shownCampaigns) } else { $null }
+  campaign_steps = if ($ShowCampaignSteps -or $CampaignId) { @($campaignStepSummaries) } else { $null }
+  campaign_gate_summary = $campaignGateSummary
   warnings = @($warnings | Select-Object -Unique)
   filters = [pscustomobject]@{
     description = Join-FilterDescription
@@ -771,6 +906,8 @@ $status = [pscustomobject]@{
     show_all = [bool]$ShowAll
     summary_only = [bool]$SummaryOnly
     show_proposals = [bool]$ShowProposals
+    show_campaigns = [bool]($ShowCampaigns -or $CampaignId)
+    show_campaign_steps = [bool]($ShowCampaignSteps -or $CampaignId)
     show_leases = [bool]$ShowLeases
     show_locks = [bool]$ShowLocks
     hygiene = [bool]$Hygiene
@@ -783,6 +920,8 @@ $status = [pscustomobject]@{
     color_mode = if ($NoColor) { "Never" } elseif ($Color) { "Always" } else { $ColorMode }
     color_enabled = [bool]$script:StatusColorEnabled
     proposal_limit = $ProposalLimit
+    campaign_limit = $CampaignLimit
+    campaign_id = if ($CampaignId) { $CampaignId } else { $null }
     proposal_status = @($ProposalStatus)
     review_status = @($ReviewStatus)
     approved_only = [bool]$ApprovedOnly

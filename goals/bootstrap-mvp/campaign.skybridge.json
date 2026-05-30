@@ -1,0 +1,56 @@
+{
+  "schema": "skybridge.campaign.v1",
+  "campaign_id": "bootstrap-mvp",
+  "title": "Bootstrap MVP campaign",
+  "description": "Seed campaign for goal-pack sequencing, Hermes gate evaluation, campaign hardening, and a read-only operator console.",
+  "project_id": "skybridge-agent-hub",
+  "source": "local-goal-pack",
+  "created_by": "operator",
+  "completed_external_dependencies": [
+    "super-185-goal-pack-campaign-sequencer"
+  ],
+  "goals": [
+    {
+      "path": "super-186-hermes-gate-evaluator-auto-advance.md"
+    },
+    {
+      "path": "super-187-bootstrap-campaign-mvp-hardening.md"
+    },
+    {
+      "path": "super-184b-operator-console-dashboard.md"
+    }
+  ],
+  "dependency_order": [
+    "super-186-hermes-gate-evaluator-auto-advance",
+    "super-187-bootstrap-campaign-mvp-hardening",
+    "super-184b-operator-console-dashboard"
+  ],
+  "safety_policy": {
+    "dry_run_default": true,
+    "mutations_require_apply": true,
+    "no_unbounded_worker_loop": true,
+    "no_auto_execute_imported_goals": true,
+    "no_hermes_auto_advance_in_super_185": true,
+    "blocked_task_types": [
+      "production_deploy",
+      "secret_rotation",
+      "server_root_config",
+      "github_settings",
+      "branch_protection"
+    ]
+  },
+  "default_advance_gates": {
+    "requires_clean_worktree": true,
+    "requires_no_active_tasks": true,
+    "requires_no_stale_leases": true,
+    "requires_parent_pr_merged": false,
+    "requires_human_approval": true
+  },
+  "stop_conditions": [
+    "active_tasks_present",
+    "stale_leases_present",
+    "failed_unrecovered_step",
+    "missing_required_evidence",
+    "operator_hold"
+  ]
+}
