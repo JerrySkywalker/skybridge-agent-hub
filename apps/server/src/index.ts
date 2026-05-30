@@ -122,7 +122,17 @@ const TASK_STATUSES: TaskStatus[] = [
   "stale",
 ];
 const TASK_RISKS: TaskRisk[] = ["low", "medium", "high"];
-const PROPOSAL_STATUSES: PlanningProposalStatus[] = ["proposed", "accepted", "rejected", "converted"];
+const PROPOSAL_STATUSES: PlanningProposalStatus[] = [
+  "proposed",
+  "reviewed",
+  "approved",
+  "rejected",
+  "deferred",
+  "superseded",
+  "blocked_dependency",
+  "converted",
+  "executed",
+];
 const TASK_SOURCES: TaskSource[] = [
   "manual",
   "planner",
@@ -152,6 +162,47 @@ function getConfiguredWorkerTokens(): string[] {
 
 function isWorkerAuthRequired(): boolean {
   return getConfiguredWorkerTokens().length > 0 || process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH === "true";
+}
+
+function getProposalDependencies(proposal: StoredTaskProposal): string[] {
+  return [...new Set([...(proposal.dependencies ?? []), ...(proposal.depends_on ?? [])].map((value) => value.trim()).filter(Boolean))];
+}
+
+function validateProposalConversion(proposal: StoredTaskProposal, allProposals: StoredTaskProposal[]): { ok: true } | { ok: false; error: string; reasons: string[] } {
+  const reasons: string[] = [];
+  if (proposal.status !== "approved") reasons.push("proposal status must be approved");
+  if (proposal.risk !== "low") reasons.push("proposal risk must be low");
+  if (!["docs", "local-smoke"].includes(proposal.task_type)) reasons.push("task_type must be docs or local-smoke");
+
+  const blockedText = [
+    proposal.title,
+    proposal.body,
+    proposal.prompt_summary,
+    proposal.rationale,
+    ...(proposal.expected_files ?? []),
+  ].join(" ");
+  if (/(production|deploy|secret|github settings|branch protection|server config|server-root-config|\/opt\/skybridge-agent-hub|\.env|private key|token file)/i.test(blockedText)) {
+    reasons.push("proposal mentions a blocked high-risk surface");
+  }
+
+  const expectedFiles = proposal.expected_files ?? [];
+  if (expectedFiles.length === 0) reasons.push("expected_files are required");
+  for (const file of expectedFiles) {
+    const normalized = file.replace(/\\/g, "/");
+    const docsOk = proposal.task_type === "docs" && normalized.startsWith("docs/");
+    const localSmokeOk = proposal.task_type === "local-smoke" && /^scripts\/powershell\/smoke-[^/]+\.ps1$/i.test(normalized);
+    if (!docsOk && !localSmokeOk) reasons.push(`expected file is outside allowed ${proposal.task_type} paths: ${normalized}`);
+  }
+
+  for (const dependencyId of getProposalDependencies(proposal)) {
+    const dependency = allProposals.find((candidate) => candidate.proposal_id === dependencyId);
+    if (!dependency || !["converted", "executed"].includes(dependency.status)) {
+      reasons.push(`dependency is not converted or executed: ${dependencyId}`);
+    }
+  }
+
+  if (reasons.length > 0) return { ok: false, error: "proposal_not_convertible", reasons };
+  return { ok: true };
 }
 
 function validateWorkerAuth(authorization: string | string[] | undefined):
@@ -638,10 +689,25 @@ export async function createServer(
   app.patch<{ Params: { proposalId: string }; Body: Record<string, unknown> }>("/v1/task-proposals/:proposalId", async (request, reply) => {
     const proposal = store.getTaskProposal(decodeURIComponent(request.params.proposalId));
     if (!proposal) return reply.code(404).send({ ok: false, error: "proposal_not_found" });
-    const status = safeString(request.body.status);
-    if (!status || !PROPOSAL_STATUSES.includes(status as PlanningProposalStatus))
+    const status = safeString(request.body.status) ?? proposal.status;
+    if (!PROPOSAL_STATUSES.includes(status as PlanningProposalStatus))
       return reply.code(400).send({ ok: false, error: "invalid_proposal_status" });
-    const updated: StoredTaskProposal = { ...proposal, status: status as PlanningProposalStatus, updated_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const reviewStatus = safeString(request.body.review_status);
+    const updated: StoredTaskProposal = {
+      ...proposal,
+      status: status as PlanningProposalStatus,
+      policy_decision: safeString(request.body.policy_decision) ?? proposal.policy_decision,
+      review_status: reviewStatus ?? proposal.review_status ?? status,
+      review_reason: safeLongString(request.body.review_reason) ?? proposal.review_reason,
+      reviewed_by: safeString(request.body.reviewed_by) ?? proposal.reviewed_by,
+      reviewed_at: reviewStatus || status !== proposal.status ? now : proposal.reviewed_at,
+      approved_by: safeString(request.body.approved_by) ?? proposal.approved_by,
+      approved_at: status === "approved" ? (proposal.approved_at ?? now) : proposal.approved_at,
+      superseded_by: safeString(request.body.superseded_by) ?? proposal.superseded_by,
+      dependencies: safeStringArray(request.body.dependencies) ?? proposal.dependencies,
+      updated_at: now,
+    };
     await store.upsertTaskProposal(updated);
     return { ok: true, proposal: updated };
   });
@@ -649,10 +715,9 @@ export async function createServer(
   app.post<{ Params: { proposalId: string }; Body: Record<string, unknown> }>("/v1/task-proposals/:proposalId/convert", async (request, reply) => {
     const proposal = store.getTaskProposal(decodeURIComponent(request.params.proposalId));
     if (!proposal) return reply.code(404).send({ ok: false, error: "proposal_not_found" });
-    if (proposal.risk === "high" && request.body.allow_high_risk !== true)
-      return reply.code(409).send({ ok: false, error: "high_risk_requires_allow_high_risk" });
-    if (!["accepted", "proposed"].includes(proposal.status))
-      return reply.code(409).send({ ok: false, error: "proposal_not_convertible" });
+    const conversionPolicy = validateProposalConversion(proposal, store.listTaskProposals({ projectId: proposal.project_id }));
+    if (!conversionPolicy.ok)
+      return reply.code(409).send({ ok: false, error: conversionPolicy.error, reasons: conversionPolicy.reasons });
     const project = store.getProject(proposal.project_id);
     if (!project) return reply.code(404).send({ ok: false, error: "project_not_found" });
     const taskId = safeString(request.body.task_id) ?? `task_${proposal.proposal_id}`;
@@ -691,7 +756,13 @@ export async function createServer(
       updated_at: now,
     };
     await store.upsertTask(task);
-    const updatedProposal: StoredTaskProposal = { ...proposal, status: "converted", converted_task_id: task.task_id, updated_at: now };
+    const updatedProposal: StoredTaskProposal = {
+      ...proposal,
+      status: "converted",
+      review_status: "converted",
+      converted_task_id: task.task_id,
+      updated_at: now,
+    };
     await store.upsertTaskProposal(updatedProposal);
     await recordTaskEvent(task, "task.created", undefined, "Task converted from proposal.", addStoredEvent, store);
     return reply.code(201).send({ ok: true, proposal: updatedProposal, task: withTaskEvents(task, store) });
@@ -2867,6 +2938,7 @@ function parseTaskProposalInput(
   if (!title || !dedupeKey || !TASK_RISKS.includes(risk as TaskRisk)) return undefined;
   const status = safeString(input.status) ?? "proposed";
   if (!PROPOSAL_STATUSES.includes(status as PlanningProposalStatus)) return undefined;
+  const dependencies = safeStringArray(input.dependencies) ?? safeStringArray(input.depends_on) ?? [];
   return {
     proposal_id: safeString(input.proposal_id) ?? slugId("proposal", title),
     master_goal_id: masterGoal.master_goal_id,
@@ -2885,11 +2957,21 @@ function parseTaskProposalInput(
       capability_normalization_reason: safeString(input.capability_normalization_reason),
       risk: risk as TaskRisk,
     task_type: safeString(input.task_type) ?? "docs",
-    depends_on: safeStringArray(input.depends_on) ?? [],
+    depends_on: safeStringArray(input.depends_on) ?? dependencies,
+    dependencies,
     rationale: safeString(input.rationale) ?? "Rule-based planner proposal.",
     stop_condition: safeString(input.stop_condition),
     status: status as PlanningProposalStatus,
+    policy_decision: safeString(input.policy_decision),
+    review_status: safeString(input.review_status) ?? status,
+    review_reason: safeLongString(input.review_reason),
+    reviewed_by: safeString(input.reviewed_by),
+    reviewed_at: safeString(input.reviewed_at),
+    approved_by: safeString(input.approved_by),
+    approved_at: safeString(input.approved_at),
+    superseded_by: safeString(input.superseded_by),
     created_by: safeString(input.created_by) ?? createdBy,
+    converted_task_id: safeString(input.converted_task_id),
     created_at: now,
     updated_at: now,
   };

@@ -224,7 +224,16 @@ export type GoalStatus =
   | "archived"
   | "paused"
   | "cancelled";
-export type PlanningProposalStatus = "proposed" | "accepted" | "rejected" | "converted";
+export type PlanningProposalStatus =
+  | "proposed"
+  | "reviewed"
+  | "approved"
+  | "rejected"
+  | "deferred"
+  | "superseded"
+  | "blocked_dependency"
+  | "converted"
+  | "executed";
 export type TaskSource =
   | "manual"
   | "planner"
@@ -376,9 +385,18 @@ export interface TaskProposal {
   risk: TaskRisk;
   task_type: string;
   depends_on: string[];
+  dependencies?: string[];
   rationale: string;
   stop_condition?: string;
   status: PlanningProposalStatus;
+  policy_decision?: string;
+  review_status?: string;
+  review_reason?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  approved_by?: string;
+  approved_at?: string;
+  superseded_by?: string;
   created_by: string;
   converted_task_id?: string;
   created_at: string;

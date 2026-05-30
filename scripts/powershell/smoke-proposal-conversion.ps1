@@ -35,12 +35,12 @@ try {
   $plan = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-plan.ps1 -ApiBase $ApiBase -ProjectId convert-project -MasterGoalId convert-master -Title "Convert smoke goal" -Apply -Json | ConvertFrom-Json
   $proposalId = @($plan.proposals)[0].proposal_id
 
+  $approve = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 -Command approve -ApiBase $ApiBase -ProjectId convert-project -ProposalId $proposalId -Apply -Reason "conversion smoke approval" -Json | ConvertFrom-Json
   $preview = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 -Command convert -ApiBase $ApiBase -ProjectId convert-project -ProposalId $proposalId -TaskId converted-task -DryRun -Json | ConvertFrom-Json
-  $accept = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 -Command accept -ApiBase $ApiBase -ProjectId convert-project -ProposalId $proposalId -Apply -Json | ConvertFrom-Json
   $convert = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 -Command convert -ApiBase $ApiBase -ProjectId convert-project -ProposalId $proposalId -TaskId converted-task -Apply -Json | ConvertFrom-Json
 
   if ($preview.task.task_id -ne "converted-task" -or @($preview.task.required_capabilities).Count -lt 1) { throw "Expected conversion preview task shape." }
-  if ($accept.proposal.status -ne "accepted") { throw "Expected accepted proposal before conversion." }
+  if ($approve.proposal.status -ne "approved") { throw "Expected approved proposal before conversion." }
   if ($convert.proposal.status -ne "converted" -or $convert.task.task_id -ne "converted-task") { throw "Expected converted proposal/task." }
   if (@($convert.task.allowed_paths).Count -lt 1) { throw "Expected converted task allowed paths from expected files." }
   if ($convert.token_printed -ne $false) { throw "Expected token_printed=false." }

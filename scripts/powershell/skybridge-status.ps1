@@ -22,6 +22,12 @@ param(
   [string]$SortBy = "updated_at",
   [switch]$Descending,
   [switch]$SummaryOnly,
+  [switch]$ShowProposals,
+  [int]$ProposalLimit = 10,
+  [string[]]$ProposalStatus = @(),
+  [string[]]$ReviewStatus = @(),
+  [switch]$ApprovedOnly,
+  [switch]$PendingReviewOnly,
   [int]$WorkersLimit = 12,
   [switch]$ShowCompleted,
   [switch]$ShowAll,
@@ -153,39 +159,119 @@ function Get-TaskSortValue {
 }
 
 function Get-TaskSummaryCounts {
-  param([array]$Tasks, [array]$Shown)
+  param([array]$Tasks, [array]$Matching, [array]$Shown, [bool]$Truncated)
+  $taskRows = @($Tasks) | Where-Object { $null -ne $_ }
+  $matchingRows = @($Matching) | Where-Object { $null -ne $_ }
+  $shownRows = @($Shown) | Where-Object { $null -ne $_ }
   [pscustomobject]@{
-    active = @($Tasks | Where-Object { $_.raw_status -in @("queued", "claimed", "running") }).Count
-    queued = @($Tasks | Where-Object { $_.raw_status -eq "queued" }).Count
-    claimed = @($Tasks | Where-Object { $_.raw_status -eq "claimed" }).Count
-    running = @($Tasks | Where-Object { $_.raw_status -eq "running" }).Count
-    blocked = @($Tasks | Where-Object { $_.raw_status -eq "blocked" }).Count
-    failed_unrecovered = @($Tasks | Where-Object { $_.raw_status -eq "failed" -and -not $_.recovered }).Count
-    recovered = @($Tasks | Where-Object { $_.recovered }).Count
-    completed = @($Tasks | Where-Object { $_.raw_status -eq "completed" }).Count
-    total_shown = @($Shown).Count
-    total_available = @($Tasks).Count
+    active = @($taskRows | Where-Object { $_.raw_status -in @("queued", "claimed", "running") }).Count
+    queued = @($taskRows | Where-Object { $_.raw_status -eq "queued" }).Count
+    claimed = @($taskRows | Where-Object { $_.raw_status -eq "claimed" }).Count
+    running = @($taskRows | Where-Object { $_.raw_status -eq "running" }).Count
+    blocked = @($taskRows | Where-Object { $_.raw_status -eq "blocked" }).Count
+    failed_unrecovered = @($taskRows | Where-Object { $_.raw_status -eq "failed" -and -not $_.recovered }).Count
+    recovered = @($taskRows | Where-Object { $_.recovered }).Count
+    completed = @($taskRows | Where-Object { $_.raw_status -eq "completed" }).Count
+    total = @($taskRows).Count
+    matching = @($matchingRows).Count
+    shown = @($shownRows).Count
+    truncated = $Truncated
+    total_shown = @($shownRows).Count
+    total_available = @($taskRows).Count
   }
+}
+
+function Select-ProposalSummary {
+  param($Proposal)
+  [pscustomobject]@{
+    proposal_id = if ($Proposal.proposal_id) { [string]$Proposal.proposal_id } else { "-" }
+    master_goal_id = if ($Proposal.master_goal_id) { [string]$Proposal.master_goal_id } else { $null }
+    planning_session_id = if ($Proposal.planning_session_id) { [string]$Proposal.planning_session_id } else { $null }
+    status = if ($Proposal.status) { [string]$Proposal.status } else { "proposed" }
+    policy_decision = if ($Proposal.policy_decision) { [string]$Proposal.policy_decision } else { "-" }
+    review_status = if ($Proposal.review_status) { [string]$Proposal.review_status } else { if ($Proposal.status) { [string]$Proposal.status } else { "proposed" } }
+    review_reason = if ($Proposal.review_reason) { [string]$Proposal.review_reason } else { $null }
+    risk = if ($Proposal.risk) { [string]$Proposal.risk } else { "-" }
+    task_type = if ($Proposal.task_type) { [string]$Proposal.task_type } else { "-" }
+    title = if ($Proposal.title) { [string]$Proposal.title } else { "-" }
+    expected_files = @($Proposal.expected_files)
+    original_required_capabilities = @($Proposal.original_required_capabilities)
+    normalized_required_capabilities = @($Proposal.normalized_required_capabilities)
+    dependencies = @($Proposal.dependencies)
+    converted_task_id = if ($Proposal.converted_task_id) { [string]$Proposal.converted_task_id } else { $null }
+    updated_at = if ($Proposal.updated_at) { [string]$Proposal.updated_at } else { $null }
+  }
+}
+
+function Get-ProposalSummaryCounts {
+  param([array]$Proposals)
+  $counts = [ordered]@{
+    proposed = 0
+    reviewed = 0
+    approved = 0
+    rejected = 0
+    deferred = 0
+    superseded = 0
+    blocked_dependency = 0
+    converted = 0
+    executed = 0
+    total = @($Proposals).Count
+  }
+  foreach ($proposal in @($Proposals)) {
+    $key = if ($proposal.review_status) { [string]$proposal.review_status } else { [string]$proposal.status }
+    if ($counts.Contains($key)) { $counts[$key] = [int]$counts[$key] + 1 }
+  }
+  [pscustomobject]$counts
 }
 
 function Write-CompactStatus {
   param($Status)
-  "SkyBridge: $($Status.api_base)"
-  "Health:    $($Status.health.status)"
-  "Project:   $($Status.project_id)"
-  "Control:   $($Status.control.state) stop=$($Status.control.stop_requested)"
-  if ($Status.control.stop_reason) { "Stop:      $($Status.control.stop_reason)" }
-  if ($Status.control.degraded_reason) { "Degraded:  $($Status.control.degraded_reason)" }
+  "SkyBridge"
+  "  API:      $($Status.api_base)"
+  "  Health:   $($Status.health.status)"
+  "  Project:  $($Status.project_id)"
+  "  Control:  $($Status.control.state)"
+  "  StopReq:  $($Status.control.stop_requested)"
+  if ($Status.control.stop_reason) { "  Reason:   $($Status.control.stop_reason)" }
+  if ($Status.control.degraded_reason) { "  Degraded: $($Status.control.degraded_reason)" }
   ""
   "Task Summary:"
-  "  active=$($Status.task_summary.active) queued=$($Status.task_summary.queued) claimed=$($Status.task_summary.claimed) running=$($Status.task_summary.running) blocked=$($Status.task_summary.blocked) failed_unrecovered=$($Status.task_summary.failed_unrecovered) recovered=$($Status.task_summary.recovered) completed=$($Status.task_summary.completed)"
-  "  shown=$($Status.task_summary.total_shown) available=$($Status.task_summary.total_available) truncated=$($Status.filters.truncated)"
+  "  Active:"
+  "    queued:   $($Status.task_summary.queued)"
+  "    claimed:  $($Status.task_summary.claimed)"
+  "    running:  $($Status.task_summary.running)"
+  "    total:    $($Status.task_summary.active)"
+  ""
+  "  Outcomes:"
+  "    completed:          $($Status.task_summary.completed)"
+  "    recovered:          $($Status.task_summary.recovered)"
+  "    blocked:            $($Status.task_summary.blocked)"
+  "    failed_unrecovered: $($Status.task_summary.failed_unrecovered)"
+  ""
+  "  Display:"
+  "    total:      $($Status.task_summary.total)"
+  "    matching:   $($Status.task_summary.matching)"
+  "    shown:      $($Status.task_summary.shown)"
+  "    truncated:  $($Status.task_summary.truncated)"
   "Filters:   $($Status.filters.description)"
-  if ($Status.filters.truncated) { "Hint:      use -ShowAll or raise -TaskLimit to show more tasks." }
+  if ($Status.task_summary.truncated) { "Hint:      use -ShowAll or raise -TaskLimit to show more tasks." }
+  if ($Status.proposal_summary) {
+    ""
+    "Proposal Summary:"
+    "  proposed:           $($Status.proposal_summary.proposed)"
+    "  reviewed:           $($Status.proposal_summary.reviewed)"
+    "  approved:           $($Status.proposal_summary.approved)"
+    "  rejected:           $($Status.proposal_summary.rejected)"
+    "  deferred:           $($Status.proposal_summary.deferred)"
+    "  superseded:         $($Status.proposal_summary.superseded)"
+    "  blocked_dependency: $($Status.proposal_summary.blocked_dependency)"
+    "  converted:          $($Status.proposal_summary.converted)"
+    "  executed:           $($Status.proposal_summary.executed)"
+  }
   if ($SummaryOnly) { return }
   ""
   "Workers:"
-  if (@($Status.workers).Count -eq 0) { "  -" } else {
+  if (@($Status.workers).Count -eq 0) { "  none" } else {
     "  id                       status   seen         task"
     foreach ($worker in @($Status.workers | Sort-Object worker_id)) {
       "  $(Shorten-StatusText $worker.worker_id 24) $(Shorten-StatusText $worker.status 8) $(Shorten-StatusText $worker.last_seen 12) $(Shorten-StatusText $worker.current_task_id 24)"
@@ -193,10 +279,20 @@ function Write-CompactStatus {
   }
   ""
   "Tasks:"
-  if (@($Status.tasks).Count -eq 0) { "  -" } else {
+  if (@($Status.tasks).Count -eq 0) { "  none" } else {
     "  id                             status           worker             pr  evidence"
     foreach ($task in @($Status.tasks)) {
       "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.display_status 16) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
+    }
+  }
+  if ($Status.filters.show_proposals) {
+    ""
+    "Proposals:"
+    if (@($Status.proposals).Count -eq 0) { "  none" } else {
+      "  id                       review              policy              risk  type         title"
+      foreach ($proposal in @($Status.proposals)) {
+        "  $(Shorten-StatusText $proposal.proposal_id 24) $(Shorten-StatusText $proposal.review_status 19) $(Shorten-StatusText $proposal.policy_decision 19) $(Shorten-StatusText $proposal.risk 5) $(Shorten-StatusText $proposal.task_type 12) $(Shorten-StatusText $proposal.title 42)"
+      }
     }
   }
   if (-not [string]::IsNullOrWhiteSpace($TaskId) -and @($Status.tasks).Count -gt 0) {
@@ -226,6 +322,11 @@ function Join-FilterDescription {
   if ($Since) { $parts += "since=$Since" }
   if ($Until) { $parts += "until=$Until" }
   if ($ShowAll) { $parts += "show-all" }
+  if ($ShowProposals) { $parts += "show-proposals" }
+  if ($ProposalStatus.Count -gt 0) { $parts += "proposal-status=$($ProposalStatus -join ',')" }
+  if ($ReviewStatus.Count -gt 0) { $parts += "review-status=$($ReviewStatus -join ',')" }
+  if ($ApprovedOnly) { $parts += "approved-only" }
+  if ($PendingReviewOnly) { $parts += "pending-review-only" }
   if ($parts.Count -eq 0) { $parts += "recent" }
   return ($parts -join "; ")
 }
@@ -237,6 +338,7 @@ if ($config.auth_mode -eq "bearer_token" -and [string]::IsNullOrWhiteSpace((Get-
 
 if ($RecentTasks -gt 0) { $TaskLimit = $RecentTasks }
 if ($TaskLimit -lt 1) { $TaskLimit = 10 }
+if ($ProposalLimit -lt 1) { $ProposalLimit = 10 }
 $sinceDate = if ($Since) { ConvertTo-StatusDate -Value $Since } else { $null }
 $untilDate = if ($Until) { ConvertTo-StatusDate -Value $Until } else { $null }
 $warnings = @()
@@ -260,8 +362,10 @@ if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
   $tasks = @($taskResponse.task)
 }
 
-$workerSummaries = @($workers | ForEach-Object { Select-WorkerSummary -Worker $_ })
-$allTaskSummaries = @($tasks | ForEach-Object { Select-TaskSummary -Task $_ })
+$workerItems = @($workers) | Where-Object { $null -ne $_ }
+$taskItems = @($tasks) | Where-Object { $null -ne $_ }
+$workerSummaries = @($workerItems | ForEach-Object { Select-WorkerSummary -Worker $_ })
+$allTaskSummaries = @($taskItems | ForEach-Object { Select-TaskSummary -Task $_ })
 $filteredTasks = @($allTaskSummaries)
 if ($WorkerId) { $filteredTasks = @($filteredTasks | Where-Object { $_.worker_id -eq $WorkerId }) }
 if ($ActiveOnly) { $filteredTasks = @($filteredTasks | Where-Object { $_.raw_status -in @("queued", "claimed", "running") }) }
@@ -292,7 +396,35 @@ $sortedTasks = @($filteredTasks | Sort-Object -Property @{ Expression = { Get-Ta
 if (-not $Descending -and $SortBy -ne "status") { $sortedTasks = @($filteredTasks | Sort-Object -Property @{ Expression = { Get-TaskSortValue -Task $_ }; Descending = $true }) }
 $totalFiltered = $sortedTasks.Count
 $shownTasks = if ($ShowAll -or $TaskId) { @($sortedTasks) } else { @($sortedTasks | Select-Object -First $TaskLimit) }
+$shownTasks = @($shownTasks) | Where-Object { $null -ne $_ }
 $shownWorkers = if ($Json) { $workerSummaries } else { @($workerSummaries | Select-Object -First $WorkersLimit) }
+$truncated = (-not $ShowAll -and -not $TaskId -and $totalFiltered -gt @($shownTasks).Count)
+
+$allProposalSummaries = @()
+$filteredProposals = @()
+$shownProposals = @()
+if ($ShowProposals) {
+  $proposalPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/task-proposals?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+  $proposalItems = @($proposalPayload.proposals) | Where-Object { $null -ne $_ }
+  $allProposalSummaries = @($proposalItems | ForEach-Object { Select-ProposalSummary -Proposal $_ })
+  $filteredProposals = @($allProposalSummaries)
+  if ($ProposalStatus.Count -gt 0) {
+    $wanted = @($ProposalStatus | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
+    $filteredProposals = @($filteredProposals | Where-Object { $wanted -contains ([string]$_.status).ToLowerInvariant() })
+  }
+  if ($ReviewStatus.Count -gt 0) {
+    $wantedReview = @($ReviewStatus | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
+    $filteredProposals = @($filteredProposals | Where-Object { $wantedReview -contains ([string]$_.review_status).ToLowerInvariant() })
+  }
+  if ($ApprovedOnly) {
+    $filteredProposals = @($filteredProposals | Where-Object { $_.status -eq "approved" -or $_.review_status -eq "approved" })
+  }
+  if ($PendingReviewOnly) {
+    $filteredProposals = @($filteredProposals | Where-Object { $_.status -eq "proposed" -or $_.review_status -eq "proposed" -or $_.review_status -eq "reviewed" })
+  }
+  $shownProposals = if ($ShowAll) { @($filteredProposals) } else { @($filteredProposals | Select-Object -First $ProposalLimit) }
+  $shownProposals = @($shownProposals) | Where-Object { $null -ne $_ }
+}
 
 $status = [pscustomobject]@{
   ok = $true
@@ -302,9 +434,25 @@ $status = [pscustomobject]@{
   health = [pscustomobject]@{ ok = [bool]$health.ok; status = if ($health.ok) { "ok" } else { "unknown" }; persistence = $health.persistence }
   project = $project.project
   control = if ($control) { $control } else { [pscustomobject]@{ state = "unknown"; stop_requested = $false } }
-  task_summary = Get-TaskSummaryCounts -Tasks $allTaskSummaries -Shown $shownTasks
+  display_header = [pscustomobject]@{
+    api = $ApiBase
+    health = if ($health.ok) { "ok" } else { "unknown" }
+    project = $ProjectId
+    control = if ($control) { $control.state } else { "unknown" }
+    stop_requested = if ($control) { [bool]$control.stop_requested } else { $false }
+    reason = if ($control -and $control.stop_reason) { [string]$control.stop_reason } else { $null }
+  }
+  control_summary = [pscustomobject]@{
+    state = if ($control) { $control.state } else { "unknown" }
+    stop_requested = if ($control) { [bool]$control.stop_requested } else { $false }
+    stop_reason = if ($control -and $control.stop_reason) { [string]$control.stop_reason } else { $null }
+    degraded_reason = if ($control -and $control.degraded_reason) { [string]$control.degraded_reason } else { $null }
+  }
+  task_summary = Get-TaskSummaryCounts -Tasks $allTaskSummaries -Matching $sortedTasks -Shown $shownTasks -Truncated $truncated
+  proposal_summary = if ($ShowProposals) { Get-ProposalSummaryCounts -Proposals $allProposalSummaries } else { $null }
   workers = $shownWorkers
   tasks = @($shownTasks)
+  proposals = if ($ShowProposals) { @($shownProposals) } else { $null }
   warnings = @($warnings | Select-Object -Unique)
   filters = [pscustomobject]@{
     description = Join-FilterDescription
@@ -319,14 +467,21 @@ $status = [pscustomobject]@{
     show_completed = [bool]$ShowCompleted
     show_all = [bool]$ShowAll
     summary_only = [bool]$SummaryOnly
+    show_proposals = [bool]$ShowProposals
+    proposal_limit = $ProposalLimit
+    proposal_status = @($ProposalStatus)
+    review_status = @($ReviewStatus)
+    approved_only = [bool]$ApprovedOnly
+    pending_review_only = [bool]$PendingReviewOnly
     include_events = [bool]$IncludeEvents
     event_limit = $EventLimit
     task_id = if ($TaskId) { $TaskId } else { $null }
     worker_id = if ($WorkerId) { $WorkerId } else { $null }
     sort_by = $SortBy
     descending = [bool]$Descending
-    truncated = (-not $ShowAll -and -not $TaskId -and $totalFiltered -gt @($shownTasks).Count)
+    truncated = $truncated
     total_filtered = $totalFiltered
+    proposal_filtered = @($filteredProposals).Count
   }
 }
 

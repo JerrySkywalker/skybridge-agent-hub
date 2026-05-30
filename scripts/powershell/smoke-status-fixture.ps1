@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output")]
+  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output", "header-format", "summary-format", "active-only-empty", "summary-counts", "proposal-summary", "show-proposals", "approved-only", "pending-review-only")]
   [string]$Scenario,
   [int]$Port = 0,
   [switch]$Json
@@ -28,10 +28,17 @@ function Wait-SkyBridgeHealth {
 }
 
 function Invoke-StatusJson {
-  param([string[]]$Arguments)
-  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-filter-project" -Json @Arguments
+  param([string[]]$Arguments, [string]$Project = "status-filter-project")
+  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId $Project -Json @Arguments
   if ($LASTEXITCODE -ne 0) { throw "skybridge-status.ps1 failed for $Scenario." }
   return ($output | ConvertFrom-Json)
+}
+
+function Invoke-StatusText {
+  param([string[]]$Arguments, [string]$Project = "status-filter-project")
+  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId $Project @Arguments
+  if ($LASTEXITCODE -ne 0) { throw "skybridge-status.ps1 failed for $Scenario." }
+  return ($output -join "`n")
 }
 
 $serverProcess = $null
@@ -50,6 +57,8 @@ try {
   Wait-SkyBridgeHealth
 
   Invoke-SkyBridgeJson "POST" "/v1/projects" @{ project_id = "status-filter-project"; name = "Status Filter Project" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/projects" @{ project_id = "status-empty-project"; name = "Status Empty Project" } | Out-Null
+  Invoke-SkyBridgeJson "PATCH" "/v1/projects/status-empty-project/control" @{ state = "paused"; stop_requested = $false; stop_reason = "status_empty_fixture" } | Out-Null
   Invoke-SkyBridgeJson "PATCH" "/v1/projects/status-filter-project/control" @{ state = "paused"; stop_requested = $false; stop_reason = "status_filter_fixture" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/workers/register" @{ worker_id = "status-worker-a"; name = "Status Worker A" } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/workers/status-worker-a/heartbeat" @{ status_note = "ready" } | Out-Null
@@ -91,6 +100,73 @@ try {
     }
   } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-filter-blocked/block" @{ error_summary = "fixture block" } | Out-Null
+
+  Invoke-SkyBridgeJson "POST" "/v1/master-goals" @{
+    master_goal_id = "status-proposal-master"
+    project_id = "status-filter-project"
+    title = "Status Proposal Master"
+    source = "fixture"
+    priority = "normal"
+  } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/planning-sessions" @{
+    planning_session_id = "status-proposal-session"
+    master_goal_id = "status-proposal-master"
+    project_id = "status-filter-project"
+    planner_adapter = @{
+      provider = "fixture"
+      planner_mode = "fixture"
+      prompt_version = "v1"
+      input_state_hash = "fixture"
+      raw_response_included = $false
+      secrets_included = $false
+    }
+    proposals = @(
+      @{
+        proposal_id = "prop_status_proposed"
+        title = "Proposed docs update"
+        dedupe_key = "prop-status-proposed"
+        risk = "low"
+        task_type = "docs"
+        status = "proposed"
+        review_status = "proposed"
+        policy_decision = "accepted_for_preview"
+        expected_files = @("docs/dev/PROPOSAL_REVIEW_QUEUE.md")
+        acceptance_criteria = @("docs updated")
+        evidence_requirements = @("smoke")
+        required_capabilities = @("codex", "git", "gh")
+        normalized_required_capabilities = @("codex", "git", "gh")
+      },
+      @{
+        proposal_id = "prop_status_approved"
+        title = "Approved docs update"
+        dedupe_key = "prop-status-approved"
+        risk = "low"
+        task_type = "docs"
+        status = "approved"
+        review_status = "approved"
+        policy_decision = "accepted_for_execution"
+        expected_files = @("docs/dev/PROGRESS.md")
+        acceptance_criteria = @("docs updated")
+        evidence_requirements = @("smoke")
+        required_capabilities = @("codex", "git", "gh")
+        normalized_required_capabilities = @("codex", "git", "gh")
+      },
+      @{
+        proposal_id = "prop_status_rejected"
+        title = "Rejected unsafe update"
+        dedupe_key = "prop-status-rejected"
+        risk = "high"
+        task_type = "deploy"
+        status = "rejected"
+        review_status = "rejected"
+        policy_decision = "rejected_high_risk"
+        expected_files = @("deploy/unsafe.md")
+        acceptance_criteria = @("blocked")
+        evidence_requirements = @("blocked")
+        required_capabilities = @("codex")
+      }
+    )
+  } | Out-Null
 
   switch ($Scenario) {
     "task-limit" {
@@ -141,6 +217,45 @@ try {
       $fileStatus = Get-Content -Raw -LiteralPath $jsonFile | ConvertFrom-Json
       if ($fileStatus.token_printed -ne $false -or $status.token_printed -ne $false) { throw "Expected token_printed=false." }
       if (@($fileStatus.tasks).Count -ne @($status.tasks).Count) { throw "Expected JSON output file to match stdout shape." }
+    }
+    "header-format" {
+      $text = Invoke-StatusText -Arguments @("-TaskLimit", "1")
+      if ($text -notmatch "(?m)^SkyBridge$" -or $text -notmatch "(?m)^  API:" -or $text -notmatch "(?m)^  StopReq:") { throw "Expected grouped header." }
+      $status = Invoke-StatusJson -Arguments @("-TaskLimit", "1")
+      if (-not $status.display_header -or -not $status.control_summary) { throw "Expected display_header and control_summary JSON." }
+    }
+    "summary-format" {
+      $text = Invoke-StatusText -Arguments @("-TaskLimit", "2", "-ShowCompleted")
+      if ($text -notmatch "Task Summary:" -or $text -notmatch "Active:" -or $text -notmatch "Outcomes:" -or $text -notmatch "Display:") { throw "Expected grouped task summary." }
+    }
+    "active-only-empty" {
+      $status = Invoke-StatusJson -Arguments @("-ActiveOnly") -Project "status-empty-project"
+      if ($status.task_summary.matching -ne 0 -or $status.task_summary.shown -ne 0) { throw "Expected empty ActiveOnly matching=0 shown=0; got matching=$($status.task_summary.matching) shown=$($status.task_summary.shown) total=$($status.task_summary.total)." }
+      $text = Invoke-StatusText -Arguments @("-ActiveOnly") -Project "status-empty-project"
+      if ($text -notmatch "Tasks:\s+none") { throw "Expected Tasks: none." }
+    }
+    "summary-counts" {
+      $status = Invoke-StatusJson -Arguments @("-ActiveOnly")
+      if ($status.task_summary.total -ne 7) { throw "Expected total task count 7." }
+      if ($status.task_summary.matching -ne 3 -or $status.task_summary.shown -ne 3) { throw "Expected three active matching and shown tasks." }
+      if ($status.task_summary.truncated -ne $false) { throw "Expected ActiveOnly not truncated." }
+    }
+    "proposal-summary" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-SummaryOnly")
+      if (-not $status.proposal_summary) { throw "Expected proposal summary." }
+      if ($status.proposal_summary.proposed -ne 1 -or $status.proposal_summary.approved -ne 1 -or $status.proposal_summary.rejected -ne 1) { throw "Expected proposal lifecycle counts." }
+    }
+    "show-proposals" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ProposalLimit", "2")
+      if (@($status.proposals).Count -ne 2) { throw "Expected proposal limit to apply." }
+    }
+    "approved-only" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ApprovedOnly")
+      if (@($status.proposals).Count -ne 1 -or @($status.proposals)[0].proposal_id -ne "prop_status_approved") { throw "Expected only approved proposal." }
+    }
+    "pending-review-only" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-PendingReviewOnly")
+      if (@($status.proposals).Count -ne 1 -or @($status.proposals)[0].proposal_id -ne "prop_status_proposed") { throw "Expected only pending proposal." }
     }
   }
 
