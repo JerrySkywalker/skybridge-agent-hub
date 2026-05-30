@@ -516,3 +516,11 @@
 - Added `skybridge-proposal.ps1` review commands for list/show/review/approve/reject/defer/supersede/convert, with all mutations gated by `-Apply`. Guide and Hermes CLI operator aliases now expose proposal list/show/approve/reject/defer/convert/status-proposals flows.
 - Local validation passed for the new status/proposal smokes, PowerShell parse validation and server typecheck.
 - Super 181 cloud pilot blocker: the current cloud SkyBridge API is still on the old proposal enum and rejects `status=approved` with `invalid_proposal_status`. Because this goal explicitly forbids production deployment, no approval-gated real cloud proposal pilot was executed. Final cloud preconditions were otherwise safe: project control paused, `stop_requested=false`, no queued/claimed/running tasks, `laptop-zenbookduo` heartbeat online, Hermes direct HTTPS healthy and historical `task_proposal-59a0236fb69800cd` still blocked.
+
+## 2026-05-31
+
+- Super 183 deployed the latest merged SkyBridge Server image from `main` to the existing server container only. Health passed on localhost and `https://skybridge.jerryskywalker.space/v1/health`; no OpenResty, DNS, Authelia, ntfy, Halo, firewall, server root configuration, secret or GitHub settings changes were made.
+- Hermes persisted a docs-only Super 183 proposal batch. Approved proposals `proposal-3ebb79b2b20a2d64` and `proposal-a3d7d8d55b54455e` converted to `task_proposal-3ebb79b2b20a2d64` and `task_proposal-a3d7d8d55b54455e`; deferred proposal `proposal-c6349c43ccbdcf98` and an unapproved proposal were refused conversion.
+- The lease-backed worker loop ran on `laptop-zenbookduo` only. Task `task_proposal-a3d7d8d55b54455e` used lease `lease_xWVPzMr5ztjvHLKheYCJa` and created child PR #86; task `task_proposal-3ebb79b2b20a2d64` used lease `lease_B3Jh_y7YhYcqGPoEWtPhq` and created child PR #87.
+- Both child PRs changed only their expected docs files, all checks passed, both PRs merged, both task leases were released, both local repo locks were cleaned up, and cloud evidence was repaired to recovered status after the CI guardian initially stopped on draft/pending checks.
+- Final cloud state for the pilot: project control paused, `stop_requested=false`, active queued/claimed/running tasks `0`, recovered task count includes both Super 183 tasks, and historical `task_proposal-59a0236fb69800cd` remains blocked.
