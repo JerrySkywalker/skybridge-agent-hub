@@ -480,7 +480,29 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -Ac
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowLeases
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowLocks
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowProposals -ApprovedOnly
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -Hygiene
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 audit -Json
 ```
+
+`skybridge-status.ps1` color is optional. Use `-Color` for interactive operator sessions, `-NoColor` for copyable logs and smokes, or `-ColorMode Auto|Always|Never` for explicit control. JSON output and `-OutputFile` never contain ANSI color.
+
+Queue hygiene semantics:
+
+- stale lease: active lease past expiry, active lease on an inactive task, or active lease whose worker is stale/offline;
+- stale task: claimed/running too long, claimed/running without a lease, expired lease, or failed task with PR evidence needing repair;
+- proposal reconciliation: raw proposal status is preserved, but converted proposals derive `executed` when the converted task completed or recovered.
+
+Recovery commands are intentionally explicit:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 recover-lease `
+  -TaskId task-id `
+  -LeaseId lease-id `
+  -Reason "operator reviewed stale lease" `
+  -DryRun
+```
+
+Use `-Apply` only after reviewing the task, lease and expected files. Do not automatically requeue old failed tasks, do not unblock `task_proposal-59a0236fb69800cd`, and do not recover production/high-risk work through the hygiene command.
 
 Run a real remote smoke only when the explicit API base and token are present:
 

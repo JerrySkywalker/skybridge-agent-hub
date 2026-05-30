@@ -73,6 +73,15 @@ For both executed tasks:
 - Historical `task_proposal-59a0236fb69800cd`: still blocked
 - Token printing: false
 
+## Queue Hygiene Follow-up
+
+Super Goal 184 did not run another worker batch. It added queue hygiene and proposal reconciliation around the Super 183 state:
+
+- raw proposal counts still include `converted=6` and `executed=0`, but derived reconciliation now reports `derived_executed=6` because the converted tasks completed or recovered;
+- Super 183 leases remain `released`;
+- no stale active lease or stale lock residue was found;
+- two older approved proposals remain approved but unconverted and should be reviewed before any future batch.
+
 ## Result
 
 The cloud lease-backed approved proposal batch loop is proven for a bounded docs-only batch of two approved proposals. The remaining improvement is to make CI guardian wait through the normal draft/pending interval before marking an otherwise healthy child task failed.

@@ -1028,6 +1028,68 @@ export async function createServer(
     return { ok: true, task: withTaskEvents(updated, store) };
   });
 
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>(
+    "/v1/tasks/:taskId/lease-recovery",
+    { preHandler: requireWorkerAuth },
+    async (request, reply) => {
+      const task = store.getTask(decodeURIComponent(request.params.taskId));
+      if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
+      const action = safeString(request.body.action);
+      const reason = safeLongString(request.body.reason);
+      const requestedLeaseId = safeString(request.body.lease_id);
+      const workerId = safeString(request.body.worker_id) ?? task.assigned_worker_id;
+      if (!action || !["release-stale", "mark-abandoned", "requeue-safe"].includes(action)) {
+        return reply.code(400).send({ ok: false, error: "invalid_lease_recovery_action" });
+      }
+      if (!reason) return reply.code(400).send({ ok: false, error: "missing_recovery_reason" });
+      if (task.task_id === "task_proposal-59a0236fb69800cd") {
+        return reply.code(409).send({ ok: false, error: "historical_blocked_task_not_recoverable" });
+      }
+      if (!task.lease) return reply.code(409).send({ ok: false, error: "task_has_no_lease" });
+      if (requestedLeaseId && requestedLeaseId !== task.lease.lease_id) {
+        return reply.code(409).send({ ok: false, error: "lease_id_mismatch", lease: task.lease });
+      }
+      const now = new Date();
+      const expired = isExpiredLease(task.lease, now);
+      const taskInactive = !["queued", "claimed", "running"].includes(task.status);
+      if (action !== "requeue-safe" && task.lease.lease_status !== "active" && task.lease.lease_status !== "expired") {
+        return reply.code(409).send({ ok: false, error: "lease_not_recoverable", lease: task.lease });
+      }
+      if (action !== "requeue-safe" && !expired && !taskInactive && task.lease.lease_status !== "expired") {
+        return reply.code(409).send({ ok: false, error: "lease_not_stale", lease: task.lease });
+      }
+      if (action === "requeue-safe") {
+        const blockedType = ["deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config", "server-root-config"].includes(task.task_type ?? "");
+        if (task.risk !== "low" || blockedType || task.status === "completed" || task.status === "cancelled") {
+          return reply.code(409).send({ ok: false, error: "task_not_safe_to_requeue" });
+        }
+      }
+      const recoveredLease: TaskLease = {
+        ...task.lease,
+        lease_status: action === "mark-abandoned" ? "abandoned" : "released",
+        released_at: now.toISOString(),
+        stale_reason: `${action}:${reason}`,
+      };
+      const updated: StoredTask = {
+        ...task,
+        status: action === "requeue-safe" ? "queued" : task.status,
+        assigned_worker_id: action === "requeue-safe" ? undefined : task.assigned_worker_id,
+        claim: action === "requeue-safe" ? undefined : task.claim,
+        lease: recoveredLease,
+        updated_at: now.toISOString(),
+      };
+      await store.upsertTask(updated);
+      await recordTaskEvent(updated, action === "requeue-safe" ? "task.requeued" : "task.updated", workerId, `Task lease recovery: ${action}.`, addStoredEvent, store, {
+        lease_id: recoveredLease.lease_id,
+        lease_status: recoveredLease.lease_status,
+        stale_reason: recoveredLease.stale_reason,
+        recovery_action: action,
+        recovery_reason: reason,
+      });
+      return { ok: true, action, task: withTaskEvents(updated, store) };
+    },
+  );
+
   app.get("/v1/workers/summary", async () => summarizeWorkers(store));
   app.get("/v1/tasks/summary", async () => summarizeTasks(store));
 
