@@ -524,3 +524,13 @@
 - The lease-backed worker loop ran on `laptop-zenbookduo` only. Task `task_proposal-a3d7d8d55b54455e` used lease `lease_xWVPzMr5ztjvHLKheYCJa` and created child PR #86; task `task_proposal-3ebb79b2b20a2d64` used lease `lease_B3Jh_y7YhYcqGPoEWtPhq` and created child PR #87.
 - Both child PRs changed only their expected docs files, all checks passed, both PRs merged, both task leases were released, both local repo locks were cleaned up, and cloud evidence was repaired to recovered status after the CI guardian initially stopped on draft/pending checks.
 - Final cloud state for the pilot: project control paused, `stop_requested=false`, active queued/claimed/running tasks `0`, recovered task count includes both Super 183 tasks, and historical `task_proposal-59a0236fb69800cd` remains blocked.
+
+## 2026-05-31 Super 184
+
+- Added colorized human output to `skybridge-status.ps1` with `-Color`, `-NoColor` and `-ColorMode Auto|Always|Never`. JSON and `-OutputFile` remain ANSI-free, and `NO_COLOR` is honored.
+- Added `-Hygiene` status mode plus filters for stale, blocked, failed, review and reconciliation-focused views. JSON now exposes `hygiene_summary`, `hygiene_findings` and `recommended_actions`.
+- Added derived lease display statuses (`active`, `released`, `expired`, `stale`, `abandoned`, `inconsistent`) and derived task hygiene statuses (`stale_claim`, `stale_running`, `lease_missing`, `lease_expired`, `pr_merged_needs_evidence`, `recovered_ok`, `blocked_historical`, `failed_unrecovered`).
+- Added proposal/task reconciliation in status output. Converted proposals whose tasks completed or recovered now show derived execution state `executed`, while approved proposals without tasks show `approved_unconverted`.
+- Added `skybridge-hygiene.ps1` for dry-run queue audit/report flows and explicit lease recovery commands. Mutations require `-Apply` and `-Reason`; the historical blocked `task_proposal-59a0236fb69800cd` is explicitly protected from automatic recovery.
+- Read-only cloud audit found project control paused, `stop_requested=false`, active tasks `0`, active leases `0`, stale leases `0`, released leases `2`, blocked historical tasks `3`, failed unrecovered tasks `1`, recovered tasks `9`, completed tasks `3`, approved unconverted proposals `2`, converted unexecuted proposals `0` and derived executed proposals `6`.
+- No safe reconciliation mutation was performed in Super 184 because there was no stale active lease or active task residue. `remote-docs-exec-pilot-001` remains an evidence-review item; historical blocked tasks remain blocked.
