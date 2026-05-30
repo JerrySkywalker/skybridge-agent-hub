@@ -117,3 +117,7 @@ Super 180 extended this result to a two-task docs batch after capability normali
 The two child PRs were [#81](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/81) for `docs/orchestrator/WORKER_PROFILE_RUNBOOK.md` and [#82](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/82) for `docs/dev/BATCH_WORKER_LOOP_PILOT.md`. Both passed AI branch validation, Project check and Docker build server/web. PR #81 completed normally; PR #82 required evidence repair because CI Guardian stopped on pending checks before they passed. Final control was paused with `stop_requested=false` and no queued/running tasks.
 
 The two-task batch is proven for low-risk docs work with recovered evidence. The next loop hardening target is CI Guardian pending-check handling, not broader worker scope.
+
+## 2026-05-30 Super 181 Proposal Review Note
+
+Super 181 implemented the proposal review queue and approval-gated conversion locally, but the real cloud proposal review pilot was not run because the deployed cloud API still rejects the new `approved` proposal status. Production deployment was out of scope for the goal. The safe next step is to merge and deploy the reviewed server change manually, then run exactly one approved low-risk docs proposal through conversion and `laptop-zenbookduo` PollOnce.

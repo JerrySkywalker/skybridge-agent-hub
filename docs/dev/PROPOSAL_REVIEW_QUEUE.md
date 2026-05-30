@@ -1,6 +1,6 @@
 # Proposal Review Queue
 
-Status: implemented locally for Super 181; real cloud pilot evidence is recorded in `docs/dev/PROGRESS.md`.
+Status: implemented locally for Super 181; real cloud pilot evidence or blocker is recorded in `docs/dev/PROGRESS.md`.
 
 SkyBridge proposal review separates planning from execution. Hermes and rule-based planners create proposals only. Operators review, approve, reject, defer or supersede those proposals before any queued task can be created.
 
@@ -83,6 +83,10 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
 ```
 
 Conversion creates a queued task only. It does not run a worker.
+
+## Deployment Boundary
+
+The approval-gated lifecycle requires the SkyBridge API server to accept the new proposal statuses. When the cloud server still rejects `status=approved` with `invalid_proposal_status`, do not run a real proposal review pilot against the old accepted/converted flow. The safe next step is to merge and deploy the reviewed server change through the normal manual path, then run the one-task proposal review pilot.
 
 ## Status UX
 
