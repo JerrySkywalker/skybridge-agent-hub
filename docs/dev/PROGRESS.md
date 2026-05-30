@@ -495,3 +495,10 @@
 - `notify-bootstrap.ps1 -Send` can deliver info and urgent messages to ntfy topics.
 - Phone-side ntfy subscription and permissions confirmed.
 - Bootstrap notification is currently the out-of-band fallback path for SkyBridge/Hermes/Codex development supervision.
+## 2026-05-30
+
+- Super 181 local implementation: added approval-gated proposal lifecycle states (`proposed`, `reviewed`, `approved`, `rejected`, `deferred`, `superseded`, `blocked_dependency`, `converted`, `executed`), proposal review metadata, approval policy checks and convert-only-approved enforcement.
+- Polished `skybridge-status.ps1` human output with grouped SkyBridge header, grouped task summary and proposal queue visibility. The task summary now distinguishes `total`, `matching`, `shown` and `truncated`; `-ActiveOnly` with no matching tasks reports `matching=0`, `shown=0` and `Tasks: none`.
+- Added `skybridge-proposal.ps1` review commands for list/show/review/approve/reject/defer/supersede/convert, with all mutations gated by `-Apply`. Guide and Hermes CLI operator aliases now expose proposal list/show/approve/reject/defer/convert/status-proposals flows.
+- Local validation passed for the new status/proposal smokes, PowerShell parse validation and server typecheck.
+- Super 181 cloud pilot blocker: the current cloud SkyBridge API is still on the old proposal enum and rejects `status=approved` with `invalid_proposal_status`. Because this goal explicitly forbids production deployment, no approval-gated real cloud proposal pilot was executed. Final cloud preconditions were otherwise safe: project control paused, `stop_requested=false`, no queued/claimed/running tasks, `laptop-zenbookduo` heartbeat online, Hermes direct HTTPS healthy and historical `task_proposal-59a0236fb69800cd` still blocked.

@@ -438,6 +438,12 @@ function Test-ProposalPolicy {
     if ($decision -eq "accepted_for_preview" -and $Mode -eq "execution") { $decision = "accepted_for_execution" }
     $proposal | Add-Member -NotePropertyName policy_decision -NotePropertyValue $decision -Force
     $proposal | Add-Member -NotePropertyName policy_reasons -NotePropertyValue @($reasons.ToArray()) -Force
+    if (-not $proposal.PSObject.Properties["review_status"]) {
+      $proposal | Add-Member -NotePropertyName review_status -NotePropertyValue "proposed" -Force
+    }
+    if (-not $proposal.PSObject.Properties["dependencies"]) {
+      $proposal | Add-Member -NotePropertyName dependencies -NotePropertyValue @($proposal.depends_on) -Force
+    }
   }
   return $Proposals
 }
