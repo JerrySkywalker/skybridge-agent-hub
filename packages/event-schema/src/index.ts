@@ -43,6 +43,22 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "task.updated",
   "task.requeued",
   "task.evidence_repaired",
+  "campaign.created",
+  "campaign.imported",
+  "campaign.started",
+  "campaign.paused",
+  "campaign.held",
+  "campaign.completed",
+  "campaign.failed",
+  "campaign.step.ready",
+  "campaign.step.started",
+  "campaign.step.completed",
+  "campaign.step.recovered",
+  "campaign.step.failed",
+  "campaign.step.held",
+  "campaign.step.skipped",
+  "campaign.step.advance_blocked",
+  "campaign.step.evidence_attached",
   "node.connected",
   "node.heartbeat",
   "node.disconnected",
@@ -538,6 +554,61 @@ export interface TaskEvent {
   time: string;
   message?: string;
   payload: Record<string, unknown>;
+}
+
+export type CampaignStatus = "draft" | "ready" | "running" | "paused" | "held" | "completed" | "failed" | "aborted";
+export type CampaignStepStatus = "pending" | "ready" | "running" | "completed" | "recovered" | "failed" | "skipped" | "held" | "needs_human" | "blocked_dependency";
+
+export interface CampaignAdvanceGate {
+  requires_clean_worktree?: boolean;
+  requires_no_active_tasks?: boolean;
+  requires_no_stale_leases?: boolean;
+  requires_parent_pr_merged?: boolean;
+  requires_human_approval?: boolean;
+  allow_project_control_running?: boolean;
+  human_approved?: boolean;
+}
+
+export interface Campaign {
+  campaign_id: string;
+  project_id: string;
+  title: string;
+  description?: string;
+  source?: string;
+  status: CampaignStatus;
+  current_step_id?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  imported_from?: string;
+  goal_pack_hash?: string;
+  safety_policy?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CampaignStep {
+  campaign_step_id: string;
+  campaign_id: string;
+  project_id: string;
+  goal_id: string;
+  title: string;
+  order: number;
+  status: CampaignStepStatus;
+  dependencies: string[];
+  markdown_path?: string;
+  markdown_hash?: string;
+  metadata?: Record<string, unknown>;
+  advance_gate?: CampaignAdvanceGate;
+  evidence_summary?: Record<string, unknown>;
+  linked_master_goal_id?: string;
+  linked_task_ids?: string[];
+  linked_pr_urls?: string[];
+  started_at?: string;
+  completed_at?: string;
+  decision_summary?: string;
+  last_gate_result?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PlannerDecision {
