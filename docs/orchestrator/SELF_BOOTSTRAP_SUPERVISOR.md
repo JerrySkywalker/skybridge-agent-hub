@@ -117,5 +117,6 @@ Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are p
 - Worker execution is lease-gated. A claimed task must include an active lease for the selected worker before Codex starts. This intentionally blocks execution against older cloud control planes that can claim tasks but do not yet emit lease metadata.
 - Local worker execution also requires a clean worktree, no duplicate active child PR for the task, no colliding task branch and a repo lock under `.agent/locks`.
 - Bounded worker loops require explicit `MaxTasks`, idle timeout and stop-on-failure settings. Query status with `-ActiveOnly`, `-RecentTasks`, `-TaskStatus`, `-WorkerId`, `-TaskId`, `-RecoveredOnly` or `-ExcludeRecovered` before starting a batch.
+- Super 183 proved a two-task approved proposal batch against the deployed cloud control plane. Both tasks received active leases, passed local workspace guards, created docs-only child PRs, merged after checks passed, released their leases and recorded recovered evidence after the initial draft/pending CI guardian stop.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.

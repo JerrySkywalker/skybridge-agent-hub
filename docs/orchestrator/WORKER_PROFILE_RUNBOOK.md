@@ -420,6 +420,68 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-rerun-ci.ps1 `
 
 The rerun helper is dry-run by default. Add `-Apply` only for one bounded rerun batch. If checks later pass and the child PR merges, append recovered evidence instead of erasing the original failed task event. Recovered task evidence is visible in `skybridge-status.ps1` as `display_status=recovered` and `evidence=recovered`; the original failed event and raw task status remain in task history.
 
+## Lease-backed Approved Batch Loop
+
+Super 183 proved the approved-proposal batch loop with `laptop-zenbookduo` and `MaxTasks <= 2`.
+
+Operator sequence:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ActiveOnly
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
+  approve `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -ProposalId proposal-id `
+  -Reason "approved low-risk docs scope" `
+  -Apply
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
+  convert `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -ProposalId proposal-id `
+  -Apply
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps1 `
+  -ConfigFile "$HOME\.skybridge\worker.laptop-zenbookduo.json" `
+  -Loop `
+  -MaxTasks 2 `
+  -IdleTimeoutSeconds 120 `
+  -PollIntervalSeconds 5 `
+  -StopOnFailure
+```
+
+Required preconditions:
+
+- project control is paused with `stop_requested=false`;
+- no unrelated queued, claimed or running tasks exist;
+- proposals are approved before conversion;
+- converted tasks carry approval metadata, normalized capabilities and explicit expected files;
+- worker heartbeat is online;
+- local worktree is clean.
+
+Execution guard expectations:
+
+- claiming a task creates an active lease;
+- the worker refuses Codex execution without an active lease for the current worker;
+- dirty tree, active PR, active branch and branch collision guards pass before Codex starts;
+- the repo lock is acquired before execution and released in `finally`;
+- per-task logs stay under `.agent/workers/<worker>/<task>/`;
+- evidence repair is allowed only after the child PR checks pass and the PR merges.
+
+Useful status checks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ActiveOnly
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowLeases
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowLocks
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ShowProposals -ApprovedOnly
+```
+
 Run a real remote smoke only when the explicit API base and token are present:
 
 ```powershell
