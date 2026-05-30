@@ -123,7 +123,7 @@ function Strip-AnsiForTest {
 
 function Get-StatusColorName {
   param([string]$Kind, [string]$Value)
-  $valueText = ([string]$Value).ToLowerInvariant()
+  $valueText = ([string]$Value).Trim().ToLowerInvariant()
   switch ($Kind) {
     "health" { if ($valueText -eq "ok") { return "green" } return "red" }
     "control" { if ($valueText -eq "paused") { return "cyan" } if ($valueText -eq "running") { return "green" } return "yellow" }
@@ -529,8 +529,8 @@ function Write-CompactStatus {
   if (@($Status.tasks).Count -eq 0) { "  none" } else {
     "  id                             status           worker             pr  evidence"
     foreach ($task in @($Status.tasks)) {
-      $displayStatus = Colorize-StatusValue -Kind task -Value $task.display_status
-      "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $displayStatus 25) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
+      $displayStatus = Colorize-StatusValue -Kind task -Value (Shorten-StatusText $task.display_status 16)
+      "  $(Shorten-StatusText $task.task_id 30) $displayStatus $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
     }
   }
   if ($Status.filters.show_leases) {
@@ -540,8 +540,8 @@ function Write-CompactStatus {
     if ($leaseRows.Count -eq 0) { "  none" } else {
       "  task                           status              worker             expires"
       foreach ($task in $leaseRows) {
-        $leaseText = Colorize-StatusValue -Kind lease -Value $task.lease_display_status
-        "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $leaseText 19) $(Shorten-StatusText $task.lease_worker_id 18) $(Shorten-StatusText $task.lease_expires_at 28)"
+        $leaseText = Colorize-StatusValue -Kind lease -Value (Shorten-StatusText $task.lease_display_status 18)
+        "  $(Shorten-StatusText $task.task_id 30) $leaseText $(Shorten-StatusText $task.lease_worker_id 18) $(Shorten-StatusText $task.lease_expires_at 28)"
       }
     }
   }
@@ -551,9 +551,9 @@ function Write-CompactStatus {
     if (@($Status.proposals).Count -eq 0) { "  none" } else {
       "  id                       review              derived              policy              risk  type         title"
       foreach ($proposal in @($Status.proposals)) {
-        $review = Colorize-StatusValue -Kind proposal -Value $proposal.review_status
-        $derived = Colorize-StatusValue -Kind proposal -Value $proposal.derived_execution_status
-        "  $(Shorten-StatusText $proposal.proposal_id 24) $(Shorten-StatusText $review 27) $(Shorten-StatusText $derived 27) $(Shorten-StatusText $proposal.policy_decision 19) $(Shorten-StatusText $proposal.risk 5) $(Shorten-StatusText $proposal.task_type 12) $(Shorten-StatusText $proposal.title 42)"
+        $review = Colorize-StatusValue -Kind proposal -Value (Shorten-StatusText $proposal.review_status 19)
+        $derived = Colorize-StatusValue -Kind proposal -Value (Shorten-StatusText $proposal.derived_execution_status 19)
+        "  $(Shorten-StatusText $proposal.proposal_id 24) $review $derived $(Shorten-StatusText $proposal.policy_decision 19) $(Shorten-StatusText $proposal.risk 5) $(Shorten-StatusText $proposal.task_type 12) $(Shorten-StatusText $proposal.title 42)"
       }
     }
   }
@@ -561,7 +561,8 @@ function Write-CompactStatus {
     ""
     "Hygiene Findings:"
     foreach ($finding in @($Status.hygiene_findings | Select-Object -First 20)) {
-      "  $(Shorten-StatusText $finding.kind 9) $(Shorten-StatusText $finding.id 32) $(Shorten-StatusText (Colorize-StatusValue -Kind task -Value $finding.status) 28) $($finding.recommended_action)"
+      $findingStatus = Colorize-StatusValue -Kind task -Value (Shorten-StatusText $finding.status 28)
+      "  $(Shorten-StatusText $finding.kind 9) $(Shorten-StatusText $finding.id 32) $findingStatus $($finding.recommended_action)"
     }
   }
   if (-not [string]::IsNullOrWhiteSpace($TaskId) -and @($Status.tasks).Count -gt 0) {
