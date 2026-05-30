@@ -8,6 +8,8 @@ param(
   [string]$GoalTitle,
   [string]$MasterGoalId,
   [string]$ProposalId,
+  [string]$Reason,
+  [string]$SupersededBy,
   [string]$Description,
   [string[]]$Constraints = @(),
   [string]$ConstraintsFile,
@@ -53,6 +55,8 @@ function Invoke-OperatorGuide {
   if ($GoalTitle) { $args += @("-GoalTitle", $GoalTitle) }
   if ($MasterGoalId) { $args += @("-MasterGoalId", $MasterGoalId) }
   if ($ProposalId) { $args += @("-ProposalId", $ProposalId) }
+  if ($Reason) { $args += @("-Reason", $Reason) }
+  if ($SupersededBy) { $args += @("-SupersededBy", $SupersededBy) }
   if ($Description) { $args += @("-Description", $Description) }
   foreach ($constraint in @($Constraints)) { $args += @("-Constraints", $constraint) }
   if ($ConstraintsFile) { $args += @("-ConstraintsFile", $ConstraintsFile) }
@@ -81,6 +85,7 @@ switch ("$Area $Command") {
   "operator status-task" { Invoke-OperatorGuide -Mode "status-task" }
   "operator status-failed" { Invoke-OperatorGuide -Mode "status-failed" }
   "operator status-recovered" { Invoke-OperatorGuide -Mode "status-recovered" }
+  "operator status-proposals" { Invoke-OperatorGuide -Mode "status-proposals" }
   "operator submit-preview" { Invoke-OperatorGuide -Mode "submit-preview" }
   "operator submit-apply" { Invoke-OperatorGuide -Mode "submit-apply" }
   "operator run-once-preview" { Invoke-OperatorGuide -Mode "run-once-preview" }
@@ -92,9 +97,16 @@ switch ("$Area $Command") {
   "operator plan-preview" { Invoke-OperatorGuide -Mode "plan-preview" }
   "operator plan-apply" { Invoke-OperatorGuide -Mode "plan-apply" }
   "operator proposals" { Invoke-OperatorGuide -Mode "proposals" }
+  "operator proposal-list" { Invoke-OperatorGuide -Mode "proposal-list" }
   "operator proposal-show" { Invoke-OperatorGuide -Mode "proposal-show" }
+  "operator proposal-approve" { Invoke-OperatorGuide -Mode "proposal-approve" }
   "operator proposal-accept" { Invoke-OperatorGuide -Mode "proposal-accept" }
+  "operator proposal-reject" { Invoke-OperatorGuide -Mode "proposal-reject" }
+  "operator proposal-defer" { Invoke-OperatorGuide -Mode "proposal-defer" }
+  "operator proposal-convert" { Invoke-OperatorGuide -Mode "proposal-convert" }
   "operator proposal-convert-preview" { Invoke-OperatorGuide -Mode "proposal-convert-preview" }
+  "operator proposal-approved" { Invoke-OperatorGuide -Mode "proposal-approved" }
+  "operator proposal-pending-review" { Invoke-OperatorGuide -Mode "proposal-pending-review" }
   "operator supervise-preview" { Invoke-OperatorGuide -Mode "supervise-preview" }
   "operator supervise-apply" { Invoke-OperatorGuide -Mode "supervise-apply" }
   "operator hermes-health" { Invoke-OperatorGuide -Mode "hermes-health" }
