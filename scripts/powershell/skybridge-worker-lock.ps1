@@ -120,6 +120,31 @@ function Test-SkyBridgeActivePrGuard {
   }
 }
 
+function Test-SkyBridgeTaskLeaseGuard {
+  param($Config, $Task)
+  $lease = if ($Task -and $Task.PSObject.Properties["lease"]) { $Task.lease } else { $null }
+  if (-not $lease) {
+    return [pscustomobject]@{
+      ok = $false
+      guard = "task_lease"
+      reason = "claimed_task_missing_active_lease"
+      lease_status = $null
+      lease_id = $null
+    }
+  }
+  $workerId = if ($lease.worker_id) { [string]$lease.worker_id } else { $null }
+  $leaseStatus = if ($lease.lease_status) { [string]$lease.lease_status } else { $null }
+  $ok = ($leaseStatus -eq "active" -and $workerId -eq [string]$Config.worker_id)
+  return [pscustomobject]@{
+    ok = $ok
+    guard = "task_lease"
+    reason = $(if ($ok) { $null } else { "claimed_task_lease_not_active_for_worker" })
+    lease_status = $leaseStatus
+    lease_id = if ($lease.lease_id) { [string]$lease.lease_id } else { $null }
+    lease_worker_id = $workerId
+  }
+}
+
 function Test-SkyBridgeBranchGuard {
   param($Config, $Task)
   $repoPath = Get-SkyBridgeRepoPath -Config $Config
@@ -164,6 +189,7 @@ function Test-SkyBridgeBranchGuard {
 function Test-SkyBridgeWorkerTaskSafety {
   param($Config, $Task)
   $guards = @(
+    (Test-SkyBridgeTaskLeaseGuard -Config $Config -Task $Task),
     (Test-SkyBridgeDirtyTreeGuard -Config $Config -Task $Task),
     (Test-SkyBridgeActivePrGuard -Config $Config -Task $Task),
     (Test-SkyBridgeBranchGuard -Config $Config -Task $Task)
