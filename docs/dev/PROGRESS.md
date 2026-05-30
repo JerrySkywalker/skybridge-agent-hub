@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-05-30 Super Goal 182 Cloud Proposal Review Pilot and Task Lease Safety
+
+- Started from latest `main` at Super 181 merge commit `5ff8838` and created branch `ai/super-182-cloud-proposal-review-task-lease-safety`.
+- Preflight confirmed cloud project control `paused`, `stop_requested=false`, active queued/claimed/running tasks `0`, `laptop-zenbookduo` heartbeat online, Hermes `direct_https=true`, and cloud API accepted `status=approved` proposal filtering.
+- Added task lease metadata to tasks. Claim creates an active lease while preserving legacy `claim`; start refreshes the lease; complete/fail/block releases it; worker heartbeat can refresh the active lease; stale leases block silent duplicate execution.
+- Added local worker guards: active lease required before Codex, dirty worktree guard, active PR guard, branch collision guard, repo lock under `.agent/locks`, stale lock recovery and finally cleanup.
+- Added status lease visibility with `-ShowLeases` and `-ShowLocks` filter metadata.
+- Real Hermes preview/apply persisted two low-risk docs proposals for Super 182: `proposal-0da654fd64115472` and `proposal-76496878cf3a15a2`.
+- Approved exactly those two Super 182 docs proposals. Deferred older local-smoke `proposal-7a0c9c5d4ce0612c` because it was outside the docs-only pilot and needs separate safe-local-smoke approval.
+- Verified unapproved `proposal-82cd1023bd7ae368` and deferred `proposal-7a0c9c5d4ce0612c` cannot be converted.
+- Attempted approved conversion for `proposal-0da654fd64115472`; deployed cloud server rejected it with `proposal_not_convertible` because the live server still matches the safety phrase `No production configuration` as a high-risk surface. The local CLI policy was fixed to ignore negated high-risk phrases.
+- No worker task was executed because server-side lease support is not deployed to cloud yet and the worker now requires an active lease before starting Codex. Final cloud active task count stayed `0`; historical `task_proposal-59a0236fb69800cd` remained blocked.
+- Result: cloud proposal review queue is proven through persistence, approval, defer and non-approved conversion refusal. Cloud task execution with lease safety is intentionally not proven until the server lease changes are merged and deployed.
+
 ## 2026-05-29 Super Goal 180 Capability Alignment and Status Query Hardening
 
 - Started from latest `main` after v0.49.0 and created branch `ai/super-180-capability-alignment-status-query-hardening`.
