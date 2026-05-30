@@ -1,5 +1,18 @@
 # Progress Log
 
+## 2026-05-31 Super Goal 185 Goal Pack and Campaign Sequencer
+
+- Started from latest `main` after Super 184 and created branch `ai/super-185-goal-pack-campaign-sequencer`.
+- Preflight confirmed cloud project control `paused`, `stop_requested=false`, no active queued/claimed/running tasks, stale leases `0`, `laptop-zenbookduo` heartbeat online, Hermes `direct_https=true`, and historical `task_proposal-59a0236fb69800cd` still blocked.
+- Added campaign and campaign step domain types, SQLite/memory persistence, and campaign event types for import, start, pause, hold, complete/fail, advance blocked, and evidence attachment.
+- Added campaign API endpoints for listing, importing goal packs, inspecting steps, state transitions, advance preview, explicit advance, step completion/failure, and evidence attachment.
+- Added `skybridge-campaign.ps1` with offline `validate-pack`, dry-run-first `import`, list/show/steps/status, advance-preview, advance, complete/fail, attach-evidence, and export-report commands. Mutating commands require `-Apply`.
+- Added campaign visibility to `skybridge-status.ps1` through `-ShowCampaigns`, `-CampaignId`, `-ShowCampaignSteps`, and `-CampaignLimit`, with JSON fields `campaign_summary`, `campaigns`, `campaign_steps`, and `campaign_gate_summary`.
+- Implemented deterministic advance gates with hard holds for active tasks, stale leases, running project control, missing dependencies, missing human approval, dirty worktree markers, missing required parent PR merge, and failed/aborted campaigns. Hermes advisory gate remains disabled for Super 185.
+- Created the seed goal pack under `goals/bootstrap-mvp/` for Super 186 Hermes Gate Evaluator, Super 187 Campaign MVP Hardening, and Super 184B Operator Console Dashboard.
+- Added local fixture smokes for pack validation, import dry-run, step order, dependency validation, status output, JSON cleanliness, apply requirement, and advance gate blockers.
+- Real cloud import was not applied because this branch contains unmerged campaign API code; no deployment or worker execution occurred in Super 185.
+
 ## 2026-05-30 Super Goal 182 Cloud Proposal Review Pilot and Task Lease Safety
 
 - Started from latest `main` at Super 181 merge commit `5ff8838` and created branch `ai/super-182-cloud-proposal-review-task-lease-safety`.

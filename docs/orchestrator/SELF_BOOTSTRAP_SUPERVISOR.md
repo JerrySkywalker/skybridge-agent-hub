@@ -2,6 +2,8 @@
 
 The self-bootstrap supervisor is a bounded plan-run-observe-decide loop. It is not an always-on worker daemon and it does not replace operator review.
 
+Campaign sequencing now sits above the supervisor. A campaign step may later invoke a supervisor run, but Super 185 campaign advance only marks ordered Super Goal steps ready; it does not run workers or auto-advance with Hermes.
+
 ## Model
 
 A supervisor run records:
@@ -67,6 +69,18 @@ The deterministic policy can output:
 The first selector prefers low-risk proposals whose normalized execution capabilities include `codex`, docs task type, approved review status, not converted/rejected/deferred/superseded, and non-duplicate dedupe keys. `task_type` names the work class; `required_capabilities` names executable tools. Legacy docs proposals that include `required_capabilities=["docs"]` are normalized to `codex`, `git` and `gh` when expected files are under `docs/`. Safe local-smoke proposals under `scripts/powershell/smoke-*.ps1` are normalized to `codex`, `powershell` and `windows` only after the safe-local-smoke gate passes. When several low-risk docs proposals are available, docs/dev record proposals are preferred before runbook follow-ups so the first sprint records the reviewed plan before expanding operator guidance. High-risk proposals, production/deploy/secret/GitHub settings/branch protection/server config proposals and dependency-blocked proposals stay out of real cloud execution.
 
 Recovered task evidence is not blocking: raw `failed` plus `evidence_summary.recovered=true` and `ci_status=passed_after_rerun` is treated as recovered for supervisor decisions.
+
+Campaign advance uses a narrower deterministic gate:
+
+- active tasks hold the campaign;
+- stale leases hold the campaign;
+- running project control holds the campaign unless explicitly allowed;
+- incomplete dependencies hold the campaign;
+- required human approval returns `ask_human`;
+- dirty worktree markers hold the campaign;
+- missing required parent PR merge holds the campaign when requested.
+
+The campaign gate returns `hermes_gate_enabled=false` until Super 186 adds Hermes advisory evaluation.
 
 ## Guide Facade
 

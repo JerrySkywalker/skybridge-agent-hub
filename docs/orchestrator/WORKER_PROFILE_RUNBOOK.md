@@ -114,6 +114,23 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
   -ShowLeases
 ```
 
+Campaign status is metadata-only and does not start workers. Operators can inspect imported Goal Packs and deterministic advance gates with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -ShowCampaigns `
+  -CampaignLimit 10
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 advance-preview `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -CampaignId bootstrap-mvp
+```
+
+Do not run a worker loop merely because a campaign step is ready. Campaign advance and worker execution stay separate operator actions.
+
 ## API Base And Worker Token
 
 Local development uses:
