@@ -849,7 +849,7 @@ if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) {
         }
       }
     }
-    $shownCampaigns = if ($ShowAll -or $CampaignId) { @($allCampaignSummaries) } else { @($allCampaignSummaries | Select-Object -First $CampaignLimit) }
+    $shownCampaigns = @(if ($ShowAll -or $CampaignId) { @($allCampaignSummaries) } else { @($allCampaignSummaries | Select-Object -First $CampaignLimit) })
   } catch {
     $warnings += "Campaign endpoints unavailable or failed: $($_.Exception.Message)"
   }
