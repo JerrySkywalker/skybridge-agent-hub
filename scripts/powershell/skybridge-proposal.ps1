@@ -114,7 +114,8 @@ function Test-ProposalApprovalPolicy {
     }
   }
   $blockedText = (@($Proposal.title, $Proposal.body, $Proposal.prompt_summary, $Proposal.rationale, @($Proposal.expected_files)) -join " ")
-  if ($blockedText -match "(?i)(production deploy|production|deploy|docker daemon|branch protection|github settings|server config|server-root-config|/opt/skybridge-agent-hub|commit \.env|token file|private key|secret)") {
+  $positiveBlockedText = ($blockedText -replace "(?i)\b(no|not|without)\s+(production|deploy(?:ment)?|secrets?|github settings|branch protection|server config|server-root-config|tokens?|private keys?)\b", "")
+  if ($positiveBlockedText -match "(?i)(production deploy|production|deploy|docker daemon|branch protection|github settings|server config|server-root-config|/opt/skybridge-agent-hub|commit \.env|token file|private key|secret)") {
     $decision = "rejected_high_risk"; $reasons.Add("proposal mentions a blocked high-risk surface") | Out-Null
   }
   $dependencies = @(Get-ProposalDependencies -Proposal $Proposal)
