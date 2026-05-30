@@ -42,6 +42,7 @@ logs/
 .agent/runs/
 .agent/iterations/
 .agent/edge-worker-loop/
+.agent/locks/
 .agent/spool/
 .agent/tmp/
 .agent/workers/

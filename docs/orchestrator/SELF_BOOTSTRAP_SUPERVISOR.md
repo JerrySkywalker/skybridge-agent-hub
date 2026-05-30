@@ -114,6 +114,8 @@ Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are p
 - Worker Codex execution classifies websocket, TLS handshake, EOF, connection reset and transport-error messages as Codex transport failures. These failures are retried at most once by default, and persistent failures record `execution_error_class`, `retry_count` and unrecovered evidence instead of retrying indefinitely.
 - Hermes planner calls are allowed only in explicit Hermes preview/apply planner modes. The hardened preview wrapper remains dry-run and uses policy-normalized `docs`/`local-smoke` proposals.
 - Proposal conversion is approval-gated. `skybridge-proposal.ps1 convert -Apply` refuses non-approved, rejected, deferred, superseded, high-risk and dependency-blocked proposals.
+- Worker execution is lease-gated. A claimed task must include an active lease for the selected worker before Codex starts. This intentionally blocks execution against older cloud control planes that can claim tasks but do not yet emit lease metadata.
+- Local worker execution also requires a clean worktree, no duplicate active child PR for the task, no colliding task branch and a repo lock under `.agent/locks`.
 - Bounded worker loops require explicit `MaxTasks`, idle timeout and stop-on-failure settings. Query status with `-ActiveOnly`, `-RecentTasks`, `-TaskStatus`, `-WorkerId`, `-TaskId`, `-RecoveredOnly` or `-ExcludeRecovered` before starting a batch.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.

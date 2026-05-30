@@ -28,6 +28,8 @@ param(
   [string[]]$ReviewStatus = @(),
   [switch]$ApprovedOnly,
   [switch]$PendingReviewOnly,
+  [switch]$ShowLeases,
+  [switch]$ShowLocks,
   [int]$WorkersLimit = 12,
   [switch]$ShowCompleted,
   [switch]$ShowAll,
@@ -93,6 +95,7 @@ function Select-TaskSummary {
   $displayStatus = $rawStatus
   if ($rawStatus -eq "failed" -and $recovered) { $displayStatus = if ($ciStatus -eq "passed_after_rerun") { "recovered" } else { "failed/recovered" } }
   $eventRows = if ($IncludeEvents -or $TaskId) { @($events | Select-Object -Last $EventLimit) } else { @() }
+  $lease = if ($Task.lease) { $Task.lease } else { $null }
   [pscustomobject]@{
     task_id = if ($Task.task_id) { [string]$Task.task_id } else { "-" }
     status = $rawStatus
@@ -111,6 +114,12 @@ function Select-TaskSummary {
     error_summary = if ($Task.error_summary) { [string]$Task.error_summary } else { $null }
     pr = if ($prUrl) { "pr" } else { "-" }
     evidence_summary = $evidenceSummary
+    lease = $lease
+    lease_id = if ($lease -and $lease.lease_id) { [string]$lease.lease_id } else { $null }
+    lease_status = if ($lease -and $lease.lease_status) { [string]$lease.lease_status } else { $null }
+    lease_expires_at = if ($lease -and $lease.lease_expires_at) { [string]$lease.lease_expires_at } else { $null }
+    lease_worker_id = if ($lease -and $lease.worker_id) { [string]$lease.worker_id } else { $null }
+    lease_stale_reason = if ($lease -and $lease.stale_reason) { [string]$lease.stale_reason } else { $null }
     recovered = $recovered
     ci_status = $ciStatus
     summary = if ($result -and $result.summary) { [string]$result.summary } elseif ($Task.error_summary) { [string]$Task.error_summary } else { $null }
@@ -172,6 +181,8 @@ function Get-TaskSummaryCounts {
     failed_unrecovered = @($taskRows | Where-Object { $_.raw_status -eq "failed" -and -not $_.recovered }).Count
     recovered = @($taskRows | Where-Object { $_.recovered }).Count
     completed = @($taskRows | Where-Object { $_.raw_status -eq "completed" }).Count
+    active_leases = @($taskRows | Where-Object { $_.lease_status -eq "active" }).Count
+    stale_leases = @($taskRows | Where-Object { $_.lease_status -in @("expired", "abandoned") }).Count
     total = @($taskRows).Count
     matching = @($matchingRows).Count
     shown = @($shownRows).Count
@@ -253,6 +264,12 @@ function Write-CompactStatus {
   "    matching:   $($Status.task_summary.matching)"
   "    shown:      $($Status.task_summary.shown)"
   "    truncated:  $($Status.task_summary.truncated)"
+  if ($Status.filters.show_leases) {
+    ""
+    "  Leases:"
+    "    active: $($Status.task_summary.active_leases)"
+    "    stale:  $($Status.task_summary.stale_leases)"
+  }
   "Filters:   $($Status.filters.description)"
   if ($Status.task_summary.truncated) { "Hint:      use -ShowAll or raise -TaskLimit to show more tasks." }
   if ($Status.proposal_summary) {
@@ -285,6 +302,17 @@ function Write-CompactStatus {
       "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.display_status 16) $(Shorten-StatusText $task.worker_id 18) $(Shorten-StatusText $task.pr 3) $(Shorten-StatusText $task.evidence 18)"
     }
   }
+  if ($Status.filters.show_leases) {
+    ""
+    "Leases:"
+    $leaseRows = @($Status.tasks | Where-Object { $_.lease_id })
+    if ($leaseRows.Count -eq 0) { "  none" } else {
+      "  task                           status    worker             expires"
+      foreach ($task in $leaseRows) {
+        "  $(Shorten-StatusText $task.task_id 30) $(Shorten-StatusText $task.lease_status 9) $(Shorten-StatusText $task.lease_worker_id 18) $(Shorten-StatusText $task.lease_expires_at 28)"
+      }
+    }
+  }
   if ($Status.filters.show_proposals) {
     ""
     "Proposals:"
@@ -305,6 +333,8 @@ function Write-CompactStatus {
     "  recovered:      $($task.recovered)"
     "  ci_status:      $(if ($task.ci_status) { $task.ci_status } else { '-' })"
     "  pr_url:         $(if ($task.pr_url) { $task.pr_url } else { '-' })"
+    "  lease_id:       $(if ($task.lease_id) { $task.lease_id } else { '-' })"
+    "  lease_status:   $(if ($task.lease_status) { $task.lease_status } else { '-' })"
     "  events_shown:   $(@($task.events).Count) of $($task.event_count)"
     "  summary:        $(if ($task.summary) { $task.summary } else { '-' })"
   }
@@ -323,6 +353,8 @@ function Join-FilterDescription {
   if ($Until) { $parts += "until=$Until" }
   if ($ShowAll) { $parts += "show-all" }
   if ($ShowProposals) { $parts += "show-proposals" }
+  if ($ShowLeases) { $parts += "show-leases" }
+  if ($ShowLocks) { $parts += "show-locks" }
   if ($ProposalStatus.Count -gt 0) { $parts += "proposal-status=$($ProposalStatus -join ',')" }
   if ($ReviewStatus.Count -gt 0) { $parts += "review-status=$($ReviewStatus -join ',')" }
   if ($ApprovedOnly) { $parts += "approved-only" }
@@ -468,6 +500,8 @@ $status = [pscustomobject]@{
     show_all = [bool]$ShowAll
     summary_only = [bool]$SummaryOnly
     show_proposals = [bool]$ShowProposals
+    show_leases = [bool]$ShowLeases
+    show_locks = [bool]$ShowLocks
     proposal_limit = $ProposalLimit
     proposal_status = @($ProposalStatus)
     review_status = @($ReviewStatus)

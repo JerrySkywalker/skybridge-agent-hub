@@ -29,6 +29,7 @@ $edgeJson = $Json
 . (Join-Path $PSScriptRoot "skybridge-worker-api.ps1")
 . (Join-Path $PSScriptRoot "load-worker-profile.ps1")
 . (Join-Path $PSScriptRoot "invoke-codex-task.ps1")
+. (Join-Path $PSScriptRoot "skybridge-worker-lock.ps1")
 
 $ConfigFile = $edgeConfigFile
 $WorkerProfileFile = $edgeWorkerProfileFile
@@ -179,7 +180,31 @@ function Invoke-EdgeWorkerOnce {
       return @{ ok = $true; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
     }
 
+    $repoLock = $null
     try {
+      $safety = Test-SkyBridgeWorkerTaskSafety -Config $Config -Task $claimed.task
+      $steps += @{ step = "workspace_safety"; status = $(if ($safety.ok) { "passed" } else { "blocked" }); result = $safety }
+      if (-not $safety.ok) {
+        $blocked = Block-Task -Config $Config -TaskId $next.task.task_id -Result @{
+          error_summary = "Worker workspace safety guard blocked execution: $($safety.reason)"
+          guard_reason = $safety.reason
+          failed_guards = @($safety.failed_guards)
+        }
+        $steps += @{ step = "block"; task = $blocked.task; reason = $safety.reason }
+        return @{ ok = $false; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
+      }
+
+      $repoLock = New-SkyBridgeRepoLock -Config $Config -Task $claimed.task
+      $steps += @{ step = "repo_lock"; status = $(if ($repoLock.ok) { "acquired" } else { "blocked" }); lock = $repoLock }
+      if (-not $repoLock.ok) {
+        $blocked = Block-Task -Config $Config -TaskId $next.task.task_id -Result @{
+          error_summary = "Worker repo lock blocked execution: $($repoLock.error)"
+          guard_reason = $repoLock.error
+        }
+        $steps += @{ step = "block"; task = $blocked.task; reason = $repoLock.error }
+        return @{ ok = $false; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
+      }
+
       $started = Start-Task -Config $Config -TaskId $next.task.task_id
       $steps += @{ step = "start"; status = "running"; task = $started.task }
 
@@ -283,6 +308,10 @@ function Invoke-EdgeWorkerOnce {
       $steps += @{ step = "fail"; task = $failed.task; error = $_.Exception.Message }
       Invoke-EdgeWorkerNotification -Config $Config -Severity "urgent" -Title "SkyBridge task failed" -Message "Task $($next.task.task_id) failed with an edge worker error." | Out-Null
       return @{ ok = $false; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
+    } finally {
+      if ($repoLock -and $repoLock.ok) {
+        Remove-SkyBridgeRepoLock -Lock $repoLock | Out-Null
+      }
     }
   }
 

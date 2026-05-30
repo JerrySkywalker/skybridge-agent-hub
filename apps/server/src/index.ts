@@ -32,6 +32,7 @@ import {
   type ProjectControlState,
   type Task,
   type TaskEvent,
+  type TaskLease,
   type TaskRisk,
   type TaskSource,
   type TaskStatus,
@@ -143,6 +144,8 @@ const TASK_SOURCES: TaskSource[] = [
   "opencode",
   "custom",
 ];
+const DEFAULT_TASK_LEASE_SECONDS = 30 * 60;
+const DEFAULT_TASK_MAX_ATTEMPTS = 1;
 
 function getConfiguredWorkerTokens(): string[] {
   const tokens: string[] = [];
@@ -203,6 +206,93 @@ function validateProposalConversion(proposal: StoredTaskProposal, allProposals: 
 
   if (reasons.length > 0) return { ok: false, error: "proposal_not_convertible", reasons };
   return { ok: true };
+}
+
+function addSeconds(value: Date, seconds: number): string {
+  return new Date(value.getTime() + seconds * 1000).toISOString();
+}
+
+function isActiveLease(lease: TaskLease | undefined): lease is TaskLease {
+  return lease?.lease_status === "active";
+}
+
+function isExpiredLease(lease: TaskLease | undefined, now: Date): boolean {
+  if (!isActiveLease(lease)) return false;
+  const expiresAt = Date.parse(lease.lease_expires_at);
+  return Number.isFinite(expiresAt) && expiresAt <= now.getTime();
+}
+
+function buildTaskLease(task: StoredTask, workerId: string, now: Date): TaskLease {
+  const previousAttempt = task.lease?.current_attempt ?? 0;
+  return {
+    lease_id: `lease_${nanoid()}`,
+    task_id: task.task_id,
+    worker_id: workerId,
+    project_id: task.project_id,
+    claimed_at: now.toISOString(),
+    lease_expires_at: addSeconds(now, DEFAULT_TASK_LEASE_SECONDS),
+    heartbeat_at: now.toISOString(),
+    lease_status: "active",
+    current_attempt: previousAttempt + 1,
+    max_attempts: task.lease?.max_attempts ?? DEFAULT_TASK_MAX_ATTEMPTS,
+  };
+}
+
+function refreshTaskLease(task: StoredTask, workerId: string | undefined, now: Date): TaskLease | undefined {
+  if (!isActiveLease(task.lease)) return task.lease;
+  if (workerId && task.lease.worker_id !== workerId) return task.lease;
+  return {
+    ...task.lease,
+    heartbeat_at: now.toISOString(),
+    lease_expires_at: addSeconds(now, DEFAULT_TASK_LEASE_SECONDS),
+    stale_reason: undefined,
+  };
+}
+
+function releaseTaskLease(task: StoredTask, workerId: string | undefined, now: Date): TaskLease | undefined {
+  if (!task.lease) return undefined;
+  if (workerId && task.lease.worker_id !== workerId) return task.lease;
+  return {
+    ...task.lease,
+    heartbeat_at: now.toISOString(),
+    released_at: now.toISOString(),
+    lease_status: "released",
+    stale_reason: undefined,
+  };
+}
+
+function markExpiredLease(task: StoredTask, now: Date): TaskLease | undefined {
+  const lease = task.lease;
+  if (!isActiveLease(lease) || !isExpiredLease(lease, now)) return lease;
+  return {
+    ...lease,
+    lease_status: "expired",
+    stale_reason: "lease_expires_at_elapsed",
+    heartbeat_at: now.toISOString(),
+  };
+}
+
+async function refreshWorkerActiveLease(
+  store: EventStore,
+  workerId: string,
+  now: Date,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+): Promise<TaskLease | undefined> {
+  const task = store.listTasks().find((candidate) =>
+    candidate.assigned_worker_id === workerId &&
+    ["claimed", "running"].includes(candidate.status) &&
+    isActiveLease(candidate.lease)
+  );
+  if (!task) return undefined;
+  const lease = refreshTaskLease(task, workerId, now);
+  if (!lease || lease === task.lease) return task.lease;
+  const updated: StoredTask = { ...task, lease, updated_at: now.toISOString() };
+  await store.upsertTask(updated);
+  await recordTaskEvent(updated, "task.updated", workerId, "Task lease refreshed by worker heartbeat.", addStoredEvent, store, {
+    lease_id: lease.lease_id,
+    lease_expires_at: lease.lease_expires_at,
+  });
+  return lease;
 }
 
 function validateWorkerAuth(authorization: string | string[] | undefined):
@@ -491,8 +581,9 @@ export async function createServer(
     };
     await store.addWorkerHeartbeat(heartbeat);
     await store.upsertWorker({ ...worker, updated_at: now });
+    const lease = await refreshWorkerActiveLease(store, workerId, new Date(now), addStoredEvent);
     await addStoredEvent(coreEvent("worker.heartbeat", { worker_id: workerId }));
-    return { ok: true, worker: presentWorker(store.getWorker(workerId)!, store), heartbeat };
+    return { ok: true, worker: presentWorker(store.getWorker(workerId)!, store), heartbeat, lease };
   });
 
   app.get("/v1/workers", async () => ({
@@ -736,6 +827,11 @@ export async function createServer(
       risk: proposal.risk,
       source: "planner",
       task_type: proposal.task_type,
+      source_proposal_id: proposal.proposal_id,
+      proposal_review_status: proposal.review_status ?? proposal.status,
+      proposal_approved_by: proposal.approved_by,
+      proposal_approved_at: proposal.approved_at,
+      proposal_policy_decision: proposal.policy_decision,
       allowed_paths: proposal.expected_files,
       validation: proposal.evidence_requirements,
       required_capabilities: requiredCapabilities,
@@ -744,6 +840,11 @@ export async function createServer(
         decision: "continue",
         reason: proposal.rationale,
         task_type: proposal.task_type,
+        source_proposal_id: proposal.proposal_id,
+        proposal_review_status: proposal.review_status ?? proposal.status,
+        proposal_policy_decision: proposal.policy_decision,
+        proposal_approved_by: proposal.approved_by,
+        proposal_approved_at: proposal.approved_at,
         allowed_paths: proposal.expected_files,
         blocked_paths: [],
         validation: proposal.evidence_requirements,
@@ -817,16 +918,44 @@ export async function createServer(
     }
     if (!["queued", "failed", "stale"].includes(task.status))
       return reply.code(409).send({ ok: false, error: "task_not_claimable" });
-    const now = new Date().toISOString();
+    const nowDate = new Date();
+    if (isActiveLease(task.lease)) {
+      if (isExpiredLease(task.lease, nowDate)) {
+        const expiredLease = markExpiredLease(task, nowDate);
+        const updatedTask: StoredTask = { ...task, lease: expiredLease, updated_at: nowDate.toISOString() };
+        await store.upsertTask(updatedTask);
+        await recordTaskEvent(updatedTask, "task.updated", workerId, "Task claim blocked by expired lease.", addStoredEvent, store, {
+          lease_id: expiredLease?.lease_id,
+          lease_status: expiredLease?.lease_status,
+          stale_reason: expiredLease?.stale_reason,
+        });
+        return reply.code(409).send({ ok: false, error: "task_stale_lease", lease: expiredLease });
+      }
+      return reply.code(409).send({ ok: false, error: "task_active_lease_exists", lease: task.lease });
+    }
+    const previousLease = task.lease as TaskLease | undefined;
+    const currentAttempt = previousLease ? previousLease.current_attempt : 0;
+    const maxAttempts = previousLease ? previousLease.max_attempts : DEFAULT_TASK_MAX_ATTEMPTS;
+    if (currentAttempt >= maxAttempts && task.status !== "queued") {
+      return reply.code(409).send({ ok: false, error: "task_max_attempts_exceeded", lease: task.lease });
+    }
+    const now = nowDate.toISOString();
+    const lease = buildTaskLease(task, workerId, nowDate);
     const updated: StoredTask = {
       ...task,
       status: "claimed",
       assigned_worker_id: workerId,
       claim: { claim_id: `claim_${nanoid()}`, task_id: task.task_id, worker_id: workerId, claimed_at: now },
+      lease,
       updated_at: now,
     };
     await store.upsertTask(updated);
-    await recordTaskEvent(updated, "task.claimed", workerId, "Task claimed.", addStoredEvent, store);
+    await recordTaskEvent(updated, "task.claimed", workerId, "Task claimed.", addStoredEvent, store, {
+      lease_id: lease.lease_id,
+      lease_expires_at: lease.lease_expires_at,
+      current_attempt: lease.current_attempt,
+      max_attempts: lease.max_attempts,
+    });
     return { ok: true, task: withTaskEvents(updated, store) };
   });
 
@@ -3200,9 +3329,35 @@ async function updateTaskTerminal(
   if (!task) return reply.code(404).send({ ok: false, error: "task_not_found" });
   if (["completed", "cancelled"].includes(task.status)) return reply.code(409).send({ ok: false, error: "invalid_task_transition" });
   const workerId = safeString(workerIdInput) ?? task.assigned_worker_id;
-  const updated: StoredTask = { ...task, status, assigned_worker_id: workerId, updated_at: new Date().toISOString() };
+  const now = new Date();
+  if (status === "running" && isActiveLease(task.lease)) {
+    if (isExpiredLease(task.lease, now)) {
+      const expiredLease = markExpiredLease(task, now);
+      const updatedTask: StoredTask = { ...task, lease: expiredLease, updated_at: now.toISOString() };
+      await store.upsertTask(updatedTask);
+      await recordTaskEvent(updatedTask, "task.updated", workerId, "Task start blocked by expired lease.", addStoredEvent, store, {
+        lease_id: expiredLease?.lease_id,
+        stale_reason: expiredLease?.stale_reason,
+      });
+      return reply.code(409).send({ ok: false, error: "task_stale_lease", lease: expiredLease });
+    }
+    if (workerId && task.lease.worker_id !== workerId) {
+      return reply.code(409).send({ ok: false, error: "task_lease_worker_mismatch", lease: task.lease });
+    }
+  }
+  const updated: StoredTask = {
+    ...task,
+    status,
+    assigned_worker_id: workerId,
+    lease: status === "running" ? refreshTaskLease(task, workerId, now) : task.lease,
+    updated_at: now.toISOString(),
+  };
   await store.upsertTask(updated);
-  await recordTaskEvent(updated, eventType, workerId, `Task ${status}.`, addStoredEvent, store);
+  await recordTaskEvent(updated, eventType, workerId, `Task ${status}.`, addStoredEvent, store, updated.lease ? {
+    lease_id: updated.lease.lease_id,
+    lease_status: updated.lease.lease_status,
+    lease_expires_at: updated.lease.lease_expires_at,
+  } : {});
   return { ok: true, task: withTaskEvents(updated, store) };
 }
 
@@ -3220,10 +3375,12 @@ async function finishTask(
   if (task.status === "completed" || task.status === "cancelled")
     return reply.code(409).send({ ok: false, error: "invalid_task_transition" });
   const workerId = safeString(body.worker_id) ?? task.assigned_worker_id;
+  const now = new Date();
   const updated: StoredTask = {
     ...task,
     status,
     assigned_worker_id: workerId,
+    lease: releaseTaskLease(task, workerId, now),
     result: {
       summary: safeString(body.summary),
       result_url: safeString(body.result_url),
@@ -3231,7 +3388,7 @@ async function finishTask(
       error_summary: safeString(body.error_summary),
       evidence_summary: safeEvidenceSummary(body.evidence_summary),
     },
-    updated_at: new Date().toISOString(),
+    updated_at: now.toISOString(),
   };
   await store.upsertTask(updated);
   if (updated.goal_id) await updateGoalProgress(updated.goal_id, store);
@@ -3242,7 +3399,14 @@ async function finishTask(
     `Task ${status}.`,
     addStoredEvent,
     store,
-    updated.result ? { ...updated.result } : {},
+    {
+      ...(updated.result ? { ...updated.result } : {}),
+      ...(updated.lease ? {
+        lease_id: updated.lease.lease_id,
+        lease_status: updated.lease.lease_status,
+        released_at: updated.lease.released_at,
+      } : {}),
+    },
   );
   return { ok: true, task: withTaskEvents(updated, store) };
 }

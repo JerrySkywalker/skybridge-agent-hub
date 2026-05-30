@@ -40,6 +40,7 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "task.completed",
   "task.failed",
   "task.blocked",
+  "task.updated",
   "task.requeued",
   "task.evidence_repaired",
   "node.connected",
@@ -271,6 +272,11 @@ export interface PlannerAdapterMetadata {
   validation: string[];
   stop_criteria_status: string[];
   source_run_id?: string;
+  source_proposal_id?: string;
+  proposal_review_status?: string;
+  proposal_policy_decision?: string;
+  proposal_approved_by?: string;
+  proposal_approved_at?: string;
   created_at: string;
   raw_response_included: false;
   secrets_included: false;
@@ -444,6 +450,23 @@ export interface TaskClaim {
   claimed_at: string;
 }
 
+export type TaskLeaseStatus = "active" | "released" | "expired" | "abandoned";
+
+export interface TaskLease {
+  lease_id: string;
+  task_id: string;
+  worker_id: string;
+  project_id: string;
+  claimed_at: string;
+  lease_expires_at: string;
+  heartbeat_at: string;
+  lease_status: TaskLeaseStatus;
+  current_attempt: number;
+  max_attempts: number;
+  stale_reason?: string;
+  released_at?: string;
+}
+
 export interface TaskResult {
   summary?: string;
   result_url?: string;
@@ -489,6 +512,11 @@ export interface Task {
   risk: TaskRisk;
   source: TaskSource;
   task_type?: string;
+  source_proposal_id?: string;
+  proposal_review_status?: string;
+  proposal_approved_by?: string;
+  proposal_approved_at?: string;
+  proposal_policy_decision?: string;
   planner_metadata?: PlannerAdapterMetadata;
   allowed_paths?: string[];
   blocked_paths?: string[];
@@ -496,6 +524,7 @@ export interface Task {
   required_capabilities: WorkerCapability[];
   assigned_worker_id?: string;
   claim?: TaskClaim;
+  lease?: TaskLease;
   result?: TaskResult;
   created_at: string;
   updated_at: string;

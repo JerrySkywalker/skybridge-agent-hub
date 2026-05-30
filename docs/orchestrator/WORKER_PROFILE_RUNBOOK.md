@@ -94,6 +94,26 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-edge-worker.ps
 
 Bounded loop exits now restore project control to `paused`, clear `stop_requested`, and record `stop_reason`. This applies to normal caps, idle timeout and failure-stop exits, so operators can inspect the final state without leaving the cloud project in a stopped state.
 
+## Lease And Workspace Guards
+
+Task execution is guarded in two layers:
+
+- Server task leases: claim creates an active lease, start refreshes it, complete/fail/block releases it, and heartbeat can refresh the current active lease.
+- Local workspace guards: the worker requires an active lease on the claimed task, refuses dirty worktrees, refuses duplicate child PR execution, checks branch collisions and acquires a repo lock before Codex starts.
+
+The local repo lock is written under `.agent/locks/skybridge-edge-worker.lock.json` and includes `task_id`, `worker_id`, `pid` and `created_at`. Stale locks are archived, not blindly overwritten. The worker removes its own lock in `finally`.
+
+If a cloud control plane has not deployed lease support, claimed tasks will not include an active lease. Current workers must block instead of starting Codex in that state.
+
+Status operators can inspect lease-aware task views with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -ShowLeases
+```
+
 ## API Base And Worker Token
 
 Local development uses:
