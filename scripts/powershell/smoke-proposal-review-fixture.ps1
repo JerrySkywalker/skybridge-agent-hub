@@ -189,6 +189,7 @@ try {
     }
   }
 
+  $global:LASTEXITCODE = 0
   $summary = [pscustomobject]@{ ok = $true; scenario = $Scenario; api_base = $ApiBase; token_printed = $false }
   if ($Json) { $summary | ConvertTo-Json -Depth 8 -Compress } else { $summary | Format-List }
 } finally {
