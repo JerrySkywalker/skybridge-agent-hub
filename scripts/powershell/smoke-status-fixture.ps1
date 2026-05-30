@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output", "header-format", "summary-format", "active-only-empty", "summary-counts", "proposal-summary", "show-proposals", "approved-only", "pending-review-only")]
+  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output", "header-format", "summary-format", "active-only-empty", "summary-counts", "proposal-summary", "show-proposals", "approved-only", "pending-review-only", "color-auto", "color-never-json-clean", "color-task-states", "lease-expiry-detection", "lease-stale-active-task", "lease-release-stale-dry-run", "lease-recovery-requires-apply", "task-stale-claim-detection", "task-stale-running-detection", "task-missing-lease-detection", "task-pr-merged-needs-evidence", "proposal-derived-executed-status", "proposal-converted-unexecuted-count", "proposal-approved-unconverted-count", "proposal-reconciliation", "hygiene-audit", "hygiene-report-json", "hygiene-recover-lease-dry-run", "hygiene-requires-apply")]
   [string]$Scenario,
   [int]$Port = 0,
   [switch]$Json
@@ -36,9 +36,18 @@ function Invoke-StatusJson {
 
 function Invoke-StatusText {
   param([string[]]$Arguments, [string]$Project = "status-filter-project")
-  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId $Project @Arguments
+  $effectiveArgs = @($Arguments)
+  if ($effectiveArgs -notcontains "-Color" -and $effectiveArgs -notcontains "-ColorMode") { $effectiveArgs += "-NoColor" }
+  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId $Project @effectiveArgs
   if ($LASTEXITCODE -ne 0) { throw "skybridge-status.ps1 failed for $Scenario." }
   return ($output -join "`n")
+}
+
+function Invoke-HygieneJson {
+  param([string[]]$Arguments)
+  $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 @Arguments -ApiBase $ApiBase -ProjectId "status-filter-project" -Json
+  if ($LASTEXITCODE -ne 0) { throw "skybridge-hygiene.ps1 failed for $Scenario." }
+  return ($output | ConvertFrom-Json)
 }
 
 $serverProcess = $null
@@ -100,6 +109,52 @@ try {
     }
   } | Out-Null
   Invoke-SkyBridgeJson "POST" "/v1/tasks/status-filter-blocked/block" @{ error_summary = "fixture block" } | Out-Null
+
+  foreach ($task in @(
+    @{ task_id = "status-stale-claim"; project_id = "status-filter-project"; title = "Stale claim"; risk = "low"; source = "manual" },
+    @{ task_id = "status-stale-running"; project_id = "status-filter-project"; title = "Stale running"; risk = "low"; source = "manual" },
+    @{ task_id = "status-missing-lease"; project_id = "status-filter-project"; title = "Missing lease"; risk = "low"; source = "manual" },
+    @{ task_id = "status-pr-needs-evidence"; project_id = "status-filter-project"; title = "PR merged needs evidence"; risk = "low"; source = "manual" }
+  )) {
+    Invoke-SkyBridgeJson "POST" "/v1/tasks" $task | Out-Null
+  }
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-stale-claim/claim" @{ worker_id = "status-worker-a" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-stale-running/claim" @{ worker_id = "status-worker-a" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-stale-running/start" @{ worker_id = "status-worker-a" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-missing-lease/claim" @{ worker_id = "status-worker-a" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-pr-needs-evidence/claim" @{ worker_id = "status-worker-a" } | Out-Null
+  Invoke-SkyBridgeJson "POST" "/v1/tasks/status-pr-needs-evidence/fail" @{ worker_id = "status-worker-a"; error_summary = "needs evidence"; pr_url = "https://github.com/example/repo/pull/99" } | Out-Null
+
+  $mutateScript = Join-Path $tempDir "mutate-status-fixture.mjs"
+  Set-Content -LiteralPath $mutateScript -Encoding UTF8 -Value @"
+import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync(process.argv[2]);
+const old = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+function updateTask(id, mutate) {
+  const row = db.prepare('SELECT task_json FROM tasks WHERE task_id = ?').get(id);
+  if (!row) throw new Error('missing task ' + id);
+  const task = JSON.parse(row.task_json);
+  mutate(task);
+  db.prepare('UPDATE tasks SET status = ?, assigned_worker_id = ?, updated_at = ?, task_json = ? WHERE task_id = ?').run(
+    task.status, task.assigned_worker_id ?? null, task.updated_at, JSON.stringify(task), id
+  );
+}
+updateTask('status-stale-claim', (task) => {
+  task.updated_at = old;
+  task.lease.lease_expires_at = old;
+  task.lease.heartbeat_at = old;
+});
+updateTask('status-stale-running', (task) => {
+  task.updated_at = old;
+  task.lease.lease_expires_at = old;
+  task.lease.heartbeat_at = old;
+});
+updateTask('status-missing-lease', (task) => {
+  task.updated_at = old;
+  delete task.lease;
+});
+"@
+  node $mutateScript $dbFile
 
   Invoke-SkyBridgeJson "POST" "/v1/master-goals" @{
     master_goal_id = "status-proposal-master"
@@ -164,6 +219,38 @@ try {
         acceptance_criteria = @("blocked")
         evidence_requirements = @("blocked")
         required_capabilities = @("codex")
+      },
+      @{
+        proposal_id = "prop_status_converted_executed"
+        title = "Converted completed docs update"
+        dedupe_key = "prop-status-converted-executed"
+        risk = "low"
+        task_type = "docs"
+        status = "converted"
+        review_status = "converted"
+        policy_decision = "accepted_for_execution"
+        expected_files = @("docs/dev/PROGRESS.md")
+        acceptance_criteria = @("docs updated")
+        evidence_requirements = @("smoke")
+        required_capabilities = @("codex", "git", "gh")
+        normalized_required_capabilities = @("codex", "git", "gh")
+        converted_task_id = "status-filter-completed"
+      },
+      @{
+        proposal_id = "prop_status_converted_unexecuted"
+        title = "Converted running docs update"
+        dedupe_key = "prop-status-converted-unexecuted"
+        risk = "low"
+        task_type = "docs"
+        status = "converted"
+        review_status = "converted"
+        policy_decision = "accepted_for_execution"
+        expected_files = @("docs/dev/QUEUE.md")
+        acceptance_criteria = @("docs updated")
+        evidence_requirements = @("smoke")
+        required_capabilities = @("codex", "git", "gh")
+        normalized_required_capabilities = @("codex", "git", "gh")
+        converted_task_id = "status-filter-running"
       }
     )
   } | Out-Null
@@ -236,8 +323,8 @@ try {
     }
     "summary-counts" {
       $status = Invoke-StatusJson -Arguments @("-ActiveOnly")
-      if ($status.task_summary.total -ne 7) { throw "Expected total task count 7." }
-      if ($status.task_summary.matching -ne 3 -or $status.task_summary.shown -ne 3) { throw "Expected three active matching and shown tasks." }
+      if ($status.task_summary.total -ne 11) { throw "Expected total task count 11." }
+      if ($status.task_summary.matching -ne 6 -or $status.task_summary.shown -ne 6) { throw "Expected six active matching and shown tasks." }
       if ($status.task_summary.truncated -ne $false) { throw "Expected ActiveOnly not truncated." }
     }
     "proposal-summary" {
@@ -256,6 +343,90 @@ try {
     "pending-review-only" {
       $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-PendingReviewOnly")
       if (@($status.proposals).Count -ne 1 -or @($status.proposals)[0].proposal_id -ne "prop_status_proposed") { throw "Expected only pending proposal." }
+    }
+    "color-auto" {
+      $text = Invoke-StatusText -Arguments @("-TaskLimit", "1", "-ColorMode", "Always")
+      if ($text -notmatch "`e\[") { throw "Expected ANSI color in always mode." }
+    }
+    "color-never-json-clean" {
+      $statusJson = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-filter-project" -Json -ColorMode Always
+      if ($statusJson -match "`e\[") { throw "JSON output must not contain ANSI color." }
+      $text = Invoke-StatusText -Arguments @("-TaskLimit", "1", "-ColorMode", "Never")
+      if ($text -match "`e\[") { throw "Never color mode emitted ANSI color." }
+    }
+    "color-task-states" {
+      $text = Invoke-StatusText -Arguments @("-TaskStatus", "failed", "-ExcludeRecovered", "-ShowAll", "-ColorMode", "Always")
+      if ($text -notmatch "`e\[31m") { throw "Expected failed task color." }
+    }
+    "lease-expiry-detection" {
+      $status = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
+      $task = @($status.tasks)[0]
+      if ($task.lease_display_status -ne "expired") { throw "Expected expired lease display status; got $($task.lease_display_status)." }
+    }
+    "lease-stale-active-task" {
+      $status = Invoke-StatusJson -Arguments @("-Hygiene", "-ShowLeases", "-ShowAll")
+      if ($status.hygiene_summary.stale_leases -lt 1) { throw "Expected stale lease count." }
+    }
+    "lease-release-stale-dry-run" {
+      $result = Invoke-HygieneJson -Arguments @("recover-lease", "-TaskId", "status-stale-claim", "-LeaseId", "lease-noop", "-Reason", "fixture dry run")
+      if ($result.mode -ne "dry-run" -or $result.action -ne "would_release_stale_lease") { throw "Expected dry-run lease release." }
+    }
+    "lease-recovery-requires-apply" {
+      $before = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
+      $result = Invoke-HygieneJson -Arguments @("recover-lease", "-TaskId", "status-stale-claim", "-Reason", "fixture requires apply")
+      $after = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
+      if ($result.mode -ne "dry-run" -or @($after.tasks)[0].lease_status -ne @($before.tasks)[0].lease_status) { throw "Expected no mutation without -Apply." }
+    }
+    "task-stale-claim-detection" {
+      $status = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim")
+      if (@($status.tasks)[0].task_hygiene_status -ne "stale_claim") { throw "Expected stale_claim." }
+    }
+    "task-stale-running-detection" {
+      $status = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-running")
+      if (@($status.tasks)[0].task_hygiene_status -ne "stale_running") { throw "Expected stale_running." }
+    }
+    "task-missing-lease-detection" {
+      $status = Invoke-StatusJson -Arguments @("-TaskId", "status-missing-lease")
+      if (@($status.tasks)[0].task_hygiene_status -ne "lease_missing") { throw "Expected lease_missing." }
+    }
+    "task-pr-merged-needs-evidence" {
+      $status = Invoke-StatusJson -Arguments @("-TaskId", "status-pr-needs-evidence")
+      if (@($status.tasks)[0].task_hygiene_status -ne "pr_merged_needs_evidence") { throw "Expected pr_merged_needs_evidence." }
+    }
+    "proposal-derived-executed-status" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ReconcileProposals", "-ShowAll")
+      $proposal = @($status.proposals | Where-Object { $_.proposal_id -eq "prop_status_converted_executed" })[0]
+      if ($proposal.derived_execution_status -ne "executed") { throw "Expected derived executed proposal." }
+    }
+    "proposal-converted-unexecuted-count" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ReconcileProposals", "-SummaryOnly")
+      if ($status.proposal_summary.converted_unexecuted -lt 1) { throw "Expected converted_unexecuted count." }
+    }
+    "proposal-approved-unconverted-count" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ReconcileProposals", "-SummaryOnly")
+      if ($status.proposal_summary.approved_unconverted -ne 1) { throw "Expected one approved_unconverted proposal." }
+    }
+    "proposal-reconciliation" {
+      $status = Invoke-StatusJson -Arguments @("-ShowProposals", "-ReconcileProposals", "-SummaryOnly")
+      if ($status.proposal_summary.derived_executed -lt 1 -or $status.proposal_summary.converted_unexecuted -lt 1) { throw "Expected proposal reconciliation summary." }
+    }
+    "hygiene-audit" {
+      $status = Invoke-StatusJson -Arguments @("-Hygiene", "-ShowProposals", "-ShowLeases", "-ShowAll")
+      if (-not $status.hygiene_summary -or @($status.hygiene_findings).Count -lt 1) { throw "Expected hygiene summary and findings." }
+    }
+    "hygiene-report-json" {
+      $result = Invoke-HygieneJson -Arguments @("audit")
+      if (-not $result.hygiene_summary -or $result.token_printed -ne $false) { throw "Expected hygiene JSON audit." }
+    }
+    "hygiene-recover-lease-dry-run" {
+      $result = Invoke-HygieneJson -Arguments @("recover-lease", "-TaskId", "status-stale-claim", "-Reason", "fixture dry run")
+      if ($result.action -ne "would_release_stale_lease") { throw "Expected recover lease dry-run action." }
+    }
+    "hygiene-requires-apply" {
+      $before = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
+      Invoke-HygieneJson -Arguments @("mark-abandoned", "-TaskId", "status-stale-claim", "-Reason", "fixture apply guard") | Out-Null
+      $after = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
+      if (@($after.tasks)[0].lease_status -ne @($before.tasks)[0].lease_status) { throw "Expected no mark-abandoned mutation without -Apply." }
     }
   }
 
