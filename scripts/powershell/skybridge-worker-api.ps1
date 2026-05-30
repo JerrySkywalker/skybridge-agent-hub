@@ -180,24 +180,81 @@ function Get-TaskType {
   return "code"
 }
 
-function Test-TaskCompatible {
-  param($Task, $Config)
-  $workerCapabilities = @($Config.capabilities)
-  $required = @($Task.required_capabilities)
-  foreach ($capability in $required) {
-    if ($workerCapabilities -notcontains $capability) {
-      return @{ compatible = $false; reason = "missing_capability:$capability"; task_type = Get-TaskType -Task $Task }
+function Get-SkyBridgeTaskFiles {
+  param($Task)
+  $files = @()
+  if ($Task.expected_files) { $files += @($Task.expected_files) }
+  if ($Task.allowed_paths) { $files += @($Task.allowed_paths) }
+  $files | ForEach-Object { ([string]$_).Replace("\", "/") } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+}
+
+function Test-SkyBridgeSafeLocalSmokeTask {
+  param($Task)
+  $files = @(Get-SkyBridgeTaskFiles -Task $Task)
+  if ($files.Count -lt 1) { return $false }
+  if (@($files | Where-Object { $_ -like "scripts/powershell/smoke-*.ps1" }).Count -ne $files.Count) { return $false }
+  $text = (@($Task.title, $Task.body, $Task.prompt_summary, @($files)) -join " ")
+  return ($text -notmatch "(?i)(production deploy|docker compose up|docker compose down|docker daemon|write secrets?|token file|private key|github settings|branch protection|server root|openresty|authelia|1panel|/opt/skybridge-agent-hub)")
+}
+
+function Normalize-SkyBridgeTaskCapabilities {
+  param($Task)
+  $original = @($Task.required_capabilities | ForEach-Object {
+    $capability = ([string]$_).Trim().ToLowerInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($capability)) { $capability }
+  } | Select-Object -Unique)
+  $taskType = (Get-TaskType -Task $Task).ToLowerInvariant()
+  $files = @(Get-SkyBridgeTaskFiles -Task $Task)
+  $docsOnly = $files.Count -gt 0 -and @($files | Where-Object { $_ -like "docs/*" }).Count -eq $files.Count
+  $safeSmokeOnly = Test-SkyBridgeSafeLocalSmokeTask -Task $Task
+  $normalized = @($original)
+  $reason = $null
+
+  if ($taskType -eq "docs" -and $docsOnly) {
+    $normalized = @($normalized | Where-Object { $_ -ne "docs" -and $_ -ne "documentation" })
+    foreach ($capability in @("codex", "git", "gh")) {
+      if ($normalized -notcontains $capability) { $normalized += $capability }
     }
+    $reason = "docs_expected_files_use_codex_git_gh"
+  } elseif ($taskType -eq "local-smoke" -and $safeSmokeOnly) {
+    $normalized = @($normalized | Where-Object { $_ -ne "smoke" -and $_ -ne "local-smoke" })
+    foreach ($capability in @("codex", "powershell", "windows")) {
+      if ($normalized -notcontains $capability) { $normalized += $capability }
+    }
+    $reason = "safe_local_smoke_expected_files_use_codex_powershell_windows"
   }
 
-  $taskType = Get-TaskType -Task $Task
+  [pscustomobject]@{
+    original_required_capabilities = @($original)
+    normalized_required_capabilities = @($normalized | Select-Object -Unique)
+    capability_normalization_reason = $reason
+    task_type = $taskType
+    expected_files = @($files)
+    safe_local_smoke = [bool]$safeSmokeOnly
+  }
+}
+
+function Test-TaskCompatible {
+  param($Task, $Config)
+  $workerCapabilities = @($Config.capabilities | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
+  $capabilityPlan = Normalize-SkyBridgeTaskCapabilities -Task $Task
+  $required = @($capabilityPlan.normalized_required_capabilities)
+  $missing = @($required | Where-Object { $workerCapabilities -notcontains $_ })
+  $rawMissing = @($capabilityPlan.original_required_capabilities | Where-Object { $_ -notin @("docs", "documentation", "smoke", "local-smoke") -and $workerCapabilities -notcontains $_ })
+  $taskType = $capabilityPlan.task_type
   if (@($Config.blocked_task_types) -contains $taskType -or $taskType -eq "blocked") {
-    return @{ compatible = $false; reason = "blocked_task_type:$taskType"; task_type = $taskType }
+    return @{ compatible = $false; reason = "blocked_task_type:$taskType"; blocked_reason = "blocked_task_type:$taskType"; task_type = $taskType; original_required_capabilities = @($capabilityPlan.original_required_capabilities); normalized_required_capabilities = @($required); missing_raw_capabilities = @($rawMissing); missing_normalized_capabilities = @($missing); expected_files = @($capabilityPlan.expected_files) }
   }
   if (@($Config.allowed_task_types).Count -gt 0 -and @($Config.allowed_task_types) -notcontains $taskType) {
-    return @{ compatible = $false; reason = "task_type_not_allowed:$taskType"; task_type = $taskType }
+    return @{ compatible = $false; reason = "task_type_not_allowed:$taskType"; blocked_reason = "task_type_not_allowed:$taskType"; task_type = $taskType; original_required_capabilities = @($capabilityPlan.original_required_capabilities); normalized_required_capabilities = @($required); missing_raw_capabilities = @($rawMissing); missing_normalized_capabilities = @($missing); expected_files = @($capabilityPlan.expected_files) }
   }
-  return @{ compatible = $true; reason = "compatible"; task_type = $taskType }
+  if ($taskType -eq "local-smoke" -and -not $capabilityPlan.safe_local_smoke) {
+    return @{ compatible = $false; reason = "unsafe_local_smoke"; blocked_reason = "unsafe_local_smoke"; task_type = $taskType; original_required_capabilities = @($capabilityPlan.original_required_capabilities); normalized_required_capabilities = @($required); missing_raw_capabilities = @($rawMissing); missing_normalized_capabilities = @($missing); expected_files = @($capabilityPlan.expected_files) }
+  }
+  if ($missing.Count -gt 0) {
+    return @{ compatible = $false; reason = "missing_capability:$($missing -join ',')"; task_type = $taskType; original_required_capabilities = @($capabilityPlan.original_required_capabilities); normalized_required_capabilities = @($required); missing_raw_capabilities = @($rawMissing); missing_normalized_capabilities = @($missing); blocked_reason = $null; expected_files = @($capabilityPlan.expected_files) }
+  }
+  return @{ compatible = $true; reason = "compatible"; task_type = $taskType; original_required_capabilities = @($capabilityPlan.original_required_capabilities); normalized_required_capabilities = @($required); missing_raw_capabilities = @($rawMissing); missing_normalized_capabilities = @(); blocked_reason = $null; capability_normalization_reason = $capabilityPlan.capability_normalization_reason; expected_files = @($capabilityPlan.expected_files) }
 }
 
 function Get-NextTask {
@@ -234,7 +291,13 @@ function Get-NextTask {
       task_id = $task.task_id
       title = $task.title
       reason = $compatibility.reason
+      blocked_reason = $compatibility.blocked_reason
       task_type = $compatibility.task_type
+      expected_files = @($compatibility.expected_files)
+      original_required_capabilities = @($compatibility.original_required_capabilities)
+      normalized_required_capabilities = @($compatibility.normalized_required_capabilities)
+      missing_raw_capabilities = @($compatibility.missing_raw_capabilities)
+      missing_normalized_capabilities = @($compatibility.missing_normalized_capabilities)
     }
   }
   return [pscustomobject]@{ task = $null; task_type = $null; skipped = $skipped }

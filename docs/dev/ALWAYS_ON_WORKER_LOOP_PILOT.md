@@ -108,4 +108,12 @@ The loop claimed exactly one task, Codex completed without transport retry, chan
 
 PR #79 passed AI branch validation, Project check, Docker build server and Docker build web, then merged at `39e554b4c3fe704133bb0f3d0b0c46b442c43330`. Evidence repair recorded `recovered=true`, `ci_status=passed_after_pending`, `risk_status=low_docs_only`, the PR URL and changed file list for `always-on-worker-loop-pilot-docs-179b`.
 
-The pilot is proven for one low-risk docs task. Before larger batches, task preparation should align `required_capabilities` with the worker profile or teach the profile/selector to advertise documentation capability explicitly.
+The pilot is proven for one low-risk docs task. Before larger batches, task preparation should align `required_capabilities` with executable worker tools. `docs` is a `task_type`, not a hard worker capability; docs tasks should normalize toward `codex`, `git` and `gh` when their expected files are under `docs/`.
+
+## 2026-05-29 Super 180 Follow-Up
+
+Super 180 extended this result to a two-task docs batch after capability normalization and status query hardening. The batch used `MaxTasks=2`, `IdleTimeoutSeconds=120`, `PollIntervalSeconds=5`, `StopOnFailure=true` and only `laptop-zenbookduo`.
+
+The two child PRs were [#81](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/81) for `docs/orchestrator/WORKER_PROFILE_RUNBOOK.md` and [#82](https://github.com/JerrySkywalker/skybridge-agent-hub/pull/82) for `docs/dev/BATCH_WORKER_LOOP_PILOT.md`. Both passed AI branch validation, Project check and Docker build server/web. PR #81 completed normally; PR #82 required evidence repair because CI Guardian stopped on pending checks before they passed. Final control was paused with `stop_requested=false` and no queued/running tasks.
+
+The two-task batch is proven for low-risk docs work with recovered evidence. The next loop hardening target is CI Guardian pending-check handling, not broader worker scope.

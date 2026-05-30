@@ -370,6 +370,9 @@ export interface TaskProposal {
   acceptance_criteria: string[];
   evidence_requirements: string[];
   required_capabilities: WorkerCapability[];
+  original_required_capabilities?: WorkerCapability[];
+  normalized_required_capabilities?: WorkerCapability[];
+  capability_normalization_reason?: string;
   risk: TaskRisk;
   task_type: string;
   depends_on: string[];

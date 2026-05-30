@@ -44,6 +44,16 @@ Profiles currently support:
 
 `allow_production_deploy` must stay `false` for current workers. `max_parallel_tasks` should stay `1` until repository locking and conflict handling are explicit.
 
+## Capability Semantics
+
+Keep `task_type` separate from worker execution capabilities.
+
+Task types describe the work class: `docs`, `local-smoke`, `test`, `frontend`, `backend`, `refactor`, and legacy `smoke`. Worker capabilities describe tools the machine can actually provide: `codex`, `git`, `gh`, `powershell`, `node`, `pnpm`, `windows` and `laptop`.
+
+`docs` is not a hard worker capability. A docs task with expected files under `docs/` is normalized for execution to require `codex`, `git` and `gh`; legacy `required_capabilities=["docs"]` is preserved as original metadata but ignored for worker matching. A safe local-smoke task with expected files under `scripts/powershell/smoke-*.ps1` is normalized to require `codex`, `powershell` and `windows`, preserving raw `powershell`, `windows` or `laptop` entries when present.
+
+Unsafe task types remain blocked regardless of normalization: production, deploy, secret, GitHub settings, branch protection, server config and server root config. Local-smoke tasks must pass the safe-local-smoke gate before a worker can match them.
+
 ## Validate A Profile
 
 ```powershell
@@ -194,6 +204,52 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
+## Status Query Examples
+
+Use `skybridge-status.ps1` for safe compact views. It prints task and worker summaries, never token values. For larger task history, prefer explicit filters:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -ActiveOnly
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -RecentTasks 10
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -WorkerId laptop-zenbookduo `
+  -TaskLimit 20
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskId remote-docs-task-001 `
+  -EventLimit 10
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -TaskStatus failed `
+  -ExcludeRecovered
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -RecoveredOnly `
+  -TaskLimit 20
+```
+
 For guided operator use, prefer `skybridge-guide.ps1`. It wraps the same safe primitives and prints the next suggested command after each step:
 
 ```powershell
@@ -204,73 +260,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
 
-## Status Query Examples
-
-Use `skybridge-status.ps1` for safe compact views. It prints task and worker summaries, never token values.
-
-Active tasks:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -ActiveOnly
-```
-
-Recent tasks:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -RecentTasks 10
-```
-
-One worker:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -WorkerId laptop-zenbookduo `
-  -TaskLimit 20
-```
-
-One task with detail:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -TaskId remote-docs-task-001 `
-  -EventLimit 10
-```
-
-Unrecovered failed tasks:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -TaskStatus failed `
-  -ExcludeRecovered
-```
-
-Recovered tasks:
-
-```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
-  -ProjectId skybridge-agent-hub `
-  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
-  -RecoveredOnly `
-  -TaskLimit 20
-```
+Guide modes `status-active`, `status-recent`, `status-worker`, `status-task`, `status-failed` and `status-recovered` map to the same filtered status queries. The Hermes CLI facade exposes them as `operator status-active`, `operator status-recent`, `operator status-worker`, `operator status-task`, `operator status-failed` and `operator status-recovered`.
 
 ## Standard Operator Workflow
 

@@ -235,7 +235,7 @@ function Normalize-HermesProposalTaskTypes {
       $proposal | Add-Member -NotePropertyName original_task_type -NotePropertyValue $raw -Force
       $proposal.task_type = $newType
     }
-    if ($normalized -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config")) {
+    if ($normalized -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config", "server-root-config")) {
       $proposal | Add-Member -NotePropertyName blocked_task_type -NotePropertyValue $normalized -Force
     }
   }
@@ -250,17 +250,29 @@ function Normalize-HermesProposalCapabilities {
       if (-not [string]::IsNullOrWhiteSpace($capability)) { $capability.ToLowerInvariant() }
     } | Where-Object { $_ } | Select-Object -Unique)
     $normalized = @($original)
+    $reason = $null
     $taskType = ([string]$proposal.task_type).Trim().ToLowerInvariant()
     $files = @($proposal.expected_files | ForEach-Object { ([string]$_).Replace("\", "/") })
     $docsOnly = $files.Count -gt 0 -and @($files | Where-Object { $_ -like "docs/*" }).Count -eq $files.Count
     $safeSmokeOnly = $files.Count -gt 0 -and @($files | Where-Object { $_ -like "scripts/powershell/smoke-*.ps1" }).Count -eq $files.Count
 
-    if (($taskType -eq "docs" -and $docsOnly) -or ($taskType -eq "local-smoke" -and $safeSmokeOnly)) {
-      if ($normalized -notcontains "codex") { $normalized += "codex" }
+    if ($taskType -eq "docs" -and $docsOnly) {
+      $normalized = @($normalized | Where-Object { $_ -ne "docs" -and $_ -ne "documentation" })
+      foreach ($capability in @("codex", "git", "gh")) {
+        if ($normalized -notcontains $capability) { $normalized += $capability }
+      }
+      $reason = "docs_expected_files_use_codex_git_gh"
+    } elseif ($taskType -eq "local-smoke" -and $safeSmokeOnly) {
+      $normalized = @($normalized | Where-Object { $_ -ne "smoke" -and $_ -ne "local-smoke" })
+      foreach ($capability in @("codex", "powershell", "windows")) {
+        if ($normalized -notcontains $capability) { $normalized += $capability }
+      }
+      $reason = "safe_local_smoke_expected_files_use_codex_powershell_windows"
     }
 
     $proposal | Add-Member -NotePropertyName original_required_capabilities -NotePropertyValue @($original) -Force
     $proposal | Add-Member -NotePropertyName normalized_required_capabilities -NotePropertyValue @($normalized | Select-Object -Unique) -Force
+    if ($reason) { $proposal | Add-Member -NotePropertyName capability_normalization_reason -NotePropertyValue $reason -Force }
   }
   return $Proposals
 }
@@ -348,7 +360,9 @@ function Invoke-HermesProposalPlanner {
     "Return strict JSON only.",
     "Do not execute commands or modify files.",
     "Use only task_type values docs or local-smoke.",
-    "Executable proposals must include codex in required_capabilities; docs proposals may also include docs/git, and local-smoke proposals may also include powershell/windows.",
+    "Executable proposals must include execution capabilities in required_capabilities, not task-type labels.",
+    "For docs proposals under docs/, use required_capabilities such as codex, git and gh; do not use docs as a required worker capability.",
+    "For local-smoke proposals under scripts/powershell/smoke-*.ps1, use codex, powershell and windows.",
     "Expected files must stay under docs/ or scripts/powershell/smoke-*.ps1.",
     "No production deployment, secrets, GitHub settings, branch protection or server root config."
   )) -join "`n- "
@@ -397,7 +411,7 @@ function Test-ProposalPolicy {
       $decision = "rejected_duplicate"; $reasons.Add("dedupe_key is missing or duplicated") | Out-Null
     }
     $seen[$dedupe] = $true
-    if ($taskType -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config") -or $proposal.blocked_task_type) {
+    if ($taskType -in @("deploy", "production", "secret", "secrets", "github-settings", "branch-protection", "server-config", "server-root-config") -or $proposal.blocked_task_type) {
       $decision = "ask_human"; $reasons.Add("task_type is blocked for Hermes-assisted automation") | Out-Null
     } elseif ($taskType -notin @("docs", "local-smoke")) {
       $decision = "ask_human"; $reasons.Add("task_type must be docs or local-smoke") | Out-Null

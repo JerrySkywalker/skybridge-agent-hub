@@ -119,6 +119,7 @@ switch ($Command) {
       throw "Proposal $ProposalId failed execution policy: $($policy.decision) ($(@($policy.reasons) -join '; '))."
     }
     if ($effectiveDryRun) {
+      $taskCapabilities = if ($proposal.PSObject.Properties["normalized_required_capabilities"] -and @($proposal.normalized_required_capabilities).Count -gt 0) { @($proposal.normalized_required_capabilities) } else { @($proposal.required_capabilities) }
       $task = [pscustomobject]@{
         task_id = if ($TaskId) { $TaskId } else { "task_$ProposalId" }
         project_id = $proposal.project_id
@@ -130,7 +131,7 @@ switch ($Command) {
         task_type = $proposal.task_type
         allowed_paths = @($proposal.expected_files)
         validation = @($proposal.evidence_requirements)
-        required_capabilities = @($proposal.required_capabilities)
+        required_capabilities = @($taskCapabilities)
       }
       $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; validation = $policy; proposal = $proposal; task = $task }
     } else {
