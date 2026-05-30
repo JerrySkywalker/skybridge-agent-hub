@@ -262,13 +262,28 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
 
 Guide modes `status-active`, `status-recent`, `status-worker`, `status-task`, `status-failed` and `status-recovered` map to the same filtered status queries. The Hermes CLI facade exposes them as `operator status-active`, `operator status-recent`, `operator status-worker`, `operator status-task`, `operator status-failed` and `operator status-recovered`.
 
+`skybridge-status.ps1` prints a grouped header and grouped task summary. The display summary distinguishes all project tasks (`total`), filter matches (`matching`), rows actually displayed (`shown`) and truncation (`truncated`). `-ActiveOnly` with no queued, claimed or running tasks reports `matching=0`, `shown=0` and `Tasks: none`.
+
+Proposal queue status is opt-in:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -ShowProposals `
+  -ProposalLimit 10
+```
+
+Use `-ApprovedOnly` before conversion and `-PendingReviewOnly` before review sessions.
+
 ## Standard Operator Workflow
 
 Use this sequence for one-shot remote work. The guided command names map directly to the underlying scripts:
 
 1. Read compact status.
 2. Optionally run `plan-preview` for a high-level master goal.
-3. Optionally run `plan-apply` and review proposals before converting one.
+3. Optionally run `plan-apply` and review proposals before approving and converting one.
 4. Preview one goal/task submission or proposal conversion.
 5. Apply one goal/task submission or proposal conversion.
 6. Preview one bounded worker pass.
@@ -350,6 +365,29 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1
   -TaskBody "Update one docs file with a short pilot note." `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
+
+Proposal review flow:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode proposal-list `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode proposal-approve `
+  -ProposalId proposal-id `
+  -Reason "reviewed low-risk docs scope" `
+  -Apply
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
+  -Mode proposal-convert `
+  -ProposalId proposal-id `
+  -Apply
+```
+
+Every review mutation requires `-Apply`; reject and defer require `-Reason`.
 
 ## CI Rerun And Evidence Repair
 

@@ -11,11 +11,14 @@ The master goal planner turns a high-level operator goal into reviewable task pr
 Task proposals use this lifecycle:
 
 ```text
-proposed -> accepted -> converted
+proposed -> reviewed -> approved -> converted -> executed
          -> rejected
+         -> deferred
+         -> superseded
+         -> blocked_dependency
 ```
 
-Converted proposals become normal SkyBridge tasks that can be run with `skybridge-run-once.ps1` or `skybridge-guide.ps1`.
+Only approved proposals can be converted. Converted proposals become normal SkyBridge tasks that can be run with `skybridge-run-once.ps1` or `skybridge-guide.ps1`.
 
 ## Rule-Based Planner
 
@@ -51,7 +54,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -ProposalId proposal-id
 ```
 
-Before conversion, inspect `expected_files`, `risk`, `required_capabilities`, `acceptance_criteria` and `evidence_requirements`.
+Before approval or conversion, inspect `expected_files`, `risk`, `task_type`, original and normalized capabilities, dependencies, `acceptance_criteria` and `evidence_requirements`.
 
 ## Convert A Proposal
 
@@ -66,14 +69,15 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -DryRun
 ```
 
-Then accept and convert:
+Then approve and convert:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
-  -Command accept `
+  -Command approve `
   -ApiBase http://127.0.0.1:8787 `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id `
+  -Reason "reviewed low-risk docs scope" `
   -Apply
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
@@ -84,7 +88,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -Apply
 ```
 
-High-risk proposals require `-AllowHighRisk` and should stay manual until the safety policy is expanded.
+High-risk, deploy, production, secret, GitHub settings, branch protection and server config proposals cannot be auto-approved and should stay manual until the safety policy is expanded.
 
 ## Guided Flow
 
@@ -112,8 +116,14 @@ Minimum guided modes:
 - `plan-preview`
 - `plan-apply`
 - `proposals`
+- `proposal-list`
 - `proposal-show`
-- `proposal-accept`
+- `proposal-approve`
+- `proposal-reject`
+- `proposal-defer`
+- `proposal-approved`
+- `proposal-pending-review`
+- `proposal-convert`
 - `proposal-convert-preview`
 
 Hermes CLI can route through the same guide with `-Area operator`.
@@ -154,7 +164,8 @@ Hermes API must remain private and authenticated. The daily target is direct HTT
 
 - Dry-run is the default.
 - `skybridge-plan.ps1 -Apply` creates proposals only, not executable tasks.
-- `skybridge-proposal.ps1 convert -Apply` is the first step that creates a normal queued task.
+- `skybridge-proposal.ps1 approve -Apply` is required before conversion.
+- `skybridge-proposal.ps1 convert -Apply` creates a normal queued task only for approved low-risk docs or explicitly approved safe local-smoke proposals.
 - Real cloud mutation requires explicit `-Apply`.
 - Proposal conversion does not run Codex or start a worker loop.
 - Token values are never printed.
