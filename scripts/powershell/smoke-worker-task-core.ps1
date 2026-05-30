@@ -68,12 +68,20 @@ try {
     risk = "low"
     source = "manual"
   } | Out-Null
-  Invoke-SkyBridgeJson "POST" "/v1/tasks/smoke-task/claim" @{
+  $claimResponse = Invoke-SkyBridgeJson "POST" "/v1/tasks/smoke-task/claim" @{
     worker_id = "smoke-worker"
-  } | Out-Null
-  Invoke-SkyBridgeJson "POST" "/v1/tasks/smoke-task/complete" @{
+  }
+  if ($claimResponse.task.lease.lease_status -ne "active") { throw "Expected active lease after claim." }
+  if (-not $claimResponse.task.lease.lease_id) { throw "Expected lease_id after claim." }
+  if ($claimResponse.task.claim.worker_id -ne "smoke-worker") { throw "Expected backward-compatible claim metadata." }
+  $startResponse = Invoke-SkyBridgeJson "POST" "/v1/tasks/smoke-task/start" @{
+    worker_id = "smoke-worker"
+  }
+  if ($startResponse.task.lease.lease_status -ne "active") { throw "Expected active lease after start." }
+  $completeResponse = Invoke-SkyBridgeJson "POST" "/v1/tasks/smoke-task/complete" @{
     summary = "Smoke completed without Codex, Hermes or notification providers."
-  } | Out-Null
+  }
+  if ($completeResponse.task.lease.lease_status -ne "released") { throw "Expected released lease after complete." }
 
   $summary = Invoke-SkyBridgeJson "GET" "/v1/summary"
   $workers = Invoke-SkyBridgeJson "GET" "/v1/workers/summary"
@@ -89,6 +97,7 @@ try {
     OnlineWorkers = $workers.online
     CompletedTasks = $tasks.completed
     LatestTaskEvent = $tasks.latest_event.type
+    LeaseStatus = $completeResponse.task.lease.lease_status
     NoRealCodex = $true
     NoRealHermes = $true
     NoRealNotification = $true

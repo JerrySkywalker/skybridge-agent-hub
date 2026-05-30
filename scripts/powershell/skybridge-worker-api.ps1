@@ -331,6 +331,13 @@ function Fail-Task {
   Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/fail" -ApiBase $Config.api_base -Body $body -Config $Config
 }
 
+function Block-Task {
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
+  $body = @{ worker_id = $Config.worker_id }
+  foreach ($key in $Result.Keys) { $body[$key] = $Result[$key] }
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/block" -ApiBase $Config.api_base -Body $body -Config $Config
+}
+
 function Repair-TaskEvidence {
   param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
   $body = @{ worker_id = $Config.worker_id }
