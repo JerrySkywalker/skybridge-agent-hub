@@ -117,16 +117,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
 
 JSON output includes `campaign_summary`, `campaigns`, `campaign_steps`, and `campaign_gate_summary`. JSON output remains ANSI-free.
 
-## Deterministic Advance Gate
+## Deterministic and Hermes Advance Gates
 
-Advance decisions are deterministic in Super 185. Hermes is represented only by:
+Super 185 introduced deterministic advance gates. Super 186 adds an optional Hermes advisory gate that consumes structured SkyBridge state and returns strict JSON using schema `skybridge.campaign_gate.v1`.
 
-```json
-{
-  "hermes_gate_enabled": false,
-  "hermes_gate_advisory": null
-}
-```
+Deterministic policy remains authoritative. Hermes can recommend `advance`, `hold`, `retry`, `ask_human`, or `abort`, but it cannot override hard blockers. Auto-advance requires both a deterministic pass and a Hermes `advance` decision.
 
 Hard holds:
 
@@ -141,6 +136,29 @@ Hard holds:
 
 Soft warnings include recovered tasks, historical blocked tasks, approved-unconverted proposals, and offline workers.
 
+Human approval is explicit. A step with `requires_human_approval=true` can advance only when the operator passes `-HumanApproved` plus a reason. `advance-with-gate` remains dry-run by default and needs `-Apply` to mutate campaign metadata.
+
+Gate commands:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 gate-preview `
+  -CampaignId bootstrap-mvp
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 hermes-gate-preview `
+  -CampaignId bootstrap-mvp `
+  -UseHermesGate `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 advance-with-gate `
+  -CampaignId bootstrap-mvp `
+  -UseHermesGate `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1" `
+  -HumanApproved `
+  -HumanApprovalReason "Operator approved metadata-only advance."
+```
+
+These commands do not run workers and do not create tasks for the next Super Goal.
+
 ## Real Cloud Import Result
 
 Super 185 does not deploy unmerged campaign API code. The local fixture and dry-run import are proven. If the live cloud server has not yet deployed the campaign endpoints, cloud import must be skipped and documented as a deployment blocker. No worker execution is part of this goal.
@@ -154,3 +172,7 @@ The seed pack lives at `goals/bootstrap-mvp/` and contains:
 - `super-184b-operator-console-dashboard.md`
 
 Super 186 is the next step and should add Hermes advisory gate evaluation while keeping deterministic vetoes authoritative.
+
+## Super 186 Gate Pilot Boundary
+
+The Super 186 real pilot may advance `bootstrap-mvp` from Super 186 to Super 187 only as campaign metadata. It must not execute Super 187, Super 184B, or any worker loop. If the gate does not produce final decision `advance`, the campaign remains on Super 186 with the hold reason recorded.
