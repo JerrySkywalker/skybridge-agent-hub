@@ -1023,7 +1023,9 @@ function Invoke-CampaignRunner {
   $lock = $null
   try {
     $lock = if ($effectiveDryRun) { Read-CampaignRunnerJson -Path (Get-CampaignRunnerLockPath -TargetCampaignId $snapshot.campaign.campaign_id -TargetProjectId $snapshot.campaign.project_id) } else { Acquire-CampaignRunnerLock -Snapshot $snapshot -State $state }
-    if ($lock -and (Get-CampaignRunnerLockStatus -Lock $lock) -eq "stale") { $hardBlockers.Add("stale_runner_lock") | Out-Null }
+    $runnerLockStatus = Get-CampaignRunnerLockStatus -Lock $lock
+    if ($runnerLockStatus -eq "active") { $hardBlockers.Add("active_runner_lock") | Out-Null }
+    if ($runnerLockStatus -eq "stale") { $hardBlockers.Add("stale_runner_lock") | Out-Null }
     $hygiene = Get-CampaignRunnerHygiene
     if ($hygiene.active_tasks -gt 0) { $hardBlockers.Add("active_tasks_present") | Out-Null }
     if ($hygiene.stale_leases -gt 0) { $hardBlockers.Add("stale_leases_present") | Out-Null }
@@ -1039,7 +1041,7 @@ function Invoke-CampaignRunner {
       for ($i = [int]$state.steps_attempted; $i -lt @($snapshot.steps).Count; $i++) {
         if ($planned.Count -ge $limitSteps) { $state.runner_status = "held"; $state.hold_reason = "max_steps_reached"; break }
         if ($state.tasks_attempted -ge [Math]::Max(1, $MaxTasks)) { $state.runner_status = "held"; $state.hold_reason = "max_tasks_reached"; break }
-        if (([datetime]::UtcNow - $started).TotalMinutes -ge [Math]::Max(1, $MaxRuntimeMinutes)) { $state.runner_status = "held"; $state.hold_reason = "max_runtime_reached"; break }
+        if ($MaxRuntimeMinutes -le 0 -or ([datetime]::UtcNow - $started).TotalMinutes -ge $MaxRuntimeMinutes) { $state.runner_status = "held"; $state.hold_reason = "max_runtime_reached"; break }
         $step = Get-CampaignRunnerStepPlan -Snapshot $snapshot -Index $i
         if (-not $step) { $state.runner_status = "completed"; $state.hold_reason = $null; break }
         $approval = Test-CampaignRunnerApproval -Step $step -Scope $scope
