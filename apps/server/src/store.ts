@@ -2,6 +2,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type {
+  Campaign,
+  CampaignStep,
   IterationRun,
   MasterGoal,
   PlanningMasterGoal,
@@ -65,6 +67,8 @@ export type StoredWorker = Omit<Worker, "status" | "current_task_id" | "last_see
 export type StoredWorkerHeartbeat = WorkerHeartbeat;
 export type StoredTask = Task;
 export type StoredTaskEvent = TaskEvent;
+export type StoredCampaign = Campaign;
+export type StoredCampaignStep = CampaignStep;
 
 interface LocalStoreData {
   events: StoredEvent[];
@@ -80,6 +84,8 @@ interface LocalStoreData {
   workerHeartbeats?: StoredWorkerHeartbeat[];
   tasks?: StoredTask[];
   taskEvents?: StoredTaskEvent[];
+  campaigns?: StoredCampaign[];
+  campaignSteps?: StoredCampaignStep[];
 }
 
 export interface EventStore {
@@ -121,6 +127,12 @@ export interface EventStore {
   upsertTask(task: StoredTask): Promise<void>;
   listTaskEvents(taskId?: string): StoredTaskEvent[];
   addTaskEvent(event: StoredTaskEvent): Promise<void>;
+  listCampaigns(filters?: { projectId?: string; status?: string }): StoredCampaign[];
+  getCampaign(campaignId: string): StoredCampaign | undefined;
+  upsertCampaign(campaign: StoredCampaign): Promise<void>;
+  listCampaignSteps(filters?: { campaignId?: string; projectId?: string; status?: string }): StoredCampaignStep[];
+  getCampaignStep(stepId: string): StoredCampaignStep | undefined;
+  upsertCampaignStep(step: StoredCampaignStep): Promise<void>;
 }
 
 export class MemoryStore implements EventStore {
@@ -139,6 +151,8 @@ export class MemoryStore implements EventStore {
     workerHeartbeats: [],
     tasks: [],
     taskEvents: [],
+    campaigns: [],
+    campaignSteps: [],
   };
 
   async load(): Promise<void> {}
@@ -310,6 +324,37 @@ export class MemoryStore implements EventStore {
 
   async addTaskEvent(event: StoredTaskEvent): Promise<void> {
     this.data.taskEvents.push(event);
+  }
+
+  listCampaigns(filters: { projectId?: string; status?: string } = {}): StoredCampaign[] {
+    return this.data.campaigns
+      .filter((campaign) => !filters.projectId || campaign.project_id === filters.projectId)
+      .filter((campaign) => !filters.status || campaign.status === filters.status)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+
+  getCampaign(campaignId: string): StoredCampaign | undefined {
+    return this.data.campaigns.find((campaign) => campaign.campaign_id === campaignId);
+  }
+
+  async upsertCampaign(campaign: StoredCampaign): Promise<void> {
+    upsertBy(this.data.campaigns, campaign, (item) => item.campaign_id);
+  }
+
+  listCampaignSteps(filters: { campaignId?: string; projectId?: string; status?: string } = {}): StoredCampaignStep[] {
+    return this.data.campaignSteps
+      .filter((step) => !filters.campaignId || step.campaign_id === filters.campaignId)
+      .filter((step) => !filters.projectId || step.project_id === filters.projectId)
+      .filter((step) => !filters.status || step.status === filters.status)
+      .sort((a, b) => a.order - b.order || a.created_at.localeCompare(b.created_at));
+  }
+
+  getCampaignStep(stepId: string): StoredCampaignStep | undefined {
+    return this.data.campaignSteps.find((step) => step.campaign_step_id === stepId);
+  }
+
+  async upsertCampaignStep(step: StoredCampaignStep): Promise<void> {
+    upsertBy(this.data.campaignSteps, step, (item) => item.campaign_step_id);
   }
 }
 
@@ -725,6 +770,76 @@ export class SqliteStore implements EventStore {
     `).run(event.task_event_id, event.task_id, event.type, event.worker_id ?? null, event.time, JSON.stringify(event));
   }
 
+  listCampaigns(filters: { projectId?: string; status?: string } = {}): StoredCampaign[] {
+    const rows = this.requireDb().prepare(`
+      SELECT campaign_json FROM campaigns
+      WHERE (? IS NULL OR project_id = ?)
+        AND (? IS NULL OR status = ?)
+      ORDER BY updated_at DESC, rowid DESC
+    `).all(filters.projectId ?? null, filters.projectId ?? null, filters.status ?? null, filters.status ?? null) as Array<{ campaign_json: string }>;
+    return rows.map((row) => JSON.parse(row.campaign_json) as StoredCampaign);
+  }
+
+  getCampaign(campaignId: string): StoredCampaign | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT campaign_json FROM campaigns WHERE campaign_id = ?
+    `).get(campaignId) as { campaign_json: string } | undefined;
+    return row ? JSON.parse(row.campaign_json) as StoredCampaign : undefined;
+  }
+
+  async upsertCampaign(campaign: StoredCampaign): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO campaigns (campaign_id, project_id, status, current_step_id, created_at, updated_at, campaign_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(campaign_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        status = excluded.status,
+        current_step_id = excluded.current_step_id,
+        updated_at = excluded.updated_at,
+        campaign_json = excluded.campaign_json
+    `).run(...toCampaignParams(campaign));
+  }
+
+  listCampaignSteps(filters: { campaignId?: string; projectId?: string; status?: string } = {}): StoredCampaignStep[] {
+    const rows = this.requireDb().prepare(`
+      SELECT step_json FROM campaign_steps
+      WHERE (? IS NULL OR campaign_id = ?)
+        AND (? IS NULL OR project_id = ?)
+        AND (? IS NULL OR status = ?)
+      ORDER BY step_order ASC, created_at ASC
+    `).all(
+      filters.campaignId ?? null,
+      filters.campaignId ?? null,
+      filters.projectId ?? null,
+      filters.projectId ?? null,
+      filters.status ?? null,
+      filters.status ?? null,
+    ) as Array<{ step_json: string }>;
+    return rows.map((row) => JSON.parse(row.step_json) as StoredCampaignStep);
+  }
+
+  getCampaignStep(stepId: string): StoredCampaignStep | undefined {
+    const row = this.requireDb().prepare(`
+      SELECT step_json FROM campaign_steps WHERE campaign_step_id = ?
+    `).get(stepId) as { step_json: string } | undefined;
+    return row ? JSON.parse(row.step_json) as StoredCampaignStep : undefined;
+  }
+
+  async upsertCampaignStep(step: StoredCampaignStep): Promise<void> {
+    this.requireDb().prepare(`
+      INSERT INTO campaign_steps (campaign_step_id, campaign_id, project_id, goal_id, status, step_order, created_at, updated_at, step_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(campaign_step_id) DO UPDATE SET
+        campaign_id = excluded.campaign_id,
+        project_id = excluded.project_id,
+        goal_id = excluded.goal_id,
+        status = excluded.status,
+        step_order = excluded.step_order,
+        updated_at = excluded.updated_at,
+        step_json = excluded.step_json
+    `).run(...toCampaignStepParams(step));
+  }
+
   private createSchema() {
     const db = this.requireDb();
     db.exec(`
@@ -942,6 +1057,36 @@ export class SqliteStore implements EventStore {
       );
       CREATE INDEX IF NOT EXISTS idx_task_events_task_id ON task_events(task_id);
       CREATE INDEX IF NOT EXISTS idx_task_events_time ON task_events(time);
+
+      CREATE TABLE IF NOT EXISTS campaigns (
+        campaign_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_step_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        campaign_json TEXT NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_campaigns_project_id ON campaigns(project_id);
+      CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+
+      CREATE TABLE IF NOT EXISTS campaign_steps (
+        campaign_step_id TEXT PRIMARY KEY,
+        campaign_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        goal_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        step_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        step_json TEXT NOT NULL,
+        FOREIGN KEY(campaign_id) REFERENCES campaigns(campaign_id) ON DELETE CASCADE,
+        FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_campaign_steps_campaign_id ON campaign_steps(campaign_id);
+      CREATE INDEX IF NOT EXISTS idx_campaign_steps_project_id ON campaign_steps(project_id);
+      CREATE INDEX IF NOT EXISTS idx_campaign_steps_status ON campaign_steps(status);
     `);
   }
 
@@ -1251,6 +1396,32 @@ function toTaskParams(task: StoredTask): unknown[] {
     task.created_at,
     task.updated_at,
     JSON.stringify(task),
+  ];
+}
+
+function toCampaignParams(campaign: StoredCampaign): unknown[] {
+  return [
+    campaign.campaign_id,
+    campaign.project_id,
+    campaign.status,
+    campaign.current_step_id ?? null,
+    campaign.created_at,
+    campaign.updated_at,
+    JSON.stringify(campaign),
+  ];
+}
+
+function toCampaignStepParams(step: StoredCampaignStep): unknown[] {
+  return [
+    step.campaign_step_id,
+    step.campaign_id,
+    step.project_id,
+    step.goal_id,
+    step.status,
+    step.order,
+    step.created_at,
+    step.updated_at,
+    JSON.stringify(step),
   ];
 }
 

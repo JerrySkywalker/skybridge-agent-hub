@@ -1,7 +1,7 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { existsSync, readFileSync } from "node:fs";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
@@ -25,6 +25,8 @@ import {
   type PlannerAdapterAuditMetadata,
   type PlanningProposalStatus,
   type EvidenceSummary,
+  type CampaignStatus,
+  type CampaignStepStatus,
   type GoalPriority,
   type GoalRisk,
   type GoalStatus,
@@ -60,6 +62,8 @@ import {
   type StoredTask,
   type StoredTaskEvent,
   type StoredTaskProposal,
+  type StoredCampaign,
+  type StoredCampaignStep,
   type StoredWorker,
   type StoredWorkerHeartbeat,
 } from "./store.js";
@@ -134,6 +138,8 @@ const PROPOSAL_STATUSES: PlanningProposalStatus[] = [
   "converted",
   "executed",
 ];
+const CAMPAIGN_STATUSES: CampaignStatus[] = ["draft", "ready", "running", "paused", "held", "completed", "failed", "aborted"];
+const CAMPAIGN_STEP_STATUSES: CampaignStepStatus[] = ["pending", "ready", "running", "completed", "recovered", "failed", "skipped", "held", "needs_human", "blocked_dependency"];
 const TASK_SOURCES: TaskSource[] = [
   "manual",
   "planner",
@@ -867,6 +873,104 @@ export async function createServer(
     await store.upsertTaskProposal(updatedProposal);
     await recordTaskEvent(task, "task.created", undefined, "Task converted from proposal.", addStoredEvent, store);
     return reply.code(201).send({ ok: true, proposal: updatedProposal, task: withTaskEvents(task, store) });
+  });
+
+  app.get<{ Querystring: { project_id?: string; status?: string } }>("/v1/campaigns", async (request, reply) => {
+    if (request.query.status && !CAMPAIGN_STATUSES.includes(request.query.status as CampaignStatus))
+      return reply.code(400).send({ ok: false, error: "invalid_campaign_status" });
+    return { campaigns: store.listCampaigns({ projectId: request.query.project_id, status: request.query.status }) };
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/campaigns", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    const parsed = parseCampaignImportInput(request.body, store);
+    if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+    await store.upsertCampaign(parsed.campaign);
+    for (const step of parsed.steps) await store.upsertCampaignStep(step);
+    await recordCampaignEvent(parsed.campaign, "campaign.created", "Campaign created.", addStoredEvent, { step_count: parsed.steps.length });
+    return reply.code(201).send({ ok: true, campaign: parsed.campaign, steps: parsed.steps });
+  });
+
+  app.get<{ Params: { campaignId: string } }>("/v1/campaigns/:campaignId", async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    return { campaign, steps: store.listCampaignSteps({ campaignId: campaign.campaign_id }) };
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/import-goal-pack", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    const campaignId = decodeURIComponent(request.params.campaignId);
+    const parsed = parseCampaignImportInput({ ...request.body, campaign_id: campaignId }, store);
+    if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+    await store.upsertCampaign(parsed.campaign);
+    for (const step of parsed.steps) await store.upsertCampaignStep(step);
+    await recordCampaignEvent(parsed.campaign, "campaign.imported", "Campaign goal pack imported.", addStoredEvent, { step_count: parsed.steps.length });
+    return reply.code(201).send({ ok: true, campaign: parsed.campaign, steps: parsed.steps });
+  });
+
+  app.get<{ Params: { campaignId: string } }>("/v1/campaigns/:campaignId/steps", async (request, reply) => {
+    const campaignId = decodeURIComponent(request.params.campaignId);
+    if (!store.getCampaign(campaignId)) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    return { steps: store.listCampaignSteps({ campaignId }) };
+  });
+
+  app.get<{ Params: { campaignId: string; stepId: string } }>("/v1/campaigns/:campaignId/steps/:stepId", async (request, reply) => {
+    const step = store.getCampaignStep(decodeURIComponent(request.params.stepId));
+    if (!step || step.campaign_id !== decodeURIComponent(request.params.campaignId)) return reply.code(404).send({ ok: false, error: "campaign_step_not_found" });
+    return { step };
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/start", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return updateCampaignState(request.params.campaignId, "running", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/pause", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return updateCampaignState(request.params.campaignId, "paused", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/hold", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return updateCampaignState(request.params.campaignId, "held", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/resume", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return updateCampaignState(request.params.campaignId, "running", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/advance-preview", async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    return { ok: true, gate: evaluateCampaignAdvanceGate(campaign, store, request.body) };
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/advance", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    if (request.body.confirm_advance !== true) return reply.code(400).send({ ok: false, error: "missing_confirm_advance" });
+    const gate = evaluateCampaignAdvanceGate(campaign, store, request.body);
+    if (gate.decision !== "advance") {
+      await recordCampaignEvent(campaign, "campaign.step.advance_blocked", "Campaign advance blocked.", addStoredEvent, gate);
+      return reply.code(409).send({ ok: false, error: "campaign_advance_blocked", gate });
+    }
+    if (!gate.next_step_id) return reply.code(409).send({ ok: false, error: "campaign_next_step_missing", gate });
+    const now = new Date().toISOString();
+    const step = store.getCampaignStep(gate.next_step_id);
+    if (!step) return reply.code(409).send({ ok: false, error: "campaign_next_step_missing", gate });
+    const updatedStep: StoredCampaignStep = { ...step, status: "ready", last_gate_result: gate, updated_at: now };
+    const updatedCampaign: StoredCampaign = { ...campaign, status: "paused", current_step_id: updatedStep.campaign_step_id, updated_at: now };
+    await store.upsertCampaignStep(updatedStep);
+    await store.upsertCampaign(updatedCampaign);
+    await recordCampaignEvent(updatedCampaign, "campaign.step.ready", "Campaign step marked ready.", addStoredEvent, gate);
+    return { ok: true, campaign: updatedCampaign, step: updatedStep, gate };
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/complete", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return finishCampaignStep(request.params.campaignId, request.params.stepId, "completed", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/fail", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return finishCampaignStep(request.params.campaignId, request.params.stepId, "failed", request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/attach-evidence", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return attachCampaignEvidence(request.params.campaignId, request.params.stepId, request.body, store, addStoredEvent, reply);
   });
 
   app.post<{ Body: Record<string, unknown> }>("/v1/tasks", async (request, reply) => {
@@ -2837,6 +2941,12 @@ function safeStringArray(input: unknown): string[] | undefined {
     : undefined;
 }
 
+function safeRecord(input: unknown): Record<string, unknown> | undefined {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? input as Record<string, unknown>
+    : undefined;
+}
+
 function resolvePersistence(options: CreateServerOptions): {
   dbFile?: string;
   jsonMigrationFile?: string;
@@ -3188,6 +3298,90 @@ function safePlannerAdapterAuditMetadata(input: unknown): PlannerAdapterAuditMet
   };
 }
 
+function parseCampaignImportInput(input: Record<string, unknown> | undefined, store: EventStore):
+  | { ok: true; campaign: StoredCampaign; steps: StoredCampaignStep[] }
+  | { ok: false; status?: number; response: QueryErrorResponse | { ok: false; error: string; reasons?: string[] } } {
+  if (!input || typeof input !== "object") return { ok: false, response: invalidQuery("body", "Expected a campaign object.").response };
+  const now = new Date().toISOString();
+  const projectId = safeString(input.project_id) ?? "skybridge-agent-hub";
+  if (!store.getProject(projectId)) return { ok: false, status: 404, response: { ok: false, error: "project_not_found" } };
+  const title = safeString(input.title);
+  const campaignId = safeString(input.campaign_id) ?? slugId("campaign", title ?? "campaign");
+  if (!title) return { ok: false, response: invalidQuery("title", "Campaign title is required.").response };
+  const rawGoals = Array.isArray(input.goals) ? input.goals : Array.isArray(input.steps) ? input.steps : [];
+  if (rawGoals.length === 0) return { ok: false, response: { ok: false, error: "campaign_requires_steps" } };
+  const errors: string[] = [];
+  const seenGoalIds = new Set<string>();
+  const seenOrders = new Set<number>();
+  const steps: StoredCampaignStep[] = [];
+  for (const rawGoal of rawGoals) {
+    if (!rawGoal || typeof rawGoal !== "object") { errors.push("goal entry must be an object"); continue; }
+    const goal = rawGoal as Record<string, unknown>;
+    const goalId = safeString(goal.goal_id);
+    const goalTitle = safeString(goal.title);
+    const order = Number(goal.order);
+    if (!goalId) errors.push("goal_id is required");
+    if (!goalTitle) errors.push(`title is required for ${goalId ?? "unknown goal"}`);
+    if (!Number.isInteger(order) || order < 1) errors.push(`order must be a positive integer for ${goalId ?? "unknown goal"}`);
+    if (goalId && seenGoalIds.has(goalId)) errors.push(`duplicate goal_id: ${goalId}`);
+    if (Number.isInteger(order) && seenOrders.has(order)) errors.push(`duplicate order: ${order}`);
+    if (goalId) seenGoalIds.add(goalId);
+    if (Number.isInteger(order)) seenOrders.add(order);
+    const dependencies = safeStringArray(goal.dependencies) ?? safeStringArray(goal.requires) ?? [];
+    const markdownPath = safeString(goal.markdown_path);
+    const markdownBody = safeLongString(goal.markdown_body);
+    const metadata = safeRecord(goal.metadata) ?? {};
+    const stepId = safeString(goal.campaign_step_id) ?? `${campaignId}:${goalId ?? slugId("goal", goalTitle ?? "step")}`;
+    steps.push({
+      campaign_step_id: stepId,
+      campaign_id: campaignId,
+      project_id: projectId,
+      goal_id: goalId ?? stepId,
+      title: goalTitle ?? stepId,
+      order: Number.isInteger(order) ? order : 9999,
+      status: "pending",
+      dependencies,
+      markdown_path: markdownPath,
+      markdown_hash: safeString(goal.markdown_hash) ?? (markdownBody ? createHash("sha256").update(markdownBody).digest("hex") : undefined),
+      metadata,
+      advance_gate: safeRecord(goal.advance_gate),
+      linked_task_ids: safeStringArray(goal.linked_task_ids) ?? [],
+      linked_pr_urls: safeStringArray(goal.linked_pr_urls) ?? [],
+      created_at: now,
+      updated_at: now,
+    });
+  }
+  const goalIds = new Set(steps.map((step) => step.goal_id));
+  for (const step of steps) {
+    for (const dependency of step.dependencies) {
+      if (!goalIds.has(dependency)) errors.push(`dependency ${dependency} for ${step.goal_id} does not refer to a campaign goal`);
+    }
+  }
+  if (errors.length > 0) return { ok: false, response: { ok: false, error: "invalid_campaign_goal_pack", reasons: errors } };
+  const sortedSteps = steps.sort((a, b) => a.order - b.order);
+  const firstStep = sortedSteps[0];
+  if (firstStep) firstStep.status = "ready";
+  const status = safeString(input.status) ?? "draft";
+  if (!CAMPAIGN_STATUSES.includes(status as CampaignStatus)) return { ok: false, response: { ok: false, error: "invalid_campaign_status" } };
+  const campaign: StoredCampaign = {
+    campaign_id: campaignId,
+    project_id: projectId,
+    title,
+    description: safeLongString(input.description),
+    source: safeString(input.source) ?? "goal-pack",
+    status: status as CampaignStatus,
+    current_step_id: firstStep?.campaign_step_id,
+    created_at: now,
+    updated_at: now,
+    created_by: safeString(input.created_by) ?? "operator",
+    imported_from: safeString(input.imported_from),
+    goal_pack_hash: safeString(input.goal_pack_hash),
+    safety_policy: safeRecord(input.safety_policy),
+    metadata: safeRecord(input.metadata),
+  };
+  return { ok: true, campaign, steps: sortedSteps };
+}
+
 function parseGoalMetadata(
   input: Record<string, unknown>,
   existing: StoredMasterGoal | undefined,
@@ -3376,6 +3570,250 @@ async function recordTaskEvent(
     status: task.status,
     risk: task.risk,
   }));
+}
+
+async function recordCampaignEvent(
+  campaign: StoredCampaign,
+  type: Extract<SkyBridgeEventType, `campaign.${string}`>,
+  message: string,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  payload: Record<string, unknown> = {},
+): Promise<void> {
+  await addStoredEvent(coreEvent(type, {
+    campaign_id: campaign.campaign_id,
+    project_id: campaign.project_id,
+    status: campaign.status,
+    message,
+    ...payload,
+  }));
+}
+
+function campaignStepDone(status: CampaignStepStatus): boolean {
+  return ["completed", "recovered", "skipped"].includes(status);
+}
+
+function campaignActiveTaskCount(projectId: string, store: EventStore): number {
+  return store
+    .listTasks({ projectId })
+    .filter((task) => ["queued", "claimed", "running"].includes(task.status))
+    .length;
+}
+
+function campaignStaleLeaseCount(projectId: string, store: EventStore, now = new Date()): number {
+  return store
+    .listTasks({ projectId })
+    .filter((task) => task.lease?.lease_status === "active" && isExpiredLease(task.lease, now))
+    .length;
+}
+
+function chooseCampaignCandidateStep(campaign: StoredCampaign, steps: StoredCampaignStep[]): StoredCampaignStep | undefined {
+  const current = campaign.current_step_id ? steps.find((step) => step.campaign_step_id === campaign.current_step_id) : undefined;
+  if (current && !campaignStepDone(current.status)) return current;
+  return steps
+    .filter((step) => !campaignStepDone(step.status) && !["failed", "held"].includes(step.status))
+    .sort((a, b) => a.order - b.order)
+    .at(0);
+}
+
+function evaluateCampaignAdvanceGate(campaign: StoredCampaign, store: EventStore, input: Record<string, unknown> | undefined = {}) {
+  const now = new Date();
+  const project = store.getProject(campaign.project_id);
+  const control = project ? controlStateForProject(project) : undefined;
+  const steps = store.listCampaignSteps({ campaignId: campaign.campaign_id }).sort((a, b) => a.order - b.order);
+  const candidate = chooseCampaignCandidateStep(campaign, steps);
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  const activeTasks = campaignActiveTaskCount(campaign.project_id, store);
+  const staleLeases = campaignStaleLeaseCount(campaign.project_id, store, now);
+  const failedUnrecovered = store.listTasks({ projectId: campaign.project_id }).filter((task) =>
+    task.status === "failed" &&
+    task.result?.evidence_summary?.recovered !== true &&
+    task.result?.evidence_summary?.recovery_status !== "recovered"
+  ).length;
+
+  if (!candidate) {
+    const incomplete = steps.some((step) => !campaignStepDone(step.status));
+    return {
+      decision: incomplete ? "hold" : "advance",
+      reason: incomplete ? "No advanceable campaign step found." : "Campaign has no remaining incomplete steps.",
+      current_step_id: campaign.current_step_id,
+      next_step_id: undefined,
+      blockers: incomplete ? ["no_advanceable_step"] : [],
+      warnings,
+      hygiene: { active_tasks: activeTasks, stale_leases: staleLeases, failed_unrecovered: failedUnrecovered },
+      hermes_gate_enabled: false,
+      hermes_gate_advisory: null,
+    };
+  }
+
+  const gate = { ...(candidate.advance_gate ?? {}), ...(safeRecord(input) ?? {}) };
+  const dependencies = candidate.dependencies ?? [];
+  for (const dependencyId of dependencies) {
+    const dependency = steps.find((step) => step.goal_id === dependencyId || step.campaign_step_id === dependencyId);
+    if (!dependency || !campaignStepDone(dependency.status)) blockers.push(`dependency_not_complete:${dependencyId}`);
+  }
+
+  if ((gate.requires_no_active_tasks ?? true) && activeTasks > 0) blockers.push("active_tasks_present");
+  if ((gate.requires_no_stale_leases ?? true) && staleLeases > 0) blockers.push("stale_leases_present");
+  if (!(gate.allow_project_control_running === true) && control?.state === "running") blockers.push("project_control_running");
+  if (candidate.status === "failed") blockers.push("current_step_failed");
+  if (input?.worktree_dirty === true || input?.repo_dirty === true) blockers.push("worktree_dirty");
+  if (gate.requires_parent_pr_merged === true && input?.parent_pr_merged !== true) blockers.push("parent_pr_not_merged");
+  if (campaign.status === "failed" || campaign.status === "aborted") blockers.push(`campaign_${campaign.status}`);
+
+  if (failedUnrecovered > 0) warnings.push("failed_unrecovered_tasks_present");
+  if (store.listTasks({ projectId: campaign.project_id }).some((task) => task.status === "blocked")) warnings.push("blocked_tasks_present");
+  if (store.listTaskProposals({ projectId: campaign.project_id }).some((proposal) => proposal.status === "approved")) warnings.push("approved_unconverted_proposals_present");
+  if (!store.listWorkers().some((worker) => presentWorker(worker, store).status === "online")) warnings.push("worker_offline");
+
+  const needsHuman = gate.requires_human_approval === true && gate.human_approved !== true;
+  return {
+    decision: blockers.length > 0 ? "hold" : needsHuman ? "ask_human" : "advance",
+    reason: blockers.length > 0
+      ? "Campaign advance is blocked by deterministic policy."
+      : needsHuman
+        ? "Campaign step requires human approval before advance."
+        : "Campaign advance gates passed.",
+    current_step_id: campaign.current_step_id,
+    next_step_id: candidate.campaign_step_id,
+    next_goal_id: candidate.goal_id,
+    blockers,
+    warnings,
+    hygiene: { active_tasks: activeTasks, stale_leases: staleLeases, failed_unrecovered: failedUnrecovered },
+    dependencies,
+    hermes_gate_enabled: false,
+    hermes_gate_advisory: null,
+  };
+}
+
+async function updateCampaignState(
+  campaignIdParam: string,
+  status: CampaignStatus,
+  body: Record<string, unknown>,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  const campaign = store.getCampaign(decodeURIComponent(campaignIdParam));
+  if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+  const now = new Date().toISOString();
+  const updated: StoredCampaign = {
+    ...campaign,
+    status,
+    updated_at: now,
+    metadata: {
+      ...(campaign.metadata ?? {}),
+      last_reason: safeString(body.reason),
+    },
+  };
+  await store.upsertCampaign(updated);
+  const eventType = status === "running"
+    ? "campaign.started"
+    : status === "paused"
+      ? "campaign.paused"
+      : status === "held"
+        ? "campaign.held"
+        : status === "completed"
+          ? "campaign.completed"
+          : status === "failed"
+            ? "campaign.failed"
+            : "campaign.paused";
+  await recordCampaignEvent(updated, eventType, `Campaign ${status}.`, addStoredEvent, { reason: safeString(body.reason) });
+  return { ok: true, campaign: updated, steps: store.listCampaignSteps({ campaignId: updated.campaign_id }) };
+}
+
+async function finishCampaignStep(
+  campaignIdParam: string,
+  stepIdParam: string,
+  status: Extract<CampaignStepStatus, "completed" | "failed">,
+  body: Record<string, unknown>,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  const campaignId = decodeURIComponent(campaignIdParam);
+  const campaign = store.getCampaign(campaignId);
+  if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+  const step = store.getCampaignStep(decodeURIComponent(stepIdParam));
+  if (!step || step.campaign_id !== campaignId) return reply.code(404).send({ ok: false, error: "campaign_step_not_found" });
+  const evidenceSummary = safeRecord(body.evidence_summary);
+  const linkedTaskIds = safeStringArray(body.linked_task_ids) ?? step.linked_task_ids ?? [];
+  const linkedPrUrls = safeStringArray(body.linked_pr_urls) ?? step.linked_pr_urls ?? [];
+  const reason = safeString(body.reason);
+  if (status === "completed" && !evidenceSummary && linkedTaskIds.length === 0 && linkedPrUrls.length === 0)
+    return reply.code(400).send({ ok: false, error: "campaign_step_completion_requires_evidence" });
+  if (status === "failed" && !reason) return reply.code(400).send({ ok: false, error: "campaign_step_failure_requires_reason" });
+  const now = new Date().toISOString();
+  const updatedStep: StoredCampaignStep = {
+    ...step,
+    status,
+    evidence_summary: evidenceSummary ?? step.evidence_summary,
+    linked_task_ids: linkedTaskIds,
+    linked_pr_urls: linkedPrUrls,
+    decision_summary: reason ?? safeString(body.decision_summary) ?? step.decision_summary,
+    completed_at: now,
+    updated_at: now,
+  };
+  const updatedCampaign: StoredCampaign = {
+    ...campaign,
+    status: status === "failed" ? "held" : campaign.status,
+    updated_at: now,
+  };
+  await store.upsertCampaignStep(updatedStep);
+  await store.upsertCampaign(updatedCampaign);
+  await recordCampaignEvent(
+    updatedCampaign,
+    status === "failed" ? "campaign.step.failed" : "campaign.step.completed",
+    `Campaign step ${status}.`,
+    addStoredEvent,
+    {
+      campaign_step_id: updatedStep.campaign_step_id,
+      goal_id: updatedStep.goal_id,
+      reason,
+      linked_task_ids: linkedTaskIds,
+      linked_pr_urls: linkedPrUrls,
+    },
+  );
+  if (status === "failed") {
+    await recordCampaignEvent(updatedCampaign, "campaign.held", "Campaign held after failed step.", addStoredEvent, { campaign_step_id: updatedStep.campaign_step_id });
+  }
+  return { ok: true, campaign: updatedCampaign, step: updatedStep };
+}
+
+async function attachCampaignEvidence(
+  campaignIdParam: string,
+  stepIdParam: string,
+  body: Record<string, unknown>,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  const campaignId = decodeURIComponent(campaignIdParam);
+  const campaign = store.getCampaign(campaignId);
+  if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+  const step = store.getCampaignStep(decodeURIComponent(stepIdParam));
+  if (!step || step.campaign_id !== campaignId) return reply.code(404).send({ ok: false, error: "campaign_step_not_found" });
+  const evidenceSummary = safeRecord(body.evidence_summary);
+  const linkedTaskIds = safeStringArray(body.linked_task_ids) ?? step.linked_task_ids ?? [];
+  const linkedPrUrls = safeStringArray(body.linked_pr_urls) ?? step.linked_pr_urls ?? [];
+  if (!evidenceSummary && linkedTaskIds.length === 0 && linkedPrUrls.length === 0)
+    return reply.code(400).send({ ok: false, error: "campaign_step_evidence_required" });
+  const now = new Date().toISOString();
+  const updatedStep: StoredCampaignStep = {
+    ...step,
+    evidence_summary: evidenceSummary ?? step.evidence_summary,
+    linked_task_ids: linkedTaskIds,
+    linked_pr_urls: linkedPrUrls,
+    updated_at: now,
+  };
+  await store.upsertCampaignStep(updatedStep);
+  await recordCampaignEvent(campaign, "campaign.step.evidence_attached", "Campaign step evidence attached.", addStoredEvent, {
+    campaign_step_id: updatedStep.campaign_step_id,
+    goal_id: updatedStep.goal_id,
+    linked_task_ids: linkedTaskIds,
+    linked_pr_urls: linkedPrUrls,
+  });
+  return { ok: true, campaign, step: updatedStep };
 }
 
 async function updateTaskTerminal(

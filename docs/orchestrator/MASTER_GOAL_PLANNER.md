@@ -2,11 +2,15 @@
 
 The master goal planner turns a high-level operator goal into reviewable task proposals. It is preview-first and does not create executable tasks unless an operator explicitly converts a proposal.
 
+For multi-goal operator campaigns, use a Goal Pack instead of one giant master goal. Goal Packs keep ordered Super Goal markdown files local and import them as campaign metadata; campaign advance marks steps ready but does not run workers.
+
 ## Concepts
 
 - `master_goal`: the high-level objective, constraints, acceptance criteria and stop conditions.
 - `planning_session`: one planner run against current project state.
 - `task_proposal`: a candidate task with dedupe key, expected files, acceptance criteria, evidence requirements, required capabilities, risk and rationale.
+- `campaign`: an ordered set of Super Goal steps imported from a local Goal Pack.
+- `campaign_step`: one sequenced Super Goal markdown file with dependencies, gates and evidence.
 
 Task proposals use this lifecycle:
 
@@ -19,6 +23,50 @@ proposed -> reviewed -> approved -> converted -> executed
 ```
 
 Only approved proposals can be converted. Converted proposals become normal SkyBridge tasks that can be run with `skybridge-run-once.ps1` or `skybridge-guide.ps1`.
+
+Campaigns use:
+
+```text
+draft -> ready -> running -> paused -> completed
+                 -> held
+                 -> failed
+                 -> aborted
+```
+
+Steps use:
+
+```text
+pending -> ready -> running -> completed
+                         -> recovered
+                         -> failed
+                         -> skipped
+                         -> held
+                         -> needs_human
+                         -> blocked_dependency
+```
+
+The campaign advance gate is deterministic in Super 185. It refuses to advance when active tasks or stale leases exist, dependencies are incomplete, project control is running, required human approval is missing, or required evidence is missing. Hermes gate evaluation is intentionally deferred to Super 186.
+
+## Goal Pack Campaigns
+
+Validate and preview the seed campaign locally:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 validate-pack `
+  -GoalPackDir goals/bootstrap-mvp
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 import `
+  -GoalPackDir goals/bootstrap-mvp `
+  -DryRun
+```
+
+Apply import only after the target server has campaign endpoints deployed:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 import `
+  -GoalPackDir goals/bootstrap-mvp `
+  -Apply
+```
 
 ## Rule-Based Planner
 
