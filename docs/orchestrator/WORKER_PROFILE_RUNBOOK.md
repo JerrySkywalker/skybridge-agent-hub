@@ -547,6 +547,30 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -Hy
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 audit -Json
 ```
 
+## Campaign Step Execution
+
+Campaign steps stay metadata-only until an operator explicitly previews and applies execution:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 execute-preview `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -CampaignId bootstrap-mvp `
+  -WorkerId laptop-zenbookduo
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 execute-step `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -CampaignId bootstrap-mvp `
+  -WorkerId laptop-zenbookduo `
+  -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
+  -Apply
+```
+
+`execute-step` creates one queued, campaign-step-derived task and links it to the campaign step. It does not start the worker. Run the normal bounded worker loop afterward with an explicit target or `MaxTasks <= 2`.
+
+Super 187 proved the first campaign-step execution: task `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053` used lease `lease_chdDfMPI1SEIgonHR-hzv`, created child PR #92, merged after checks passed, recorded recovered evidence, and advanced `bootstrap-mvp` to Super 184B ready through the gate. Super 184B was not executed.
+
 `skybridge-status.ps1` color is optional. Use `-Color` for interactive operator sessions, `-NoColor` for copyable logs and smokes, or `-ColorMode Auto|Always|Never` for explicit control. JSON output and `-OutputFile` never contain ANSI color.
 
 Queue hygiene semantics:

@@ -1,14 +1,15 @@
 # Progress Log
 
-## 2026-05-31 Super Goal 187 Bootstrap Campaign MVP Hardening
+## 2026-05-31 Super Goal 187 Campaign Step Executor and Bootstrap MVP Pilot
 
-- Executed campaign step `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening` as a docs-only child task bounded to the expected files.
-- Added `docs/dev/BOOTSTRAP_CAMPAIGN_MVP.md` with the restartable campaign MVP contract: resume semantics after interrupted sessions, campaign locks separate from task leases and repo locks, one-active-campaign-per-project enforcement, step retry/skip/hold evidence requirements, append-only campaign step event families, and audit/export report expectations.
-- Added `docs/dev/CAMPAIGN_STEP_EXECUTOR_PILOT.md` to record the manual campaign-step execution pattern, expected files, safety boundaries, validation checklist, delegated draft PR evidence, and campaign step result fields.
-- Updated the self-bootstrap supervisor and worker profile runbooks so ready campaign steps remain metadata-only until proposal review, task conversion, lease checks and repo guards permit worker execution.
-- Validation passed with fallback `corepack pnpm check`; `just` was not used by the validation wrapper because the fallback path executed.
-- Did not advance campaign metadata, did not execute Super 184B, did not start a worker loop, did not convert proposals, and did not touch production deployment, server root config, secrets, GitHub settings or branch protection.
-- Draft/manual child PR creation is delegated to the edge worker because this task explicitly forbids `git add`, `git commit`, `git push` and `gh pr create` from this Codex session.
+- Started from latest `main` after PR #91 and created branch `ai/super-187-campaign-step-executor-bootstrap-mvp`.
+- Preflight confirmed cloud project control `paused`, `stop_requested=false`, active queued/claimed/running tasks `0`, stale leases `0`, campaign `bootstrap-mvp` present, current step `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening` ready, Super 186 completed, `laptop-zenbookduo` heartbeat online after refresh, and Hermes `direct_https=true`.
+- Added campaign step executor support in `skybridge-campaign.ps1` and the server: `execute-preview`, `execute-step`, `link-task`, `attach-execution-evidence`, and `step-report`. Mutating commands require `-Apply`; execution creates a queued task only and does not run a worker unless a future explicit run mode is implemented.
+- Added execution safety gates for active tasks, stale leases, running project control, non-current or already-completed steps, incomplete dependencies, duplicate linked tasks, linked open PRs, markdown hash mismatch, unsafe paths, blocked task types, dirty worktree markers, and missing worker capabilities.
+- Real cloud `execute-preview` for Super 187 produced exactly one docs-scoped task payload. `execute-step -Apply` created `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053` and linked it to the campaign step.
+- Ran a bounded `MaxTasks=1` lease-backed worker loop on `laptop-zenbookduo`. The task received lease `lease_chdDfMPI1SEIgonHR-hzv`, passed workspace guards, created child PR #92, and changed only the expected docs files.
+- PR #92 checks passed and the child PR merged. The task remains raw `failed` because the worker CI guardian initially stopped on draft/pending checks, but evidence was repaired to recovered after merge.
+- Attached task/PR/evidence summary to Super 187, marked the step completed, and ran `advance-with-gate -Apply` with human approval. Deterministic plus Hermes gate returned final decision `advance`, moving `bootstrap-mvp` to `bootstrap-mvp:super-184b-operator-console-dashboard` ready. No worker execution for Super 184B occurred.
 
 ## 2026-05-31 Super Goal 186 Hermes Gate Evaluator and Auto-Advance Pilot
 

@@ -143,6 +143,21 @@ corepack pnpm check
 
 If `just` is available, `just check` remains the final preferred command. A failed or unavailable check must be recorded in the campaign step result rather than hidden.
 
-## Super 187 Boundary
+## Super 187 Pilot Result
 
-This Super Goal documents the restartable MVP contract. It does not advance `bootstrap-mvp`, does not execute Super 184B, does not create tasks and does not change production deployment, server root configuration, secrets, GitHub settings or branch protection.
+Super 187 proved the next bootstrap capability: a campaign step can be turned into one approved task, executed through the lease-backed worker flow, attached back to the campaign step as evidence, and advanced through deterministic plus Hermes gate evaluation.
+
+Pilot result:
+
+- campaign id: `bootstrap-mvp`
+- executed step: `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`
+- derived task: `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053`
+- lease id: `lease_chdDfMPI1SEIgonHR-hzv`
+- child PR: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/92`
+- CI: passed
+- merge: PR #92 merged
+- evidence: recovered after the initial draft/pending CI guardian stop
+- gate result: final decision `advance`
+- current campaign step after pilot: `bootstrap-mvp:super-184b-operator-console-dashboard`
+
+The pilot did not execute Super 184B and did not change production deployment, server root configuration, secrets, GitHub settings or branch protection.
