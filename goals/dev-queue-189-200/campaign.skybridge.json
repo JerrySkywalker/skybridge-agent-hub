@@ -1,0 +1,52 @@
+{
+  "schema": "skybridge.campaign.v1",
+  "campaign_id": "dev-queue-189-200",
+  "project_id": "skybridge-agent-hub",
+  "title": "Dev Queue 189-200",
+  "description": "Manually authored development queue for unattended post-Goal-188 execution.",
+  "source": "local-goal-pack",
+  "created_by": "operator",
+  "safety_policy": {
+    "dry_run_default": true,
+    "mutations_require_apply": true,
+    "no_unbounded_worker_loop": true,
+    "blocked_task_types": [
+      "production_deploy",
+      "secret_rotation",
+      "server_root_config",
+      "github_settings",
+      "branch_protection"
+    ]
+  },
+  "default_advance_gates": {
+    "requires_clean_worktree": true,
+    "requires_no_active_tasks": true,
+    "requires_no_stale_leases": true,
+    "requires_parent_pr_merged": false,
+    "requires_human_approval": true
+  },
+  "stop_conditions": [
+    "active_tasks_present",
+    "stale_leases_present",
+    "stale_locks_present",
+    "failed_unrecovered_step",
+    "missing_required_evidence",
+    "operator_hold",
+    "max_steps_reached",
+    "max_runtime_reached"
+  ],
+  "goals": [
+    { "path": "super-189-ci-guardian-pr-finalizer-hardening.md" },
+    { "path": "super-190-campaign-run-report-evidence-ledger.md" },
+    { "path": "super-191-readonly-operator-dashboard.md" },
+    { "path": "super-192-dashboard-safe-actions.md" },
+    { "path": "super-193-notification-attention-loop.md" },
+    { "path": "super-194-worker-service-mode.md" },
+    { "path": "super-195-manual-goal-queue-management.md" },
+    { "path": "super-196-campaign-locking-multi-campaign-queue.md" },
+    { "path": "super-197-multi-worker-readiness.md" },
+    { "path": "super-198-multi-project-support.md" },
+    { "path": "super-199-hermes-goal-draft-generator.md" },
+    { "path": "super-200-controlled-goal-draft-review-import.md" }
+  ]
+}
