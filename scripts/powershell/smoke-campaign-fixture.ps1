@@ -240,9 +240,9 @@ db.prepare('UPDATE campaign_steps SET step_json = ? WHERE campaign_step_id = ?')
     "hermes-gate-invalid-json" {
       $badFixture = Join-Path $tempDir "bad-gate.json"
       Set-Content -LiteralPath $badFixture -Encoding UTF8 -Value '```json{"schema":"skybridge.campaign_gate.v1"}```'
-      $failed = $false
-      try { Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HermesGateFixtureFile", $badFixture) | Out-Null } catch { $failed = $true }
-      if (-not $failed) { throw "Expected invalid Hermes JSON to be rejected." }
+      $null = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 -ApiBase $ApiBase -ProjectId $ProjectId -Json hermes-gate-preview -CampaignId $campaignId -HermesGateFixtureFile $badFixture 2>$null
+      if ($LASTEXITCODE -eq 0) { throw "Expected invalid Hermes JSON to be rejected." }
+      $global:LASTEXITCODE = 0
       $result = [pscustomobject]@{ ok = $true; scenario = $Scenario }
     }
     "campaign-gate-final-decision-advance" {
