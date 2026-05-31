@@ -949,16 +949,28 @@ export async function createServer(
       await recordCampaignEvent(campaign, "campaign.step.advance_blocked", "Campaign advance blocked.", addStoredEvent, gate);
       return reply.code(409).send({ ok: false, error: "campaign_advance_blocked", gate });
     }
+    const advisoryGate = safeRecord(request.body.gate_result);
+    if (advisoryGate && safeString(advisoryGate.final_decision) && safeString(advisoryGate.final_decision) !== "advance") {
+      await recordCampaignEvent(campaign, "campaign.step.advance_blocked", "Campaign advance blocked by advisory gate.", addStoredEvent, advisoryGate);
+      return reply.code(409).send({ ok: false, error: "campaign_gate_not_advance", gate: advisoryGate });
+    }
     if (!gate.next_step_id) return reply.code(409).send({ ok: false, error: "campaign_next_step_missing", gate });
     const now = new Date().toISOString();
     const step = store.getCampaignStep(gate.next_step_id);
     if (!step) return reply.code(409).send({ ok: false, error: "campaign_next_step_missing", gate });
-    const updatedStep: StoredCampaignStep = { ...step, status: "ready", last_gate_result: gate, updated_at: now };
+    const persistedGate = advisoryGate ?? gate;
+    const updatedStep: StoredCampaignStep = { ...step, status: "ready", last_gate_result: persistedGate, updated_at: now };
     const updatedCampaign: StoredCampaign = { ...campaign, status: "paused", current_step_id: updatedStep.campaign_step_id, updated_at: now };
     await store.upsertCampaignStep(updatedStep);
     await store.upsertCampaign(updatedCampaign);
-    await recordCampaignEvent(updatedCampaign, "campaign.step.ready", "Campaign step marked ready.", addStoredEvent, gate);
-    return { ok: true, campaign: updatedCampaign, step: updatedStep, gate };
+    await recordCampaignEvent(updatedCampaign, "campaign.step.gate_previewed", "Campaign step gate previewed.", addStoredEvent, persistedGate);
+    if (advisoryGate) {
+      await recordCampaignEvent(updatedCampaign, "campaign.step.hermes_gate_evaluated", "Campaign Hermes gate evaluated.", addStoredEvent, advisoryGate);
+    }
+    await recordCampaignEvent(updatedCampaign, "campaign.step.advance_allowed", "Campaign step advance allowed.", addStoredEvent, persistedGate);
+    await recordCampaignEvent(updatedCampaign, "campaign.step.advanced", "Campaign advanced to next step.", addStoredEvent, { from_step_id: campaign.current_step_id, to_step_id: updatedStep.campaign_step_id, gate: persistedGate });
+    await recordCampaignEvent(updatedCampaign, "campaign.step.ready", "Campaign step marked ready.", addStoredEvent, persistedGate);
+    return { ok: true, campaign: updatedCampaign, step: updatedStep, gate: persistedGate };
   });
 
   app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/complete", { preHandler: requireWorkerAuth }, async (request, reply) => {

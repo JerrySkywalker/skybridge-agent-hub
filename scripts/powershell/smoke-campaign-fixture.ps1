@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("pack-validate", "import-dry-run", "step-order", "dependency-check", "status-output", "advance-preview", "requires-apply", "json-clean", "advance-gate-clean", "advance-gate-active-task-block", "advance-gate-stale-lease-block", "advance-gate-missing-dependency", "advance-gate-human-approval")]
+  [ValidateSet("pack-validate", "import-dry-run", "step-order", "dependency-check", "status-output", "advance-preview", "requires-apply", "json-clean", "advance-gate-clean", "advance-gate-active-task-block", "advance-gate-stale-lease-block", "advance-gate-missing-dependency", "advance-gate-human-approval", "hermes-gate-schema", "campaign-gate-final-decision-advance", "campaign-gate-final-decision-hard-veto", "campaign-gate-human-approval-required", "campaign-gate-warnings-do-not-block", "hermes-gate-parse", "hermes-gate-invalid-json", "hermes-gate-hard-veto", "hermes-gate-human-approval", "hermes-gate-warning-only", "advance-with-gate-dry-run", "advance-with-gate-requires-apply", "gate-json-clean", "gate-no-secrets")]
   [string]$Scenario,
   [int]$Port = 0,
   [switch]$Json
@@ -42,6 +42,55 @@ function Invoke-StatusJson {
 
 function Import-SmokeCampaign {
   Invoke-CampaignJson -Arguments @("import", "-GoalPackDir", "goals/bootstrap-mvp", "-Apply")
+}
+
+function New-GateFixtureFile {
+  param(
+    [string]$CampaignId,
+    [string]$CurrentStepId,
+    [string]$CurrentGoalId,
+    [string]$NextStepId,
+    [string]$NextGoalId,
+    [string]$Decision = "advance",
+    [string[]]$Warnings = @("worker_offline")
+  )
+  $path = Join-Path $tempDir ("gate-" + [Guid]::NewGuid().ToString("n") + ".json")
+  $gate = [pscustomobject]@{
+    schema = "skybridge.campaign_gate.v1"
+    decision = $Decision
+    confidence = if ($Decision -eq "advance") { 0.86 } else { 0.62 }
+    campaign_id = $CampaignId
+    current_step_id = $CurrentStepId
+    current_goal_id = $CurrentGoalId
+    next_step_id = $NextStepId
+    next_goal_id = $NextGoalId
+    reasons = @("Fixture Hermes gate reviewed campaign state.")
+    blockers = @()
+    warnings = @($Warnings)
+    required_human_actions = @()
+    evidence_reviewed = [pscustomobject]@{
+      active_tasks = 0
+      stale_leases = 0
+      failed_unrecovered = 0
+      blocked_tasks = 0
+      approved_unconverted_proposals = 0
+      current_step_status = "ready"
+      linked_prs = @()
+      linked_tasks = @()
+      validation_summary = @{ ok = $true }
+      hygiene_summary = @{ active_tasks = 0; stale_leases = 0 }
+    }
+    safety_assessment = [pscustomobject]@{
+      safe_to_advance = ($Decision -eq "advance")
+      safe_to_execute_next_step = $false
+      requires_human_approval = $true
+      deterministic_veto_expected = $false
+    }
+    recommended_next_action = if ($Decision -eq "advance") { "advance_campaign_metadata_only" } else { "hold_campaign" }
+    raw_notes = "Fixture output; no worker execution."
+  }
+  $gate | ConvertTo-Json -Depth 40 | Set-Content -LiteralPath $path -Encoding UTF8
+  return $path
 }
 
 $serverProcess = $null
@@ -103,6 +152,9 @@ try {
 
   $import = Import-SmokeCampaign
   $campaignId = $import.campaign.campaign_id
+  $stepsForGate = @($import.steps | Sort-Object order)
+  $currentForGate = @($stepsForGate | Select-Object -First 1)[0]
+  $nextForGate = @($stepsForGate | Select-Object -Skip 1 -First 1)[0]
 
   switch ($Scenario) {
     "step-order" {
@@ -171,6 +223,100 @@ db.prepare('UPDATE campaign_steps SET step_json = ? WHERE campaign_step_id = ?')
       node $mutateScript $dbFile
       $preview = Invoke-CampaignJson -Arguments @("advance-preview", "-CampaignId", $campaignId, "-HumanApproved")
       if ($preview.gate.decision -ne "hold" -or -not (@($preview.gate.blockers) -match "dependency_not_complete:missing-step")) { throw "Expected missing dependency blocker." }
+      $result = $preview
+    }
+    "hermes-gate-schema" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.hermes_gate.schema -ne "skybridge.campaign_gate.v1") { throw "Expected campaign gate schema." }
+      $result = $preview
+    }
+    "hermes-gate-parse" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.hermes_decision -ne "advance") { throw "Expected parsed Hermes advance decision." }
+      $result = $preview
+    }
+    "hermes-gate-invalid-json" {
+      $badFixture = Join-Path $tempDir "bad-gate.json"
+      Set-Content -LiteralPath $badFixture -Encoding UTF8 -Value '```json{"schema":"skybridge.campaign_gate.v1"}```'
+      $failed = $false
+      try { Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HermesGateFixtureFile", $badFixture) | Out-Null } catch { $failed = $true }
+      if (-not $failed) { throw "Expected invalid Hermes JSON to be rejected." }
+      $result = [pscustomobject]@{ ok = $true; scenario = $Scenario }
+    }
+    "campaign-gate-final-decision-advance" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "advance" -or -not $preview.would_advance) { throw "Expected final advance decision." }
+      $result = $preview
+    }
+    "campaign-gate-final-decision-hard-veto" {
+      Invoke-SkyBridgeJson "POST" "/v1/tasks" @{ task_id = "campaign-smoke-active"; project_id = $ProjectId; title = "Active task"; risk = "low"; source = "manual" } | Out-Null
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "hold" -or @($preview.gate.hard_blockers) -notcontains "active_tasks_present") { throw "Expected deterministic hard veto." }
+      $result = $preview
+    }
+    "campaign-gate-human-approval-required" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "ask_human" -or -not $preview.gate.human_approval_required) { throw "Expected human approval requirement." }
+      $result = $preview
+    }
+    "campaign-gate-warnings-do-not-block" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id -Warnings @("worker_offline", "blocked_tasks_present")
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "advance" -or @($preview.gate.warnings).Count -eq 0) { throw "Expected warnings to remain non-blocking." }
+      $result = $preview
+    }
+    "hermes-gate-hard-veto" {
+      Invoke-SkyBridgeJson "POST" "/v1/tasks" @{ task_id = "campaign-smoke-active"; project_id = $ProjectId; title = "Active task"; risk = "low"; source = "manual" } | Out-Null
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "hold") { throw "Expected hard veto to hold Hermes advance." }
+      $result = $preview
+    }
+    "hermes-gate-human-approval" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "advance" -or -not $preview.gate.human_approval_present) { throw "Expected human-approved Hermes gate advance." }
+      $result = $preview
+    }
+    "hermes-gate-warning-only" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id -Warnings @("worker_offline")
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.gate.final_decision -ne "advance" -or @($preview.gate.warnings).Count -eq 0) { throw "Expected warning-only gate to advance." }
+      $result = $preview
+    }
+    "advance-with-gate-dry-run" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.mode -ne "dry-run" -or -not $preview.would_advance) { throw "Expected advance-with-gate dry-run." }
+      $after = Invoke-CampaignJson -Arguments @("show", "-CampaignId", $campaignId)
+      if ($after.campaign.current_step_id -ne $currentForGate.campaign_step_id) { throw "Dry-run changed campaign current step." }
+      $result = $preview
+    }
+    "advance-with-gate-requires-apply" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $preview = Invoke-CampaignJson -Arguments @("advance-with-gate", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture)
+      if ($preview.mode -ne "dry-run") { throw "Expected -Apply to be required for advance-with-gate." }
+      $result = $preview
+    }
+    "gate-json-clean" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $text = (& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 -ApiBase $ApiBase -ProjectId $ProjectId -Json advance-with-gate -CampaignId $campaignId -HumanApproved -HumanApprovalReason "smoke approval" -HermesGateFixtureFile $fixture) -join "`n"
+      if ($LASTEXITCODE -ne 0) { throw "advance-with-gate JSON command failed." }
+      if ($text -match "`e\[[0-9;]*m") { throw "Gate JSON output contains ANSI codes." }
+      $result = ($text | ConvertFrom-Json)
+    }
+    "gate-no-secrets" {
+      $fixture = New-GateFixtureFile -CampaignId $campaignId -CurrentStepId $currentForGate.campaign_step_id -CurrentGoalId $currentForGate.goal_id -NextStepId $nextForGate.campaign_step_id -NextGoalId $nextForGate.goal_id
+      $inputFile = Join-Path $tempDir "gate-input.json"
+      $outputFile = Join-Path $tempDir "gate-output.json"
+      $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture, "-SaveGateInput", $inputFile, "-SaveGateOutput", $outputFile)
+      $saved = (Get-Content -Raw -LiteralPath $inputFile) + "`n" + (Get-Content -Raw -LiteralPath $outputFile)
+      if ($saved -match "(?i)(HERMES_API_KEY|SKYBRIDGE_WORKER_TOKEN|sk-[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY-----)") { throw "Saved gate artifacts contain secret-looking text." }
       $result = $preview
     }
   }
