@@ -985,6 +985,27 @@ export async function createServer(
     return attachCampaignEvidence(request.params.campaignId, request.params.stepId, request.body, store, addStoredEvent, reply);
   });
 
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/execute-preview", async (request, reply) => {
+    return previewCampaignStepExecution(request.params.campaignId, request.params.stepId, request.body, store, reply);
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/execute", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return executeCampaignStep(request.params.campaignId, request.params.stepId, request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/link-task", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    const taskId = safeString(request.body.task_id);
+    if (!taskId) return reply.code(400).send({ ok: false, error: "missing_task_id" });
+    return attachCampaignEvidence(request.params.campaignId, request.params.stepId, {
+      linked_task_ids: [taskId],
+      evidence_summary: { summary: `Campaign step linked to task ${taskId}.`, created_at: new Date().toISOString(), task_id: taskId },
+    }, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/attach-execution-evidence", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return attachCampaignEvidence(request.params.campaignId, request.params.stepId, request.body, store, addStoredEvent, reply);
+  });
+
   app.post<{ Body: Record<string, unknown> }>("/v1/tasks", async (request, reply) => {
     const parsed = parseTaskInput(request.body, store);
     if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
@@ -3828,6 +3849,173 @@ async function attachCampaignEvidence(
   return { ok: true, campaign, step: updatedStep };
 }
 
+function safeCampaignExecutionFiles(input: Record<string, unknown>, step: StoredCampaignStep): string[] {
+  const explicit = safePathArray(input.expected_files);
+  if (explicit && explicit.length > 0) return explicit;
+  const goalId = step.goal_id.toLowerCase();
+  if (goalId === "super-187-bootstrap-campaign-mvp-hardening") {
+    return [
+      "docs/dev/CAMPAIGN_STEP_EXECUTOR_PILOT.md",
+      "docs/dev/BOOTSTRAP_CAMPAIGN_MVP.md",
+      "docs/dev/PROGRESS.md",
+      "docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md",
+      "docs/orchestrator/WORKER_PROFILE_RUNBOOK.md",
+    ];
+  }
+  return [`docs/dev/${goalId}.md`];
+}
+
+function validateCampaignExecutionPaths(taskType: string, files: string[]): string | undefined {
+  if (files.length === 0) return "expected_files_required";
+  for (const file of files) {
+    if (/(^|\/)(\.env|id_rsa|secrets?|tokens?|private-key)/i.test(file) || /^(deploy\/|\.github\/settings|server-root|\/opt\/|[A-Z]:\/Users\/.*\/\.skybridge)/i.test(file))
+      return `unsafe_expected_file:${file}`;
+    if (taskType === "docs" && !file.startsWith("docs/")) return `docs_task_file_outside_docs:${file}`;
+    if (taskType === "local-smoke" && !/^scripts\/powershell\/smoke-[^/]+\.ps1$/i.test(file)) return `local_smoke_file_not_safe:${file}`;
+    if (taskType === "refactor" && !file.startsWith("docs/") && !file.startsWith("scripts/powershell/") && !file.startsWith("apps/server/src/") && !file.startsWith("packages/event-schema/src/"))
+      return `refactor_file_outside_allowed_paths:${file}`;
+  }
+  return undefined;
+}
+
+function buildCampaignExecutionPreview(campaignIdParam: string, stepIdParam: string, body: Record<string, unknown>, store: EventStore) {
+  const campaignId = decodeURIComponent(campaignIdParam);
+  const stepId = decodeURIComponent(stepIdParam);
+  const campaign = store.getCampaign(campaignId);
+  if (!campaign) return { status: 404, payload: { ok: false, error: "campaign_not_found" } };
+  const step = store.getCampaignStep(stepId);
+  if (!step || step.campaign_id !== campaignId) return { status: 404, payload: { ok: false, error: "campaign_step_not_found" } };
+  const steps = store.listCampaignSteps({ campaignId }).sort((a, b) => a.order - b.order);
+  const project = store.getProject(campaign.project_id);
+  const control = project ? controlStateForProject(project) : undefined;
+  const blockers: string[] = [];
+  const retry = body.retry_attempt === true;
+  const taskType = (safeString(body.task_type) ?? "docs").toLowerCase();
+  const files = safeCampaignExecutionFiles(body, step);
+  const pathError = validateCampaignExecutionPaths(taskType, files);
+  const activeTasks = campaignActiveTaskCount(campaign.project_id, store);
+  const staleLeases = campaignStaleLeaseCount(campaign.project_id, store);
+  if (campaign.current_step_id && campaign.current_step_id !== step.campaign_step_id) blockers.push("step_not_current");
+  if (["running", "failed", "aborted"].includes(campaign.status)) blockers.push(`campaign_status_${campaign.status}`);
+  if (!["ready", "running", "needs_human"].includes(step.status)) blockers.push(`step_not_ready:${step.status}`);
+  if (campaignStepDone(step.status) && !retry) blockers.push("step_already_done");
+  for (const dependencyId of step.dependencies ?? []) {
+    const dependency = steps.find((candidate) => candidate.goal_id === dependencyId || candidate.campaign_step_id === dependencyId);
+    if (!dependency || !campaignStepDone(dependency.status)) blockers.push(`dependency_not_complete:${dependencyId}`);
+  }
+  if (activeTasks > 0) blockers.push("active_tasks_present");
+  if (staleLeases > 0) blockers.push("stale_leases_present");
+  if (control?.state === "running") blockers.push("project_control_running");
+  if (body.repo_dirty === true || body.worktree_dirty === true) blockers.push("worktree_dirty");
+  if (safeString(body.markdown_hash) && step.markdown_hash && safeString(body.markdown_hash) !== step.markdown_hash && body.acknowledge_markdown_hash_mismatch !== true) blockers.push("markdown_hash_mismatch");
+  if (pathError) blockers.push(pathError);
+  const linkedTaskIds = step.linked_task_ids ?? [];
+  if (linkedTaskIds.length > 0 && !retry) blockers.push("duplicate_linked_task");
+  for (const linkedTaskId of linkedTaskIds) {
+    const linkedTask = store.getTask(linkedTaskId);
+    if (linkedTask && ["queued", "claimed", "running"].includes(linkedTask.status)) blockers.push(`linked_active_task:${linkedTaskId}`);
+    if (linkedTask?.result?.pr_url && ["queued", "claimed", "running", "failed"].includes(linkedTask.status)) blockers.push(`linked_open_or_unresolved_pr:${linkedTaskId}`);
+  }
+  const allowedTypes = safeStringArray(step.metadata?.allowed_task_types) ?? [];
+  const blockedTypes = safeStringArray(step.metadata?.blocked_task_types) ?? [];
+  if (allowedTypes.length > 0 && !allowedTypes.map((item) => item.toLowerCase()).includes(taskType)) blockers.push(`task_type_not_allowed:${taskType}`);
+  if (blockedTypes.map((item) => item.toLowerCase()).includes(taskType)) blockers.push(`blocked_task_type:${taskType}`);
+  const requiredCapabilities = taskType === "local-smoke" ? ["codex", "powershell", "windows"] : ["codex", "git", "gh"];
+  const markdownBody = safeLongString(body.markdown_body) ?? safeLongString(body.body) ?? `Campaign step markdown unavailable in server preview. Use local CLI to include the full markdown body for ${step.goal_id}.`;
+  const markdownPath = safeString(body.markdown_path) ?? step.markdown_path;
+  const markdownHash = safeString(body.markdown_hash) ?? step.markdown_hash;
+  const taskId = safeString(body.task_id) ?? `campaign-step-${step.goal_id.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`;
+  const task = {
+    task_id: taskId,
+    project_id: campaign.project_id,
+    title: `Campaign step execution: ${step.title}`,
+    body: `This task is executing a campaign step. Do not advance the campaign yourself unless explicitly instructed by SkyBridge gate.\n\nCampaign: ${campaign.campaign_id}\nStep: ${step.campaign_step_id}\nGoal: ${step.goal_id}\nSource markdown: ${markdownPath ?? "-"}\nMarkdown hash: ${markdownHash ?? "-"}\n\nSafety boundaries:\n- Do not change production deployment, server root config, secrets, GitHub settings, or branch protection.\n- Do not execute Super 184B.\n- Keep work bounded to the expected files.\n\nExpected files:\n${files.map((file) => `- ${file}`).join("\n")}\n\nFull Super Goal markdown:\n\n${markdownBody}`,
+    prompt_summary: `Execute campaign step ${step.goal_id} from ${campaign.campaign_id}; do not advance campaign metadata.`,
+    risk: "low",
+    source: "custom",
+    task_type: taskType,
+    allowed_paths: files,
+    blocked_paths: ["deploy/**", ".env", "**/.env", "**/*token*", "**/*secret*", ".github/settings/**"],
+    validation: ["pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/powershell/validate-powershell.ps1", "just check"],
+    required_capabilities: requiredCapabilities,
+    planner_metadata: {
+      adapter: "campaign-step-executor",
+      decision: "continue",
+      reason: "Campaign step execution task generated from imported Super Goal markdown.",
+      task_type: taskType,
+      allowed_paths: files,
+      expected_files: files,
+      blocked_paths: ["deploy/**", ".env", "**/.env", "**/*token*", "**/*secret*", ".github/settings/**"],
+      validation: ["validate-powershell.ps1", "just check"],
+      stop_criteria_status: ["completed", "recovered", "blocked", "failed"],
+      source_run_id: `${campaign.campaign_id}:${step.campaign_step_id}`,
+      source_campaign_id: campaign.campaign_id,
+      source_campaign_step_id: step.campaign_step_id,
+      source_goal_id: step.goal_id,
+      markdown_path: markdownPath,
+      markdown_hash: markdownHash,
+      expected_outputs: safeStringArray(step.metadata?.expected_outputs) ?? [],
+      created_at: new Date().toISOString(),
+      raw_response_included: false,
+      secrets_included: false,
+    },
+  };
+  return {
+    status: 200,
+    payload: {
+      ok: blockers.length === 0,
+      campaign_id: campaign.campaign_id,
+      step_id: step.campaign_step_id,
+      goal_id: step.goal_id,
+      markdown_path: markdownPath,
+      markdown_hash: markdownHash,
+      blockers: [...new Set(blockers)],
+      expected_files: files,
+      task,
+      would_create_task: blockers.length === 0,
+    },
+  };
+}
+
+async function previewCampaignStepExecution(
+  campaignIdParam: string,
+  stepIdParam: string,
+  body: Record<string, unknown>,
+  store: EventStore,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  const preview = buildCampaignExecutionPreview(campaignIdParam, stepIdParam, body, store);
+  return reply.code(preview.status).send(preview.payload);
+}
+
+async function executeCampaignStep(
+  campaignIdParam: string,
+  stepIdParam: string,
+  body: Record<string, unknown>,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  if (body.apply !== true && body.confirm_execute !== true) return reply.code(400).send({ ok: false, error: "missing_confirm_execute" });
+  const preview = buildCampaignExecutionPreview(campaignIdParam, stepIdParam, body, store);
+  if (preview.status !== 200) return reply.code(preview.status).send(preview.payload);
+  const payload = preview.payload as { ok: boolean; blockers: string[]; task: Record<string, unknown>; campaign_id: string; step_id: string };
+  if (!payload.ok) return reply.code(409).send({ ok: false, error: "campaign_step_execute_blocked", preview: payload });
+  const parsed = parseTaskInput(payload.task, store);
+  if (!parsed.ok) return reply.code(parsed.status ?? 400).send(parsed.response);
+  await store.upsertTask(parsed.task);
+  await recordTaskEvent(parsed.task, "task.created", undefined, "Campaign step execution task created.", addStoredEvent, store);
+  const attachResult = await attachCampaignEvidence(payload.campaign_id, payload.step_id, {
+    linked_task_ids: [parsed.task.task_id],
+    evidence_summary: {
+      summary: `Campaign step execution task created: ${parsed.task.task_id}. Worker execution has not been started by this endpoint.`,
+      created_at: new Date().toISOString(),
+      task_id: parsed.task.task_id,
+    },
+  }, store, addStoredEvent, reply);
+  return { ok: true, task: withTaskEvents(parsed.task, store), link: attachResult, preview: payload };
+}
+
 async function updateTaskTerminal(
   taskIdParam: string,
   workerIdInput: unknown,
@@ -4061,9 +4249,16 @@ function safePlannerMetadata(input: unknown) {
     allowed_paths: safePathArray(record.allowed_paths) ?? [],
     blocked_paths: safePathArray(record.blocked_paths) ?? [],
     validation: safeStringArray(record.validation) ?? [],
+    expected_files: safePathArray(record.expected_files) ?? [],
     stop_criteria_status: safeStringArray(record.stop_criteria_status) ?? [],
     source_run_id: safeString(record.source_run_id),
+    source_campaign_id: safeString(record.source_campaign_id),
+    source_campaign_step_id: safeString(record.source_campaign_step_id),
+    source_goal_id: safeString(record.source_goal_id),
     created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
+    markdown_path: safeString(record.markdown_path),
+    markdown_hash: safeString(record.markdown_hash),
+    expected_outputs: safeStringArray(record.expected_outputs) ?? [],
     raw_response_included: false as const,
     secrets_included: false as const,
   };

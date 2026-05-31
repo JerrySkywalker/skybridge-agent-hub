@@ -88,6 +88,10 @@ Hermes can recommend a hold or advance, but cannot override deterministic blocke
 
 Campaign resume uses the same conservative state source. An interrupted operator session should resume only after re-reading the campaign, current step, recent campaign events, project control, active tasks, stale leases and latest evidence. Resume may recover a stale campaign lock with `-Apply` and a reason, but it must not automatically re-run the current step.
 
+Campaign step execution is explicit and task-backed. `skybridge-campaign.ps1 execute-preview` builds the candidate task payload from the current step markdown and safety metadata without mutation. `execute-step -Apply` creates one queued task and links it to the campaign step; it does not run the worker by itself. The resulting task must still pass the normal lease-backed worker path, repo lock, dirty tree guard, active PR guard, branch collision guard, CI, merge policy and evidence repair rules.
+
+Super 187 proved this flow for `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`: the executor created `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053`, the worker acquired lease `lease_chdDfMPI1SEIgonHR-hzv`, child PR #92 passed checks and merged, recovered evidence was attached, and `advance-with-gate -Apply` moved the campaign metadata to Super 184B ready without executing Super 184B.
+
 Step retry, skip and hold are distinct supervisor inputs:
 
 - retry preserves previous evidence, increments an attempt record and requires a retry reason plus validation target;

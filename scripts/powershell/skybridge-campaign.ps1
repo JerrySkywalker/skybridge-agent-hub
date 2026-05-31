@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("init", "validate-pack", "import", "list", "show", "steps", "status", "start", "pause", "hold", "resume", "advance-preview", "advance", "gate-preview", "hermes-gate-preview", "advance-with-gate", "attach-gate-evidence", "complete-step", "fail-step", "attach-evidence", "export-report")]
+  [ValidateSet("init", "validate-pack", "import", "list", "show", "steps", "status", "start", "pause", "hold", "resume", "advance-preview", "advance", "gate-preview", "hermes-gate-preview", "advance-with-gate", "attach-gate-evidence", "execute-preview", "execute-step", "link-task", "attach-execution-evidence", "step-report", "complete-step", "fail-step", "attach-evidence", "export-report")]
   [string]$Command = "status",
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -10,6 +10,13 @@ param(
   [string]$ManifestFile,
   [string]$StepId,
   [string]$GoalId,
+  [string]$WorkerId,
+  [string]$TaskId,
+  [string]$ExecutionTaskType = "docs",
+  [string[]]$ExpectedFiles = @(),
+  [switch]$RetryAttempt,
+  [switch]$AcknowledgeMarkdownHashMismatch,
+  [switch]$Run,
   [string]$TokenFile,
   [string]$TokenEnvVar,
   [switch]$UseHermesGate,
@@ -482,6 +489,238 @@ function ConvertTo-CampaignImportPayload {
   [pscustomobject]@{ ok = ($errors.Count -eq 0); errors = @($errors.ToArray()); manifest_path = $manifestPath; goal_count = $sorted.Count; payload = $payload }
 }
 
+function Resolve-CampaignStepMarkdownPath {
+  param($Campaign, $Step)
+  $pathText = [string]$Step.markdown_path
+  if ([string]::IsNullOrWhiteSpace($pathText)) { throw "Campaign step has no markdown_path: $($Step.campaign_step_id)" }
+  if ([System.IO.Path]::IsPathRooted($pathText) -and (Test-Path -LiteralPath $pathText -PathType Leaf)) { return (Resolve-Path -LiteralPath $pathText).Path }
+  $candidates = New-Object System.Collections.Generic.List[string]
+  if ($ManifestFile) {
+    $manifestPath = (Resolve-Path -LiteralPath $ManifestFile -ErrorAction Stop).Path
+    $candidates.Add((Join-Path (Split-Path -Parent $manifestPath) $pathText)) | Out-Null
+  }
+  if ($GoalPackDir) { $candidates.Add((Join-Path $GoalPackDir $pathText)) | Out-Null }
+  if ($Campaign.imported_from -and (Test-Path -LiteralPath ([string]$Campaign.imported_from) -PathType Leaf)) {
+    $candidates.Add((Join-Path (Split-Path -Parent ([string]$Campaign.imported_from)) $pathText)) | Out-Null
+  }
+  $candidates.Add((Join-Path (Join-Path "goals" ([string]$Campaign.campaign_id)) $pathText)) | Out-Null
+  $candidates.Add((Join-Path "goals/bootstrap-mvp" $pathText)) | Out-Null
+  foreach ($candidate in @($candidates.ToArray())) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return (Resolve-Path -LiteralPath $candidate).Path }
+  }
+  throw "Campaign step markdown not found for $($Step.campaign_step_id): $pathText"
+}
+
+function Get-CampaignExecutionExpectedFiles {
+  param($Step)
+  if (@($ExpectedFiles).Count -gt 0) { return @($ExpectedFiles | ForEach-Object { ([string]$_).Replace("\", "/") } | Where-Object { $_ }) }
+  $goalId = ([string]$Step.goal_id).ToLowerInvariant()
+  if ($goalId -eq "super-187-bootstrap-campaign-mvp-hardening") {
+    return @(
+      "docs/dev/CAMPAIGN_STEP_EXECUTOR_PILOT.md",
+      "docs/dev/BOOTSTRAP_CAMPAIGN_MVP.md",
+      "docs/dev/PROGRESS.md",
+      "docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md",
+      "docs/orchestrator/WORKER_PROFILE_RUNBOOK.md"
+    )
+  }
+  return @("docs/dev/$($goalId.ToUpperInvariant()).md".ToLowerInvariant())
+}
+
+function Test-CampaignExecutionPaths {
+  param([string]$TaskType, [string[]]$Files)
+  $normalized = @($Files | ForEach-Object { ([string]$_).Replace("\", "/") } | Where-Object { $_ })
+  if ($normalized.Count -lt 1) { return @{ ok = $false; reason = "expected_files_required" } }
+  foreach ($file in $normalized) {
+    if ($file -match "(?i)(^|/)(\.env|id_rsa|secrets?|tokens?|private-key)" -or $file -match "(?i)^(deploy/|\.github/settings|server-root|/opt/|C:/Users/.*/\.skybridge)") {
+      return @{ ok = $false; reason = "unsafe_expected_file:$file" }
+    }
+    if ($TaskType -eq "docs" -and $file -notlike "docs/*") { return @{ ok = $false; reason = "docs_task_file_outside_docs:$file" } }
+    if ($TaskType -eq "local-smoke" -and $file -notmatch "^scripts/powershell/smoke-[^/]+\.ps1$") { return @{ ok = $false; reason = "local_smoke_file_not_safe:$file" } }
+    if ($TaskType -eq "refactor" -and $file -notlike "docs/*" -and $file -notlike "scripts/powershell/*" -and $file -notlike "apps/server/src/*" -and $file -notlike "packages/event-schema/src/*") {
+      return @{ ok = $false; reason = "refactor_file_outside_allowed_paths:$file" }
+    }
+  }
+  return @{ ok = $true; reason = "paths_ok" }
+}
+
+function Get-CampaignExecutionContext {
+  if ([string]::IsNullOrWhiteSpace($CampaignId)) { throw "$Command requires -CampaignId." }
+  $payload = Invoke-CampaignApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))"
+  $campaign = $payload.campaign
+  $steps = @($payload.steps | Sort-Object order)
+  if (-not $campaign) { throw "Campaign not found: $CampaignId" }
+  $step = $null
+  if ($StepId) { $step = @($steps | Where-Object { $_.campaign_step_id -eq $StepId })[0] }
+  elseif ($GoalId) { $step = @($steps | Where-Object { $_.goal_id -eq $GoalId })[0] }
+  elseif ($campaign.current_step_id) { $step = @($steps | Where-Object { $_.campaign_step_id -eq $campaign.current_step_id })[0] }
+  if (-not $step) { throw "Campaign step not found. Supply -StepId or -GoalId." }
+  $markdownPath = Resolve-CampaignStepMarkdownPath -Campaign $campaign -Step $step
+  $rawMarkdown = Get-Content -Raw -LiteralPath $markdownPath
+  $parsedMarkdown = Get-MarkdownMetadata -Path $markdownPath
+  $hash = Get-JsonHash -Text $rawMarkdown
+  $expected = @(Get-CampaignExecutionExpectedFiles -Step $step)
+  $executionTaskType = $ExecutionTaskType.ToLowerInvariant()
+  $pathCheck = Test-CampaignExecutionPaths -TaskType $executionTaskType -Files $expected
+  $status = Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-Hygiene", "-ShowCampaigns", "-CampaignId", $CampaignId, "-ShowCampaignSteps", "-Json", "-ColorMode", "Never")
+  $repo = Get-GitMetadata
+  [pscustomobject]@{
+    campaign = $campaign
+    steps = @($steps)
+    step = $step
+    markdown_path = $markdownPath
+    markdown_hash = $hash
+    markdown_hash_matches = ([string]$step.markdown_hash -eq $hash)
+    markdown = $rawMarkdown
+    markdown_body = $parsedMarkdown.body
+    expected_files = @($expected)
+    execution_task_type = $executionTaskType
+    path_check = $pathCheck
+    status = $status
+    repo = $repo
+  }
+}
+
+function Get-CampaignExecutionBlockers {
+  param($Context)
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $step = $Context.step
+  $campaign = $Context.campaign
+  $status = $Context.status
+  $taskSummary = $status.task_summary
+  $hygiene = $status.hygiene_summary
+  if ($campaign.current_step_id -and $step.campaign_step_id -ne $campaign.current_step_id) { $blockers.Add("step_not_current") | Out-Null }
+  if ([string]$campaign.status -in @("running", "failed", "aborted")) { $blockers.Add("campaign_status_$($campaign.status)") | Out-Null }
+  if ([string]$step.status -notin @("ready", "running", "needs_human")) { $blockers.Add("step_not_ready:$($step.status)") | Out-Null }
+  if ([string]$step.status -in @("completed", "recovered", "skipped") -and -not $RetryAttempt) { $blockers.Add("step_already_done") | Out-Null }
+  if ($taskSummary.active -gt 0) { $blockers.Add("active_tasks_present") | Out-Null }
+  if ($hygiene.stale_leases -gt 0) { $blockers.Add("stale_leases_present") | Out-Null }
+  if ($status.control.state -eq "running") { $blockers.Add("project_control_running") | Out-Null }
+  foreach ($dependencyId in @($step.dependencies)) {
+    $dependency = @($Context.steps | Where-Object { $_.goal_id -eq $dependencyId -or $_.campaign_step_id -eq $dependencyId })[0]
+    if (-not $dependency -or [string]$dependency.status -notin @("completed", "recovered", "skipped")) { $blockers.Add("dependency_not_complete:$dependencyId") | Out-Null }
+  }
+  if (-not $Context.markdown_hash_matches -and -not $AcknowledgeMarkdownHashMismatch) { $blockers.Add("markdown_hash_mismatch") | Out-Null }
+  if (-not $Context.path_check.ok) { $blockers.Add([string]$Context.path_check.reason) | Out-Null }
+  if ($Context.repo.dirty -eq $true) { $blockers.Add("worktree_dirty") | Out-Null }
+  $linkedTaskIds = @($step.linked_task_ids | Where-Object { $_ })
+  if ($linkedTaskIds.Count -gt 0 -and -not $RetryAttempt) { $blockers.Add("duplicate_linked_task") | Out-Null }
+  foreach ($taskIdItem in $linkedTaskIds) {
+    try {
+      $taskPayload = Invoke-CampaignApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString([string]$taskIdItem))"
+      if ([string]$taskPayload.task.status -in @("queued", "claimed", "running")) { $blockers.Add("linked_active_task:$taskIdItem") | Out-Null }
+      if ($taskPayload.task.result.pr_url -and [string]$taskPayload.task.status -in @("queued", "claimed", "running", "failed")) { $blockers.Add("linked_open_or_unresolved_pr:$taskIdItem") | Out-Null }
+    } catch {}
+  }
+  $blockedTaskTypes = @($step.metadata.blocked_task_types | ForEach-Object { ([string]$_).ToLowerInvariant() })
+  if ($blockedTaskTypes -contains $Context.execution_task_type) { $blockers.Add("blocked_task_type:$($Context.execution_task_type)") | Out-Null }
+  $allowedTaskTypes = @($step.metadata.allowed_task_types | ForEach-Object { ([string]$_).ToLowerInvariant() })
+  if ($allowedTaskTypes.Count -gt 0 -and $allowedTaskTypes -notcontains $Context.execution_task_type) { $blockers.Add("task_type_not_allowed:$($Context.execution_task_type)") | Out-Null }
+  if ($WorkerId) {
+    $worker = @($status.workers | Where-Object { $_.worker_id -eq $WorkerId -or $_.id -eq $WorkerId })[0]
+    if (-not $worker -or [string]$worker.status -ne "online") { $blockers.Add("worker_unavailable:$WorkerId") | Out-Null }
+  } elseif (@($status.workers | Where-Object { $_.status -eq "online" }).Count -lt 1) {
+    $blockers.Add("worker_unavailable") | Out-Null
+  }
+  @($blockers.ToArray() | Select-Object -Unique)
+}
+
+function New-CampaignExecutionTaskPayload {
+  param($Context)
+  $step = $Context.step
+  $taskIdValue = if ($TaskId) { $TaskId } else { "campaign-step-$(([string]$step.goal_id).ToLowerInvariant() -replace '[^a-z0-9]+','-')-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))" }
+  $taskType = $Context.execution_task_type
+  $requiredCapabilities = if ($taskType -eq "local-smoke") { @("codex", "powershell", "windows") } else { @("codex", "git", "gh") }
+  $body = @"
+This task is executing a campaign step. Do not advance the campaign yourself unless explicitly instructed by SkyBridge gate.
+
+Campaign: $($Context.campaign.campaign_id)
+Step: $($step.campaign_step_id)
+Goal: $($step.goal_id)
+Source markdown: $($Context.markdown_path)
+Markdown hash: $($Context.markdown_hash)
+
+Safety boundaries:
+- Do not change production deployment, server root config, secrets, GitHub settings, or branch protection.
+- Do not execute Super 184B.
+- Keep work bounded to the expected files listed below.
+- Create a draft/manual child PR and report validation evidence.
+
+Expected files:
+$(@($Context.expected_files | ForEach-Object { "- $_" }) -join "`n")
+
+Required evidence:
+- draft parent or child PR URL;
+- validation summary;
+- campaign step result summary;
+- CI/merge/evidence status when available.
+
+Full Super Goal markdown:
+
+$($Context.markdown)
+"@
+  [pscustomobject]@{
+    task_id = $taskIdValue
+    project_id = $ProjectId
+    title = "Campaign step execution: $($step.title)"
+    body = $body
+    prompt_summary = "Execute campaign step $($step.goal_id) from $($Context.campaign.campaign_id); do not advance campaign metadata."
+    risk = "low"
+    source = "custom"
+    task_type = $taskType
+    allowed_paths = @($Context.expected_files)
+    blocked_paths = @("deploy/**", ".env", "**/.env", "**/*token*", "**/*secret*", ".github/settings/**")
+    validation = @("pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/powershell/validate-powershell.ps1", "just check")
+    required_capabilities = @($requiredCapabilities)
+    planner_metadata = @{
+      adapter = "campaign-step-executor"
+      decision = "continue"
+      reason = "Campaign step execution task generated from imported Super Goal markdown."
+      task_type = $taskType
+      allowed_paths = @($Context.expected_files)
+      expected_files = @($Context.expected_files)
+      blocked_paths = @("deploy/**", ".env", "**/.env", "**/*token*", "**/*secret*", ".github/settings/**")
+      validation = @("validate-powershell.ps1", "just check")
+      stop_criteria_status = @("completed", "recovered", "blocked", "failed")
+      source_run_id = "$($Context.campaign.campaign_id):$($step.campaign_step_id)"
+      source_campaign_id = $Context.campaign.campaign_id
+      source_campaign_step_id = $step.campaign_step_id
+      source_goal_id = $step.goal_id
+      markdown_path = $step.markdown_path
+      markdown_hash = $Context.markdown_hash
+      expected_outputs = @($step.metadata.expected_outputs)
+      advance_gate = $step.advance_gate
+      created_at = (Get-Date).ToUniversalTime().ToString("o")
+      raw_response_included = $false
+      secrets_included = $false
+    }
+  }
+}
+
+function New-CampaignExecutionPreview {
+  $context = Get-CampaignExecutionContext
+  $blockers = @(Get-CampaignExecutionBlockers -Context $context)
+  $task = New-CampaignExecutionTaskPayload -Context $context
+  [pscustomobject]@{
+    ok = ($blockers.Count -eq 0)
+    command = $Command
+    mode = if ($effectiveDryRun) { "dry-run" } else { "apply" }
+    project_id = $ProjectId
+    token_printed = $false
+    campaign_id = $context.campaign.campaign_id
+    step_id = $context.step.campaign_step_id
+    goal_id = $context.step.goal_id
+    markdown_path = $context.markdown_path
+    markdown_hash = $context.markdown_hash
+    markdown_hash_matches = $context.markdown_hash_matches
+    blockers = @($blockers)
+    expected_files = @($context.expected_files)
+    task = $task
+    would_create_task = ($blockers.Count -eq 0)
+    would_run_worker = [bool]$Run
+  }
+}
+
 function Write-CampaignResult {
   param($Result)
   if ($OutputFile) {
@@ -664,6 +903,82 @@ switch ($Command) {
       }
       $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; campaign = $payload.campaign; steps = @($payload.step); gate = $finalGate }
     }
+  }
+  "execute-preview" {
+    $result = New-CampaignExecutionPreview
+  }
+  "execute-step" {
+    if ($Run) { throw "execute-step -Run is reserved for a future bounded runner integration; create the task first, then run the worker explicitly." }
+    $preview = New-CampaignExecutionPreview
+    if (@($preview.blockers).Count -gt 0) {
+      $result = $preview
+    } elseif ($effectiveDryRun) {
+      $result = $preview
+    } else {
+      $created = Invoke-CampaignApi -Method POST -Path "/v1/tasks" -Body $preview.task
+      $linkBody = @{
+        linked_task_ids = @($created.task.task_id)
+        evidence_summary = @{
+          summary = "Campaign step execution task created: $($created.task.task_id). Worker execution is not started by execute-step."
+          created_at = (Get-Date).ToUniversalTime().ToString("o")
+          task_id = $created.task.task_id
+          campaign_id = $preview.campaign_id
+          campaign_step_id = $preview.step_id
+          markdown_hash = $preview.markdown_hash
+        }
+      }
+      $linked = Invoke-CampaignApi -Method POST -Path "/v1/campaigns/$([uri]::EscapeDataString($preview.campaign_id))/steps/$([uri]::EscapeDataString($preview.step_id))/attach-evidence" -Body $linkBody
+      $result = [pscustomobject]@{
+        ok = $true
+        command = $Command
+        mode = "apply"
+        project_id = $ProjectId
+        token_printed = $false
+        campaign_id = $preview.campaign_id
+        step_id = $preview.step_id
+        goal_id = $preview.goal_id
+        task = $created.task
+        campaign = $linked.campaign
+        steps = @($linked.step)
+        linked_task_ids = @($created.task.task_id)
+        expected_files = @($preview.expected_files)
+      }
+    }
+  }
+  "link-task" {
+    if ([string]::IsNullOrWhiteSpace($CampaignId) -or [string]::IsNullOrWhiteSpace($StepId) -or [string]::IsNullOrWhiteSpace($TaskId)) { throw "link-task requires -CampaignId, -StepId, and -TaskId." }
+    if ($effectiveDryRun) {
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; campaign_id = $CampaignId; step_id = $StepId; task_id = $TaskId; would_link_task = $true }
+    } else {
+      $payload = Invoke-CampaignApi -Method POST -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))/steps/$([uri]::EscapeDataString($StepId))/attach-evidence" -Body @{
+        linked_task_ids = @($TaskId)
+        evidence_summary = @{ summary = "Campaign step linked to task $TaskId."; created_at = (Get-Date).ToUniversalTime().ToString("o"); task_id = $TaskId }
+      }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; campaign = $payload.campaign; steps = @($payload.step); linked_task_ids = @($TaskId) }
+    }
+  }
+  "attach-execution-evidence" {
+    if ([string]::IsNullOrWhiteSpace($CampaignId) -or [string]::IsNullOrWhiteSpace($StepId)) { throw "attach-execution-evidence requires -CampaignId and -StepId." }
+    if (-not $EvidenceSummary -and $LinkedTaskIds.Count -eq 0 -and $LinkedPrUrls.Count -eq 0) { throw "attach-execution-evidence requires -EvidenceSummary, -LinkedTaskIds, or -LinkedPrUrls." }
+    if ($effectiveDryRun) {
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; campaign_id = $CampaignId; step_id = $StepId; would_attach_execution_evidence = $true }
+    } else {
+      $body = @{ linked_task_ids = @($LinkedTaskIds); linked_pr_urls = @($LinkedPrUrls) }
+      if ($EvidenceSummary) { $body.evidence_summary = @{ summary = $EvidenceSummary; created_at = (Get-Date).ToUniversalTime().ToString("o"); linked_task_ids = @($LinkedTaskIds); linked_pr_urls = @($LinkedPrUrls) } }
+      $payload = Invoke-CampaignApi -Method POST -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))/steps/$([uri]::EscapeDataString($StepId))/attach-evidence" -Body $body
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; campaign = $payload.campaign; steps = @($payload.step) }
+    }
+  }
+  "step-report" {
+    if ([string]::IsNullOrWhiteSpace($CampaignId)) { throw "step-report requires -CampaignId." }
+    $payload = Invoke-CampaignApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))"
+    $step = if ($StepId) { @($payload.steps | Where-Object { $_.campaign_step_id -eq $StepId })[0] } elseif ($GoalId) { @($payload.steps | Where-Object { $_.goal_id -eq $GoalId })[0] } else { @($payload.steps | Where-Object { $_.campaign_step_id -eq $payload.campaign.current_step_id })[0] }
+    if (-not $step) { throw "Campaign step not found for report." }
+    $tasks = @()
+    foreach ($linkedTaskId in @($step.linked_task_ids)) {
+      try { $tasks += (Invoke-CampaignApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString([string]$linkedTaskId))").task } catch {}
+    }
+    $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "read"; project_id = $ProjectId; token_printed = $false; campaign = $payload.campaign; steps = @($step); linked_tasks = @($tasks) }
   }
   "complete-step" {
     if ([string]::IsNullOrWhiteSpace($CampaignId) -or [string]::IsNullOrWhiteSpace($StepId)) { throw "complete-step requires -CampaignId and -StepId." }
