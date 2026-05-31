@@ -153,6 +153,30 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 a
 
 These commands still do not execute a worker. A ready campaign step must be converted into approved proposals and tasks through the normal review queue before `laptop-zenbookduo` may run anything.
 
+Super 187 adds restartable campaign MVP expectations for workers and operators:
+
+- a campaign lock is distinct from the worker repo lock under `.agent/locks` and from server task leases;
+- a stale campaign lock should block campaign mutation until an operator previews recovery and applies it with a reason;
+- workers should not treat a ready campaign step as executable work unless a normal approved task has been created;
+- one active campaign per project is the default safety posture;
+- campaign retry, skip and hold evidence should be attached to the campaign step before any new task is converted.
+
+Before executing work derived from a campaign step, confirm the status view shows no unrelated active task residue and no stale leases:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -ActiveOnly
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -Hygiene
+```
+
+If the step is being resumed after an interrupted session, inspect the campaign event log, child PR evidence and validation status first. Do not re-run Codex simply because the previous terminal was interrupted.
+
 ## API Base And Worker Token
 
 Local development uses:

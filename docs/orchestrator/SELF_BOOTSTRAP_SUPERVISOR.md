@@ -4,6 +4,8 @@ The self-bootstrap supervisor is a bounded plan-run-observe-decide loop. It is n
 
 Campaign sequencing now sits above the supervisor. A campaign step may later invoke a supervisor run, but campaign advance only marks ordered Super Goal steps ready; it does not run workers. Super 186 adds a Hermes advisory gate for metadata-only advance, with deterministic policy still acting as the final veto.
 
+Super 187 hardens the campaign layer as a restartable MVP. Campaign resume, retry, skip and hold decisions are campaign metadata operations first; they must inspect current server state, task leases, repo locks and campaign events before deciding whether a later supervisor or worker run is safe.
+
 ## Model
 
 A supervisor run records:
@@ -84,6 +86,16 @@ Super 186 adds Hermes advisory evaluation through `skybridge-campaign.ps1 hermes
 
 Hermes can recommend a hold or advance, but cannot override deterministic blockers. `advance-with-gate` is dry-run by default, requires `-Apply` for metadata mutation, and must not start workers or create tasks for the next Super Goal.
 
+Campaign resume uses the same conservative state source. An interrupted operator session should resume only after re-reading the campaign, current step, recent campaign events, project control, active tasks, stale leases and latest evidence. Resume may recover a stale campaign lock with `-Apply` and a reason, but it must not automatically re-run the current step.
+
+Step retry, skip and hold are distinct supervisor inputs:
+
+- retry preserves previous evidence, increments an attempt record and requires a retry reason plus validation target;
+- skip requires evidence that the omitted step is superseded, unnecessary or manually accepted;
+- hold requires an owner, reason and next review condition.
+
+Skipped or recovered campaign steps can satisfy dependencies only when the evidence is present in the campaign step event log.
+
 ## Guide Facade
 
 `skybridge-guide.ps1` exposes:
@@ -135,5 +147,6 @@ Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are p
 - Bounded worker loops require explicit `MaxTasks`, idle timeout and stop-on-failure settings. Query status with `-ActiveOnly`, `-RecentTasks`, `-TaskStatus`, `-WorkerId`, `-TaskId`, `-RecoveredOnly` or `-ExcludeRecovered` before starting a batch.
 - Super 183 proved a two-task approved proposal batch against the deployed cloud control plane. Both tasks received active leases, passed local workspace guards, created docs-only child PRs, merged after checks passed, released their leases and recorded recovered evidence after the initial draft/pending CI guardian stop.
 - Super 184 adds queue hygiene as a pre-run gate. Use `skybridge-status.ps1 -Hygiene` or `skybridge-hygiene.ps1 audit` before any larger batch. Stale leases, stale claimed/running tasks, approved-unconverted proposals and converted-unexecuted proposals are report-only by default. Recovery commands require `-Apply` and `-Reason`; historical `task_proposal-59a0236fb69800cd` must not be unblocked automatically.
+- Super 187 adds the restartable campaign MVP contract. Campaign locks are separate from task leases and local repo locks. One active campaign per project is the default, with explicit override evidence required for exceptions. Campaign event logs should record advance previews, blocked advances, retries, skips, holds, evidence attachments and export reports using bounded redacted payloads.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.
