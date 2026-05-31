@@ -293,10 +293,17 @@ export interface PlannerAdapterMetadata {
   stop_criteria_status: string[];
   source_run_id?: string;
   source_proposal_id?: string;
+  source_campaign_id?: string;
+  source_campaign_step_id?: string;
+  source_goal_id?: string;
   proposal_review_status?: string;
   proposal_policy_decision?: string;
   proposal_approved_by?: string;
   proposal_approved_at?: string;
+  expected_files?: string[];
+  expected_outputs?: string[];
+  markdown_path?: string;
+  markdown_hash?: string;
   created_at: string;
   raw_response_included: false;
   secrets_included: false;

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("pack-validate", "import-dry-run", "step-order", "dependency-check", "status-output", "advance-preview", "requires-apply", "json-clean", "advance-gate-clean", "advance-gate-active-task-block", "advance-gate-stale-lease-block", "advance-gate-missing-dependency", "advance-gate-human-approval", "hermes-gate-schema", "campaign-gate-final-decision-advance", "campaign-gate-final-decision-hard-veto", "campaign-gate-human-approval-required", "campaign-gate-warnings-do-not-block", "hermes-gate-parse", "hermes-gate-invalid-json", "hermes-gate-hard-veto", "hermes-gate-human-approval", "hermes-gate-warning-only", "advance-with-gate-dry-run", "advance-with-gate-requires-apply", "gate-json-clean", "gate-no-secrets")]
+  [ValidateSet("pack-validate", "import-dry-run", "step-order", "dependency-check", "status-output", "advance-preview", "requires-apply", "json-clean", "advance-gate-clean", "advance-gate-active-task-block", "advance-gate-stale-lease-block", "advance-gate-missing-dependency", "advance-gate-human-approval", "hermes-gate-schema", "campaign-gate-final-decision-advance", "campaign-gate-final-decision-hard-veto", "campaign-gate-human-approval-required", "campaign-gate-warnings-do-not-block", "hermes-gate-parse", "hermes-gate-invalid-json", "hermes-gate-hard-veto", "hermes-gate-human-approval", "hermes-gate-warning-only", "advance-with-gate-dry-run", "advance-with-gate-requires-apply", "gate-json-clean", "gate-no-secrets", "step-execute-preview", "step-execute-requires-apply", "step-execute-blocks-active-task", "step-execute-blocks-stale-lease", "step-execute-blocks-duplicate-task", "step-execute-markdown-hash")]
   [string]$Scenario,
   [int]$Port = 0,
   [switch]$Json
@@ -155,6 +155,10 @@ try {
   $stepsForGate = @($import.steps | Sort-Object order)
   $currentForGate = @($stepsForGate | Select-Object -First 1)[0]
   $nextForGate = @($stepsForGate | Select-Object -Skip 1 -First 1)[0]
+  if ($Scenario -like "step-execute*") {
+    Invoke-SkyBridgeJson "POST" "/v1/workers/register" @{ worker_id = "campaign-smoke-worker"; name = "Campaign Smoke Worker"; capabilities = @("codex", "git", "gh", "powershell", "windows", "laptop") } | Out-Null
+    Invoke-SkyBridgeJson "POST" "/v1/workers/campaign-smoke-worker/heartbeat" @{ status_note = "ready" } | Out-Null
+  }
 
   switch ($Scenario) {
     "step-order" {
@@ -317,6 +321,66 @@ db.prepare('UPDATE campaign_steps SET step_json = ? WHERE campaign_step_id = ?')
       $preview = Invoke-CampaignJson -Arguments @("hermes-gate-preview", "-CampaignId", $campaignId, "-HumanApproved", "-HumanApprovalReason", "smoke approval", "-HermesGateFixtureFile", $fixture, "-SaveGateInput", $inputFile, "-SaveGateOutput", $outputFile)
       $saved = (Get-Content -Raw -LiteralPath $inputFile) + "`n" + (Get-Content -Raw -LiteralPath $outputFile)
       if ($saved -match "(?i)(HERMES_API_KEY|SKYBRIDGE_WORKER_TOKEN|sk-[A-Za-z0-9_-]{20,}|-----BEGIN .*PRIVATE KEY-----)") { throw "Saved gate artifacts contain secret-looking text." }
+      $result = $preview
+    }
+    "step-execute-preview" {
+      $preview = Invoke-CampaignJson -Arguments @("execute-preview", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if (-not $preview.would_create_task -or @($preview.blockers).Count -ne 0) { throw "Expected executable campaign step preview." }
+      if ($preview.task.planner_metadata.source_campaign_step_id -ne $preview.step_id) { throw "Expected campaign step metadata in task payload." }
+      $result = $preview
+    }
+    "step-execute-requires-apply" {
+      $preview = Invoke-CampaignJson -Arguments @("execute-step", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if ($preview.mode -ne "dry-run" -or -not $preview.would_create_task) { throw "Expected execute-step without -Apply to dry-run." }
+      $tasks = Invoke-SkyBridgeJson "GET" "/v1/tasks?project_id=$ProjectId"
+      if (@($tasks.tasks).Count -ne 0) { throw "Dry-run execute-step created a task." }
+      $result = $preview
+    }
+    "step-execute-blocks-active-task" {
+      Invoke-SkyBridgeJson "POST" "/v1/tasks" @{ task_id = "campaign-step-active"; project_id = $ProjectId; title = "Active task"; risk = "low"; source = "manual" } | Out-Null
+      $preview = Invoke-CampaignJson -Arguments @("execute-preview", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if (@($preview.blockers) -notcontains "active_tasks_present") { throw "Expected active task blocker." }
+      $result = $preview
+    }
+    "step-execute-blocks-stale-lease" {
+      Invoke-SkyBridgeJson "POST" "/v1/tasks" @{ task_id = "campaign-step-stale"; project_id = $ProjectId; title = "Stale lease"; risk = "low"; source = "manual" } | Out-Null
+      Invoke-SkyBridgeJson "POST" "/v1/tasks/campaign-step-stale/claim" @{ worker_id = "campaign-smoke-worker" } | Out-Null
+      $mutateScript = Join-Path $tempDir "mutate-execute-stale.mjs"
+      Set-Content -LiteralPath $mutateScript -Encoding UTF8 -Value @"
+import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync(process.argv[2]);
+const old = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const row = db.prepare('SELECT task_json FROM tasks WHERE task_id = ?').get('campaign-step-stale');
+const task = JSON.parse(row.task_json);
+task.lease.lease_expires_at = old;
+task.lease.heartbeat_at = old;
+db.prepare('UPDATE tasks SET task_json = ?, updated_at = ? WHERE task_id = ?').run(JSON.stringify(task), old, 'campaign-step-stale');
+"@
+      node $mutateScript $dbFile
+      $preview = Invoke-CampaignJson -Arguments @("execute-preview", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if (@($preview.blockers) -notcontains "stale_leases_present") { throw "Expected stale lease blocker." }
+      $result = $preview
+    }
+    "step-execute-blocks-duplicate-task" {
+      $created = Invoke-CampaignJson -Arguments @("execute-step", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker", "-TaskId", "campaign-step-created", "-Apply")
+      if (-not $created.task.task_id) { throw "Expected execute-step to create a task." }
+      $preview = Invoke-CampaignJson -Arguments @("execute-preview", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if (@($preview.blockers) -notcontains "duplicate_linked_task") { throw "Expected duplicate linked task blocker." }
+      $result = $preview
+    }
+    "step-execute-markdown-hash" {
+      $mutateScript = Join-Path $tempDir "mutate-execute-hash.mjs"
+      Set-Content -LiteralPath $mutateScript -Encoding UTF8 -Value @"
+import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync(process.argv[2]);
+const row = db.prepare('SELECT step_json FROM campaign_steps WHERE campaign_step_id = ?').get(process.argv[3]);
+const step = JSON.parse(row.step_json);
+step.markdown_hash = 'bad-hash-for-smoke';
+db.prepare('UPDATE campaign_steps SET step_json = ? WHERE campaign_step_id = ?').run(JSON.stringify(step), step.campaign_step_id);
+"@
+      node $mutateScript $dbFile $currentForGate.campaign_step_id
+      $preview = Invoke-CampaignJson -Arguments @("execute-preview", "-CampaignId", $campaignId, "-WorkerId", "campaign-smoke-worker")
+      if (@($preview.blockers) -notcontains "markdown_hash_mismatch") { throw "Expected markdown hash mismatch blocker." }
       $result = $preview
     }
   }
