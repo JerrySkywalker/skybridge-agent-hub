@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-05-31 Super Goal 187 Bootstrap Campaign MVP Hardening
+
+- Executed campaign step `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening` as a docs-only child task bounded to the expected files.
+- Added `docs/dev/BOOTSTRAP_CAMPAIGN_MVP.md` with the restartable campaign MVP contract: resume semantics after interrupted sessions, campaign locks separate from task leases and repo locks, one-active-campaign-per-project enforcement, step retry/skip/hold evidence requirements, append-only campaign step event families, and audit/export report expectations.
+- Added `docs/dev/CAMPAIGN_STEP_EXECUTOR_PILOT.md` to record the manual campaign-step execution pattern, expected files, safety boundaries, validation checklist, delegated draft PR evidence, and campaign step result fields.
+- Updated the self-bootstrap supervisor and worker profile runbooks so ready campaign steps remain metadata-only until proposal review, task conversion, lease checks and repo guards permit worker execution.
+- Validation passed with fallback `corepack pnpm check`; `just` was not used by the validation wrapper because the fallback path executed.
+- Did not advance campaign metadata, did not execute Super 184B, did not start a worker loop, did not convert proposals, and did not touch production deployment, server root config, secrets, GitHub settings or branch protection.
+- Draft/manual child PR creation is delegated to the edge worker because this task explicitly forbids `git add`, `git commit`, `git push` and `gh pr create` from this Codex session.
+
 ## 2026-05-31 Super Goal 186 Hermes Gate Evaluator and Auto-Advance Pilot
 
 - Started from latest `main` after Super 185 and created branch `ai/super-186-hermes-gate-evaluator-auto-advance`.
