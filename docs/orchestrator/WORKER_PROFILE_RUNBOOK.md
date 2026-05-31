@@ -131,6 +131,28 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 a
 
 Do not run a worker loop merely because a campaign step is ready. Campaign advance and worker execution stay separate operator actions.
 
+Super 186 adds Hermes advisory gate commands for campaign metadata advance:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 hermes-gate-preview `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -CampaignId bootstrap-mvp `
+  -UseHermesGate `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 advance-with-gate `
+  -ApiBase https://skybridge.jerryskywalker.space `
+  -ProjectId skybridge-agent-hub `
+  -CampaignId bootstrap-mvp `
+  -UseHermesGate `
+  -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1" `
+  -HumanApproved `
+  -HumanApprovalReason "Operator approved metadata-only advance."
+```
+
+These commands still do not execute a worker. A ready campaign step must be converted into approved proposals and tasks through the normal review queue before `laptop-zenbookduo` may run anything.
+
 ## API Base And Worker Token
 
 Local development uses:

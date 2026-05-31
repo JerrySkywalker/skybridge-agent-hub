@@ -45,7 +45,16 @@ pending -> ready -> running -> completed
                          -> blocked_dependency
 ```
 
-The campaign advance gate is deterministic in Super 185. It refuses to advance when active tasks or stale leases exist, dependencies are incomplete, project control is running, required human approval is missing, or required evidence is missing. Hermes gate evaluation is intentionally deferred to Super 186.
+The campaign advance gate is deterministic first. It refuses to advance when active tasks or stale leases exist, dependencies are incomplete, project control is running, required human approval is missing, or required evidence is missing. Super 186 adds Hermes advisory evaluation after deterministic state collection, but deterministic hard blockers remain final.
+
+Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
+
+- deterministic gate passes;
+- required human approval is present when the step demands it;
+- Hermes decision is `advance`;
+- `advance-with-gate -Apply` is explicitly used.
+
+The command only advances campaign metadata to the next step. It does not run a worker, create tasks, or execute the next Super Goal.
 
 ## Goal Pack Campaigns
 

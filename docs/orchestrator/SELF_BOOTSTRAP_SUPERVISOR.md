@@ -2,7 +2,7 @@
 
 The self-bootstrap supervisor is a bounded plan-run-observe-decide loop. It is not an always-on worker daemon and it does not replace operator review.
 
-Campaign sequencing now sits above the supervisor. A campaign step may later invoke a supervisor run, but Super 185 campaign advance only marks ordered Super Goal steps ready; it does not run workers or auto-advance with Hermes.
+Campaign sequencing now sits above the supervisor. A campaign step may later invoke a supervisor run, but campaign advance only marks ordered Super Goal steps ready; it does not run workers. Super 186 adds a Hermes advisory gate for metadata-only advance, with deterministic policy still acting as the final veto.
 
 ## Model
 
@@ -80,7 +80,9 @@ Campaign advance uses a narrower deterministic gate:
 - dirty worktree markers hold the campaign;
 - missing required parent PR merge holds the campaign when requested.
 
-The campaign gate returns `hermes_gate_enabled=false` until Super 186 adds Hermes advisory evaluation.
+Super 186 adds Hermes advisory evaluation through `skybridge-campaign.ps1 hermes-gate-preview` and `advance-with-gate`. Hermes must return strict `skybridge.campaign_gate.v1` JSON. The final decision records `deterministic_decision`, `hermes_decision`, `final_decision`, hard blockers, warnings, human approval state, `input_state_hash` and prompt version.
+
+Hermes can recommend a hold or advance, but cannot override deterministic blockers. `advance-with-gate` is dry-run by default, requires `-Apply` for metadata mutation, and must not start workers or create tasks for the next Super Goal.
 
 ## Guide Facade
 

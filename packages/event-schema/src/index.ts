@@ -57,7 +57,11 @@ export const SkyBridgeEventTypeSchema = z.enum([
   "campaign.step.failed",
   "campaign.step.held",
   "campaign.step.skipped",
+  "campaign.step.gate_previewed",
+  "campaign.step.hermes_gate_evaluated",
+  "campaign.step.advance_allowed",
   "campaign.step.advance_blocked",
+  "campaign.step.advanced",
   "campaign.step.evidence_attached",
   "node.connected",
   "node.heartbeat",
@@ -567,6 +571,55 @@ export interface CampaignAdvanceGate {
   requires_human_approval?: boolean;
   allow_project_control_running?: boolean;
   human_approved?: boolean;
+}
+
+export type CampaignGateDecision =
+  | "advance"
+  | "hold"
+  | "retry"
+  | "ask_human"
+  | "abort";
+
+export interface CampaignGateEvidenceReviewed {
+  active_tasks: number;
+  stale_leases: number;
+  failed_unrecovered: number;
+  blocked_tasks: number;
+  approved_unconverted_proposals: number;
+  current_step_status: CampaignStepStatus | string;
+  linked_prs: string[];
+  linked_tasks: string[];
+  validation_summary?: Record<string, unknown>;
+  hygiene_summary?: Record<string, unknown>;
+}
+
+export interface CampaignGateSafetyAssessment {
+  safe_to_advance: boolean;
+  safe_to_execute_next_step: boolean;
+  requires_human_approval: boolean;
+  deterministic_veto_expected: boolean;
+}
+
+export interface CampaignGateResult {
+  schema: "skybridge.campaign_gate.v1";
+  decision: CampaignGateDecision;
+  confidence: number;
+  campaign_id: string;
+  current_step_id: string;
+  current_goal_id: string;
+  next_step_id?: string;
+  next_goal_id?: string;
+  reasons: string[];
+  blockers: string[];
+  warnings: string[];
+  required_human_actions: string[];
+  evidence_reviewed: CampaignGateEvidenceReviewed;
+  safety_assessment: CampaignGateSafetyAssessment;
+  recommended_next_action: string;
+  raw_notes?: string;
+  input_state_hash?: string;
+  prompt_version?: string;
+  generated_at?: string;
 }
 
 export interface Campaign {

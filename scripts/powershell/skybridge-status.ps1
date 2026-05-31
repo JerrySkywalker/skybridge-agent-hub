@@ -476,6 +476,8 @@ function Select-CampaignSummary {
 
 function Select-CampaignStepSummary {
   param($Step)
+  $gate = $Step.last_gate_result
+  if (-not $gate -and $Step.evidence_summary -and $Step.evidence_summary.gate_result) { $gate = $Step.evidence_summary.gate_result }
   [pscustomobject]@{
     campaign_step_id = $Step.campaign_step_id
     campaign_id = $Step.campaign_id
@@ -490,6 +492,20 @@ function Select-CampaignStepSummary {
     linked_pr_urls = @($Step.linked_pr_urls)
     evidence_summary = $Step.evidence_summary
     last_gate_result = $Step.last_gate_result
+    gate_summary = if ($gate) {
+      [pscustomobject]@{
+        deterministic_decision = $gate.deterministic_decision
+        hermes_decision = $gate.hermes_decision
+        final_decision = if ($gate.final_decision) { $gate.final_decision } else { $gate.decision }
+        human_approval_required = $gate.human_approval_required
+        human_approval_present = $gate.human_approval_present
+        hard_blockers = @($gate.hard_blockers)
+        warnings = @($gate.warnings)
+        input_state_hash = $gate.input_state_hash
+        prompt_version = $gate.prompt_version
+        generated_at = $gate.generated_at
+      }
+    } else { $null }
     started_at = $Step.started_at
     completed_at = $Step.completed_at
   }
@@ -588,6 +604,19 @@ function Write-CompactStatus {
     "  completed: $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.completed)"
     "  failed:    $(Colorize-StatusValue -Kind campaign -Value $Status.campaign_summary.failed)"
   }
+  if ($Status.campaign_gate_summary) {
+    ""
+    "Campaign Gate:"
+    "  deterministic: $(if ($Status.campaign_gate_summary.deterministic_decision) { $Status.campaign_gate_summary.deterministic_decision } else { '-' })"
+    "  hermes:        $(if ($Status.campaign_gate_summary.hermes_decision) { $Status.campaign_gate_summary.hermes_decision } else { '-' })"
+    "  final:         $(if ($Status.campaign_gate_summary.final_decision) { Colorize-StatusValue -Kind campaign -Value $Status.campaign_gate_summary.final_decision } else { Colorize-StatusValue -Kind campaign -Value $Status.campaign_gate_summary.decision })"
+    "  human:        required=$(if ($Status.campaign_gate_summary.human_approval_required -ne $null) { $Status.campaign_gate_summary.human_approval_required } else { '-' }) present=$(if ($Status.campaign_gate_summary.human_approval_present -ne $null) { $Status.campaign_gate_summary.human_approval_present } else { '-' })"
+    "  next_step:     $(if ($Status.campaign_gate_summary.next_step_id) { $Status.campaign_gate_summary.next_step_id } else { '-' })"
+    "  input_hash:    $(if ($Status.campaign_gate_summary.input_state_hash) { $Status.campaign_gate_summary.input_state_hash } else { '-' })"
+    "  prompt:        $(if ($Status.campaign_gate_summary.prompt_version) { $Status.campaign_gate_summary.prompt_version } else { '-' })"
+    if ($Status.campaign_gate_summary.blockers) { "  blockers:      $(@($Status.campaign_gate_summary.blockers) -join ', ')" }
+    if ($Status.campaign_gate_summary.warnings) { "  warnings:      $(@($Status.campaign_gate_summary.warnings) -join ', ')" }
+  }
   if ($SummaryOnly) { return }
   ""
   "Workers:"
@@ -645,10 +674,11 @@ function Write-CompactStatus {
     ""
     "Campaign Steps:"
     if (@($Status.campaign_steps).Count -eq 0) { "  none" } else {
-      "  order status       goal_id                              title"
+      "  order status       gate        goal_id                              title"
       foreach ($step in @($Status.campaign_steps | Sort-Object campaign_id, order)) {
         $stepStatus = Colorize-StatusValue -Kind campaign -Value (Shorten-StatusText $step.status 11)
-        "  $(Shorten-StatusText $step.order 5) $stepStatus $(Shorten-StatusText $step.goal_id 35) $(Shorten-StatusText $step.title 44)"
+        $gateStatus = if ($step.gate_summary -and $step.gate_summary.final_decision) { Colorize-StatusValue -Kind campaign -Value (Shorten-StatusText $step.gate_summary.final_decision 10) } else { Shorten-StatusText "-" 10 }
+        "  $(Shorten-StatusText $step.order 5) $stepStatus $gateStatus $(Shorten-StatusText $step.goal_id 35) $(Shorten-StatusText $step.title 44)"
       }
     }
   }
