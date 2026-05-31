@@ -572,3 +572,13 @@
 - Added `skybridge-hygiene.ps1` for dry-run queue audit/report flows and explicit lease recovery commands. Mutations require `-Apply` and `-Reason`; the historical blocked `task_proposal-59a0236fb69800cd` is explicitly protected from automatic recovery.
 - Read-only cloud audit found project control paused, `stop_requested=false`, active tasks `0`, active leases `0`, stale leases `0`, released leases `2`, blocked historical tasks `3`, failed unrecovered tasks `1`, recovered tasks `9`, completed tasks `3`, approved unconverted proposals `2`, converted unexecuted proposals `0` and derived executed proposals `6`.
 - No safe reconciliation mutation was performed in Super 184 because there was no stale active lease or active task residue. `remote-docs-exec-pilot-001` remains an evidence-review item; historical blocked tasks remain blocked.
+
+## 2026-05-31 Super 188
+
+- Added the autonomous campaign runner command surface to `skybridge-campaign.ps1`: `run-next`, `run-until-hold`, `run-until-complete`, runner-aware `resume`, `runner-status`, `runner-report`, `runner-stop`, `runner-hold` and `runner-unlock`.
+- Added local campaign runner state and campaign locks under `.agent/campaign-runners`, including bounded step/task/runtime limits, audit logs, stale lock handling and explicit apply-gated unlocks.
+- Added delegated runner approval scope support so a bounded manually authored campaign can satisfy step-level human approval without overriding hard veto rules.
+- Added the baseline PR finalizer at `scripts/powershell/skybridge-pr-finalize.ps1`, including fixture smokes for pending checks, safe merge, unsafe file blocking and evidence repair.
+- Seeded `goals/dev-queue-189-200` with 12 manually authored Super Goal files and the `dev-queue-189-200` campaign manifest. The queue starts at Goal 189 and keeps Goal 190-200 dependency-gated.
+- Added `scripts/powershell/start-dev-queue-189-200.ps1` as the post-merge launch wrapper. It validates the pack, checks cloud hygiene, requires `-Apply` and writes runner reports under `.agent/tmp`.
+- Goal 189-200 were not executed from the unmerged feature branch. The queue was validated and imported only as campaign metadata.

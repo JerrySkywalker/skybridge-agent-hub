@@ -630,3 +630,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-token-auth-
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-remote-profile.ps1 -DryRun
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 -DryRun -Json
 ```
+
+## Goal 188 Runner Profile
+
+The Goal 188 autonomous runner is expected to use the `laptop-zenbookduo` worker profile for the initial development queue. The launch wrapper defaults to that profile and keeps execution bounded with `MaxSteps`, `MaxTasks`, `MaxRuntimeMinutes`, `StopOnFailure`, `AllowAutoMerge` and `AllowEvidenceRepair`.
+
+Before starting a real queue run, verify the worker can heartbeat, project control is paused, `stop_requested=false`, active queued/claimed/running tasks are zero and stale leases are zero. The runner must be stopped or held before the operator exits.
+
+Do not run the `dev-queue-189-200` unattended queue from an unmerged feature branch. After merge and any required server deployment, use `scripts/powershell/start-dev-queue-189-200.ps1 -Apply` with the real API base, token file and Hermes env file.
