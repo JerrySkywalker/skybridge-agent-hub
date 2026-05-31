@@ -10,6 +10,9 @@
 - Hardened the final decision algorithm so deterministic hard blockers and missing human approval override Hermes, while warning-only conditions such as blocked historical tasks, recovered tasks, approved-unconverted proposals, and offline workers do not block by themselves.
 - Added campaign gate event types and status display fields for deterministic decision, Hermes decision, final decision, human approval, blockers, warnings, prompt version, timestamp, and input state hash.
 - Added local fixture smokes for strict JSON parsing, invalid JSON rejection, hard-veto precedence, human approval, warning-only advance, dry-run behavior, apply requirement, JSON cleanliness, and saved-artifact secret checks.
+- Real cloud gate preview without `-HumanApproved` returned final decision `ask_human`, as expected because the current Super 186 step requires explicit human approval.
+- Real cloud gate preview with `-HumanApproved` and reason `Operator approved Super 186 gate pilot; this advance only prepares Super 187 and does not execute it.` returned final decision `advance` with no hard blockers. Hermes kept historical failed/blocked tasks, approved-unconverted proposals, and worker offline state as warnings for later execution gates.
+- Attached Super 186 gate evidence, marked the current step completed with metadata-only evidence, and ran `advance-with-gate -Apply`. Campaign `bootstrap-mvp` advanced current step metadata to `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`, which is now ready. No worker loop, task creation, proposal conversion, Super 187 execution, or Super 184B execution occurred.
 
 ## 2026-05-31 Super Goal 185 Goal Pack and Campaign Sequencer
 

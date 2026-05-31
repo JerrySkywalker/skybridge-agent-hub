@@ -108,3 +108,17 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 a
 ```
 
 Campaign status now surfaces the latest deterministic decision, Hermes decision, final decision, human approval state, hard blockers, warnings, prompt version, timestamp, and input hash when present.
+
+## Super 186 Cloud Pilot
+
+The `bootstrap-mvp` campaign was evaluated against the cloud control plane while project control was paused, active task count was `0`, and stale lease count was `0`.
+
+Results:
+
+- Without `-HumanApproved`, real Hermes gate preview returned final decision `ask_human`.
+- With `-HumanApproved` and the reason `Operator approved Super 186 gate pilot; this advance only prepares Super 187 and does not execute it.`, real Hermes gate preview returned final decision `advance`.
+- `advance-with-gate -Apply` advanced campaign metadata from `bootstrap-mvp:super-186-hermes-gate-evaluator-auto-advance` to `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`.
+- Super 186 was marked completed with gate evidence.
+- No worker loop ran, no task was created, and Super 187 was not executed.
+
+Historical failed/blocked tasks, approved-unconverted proposals, and offline workers remained warnings for a future execution gate. They did not block the metadata-only advance.
