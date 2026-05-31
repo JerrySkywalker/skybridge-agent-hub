@@ -281,22 +281,79 @@ function Invoke-HermesGate {
   if ($HermesApiBase) { $env:HERMES_API_BASE = $HermesApiBase }
   if ([string]::IsNullOrWhiteSpace($env:HERMES_API_BASE)) { throw "HERMES_API_BASE is missing." }
   if ([string]::IsNullOrWhiteSpace($env:HERMES_API_KEY)) { throw "HERMES_API_KEY is missing." }
+  $current = $GateInput.current_step
+  $next = $GateInput.next_step
+  $requiredTemplate = [pscustomobject]@{
+    schema = "skybridge.campaign_gate.v1"
+    decision = "advance|hold|retry|ask_human|abort"
+    confidence = "number 0..1"
+    campaign_id = [string]$GateInput.campaign.campaign_id
+    current_step_id = [string]$current.campaign_step_id
+    current_goal_id = [string]$current.goal_id
+    next_step_id = [string]$next.campaign_step_id
+    next_goal_id = [string]$next.goal_id
+    reasons = @("string")
+    blockers = @("string")
+    warnings = @("string")
+    required_human_actions = @("string")
+    evidence_reviewed = @{
+      active_tasks = [int]$GateInput.task_summary.active
+      stale_leases = [int]$GateInput.task_summary.stale_leases
+      failed_unrecovered = [int]$GateInput.task_summary.failed_unrecovered
+      blocked_tasks = [int]$GateInput.task_summary.blocked
+      approved_unconverted_proposals = [int]$GateInput.proposal_summary.approved_unconverted
+      current_step_status = [string]$current.status
+      linked_prs = @($current.linked_pr_urls)
+      linked_tasks = @($current.linked_task_ids)
+      validation_summary = @{}
+      hygiene_summary = $GateInput.hygiene_summary
+    }
+    safety_assessment = @{
+      safe_to_advance = $false
+      safe_to_execute_next_step = $false
+      requires_human_approval = [bool]$current.advance_gate.requires_human_approval
+      deterministic_veto_expected = (@($GateInput.deterministic_gate.blockers).Count -gt 0)
+    }
+    recommended_next_action = "string"
+    raw_notes = "string"
+  }
   $prompt = @"
 You are the SkyBridge campaign gate evaluator. Return strict JSON only. No Markdown.
 Schema: skybridge.campaign_gate.v1.
 Decision must be one of advance, hold, retry, ask_human, abort.
 Deterministic hard blockers are final vetoes. Do not recommend executing the next step; this gate only advances campaign metadata.
+You must include every key from this exact output template and copy the provided ids exactly:
+$(ConvertTo-JsonObject -Value $requiredTemplate)
 Review this redacted campaign gate input:
 $(ConvertTo-JsonObject -Value $GateInput)
 "@
-  $body = @{
-    model = if ($env:HERMES_MODEL) { $env:HERMES_MODEL } else { "default" }
-    input = $prompt
-    response_format = @{ type = "json_object" }
-  }
   $headers = @{ Authorization = "Bearer $env:HERMES_API_KEY"; "Content-Type" = "application/json" }
-  $response = Invoke-RestMethod -Method POST -Uri "$($env:HERMES_API_BASE.TrimEnd('/'))/v1/responses" -Headers $headers -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 40) -TimeoutSec 180
-  ConvertFrom-StrictGateJson -Text (Get-StrictHermesText -Response $response)
+  $lastError = $null
+  for ($attempt = 1; $attempt -le 2; $attempt++) {
+    $attemptPrompt = if ($attempt -eq 1) {
+      $prompt
+    } else {
+@"
+Your previous response failed strict schema validation: $lastError
+Return strict JSON only. No Markdown. Include every required key and copy these ids exactly:
+$(ConvertTo-JsonObject -Value $requiredTemplate)
+Use this same redacted campaign gate input:
+$(ConvertTo-JsonObject -Value $GateInput)
+"@
+    }
+    $body = @{
+      model = if ($env:HERMES_MODEL) { $env:HERMES_MODEL } else { "default" }
+      input = $attemptPrompt
+      response_format = @{ type = "json_object" }
+    }
+    $response = Invoke-RestMethod -Method POST -Uri "$($env:HERMES_API_BASE.TrimEnd('/'))/v1/responses" -Headers $headers -ContentType "application/json" -Body ($body | ConvertTo-Json -Depth 50) -TimeoutSec 180
+    try {
+      return ConvertFrom-StrictGateJson -Text (Get-StrictHermesText -Response $response)
+    } catch {
+      $lastError = $_.Exception.Message
+      if ($attempt -ge 2) { throw }
+    }
+  }
 }
 
 function Resolve-CampaignGateDecision {
