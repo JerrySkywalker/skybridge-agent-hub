@@ -322,6 +322,8 @@ You are the SkyBridge campaign gate evaluator. Return strict JSON only. No Markd
 Schema: skybridge.campaign_gate.v1.
 Decision must be one of advance, hold, retry, ask_human, abort.
 Deterministic hard blockers are final vetoes. Do not recommend executing the next step; this gate only advances campaign metadata.
+Treat deterministic warnings as warnings, not blockers. Warning-only conditions such as failed_unrecovered_tasks_present, blocked_tasks_present, approved_unconverted_proposals_present, recovered_tasks_present, and worker_offline do not block metadata-only campaign advance by themselves.
+safe_to_advance means safe to update campaign step metadata. safe_to_execute_next_step must remain false unless a separate worker execution gate exists.
 You must include every key from this exact output template and copy the provided ids exactly:
 $(ConvertTo-JsonObject -Value $requiredTemplate)
 Review this redacted campaign gate input:
@@ -336,6 +338,7 @@ $(ConvertTo-JsonObject -Value $GateInput)
 @"
 Your previous response failed strict schema validation: $lastError
 Return strict JSON only. No Markdown. Include every required key and copy these ids exactly:
+Treat warning-only hygiene conditions as warnings, not blockers. Metadata-only advance can be safe even when execution of the next step is not safe.
 $(ConvertTo-JsonObject -Value $requiredTemplate)
 Use this same redacted campaign gate input:
 $(ConvertTo-JsonObject -Value $GateInput)
