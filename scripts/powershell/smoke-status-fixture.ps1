@@ -276,8 +276,12 @@ updateTask('status-missing-lease', (task) => {
     }
     "task-status-filter" {
       $status = Invoke-StatusJson -Arguments @("-TaskStatus", "failed", "-ExcludeRecovered", "-ShowAll")
-      if (@($status.tasks).Count -ne 1) { throw "Expected only one unrecovered failed task." }
-      if (@($status.tasks)[0].task_id -ne "status-filter-failed") { throw "Expected unrecovered failed task." }
+      $taskIds = @($status.tasks | ForEach-Object { [string]$_.task_id } | Sort-Object)
+      $expectedTaskIds = @("status-filter-failed", "status-pr-needs-evidence")
+      if (@($taskIds).Count -ne @($expectedTaskIds).Count) { throw "Expected unrecovered failed tasks: $($expectedTaskIds -join ', ')." }
+      foreach ($expectedTaskId in $expectedTaskIds) {
+        if ($taskIds -notcontains $expectedTaskId) { throw "Missing unrecovered failed task '$expectedTaskId'." }
+      }
     }
     "worker-filter" {
       $status = Invoke-StatusJson -Arguments @("-WorkerId", "status-worker-a", "-ShowAll")
