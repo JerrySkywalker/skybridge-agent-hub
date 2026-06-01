@@ -266,6 +266,9 @@ try {
     $shouldPoll = $Demo -or $null -eq $snapshot -or ((Get-Date) - $lastPoll).TotalSeconds -ge $PollIntervalSeconds
     try {
       if ($shouldPoll) {
+        if ($env:SKYBRIDGE_WATCH_TEST_FAIL_AFTER_FIRST_POLL -and $frameIndex -ge 1) {
+          throw "simulated poll failure"
+        }
         $snapshot = if ($Demo) { Get-DemoFrame -FrameIndex ($frameIndex % [Math]::Max(1, $Frames)) } else { Get-WatchSnapshot }
         $lastPoll = Get-Date
       } elseif ($SpinnerOnlyBetweenPolls -and $snapshot.PSObject.Properties["warning"]) {
