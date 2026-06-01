@@ -23,7 +23,7 @@ function Invoke-RunnerJson {
 }
 
 function New-Lock {
-  param([string]$Status = "active", [int]$Minutes = 30)
+  param([string]$Status = "active", [int]$Minutes = 30, [string]$Owner = "fixture")
   $dir = Join-Path $runnerRoot "locks"
   New-Item -ItemType Directory -Path $dir -Force | Out-Null
   $path = Join-Path $dir "skybridge-agent-hub__dev-queue-189-200.lock.json"
@@ -32,7 +32,7 @@ function New-Lock {
     campaign_lock_id = "lock_fixture"
     campaign_id = "dev-queue-189-200"
     project_id = "skybridge-agent-hub"
-    lock_owner = "fixture"
+    lock_owner = $Owner
     lock_status = $Status
     created_at = (Get-Date).ToUniversalTime().ToString("o")
     heartbeat_at = (Get-Date).ToUniversalTime().ToString("o")
@@ -105,10 +105,30 @@ try {
       $result = Invoke-RunnerJson @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture")
       Assert-True (@($result.hard_blockers) -contains "active_runner_lock") "Expected active runner lock blocker."
     }
+    "self-lock" {
+      $result = Invoke-RunnerJson @("run-until-complete", "-GoalPackDir", $goalPack, "-Apply", "-HumanApproved", "-HumanApprovalReason", "fixture", "-MaxSteps", "12", "-MaxTasks", "12", "-MaxRuntimeMinutes", "0")
+      Assert-True (@($result.hard_blockers) -notcontains "active_runner_lock") "Self-owned active runner lock must not block the runner."
+      Assert-True ($result.stop_reason -eq "max_runtime_reached") "Expected bounded apply regression to stop before step execution."
+      Assert-True (@($result.planned_actions).Count -eq 0) "Bounded apply regression must not plan or execute steps."
+      Assert-True ($result.runner_lock.lock_owner -eq $result.runner_state.runner_id) "Expected lock owner to match current runner."
+      $status = Invoke-RunnerJson @("runner-status", "-CampaignId", "dev-queue-189-200", "-GoalPackDir", $goalPack)
+      Assert-True ($status.runner_lock_status -eq "released") "Self-owned apply lock should be released on stop."
+    }
+    "foreign-active-lock" {
+      New-Lock -Status "active" -Owner "foreign-runner" | Out-Null
+      $result = Invoke-RunnerJson @("run-until-complete", "-GoalPackDir", $goalPack, "-Apply", "-HumanApproved", "-HumanApprovalReason", "fixture", "-MaxSteps", "12", "-MaxTasks", "12", "-MaxRuntimeMinutes", "0")
+      Assert-True (@($result.hard_blockers) -contains "active_runner_lock") "Expected foreign active runner lock blocker."
+      Assert-True ($result.stop_reason -eq "active_runner_lock") "Expected active_runner_lock stop reason."
+      Assert-True ($result.runner_lock.lock_owner -eq "foreign-runner") "Runner must not replace a foreign lock."
+      $status = Invoke-RunnerJson @("runner-status", "-CampaignId", "dev-queue-189-200", "-GoalPackDir", $goalPack)
+      Assert-True ($status.runner_lock_status -eq "active") "Runner must not release a foreign lock."
+    }
     "stale-lock" {
       New-Lock -Status "active" -Minutes -1 | Out-Null
       $result = Invoke-RunnerJson @("runner-status", "-GoalPackDir", $goalPack)
       Assert-True ($result.runner_lock_status -eq "stale") "Expected stale lock."
+      $run = Invoke-RunnerJson @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture")
+      Assert-True (@($run.hard_blockers) -contains "stale_runner_lock") "Expected stale runner lock blocker."
     }
     "unlock-requires-apply" {
       New-Lock -Status "active" | Out-Null

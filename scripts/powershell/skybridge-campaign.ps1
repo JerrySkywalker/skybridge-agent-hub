@@ -963,8 +963,7 @@ function Acquire-CampaignRunnerLock {
   $lockPath = Get-CampaignRunnerLockPath -TargetCampaignId $Snapshot.campaign.campaign_id -TargetProjectId $Snapshot.campaign.project_id
   $existing = Read-CampaignRunnerJson -Path $lockPath
   $existingStatus = Get-CampaignRunnerLockStatus -Lock $existing
-  if ($existingStatus -eq "active") { throw "Active campaign runner lock exists for $($Snapshot.campaign.campaign_id)." }
-  if ($existingStatus -eq "stale" -and -not ($Command -eq "runner-unlock" -and $Apply)) { throw "Stale campaign runner lock blocks auto-run until inspected: $lockPath" }
+  if ($existingStatus -in @("active", "stale")) { return $existing }
   $now = Get-CampaignRunnerNow
   $lock = [pscustomobject]@{
     schema = "skybridge.campaign_runner_lock.v1"
@@ -1024,7 +1023,8 @@ function Invoke-CampaignRunner {
   try {
     $lock = if ($effectiveDryRun) { Read-CampaignRunnerJson -Path (Get-CampaignRunnerLockPath -TargetCampaignId $snapshot.campaign.campaign_id -TargetProjectId $snapshot.campaign.project_id) } else { Acquire-CampaignRunnerLock -Snapshot $snapshot -State $state }
     $runnerLockStatus = Get-CampaignRunnerLockStatus -Lock $lock
-    if ($runnerLockStatus -eq "active") { $hardBlockers.Add("active_runner_lock") | Out-Null }
+    $runnerOwnsLock = ($lock -and [string]$lock.lock_owner -eq [string]$state.runner_id)
+    if ($runnerLockStatus -eq "active" -and -not $runnerOwnsLock) { $hardBlockers.Add("active_runner_lock") | Out-Null }
     if ($runnerLockStatus -eq "stale") { $hardBlockers.Add("stale_runner_lock") | Out-Null }
     $hygiene = Get-CampaignRunnerHygiene
     if ($hygiene.active_tasks -gt 0) { $hardBlockers.Add("active_tasks_present") | Out-Null }
@@ -1087,7 +1087,7 @@ function Invoke-CampaignRunner {
         }
         $state.steps_completed++
         $state.tasks_completed++
-        Update-CampaignRunnerLockHeartbeat -Lock $lock
+        if ($runnerOwnsLock) { Update-CampaignRunnerLockHeartbeat -Lock $lock }
         if ($RunnerCommand -eq "run-next") { $state.runner_status = "idle"; $state.hold_reason = "run_next_completed"; break }
       }
       if ($planned.Count -eq @($snapshot.steps).Count -and -not $state.hold_reason -and $RunnerCommand -eq "run-until-complete") { $state.runner_status = "completed" }
@@ -1101,7 +1101,7 @@ function Invoke-CampaignRunner {
     $state.updated_at = Get-CampaignRunnerNow
     if ($state.runner_status -in @("held", "completed", "failed", "aborted", "idle")) { $state.stopped_at = $state.updated_at }
     Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath -TargetCampaignId $snapshot.campaign.campaign_id)
-    if (-not $effectiveDryRun -and $lock) { Release-CampaignRunnerLock -Lock $lock -Reason $state.runner_status }
+    if (-not $effectiveDryRun -and $lock -and [string]$lock.lock_owner -eq [string]$state.runner_id) { Release-CampaignRunnerLock -Lock $lock -Reason $state.runner_status }
   }
   [pscustomobject]@{
     ok = ($state.runner_status -notin @("failed", "aborted"))
