@@ -2,13 +2,19 @@
 param(
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
   [string]$ProjectId = "skybridge-agent-hub",
+  [string]$GoalPackDir = "goals/dev-queue-189-200",
+  [string]$CampaignId = "dev-queue-189-200",
   [string]$WorkerProfile = "$HOME\.skybridge\worker.laptop-zenbookduo.json",
   [string]$TokenFile = "$HOME\.skybridge\secrets\worker-token.txt",
   [string]$HermesEnvFile = "$HOME\.skybridge\hermes.env.ps1",
+  [int]$MaxSteps = 12,
+  [int]$MaxTasks = 12,
   [int]$MaxRuntimeMinutes = 240,
+  [switch]$DryRun,
   [switch]$Apply,
   [switch]$Json,
-  [string]$OutputDir = ".agent/tmp"
+  [string]$OutputDir = ".agent/tmp",
+  [string]$OutputFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,26 +26,51 @@ function Invoke-JsonScript {
   return ($output | ConvertFrom-Json)
 }
 
-function Test-GitCleanMain {
+function Test-GitReady {
   $branch = (git branch --show-current).Trim()
-  if ($branch -ne "main") { throw "start-dev-queue-189-200 must run from main after Goal 188 is merged. Current branch: $branch" }
-  git fetch origin main | Out-Null
-  $local = (git rev-parse main).Trim()
-  $remote = (git rev-parse origin/main).Trim()
-  if ($local -ne $remote) { throw "main is not equal to origin/main. Pull latest main first." }
   if (-not [string]::IsNullOrWhiteSpace((git status --short | Out-String).Trim())) { throw "Working tree must be clean." }
+  if ($Apply) {
+    if ($branch -ne "main") { throw "start-dev-queue-189-200 -Apply must run from main after Goal 188 is merged. Current branch: $branch" }
+    git fetch origin main | Out-Null
+    $local = (git rev-parse main).Trim()
+    $remote = (git rev-parse origin/main).Trim()
+    if ($local -ne $remote) { throw "main is not equal to origin/main. Pull latest main first." }
+  }
+  return $branch
 }
 
+if ($Apply -and $DryRun) { throw "Use either -Apply or -DryRun, not both." }
+if ($MaxSteps -lt 1) { throw "-MaxSteps must be at least 1." }
+if ($MaxTasks -lt 1) { throw "-MaxTasks must be at least 1." }
+if ($MaxRuntimeMinutes -lt 1) { throw "-MaxRuntimeMinutes must be at least 1." }
+
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-$jsonReport = Join-Path $OutputDir "dev-queue-189-200-runner-report.json"
-$markdownReport = Join-Path $OutputDir "dev-queue-189-200-runner-report.md"
+$jsonReport = if ([string]::IsNullOrWhiteSpace($OutputFile)) { Join-Path $OutputDir "$CampaignId-runner-report.json" } else { $OutputFile }
+$reportDir = Split-Path -Parent $jsonReport
+if (-not [string]::IsNullOrWhiteSpace($reportDir)) { New-Item -ItemType Directory -Path $reportDir -Force | Out-Null }
+$markdownReport = Join-Path $OutputDir "$CampaignId-runner-report.md"
 
-Test-GitCleanMain
+$branch = Test-GitReady
+$mode = if ($Apply) { "apply" } else { "dry-run" }
+$resolved = [pscustomobject]@{
+  api_base = $ApiBase
+  project_id = $ProjectId
+  goal_pack_dir = $GoalPackDir
+  campaign_id = $CampaignId
+  max_steps = $MaxSteps
+  max_tasks = $MaxTasks
+  max_runtime_minutes = $MaxRuntimeMinutes
+  output_file = $jsonReport
+  output_dir = $OutputDir
+  mode = $mode
+  branch = $branch
+  token_printed = $false
+}
 
-$validate = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "validate-pack", "-GoalPackDir", "goals\dev-queue-189-200", "-Json")
+$validate = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "validate-pack", "-GoalPackDir", $GoalPackDir, "-Json")
 if (-not $validate.validation.ok) { throw "Dev queue validation failed." }
 
-$importArgs = @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "import", "-GoalPackDir", "goals\dev-queue-189-200", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-Json")
+$importArgs = @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "import", "-GoalPackDir", $GoalPackDir, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-Json")
 if ($Apply) { $importArgs += "-Apply" } else { $importArgs += "-DryRun" }
 $import = Invoke-JsonScript $importArgs
 
@@ -51,14 +82,14 @@ if ([int]$hygiene.task_summary.stale_leases -ne 0) { throw "Stale leases are pre
 $runArgs = @(
   "-File", ".\scripts\powershell\skybridge-campaign.ps1",
   "run-until-hold",
-  "-CampaignId", "dev-queue-189-200",
+  "-CampaignId", $CampaignId,
   "-ApiBase", $ApiBase,
   "-ProjectId", $ProjectId,
   "-TokenFile", $TokenFile,
   "-WorkerProfile", $WorkerProfile,
   "-HermesEnvFile", $HermesEnvFile,
-  "-MaxSteps", "12",
-  "-MaxTasks", "12",
+  "-MaxSteps", [string]$MaxSteps,
+  "-MaxTasks", [string]$MaxTasks,
   "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes,
   "-StopOnFailure",
   "-AllowAutoMerge",
@@ -71,13 +102,14 @@ $runArgs = @(
 if ($Apply) { $runArgs += "-Apply" } else { $runArgs += "-DryRun" }
 $runner = Invoke-JsonScript $runArgs
 
-Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-report", "-CampaignId", "dev-queue-189-200", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-OutputFile", $markdownReport, "-Json") | Out-Null
-$finalStatus = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-status", "-CampaignId", "dev-queue-189-200", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-Json")
+Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-report", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-OutputFile", $markdownReport, "-Json") | Out-Null
+$finalStatus = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-status", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-Json")
 
 $result = [pscustomobject]@{
   ok = $true
-  mode = if ($Apply) { "apply" } else { "dry-run" }
+  mode = $mode
   token_printed = $false
+  resolved_parameters = $resolved
   validate = $validate.validation.ok
   import_mode = $import.mode
   active_tasks = $active.task_summary.active
