@@ -122,11 +122,13 @@ Recommended operator workflow:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command preflight -Json
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command watch -ColorMode Always
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command watch -PollIntervalSeconds 5 -RenderIntervalMilliseconds 250 -ColorMode Always
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command start-one -Apply -Json
 ```
 
 Keep the watch command in a separate window. If Goal 189 succeeds, run `start-all -Apply -Json`; if the runner holds, run `report -Json` and inspect the current step, PR, CI and evidence fields before resuming. Use `safe-pause -Apply -Reason` for normal holds and `emergency-stop -Apply -Reason` only when the runner must be interrupted immediately. `unlock-stale-runner -Apply -Reason` is only for inspected stale runner locks; active locks are not force-unlocked by the wrapper.
+
+Goal 188D fixed a JSON parsing edge case in the control wrapper: child scripts can emit diagnostic prefix lines before their JSON payload, especially around git operations. The wrapper now extracts the final JSON payload and reports whether mixed output was seen. The watch command also separates render cadence from polling cadence, so operators can keep a smooth spinner without increasing API polling frequency. Keep `-PollIntervalSeconds 5` and `-RenderIntervalMilliseconds 250` for launch-day monitoring.
 
 Campaign status is metadata-only and does not start workers. Operators can inspect imported Goal Packs and deterministic advance gates with:
 

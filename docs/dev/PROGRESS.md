@@ -602,3 +602,11 @@
 - Seeded `goals/dev-queue-189-200` with 12 manually authored Super Goal files and the `dev-queue-189-200` campaign manifest. The queue starts at Goal 189 and keeps Goal 190-200 dependency-gated.
 - Added `scripts/powershell/start-dev-queue-189-200.ps1` as the post-merge launch wrapper. It validates the pack, checks cloud hygiene, requires `-Apply` and writes runner reports under `.agent/tmp`.
 - Goal 189-200 were not executed from the unmerged feature branch. The queue was validated and imported only as campaign metadata.
+
+## 2026-06-01 Goal 188D
+
+- Hardened `skybridge-dev-queue-control.ps1` JSON parsing so mixed child output, including git prefix lines before the JSON payload, no longer breaks `start-one` or `start-all` JSON mode.
+- Quieted `start-dev-queue-189-200.ps1` git fetch output and kept JSON output ANSI-free.
+- Split `skybridge-campaign-watch.ps1` rendering from remote polling: `-RenderIntervalMilliseconds` controls spinner smoothness, while `-PollIntervalSeconds` controls bounded API polling. Recommended launch watch settings are 250 ms render and 5 second polling.
+- Added focused smokes for mixed JSON extraction, JSON cleanliness, watch render/poll behavior, fast demo spinner and cached-frame poll failure handling.
+- Goal 189-200 full queue execution remains held pending reviewed `start-one` verification.

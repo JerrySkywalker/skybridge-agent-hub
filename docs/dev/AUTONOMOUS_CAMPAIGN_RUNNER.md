@@ -89,6 +89,8 @@ Recommended two-window operation:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
   -Command watch `
   -CampaignId dev-queue-189-200 `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
   -ColorMode Always
 
 # Window B: control commands
@@ -143,3 +145,38 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 ```
 
 The wrapper refuses to unlock an active non-stale runner lock.
+
+## Goal 188D JSON And Watch Polish
+
+Goal 188D hardens launch-day JSON handling. The control wrapper invokes child PowerShell scripts and those children can legitimately emit non-JSON diagnostic lines before their JSON payload, for example `git fetch` prefix lines on stderr. `skybridge-dev-queue-control.ps1` now first tries whole-output JSON parsing, then extracts the last JSON object or array from mixed output. Its JSON response includes `child_parse_mode` and `child_non_json_prefix_present` for `start-one` and `start-all` diagnostics. JSON mode remains valid JSON and must not include ANSI color or secrets.
+
+`start-dev-queue-189-200.ps1` also quiets `git fetch` in the clean-main guard so expected fetch chatter does not contaminate JSON output.
+
+The watch CLI now separates local rendering from remote polling:
+
+- `-RenderIntervalMilliseconds` controls visual spinner smoothness.
+- `-PollIntervalSeconds` controls remote API polling and defaults to 5 seconds.
+- `-IntervalSeconds` remains a backward-compatible alias for `-PollIntervalSeconds`.
+- `-MaxFrames` is useful for demos and smokes.
+
+Recommended high-smoothness watch command:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command watch `
+  -CampaignId dev-queue-189-200 `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
+  -ColorMode Always
+```
+
+After this fix, verify `start-one` before launching the full queue:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-one `
+  -Apply `
+  -Json
+```
+
+Do not run `start-all -Apply` until `start-one` has been reviewed and Goal 189 is confirmed clean.
