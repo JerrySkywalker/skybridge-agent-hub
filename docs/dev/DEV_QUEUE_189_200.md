@@ -72,3 +72,52 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.
 ```
 
 Do not launch the queue from a draft/manual parent PR. Do not launch if project control is running, active tasks are present, stale leases are present, a runner lock is active, or the goal files have not been reviewed after expansion.
+
+## Recommended Operator Workflow
+
+Goal 188C adds a read-only watch CLI and a control wrapper for launch day.
+
+1. Run preflight:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command preflight `
+  -Json
+```
+
+2. Open a watch window:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command watch `
+  -CampaignId dev-queue-189-200 `
+  -ColorMode Always
+```
+
+3. In a second window, start one step first:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-one `
+  -Apply `
+  -Json
+```
+
+4. If Goal 189 succeeds, start the remaining bounded queue:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-all `
+  -Apply `
+  -Json
+```
+
+5. If the queue holds, inspect the report:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command report `
+  -Json
+```
+
+Use `safe-pause -Apply -Reason` for normal holds and `emergency-stop -Apply -Reason` only for urgent interruption. For stale runner locks, use `unlock-stale-runner -Apply -Reason` after inspection. The control wrapper defaults to dry-run for start/pause/stop/unlock commands unless `-Apply` is supplied.

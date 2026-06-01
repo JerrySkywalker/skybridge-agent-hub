@@ -197,3 +197,12 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.
 ```
 
 Do not run the launch command before the preparation PR is merged and reviewed. Do not run it from a draft/manual parent PR.
+
+## Goal 188C Operator Watch And Control
+
+Goal 188C adds the operator surface for launch day:
+
+- `skybridge-campaign-watch.ps1` is a read-only live watch with Docker BuildKit-style spinner, colored statuses, current-step context, nearby queue entries and recent runner audit entries.
+- `skybridge-dev-queue-control.ps1` wraps preflight, watch, start-one, start-all, safe-pause, emergency-stop, resume, report and stale runner lock unlock.
+
+Recommended operation is two windows: keep the watch running in one window and run control commands in another. Start with `preflight`, then use `start-one` to validate Goal 189 before `start-all`. Use `safe-pause` for planned holds, `emergency-stop` for urgent interruption and `report` before deciding how to resume.
