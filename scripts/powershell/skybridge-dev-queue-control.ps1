@@ -19,6 +19,10 @@ param(
   [string]$Reason,
   [ValidateSet("Auto", "Always", "Never")]
   [string]$ColorMode = "Auto",
+  [int]$PollIntervalSeconds = 5,
+  [int]$RenderIntervalMilliseconds = 250,
+  [switch]$SpinnerOnlyBetweenPolls,
+  [int]$MaxFrames = 0,
   [switch]$Once,
   [switch]$NoClear,
   [switch]$Compact
@@ -26,11 +30,80 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-LastJsonPayloadFromOutput {
+  param([string]$Text)
+  if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+  $starts = New-Object System.Collections.Generic.List[int]
+  for ($i = 0; $i -lt $Text.Length; $i++) {
+    if ($Text[$i] -eq "{" -or $Text[$i] -eq "[") { $starts.Add($i) | Out-Null }
+  }
+  for ($s = $starts.Count - 1; $s -ge 0; $s--) {
+    $start = $starts[$s]
+    for ($end = $Text.Length; $end -gt $start; $end--) {
+      $candidate = $Text.Substring($start, $end - $start).Trim()
+      if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+      try {
+        $null = $candidate | ConvertFrom-Json -ErrorAction Stop
+        return [pscustomobject]@{
+          json = $candidate
+          prefix = $Text.Substring(0, $start)
+          suffix = $Text.Substring($end)
+        }
+      } catch {
+      }
+    }
+  }
+  return $null
+}
+
+function Format-ChildOutputDiagnostic {
+  param([string]$Text)
+  $safe = [string]$Text
+  $safe = $safe -replace "(?i)(token|authorization|api[_-]?key)(\s*[:=]\s*)\S+", '$1$2[REDACTED]'
+  $lines = @($safe -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+  if ($lines.Count -le 6) { return ($lines -join "`n") }
+  return (@($lines | Select-Object -First 3) + @("...") + @($lines | Select-Object -Last 3)) -join "`n"
+}
+
+function ConvertFrom-MixedJsonOutput {
+  param([object[]]$Output)
+  $text = ($Output | ForEach-Object { [string]$_ }) -join "`n"
+  try {
+    $value = $text | ConvertFrom-Json -ErrorAction Stop
+    return [pscustomobject]@{
+      value = $value
+      parse_mode = "whole_json"
+      non_json_prefix_present = $false
+      non_json_prefix = ""
+      non_json_suffix = ""
+    }
+  } catch {
+    $payload = Get-LastJsonPayloadFromOutput -Text $text
+    if ($null -eq $payload) {
+      $diagnostic = Format-ChildOutputDiagnostic -Text $text
+      throw "Child command did not emit parseable JSON. Output excerpt:`n$diagnostic"
+    }
+    $value = $payload.json | ConvertFrom-Json -ErrorAction Stop
+    return [pscustomobject]@{
+      value = $value
+      parse_mode = "extracted_json"
+      non_json_prefix_present = -not [string]::IsNullOrWhiteSpace($payload.prefix)
+      non_json_prefix = (Format-ChildOutputDiagnostic -Text $payload.prefix)
+      non_json_suffix = (Format-ChildOutputDiagnostic -Text $payload.suffix)
+    }
+  }
+}
+
 function Invoke-JsonScript {
-  param([string[]]$Arguments)
+  param([string[]]$Arguments, [switch]$IncludeParseMetadata)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1
   if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $($Arguments -join ' ')`n$($output -join "`n")" }
-  return ($output | ConvertFrom-Json)
+  if ($env:SKYBRIDGE_DEV_QUEUE_CONTROL_TEST_PREFIX) {
+    $output = @($env:SKYBRIDGE_DEV_QUEUE_CONTROL_TEST_PREFIX) + @($output)
+  }
+  $parsed = ConvertFrom-MixedJsonOutput -Output $output
+  if ($IncludeParseMetadata) { return $parsed }
+  return $parsed.value
 }
 
 function Invoke-TextScript {
@@ -52,7 +125,7 @@ function Test-GitPreflight {
   $dirty = -not [string]::IsNullOrWhiteSpace((git status --short | Out-String).Trim())
   $mainSync = "unknown"
   try {
-    git fetch origin main | Out-Null
+    git fetch --quiet origin main *> $null
     $mainSync = ((git rev-parse main).Trim() -eq (git rev-parse origin/main).Trim())
   } catch {
     $mainSync = "unknown"
@@ -130,6 +203,10 @@ switch ($Command) {
     if ($Once) { $watchArgs += "-Once" }
     if ($NoClear) { $watchArgs += "-NoClear" }
     if ($Compact) { $watchArgs += "-Compact" }
+    if ($PollIntervalSeconds -gt 0) { $watchArgs += @("-PollIntervalSeconds", [string]$PollIntervalSeconds) }
+    if ($RenderIntervalMilliseconds -gt 0) { $watchArgs += @("-RenderIntervalMilliseconds", [string]$RenderIntervalMilliseconds) }
+    if ($SpinnerOnlyBetweenPolls) { $watchArgs += "-SpinnerOnlyBetweenPolls" }
+    if ($MaxFrames -gt 0) { $watchArgs += @("-MaxFrames", [string]$MaxFrames) }
     if ($Json) { $watchArgs += "-Json" }
     if ($OutputFile) { $watchArgs += @("-OutputFile", $OutputFile) }
     if ($Json) { $result = Invoke-JsonScript $watchArgs } else { Invoke-TextScript $watchArgs; return }
@@ -138,13 +215,44 @@ switch ($Command) {
     $args = @("-File", ".\scripts\powershell\start-dev-queue-189-200.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalPackDir", $GoalPackDir, "-CampaignId", $CampaignId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxSteps", "1", "-MaxTasks", "1", "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-Json") + $tokenArgs
     if ($Apply) { $args += "-Apply" } else { $args += "-DryRun" }
     if ($OutputFile) { $args += @("-OutputFile", $OutputFile) }
-    $result = Invoke-JsonScript $args
+    $child = Invoke-JsonScript $args -IncludeParseMetadata
+    $result = $child.value
+    $result | Add-Member -NotePropertyName child_non_json_prefix_present -NotePropertyValue ([bool]$child.non_json_prefix_present) -Force
+    $result | Add-Member -NotePropertyName child_parse_mode -NotePropertyValue ([string]$child.parse_mode) -Force
+    if ($child.non_json_prefix_present) { $result | Add-Member -NotePropertyName child_non_json_prefix -NotePropertyValue ([string]$child.non_json_prefix) -Force }
+    if (-not $result.PSObject.Properties["task_created"]) {
+      $taskId = $null
+      if ($result.final_status -and $result.final_status.campaign -and $result.final_status.campaign.steps) {
+        $current = @($result.final_status.campaign.steps | Where-Object { $_.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" })[0]
+        if ($current -and @($current.linked_task_ids).Count -gt 0) { $taskId = [string]@($current.linked_task_ids)[0] }
+      }
+      $result | Add-Member -NotePropertyName task_created -NotePropertyValue (-not [string]::IsNullOrWhiteSpace($taskId)) -Force
+      $result | Add-Member -NotePropertyName task_id -NotePropertyValue $taskId -Force
+      $result | Add-Member -NotePropertyName task_created_summary -NotePropertyValue $(if ($taskId) { "task created: $taskId" } else { "no task created" }) -Force
+    }
+    if ([string]$result.runner_status -eq "held" -and [string]$result.stop_reason -eq "max_steps_reached") {
+      $result.ok = $true
+      $result | Add-Member -NotePropertyName bounded_completion -NotePropertyValue $true -Force
+    }
   }
   "start-all" {
     $args = @("-File", ".\scripts\powershell\start-dev-queue-189-200.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalPackDir", $GoalPackDir, "-CampaignId", $CampaignId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxSteps", "12", "-MaxTasks", "12", "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-Json") + $tokenArgs
     if ($Apply) { $args += "-Apply" } else { $args += "-DryRun" }
     if ($OutputFile) { $args += @("-OutputFile", $OutputFile) }
-    $result = Invoke-JsonScript $args
+    $child = Invoke-JsonScript $args -IncludeParseMetadata
+    $result = $child.value
+    $result | Add-Member -NotePropertyName child_non_json_prefix_present -NotePropertyValue ([bool]$child.non_json_prefix_present) -Force
+    $result | Add-Member -NotePropertyName child_parse_mode -NotePropertyValue ([string]$child.parse_mode) -Force
+    if ($child.non_json_prefix_present) { $result | Add-Member -NotePropertyName child_non_json_prefix -NotePropertyValue ([string]$child.non_json_prefix) -Force }
+    if (-not $result.PSObject.Properties["task_created"]) {
+      $result | Add-Member -NotePropertyName task_created -NotePropertyValue $false -Force
+      $result | Add-Member -NotePropertyName task_id -NotePropertyValue $null -Force
+      $result | Add-Member -NotePropertyName task_created_summary -NotePropertyValue "no task id surfaced by child command" -Force
+    }
+    if ([string]$result.runner_status -eq "held" -and [string]$result.stop_reason -eq "max_steps_reached") {
+      $result.ok = $true
+      $result | Add-Member -NotePropertyName bounded_completion -NotePropertyValue $true -Force
+    }
   }
   "safe-pause" {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "safe-pause requires -Reason." }

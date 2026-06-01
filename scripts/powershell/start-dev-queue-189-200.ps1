@@ -23,7 +23,17 @@ function Invoke-JsonScript {
   param([string[]]$Arguments)
   $output = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1
   if ($LASTEXITCODE -ne 0) { throw "Command failed: pwsh $($Arguments -join ' ')`n$($output -join "`n")" }
-  return ($output | ConvertFrom-Json)
+  $text = ($output | ForEach-Object { [string]$_ }) -join "`n"
+  try {
+    return ($text | ConvertFrom-Json -ErrorAction Stop)
+  } catch {
+    for ($i = $text.LastIndexOf("{"); $i -ge 0; $i = $text.LastIndexOf("{", $i - 1)) {
+      $candidate = $text.Substring($i).Trim()
+      try { return ($candidate | ConvertFrom-Json -ErrorAction Stop) } catch {}
+      if ($i -eq 0) { break }
+    }
+    throw "Command did not emit parseable JSON: pwsh $($Arguments -join ' ')`n$($text -replace '(?i)(token|authorization|api[_-]?key)(\s*[:=]\s*)\S+', '$1$2[REDACTED]')"
+  }
 }
 
 function Test-GitReady {
@@ -31,7 +41,7 @@ function Test-GitReady {
   if (-not [string]::IsNullOrWhiteSpace((git status --short | Out-String).Trim())) { throw "Working tree must be clean." }
   if ($Apply) {
     if ($branch -ne "main") { throw "start-dev-queue-189-200 -Apply must run from main after Goal 188 is merged. Current branch: $branch" }
-    git fetch origin main | Out-Null
+    git fetch --quiet origin main *> $null
     $local = (git rev-parse main).Trim()
     $remote = (git rev-parse origin/main).Trim()
     if ($local -ne $remote) { throw "main is not equal to origin/main. Pull latest main first." }

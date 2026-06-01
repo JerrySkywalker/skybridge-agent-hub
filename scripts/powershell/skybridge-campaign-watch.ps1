@@ -5,7 +5,11 @@ param(
   [string]$CampaignId = "dev-queue-189-200",
   [string]$TokenFile = "$HOME\.skybridge\secrets\worker-token.txt",
   [string]$TokenEnvVar,
-  [int]$IntervalSeconds = 5,
+  [Alias("IntervalSeconds")]
+  [int]$PollIntervalSeconds = 5,
+  [int]$RenderIntervalMilliseconds = 250,
+  [switch]$SpinnerOnlyBetweenPolls,
+  [int]$MaxFrames = 0,
   [ValidateSet("Auto", "Always", "Never")]
   [string]$ColorMode = "Auto",
   [switch]$Once,
@@ -94,6 +98,8 @@ function Get-DemoFrame {
     api_base = "demo"
     project_id = $ProjectId
     token_printed = $false
+    fetched_at = (Get-Date)
+    warning = $null
     project = [pscustomobject]@{ control = "paused"; active_tasks = 0; stale_leases = 0; stale_locks = 0 }
     worker = [pscustomobject]@{ worker_id = "laptop-zenbookduo"; status = "online"; last_seen = "now"; current_task_id = $null }
     campaign = [pscustomobject]@{ campaign_id = $CampaignId; status = "draft"; current_step_id = "$CampaignId`:super-189-ci-guardian-pr-finalizer-hardening" }
@@ -131,6 +137,8 @@ function Get-WatchSnapshot {
     api_base = $ApiBase
     project_id = $ProjectId
     token_printed = $false
+    fetched_at = (Get-Date)
+    warning = $null
     project = [pscustomobject]@{
       control = [string]$active.control.state
       active_tasks = [int]$active.task_summary.active
@@ -172,9 +180,16 @@ function Format-StepLine {
 function Format-WatchFrame {
   param($Snapshot, [string]$Spinner)
   $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+  $age = "-"
+  if ($Snapshot.fetched_at) {
+    try { $age = "{0:N1}s" -f ((Get-Date) - ([datetime]$Snapshot.fetched_at)).TotalSeconds } catch { $age = "-" }
+  }
   $lines = New-Object System.Collections.Generic.List[string]
   $lines.Add(("$(Colorize $Spinner 'cyan') SkyBridge Dev Queue Watch                                      $timestamp")) | Out-Null
   $lines.Add("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━") | Out-Null
+  if ($Snapshot.warning) {
+    $lines.Add((Colorize (" WARNING     {0}" -f $Snapshot.warning) "red")) | Out-Null
+  }
   $control = Colorize ([string]$Snapshot.project.control) (Get-StatusKind ([string]$Snapshot.project.control))
   $workerStatus = if ($Snapshot.worker) { [string]$Snapshot.worker.status } else { "unknown" }
   $workerLineStatus = Colorize $workerStatus (Get-StatusKind $workerStatus)
@@ -182,7 +197,7 @@ function Format-WatchFrame {
   $lines.Add((" Project     {0,-28} control={1,-16} active={2} stale_leases={3} stale_locks={4}" -f $Snapshot.project_id, $control, $Snapshot.project.active_tasks, $Snapshot.project.stale_leases, $Snapshot.project.stale_locks)) | Out-Null
   $workerTask = if ($Snapshot.worker.current_task_id) { $Snapshot.worker.current_task_id } else { "-" }
   $lines.Add((" Worker      {0,-28} {1,-18} task={2}" -f "laptop-zenbookduo", $workerLineStatus, $workerTask)) | Out-Null
-  $lines.Add((" Campaign    {0,-28} runner={1,-16} step={2:00}/{3:00}" -f $Snapshot.campaign.campaign_id, $runnerStatus, $Snapshot.current_step.index, $Snapshot.current_step.total)) | Out-Null
+  $lines.Add((" Campaign    {0,-28} runner={1,-16} step={2:00}/{3:00} refreshed={4}" -f $Snapshot.campaign.campaign_id, $runnerStatus, $Snapshot.current_step.index, $Snapshot.current_step.total, $age)) | Out-Null
   if ($Compact) {
     $lines.Add((" Current     {0}  {1}  hold={2}" -f $Snapshot.current_step.goal_id, $Snapshot.current_step.title, $Snapshot.runner.hold_reason)) | Out-Null
     return ($lines -join "`n")
@@ -227,7 +242,7 @@ function Write-WatchResult {
     snapshot = $Snapshot
     frame = $Frame
   }
-  if ($OutputFile) {
+if ($OutputFile) {
     $dir = Split-Path -Parent $OutputFile
     if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     $result | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $OutputFile -Encoding UTF8
@@ -236,27 +251,50 @@ function Write-WatchResult {
   else { $Frame }
 }
 
-if ($IntervalSeconds -lt 1) { throw "-IntervalSeconds must be at least 1." }
+if ($PollIntervalSeconds -lt 1) { throw "-PollIntervalSeconds must be at least 1." }
+if ($RenderIntervalMilliseconds -lt 50) { throw "-RenderIntervalMilliseconds must be at least 50." }
 if ($EventLimit -lt 1) { throw "-EventLimit must be at least 1." }
 
 $frameIndex = 0
+$snapshot = $null
+$lastPoll = [datetime]::MinValue
+$effectiveOnce = [bool]($Once -or $Json)
+$effectiveMaxFrames = if ($MaxFrames -gt 0) { $MaxFrames } elseif ($Demo -and $Frames -gt 0) { $Frames } else { 0 }
 try {
   do {
     $spinner = $SpinnerFrames[$frameIndex % $SpinnerFrames.Count]
+    $shouldPoll = $Demo -or $null -eq $snapshot -or ((Get-Date) - $lastPoll).TotalSeconds -ge $PollIntervalSeconds
     try {
-      $snapshot = if ($Demo) { Get-DemoFrame -FrameIndex ($frameIndex % [Math]::Max(1, $Frames)) } else { Get-WatchSnapshot }
+      if ($shouldPoll) {
+        $snapshot = if ($Demo) { Get-DemoFrame -FrameIndex ($frameIndex % [Math]::Max(1, $Frames)) } else { Get-WatchSnapshot }
+        $lastPoll = Get-Date
+      } elseif ($SpinnerOnlyBetweenPolls -and $snapshot.PSObject.Properties["warning"]) {
+        $snapshot.warning = $null
+      }
       $frame = Format-WatchFrame -Snapshot $snapshot -Spinner $spinner
     } catch {
-      $snapshot = [pscustomobject]@{ ok = $false; token_printed = $false; error = $_.Exception.Message }
-      $frame = "$(Colorize $spinner 'cyan') SkyBridge Dev Queue Watch  $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss"))`n" +
-        (Colorize "WARNING: $($_.Exception.Message)" "red")
-      if ($Once) { Write-WatchResult -Snapshot $snapshot -Frame $frame; break }
+      if ($null -ne $snapshot) {
+        $snapshot.warning = $_.Exception.Message
+        $frame = Format-WatchFrame -Snapshot $snapshot -Spinner $spinner
+      } else {
+        $snapshot = [pscustomobject]@{
+          ok = $false
+          token_printed = $false
+          fetched_at = $null
+          warning = $_.Exception.Message
+          error = $_.Exception.Message
+        }
+        $frame = "$(Colorize $spinner 'cyan') SkyBridge Dev Queue Watch  $((Get-Date).ToString("yyyy-MM-dd HH:mm:ss"))`n" +
+          (Colorize "WARNING: $($_.Exception.Message)" "red")
+      }
+      if ($effectiveOnce) { Write-WatchResult -Snapshot $snapshot -Frame $frame; break }
     }
     if (-not $NoClear -and -not $Json -and -not $OutputFile) { try { Clear-Host } catch {} }
     Write-WatchResult -Snapshot $snapshot -Frame $frame
     $frameIndex++
-    if ($Once) { break }
-    Start-Sleep -Seconds $IntervalSeconds
+    if ($effectiveOnce) { break }
+    if ($effectiveMaxFrames -gt 0 -and $frameIndex -ge $effectiveMaxFrames) { break }
+    Start-Sleep -Milliseconds $RenderIntervalMilliseconds
   } while ($true)
 } finally {
 }
