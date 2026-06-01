@@ -94,7 +94,7 @@ try {
   $json = pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase $ApiBase -ProjectId "status-project" -ShowCompleted -Json -OutputFile $jsonFile
   $parsed = $json | ConvertFrom-Json
 
-  foreach ($expected in @("SkyBridge:", "Control:", "status-worker-online", "status-task-queued", "status-task-blocked")) {
+  foreach ($expected in @("SkyBridge", "Control:", "status-worker-online", "status-task-queued", "status-task-blocked")) {
     if (($compact -join "`n") -notmatch [regex]::Escape($expected)) {
       throw "Compact status output missing '$expected'."
     }

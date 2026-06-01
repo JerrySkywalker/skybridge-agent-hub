@@ -162,3 +162,38 @@ The autonomous campaign runner is the next layer above the bounded supervisor. I
 Use `skybridge-campaign.ps1 run-next` for a single-step execution, `run-until-hold` for unattended execution until a hold or limit, and `run-until-complete` only for a bounded campaign that is already approved for completion. `resume` inspects existing task, PR and evidence state before creating anything new. `runner-status` and `runner-report` are read-only inspection commands.
 
 Runner mutations remain dry-run by default. `runner-unlock` requires `-Apply` and a reason, and stale locks block automatic execution until inspected. The runner never overrides deterministic hard vetoes for active task residue, stale leases, unsafe paths, missing evidence, real CI failures, unapproved high-risk task types or uncertain Hermes gate output.
+
+## Goal 188A Dev Queue Preparation
+
+Goal 188A prepares the `dev-queue-189-200` campaign for later unattended execution but does not launch it. The Goal 189-200 markdown files are expanded Super Goal documents and must be reviewed before the queue starts.
+
+The launch wrapper now supports explicit queue parameters:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 `
+  -GoalPackDir .\goals\dev-queue-189-200 `
+  -CampaignId dev-queue-189-200 `
+  -MaxSteps 12 `
+  -MaxTasks 12 `
+  -MaxRuntimeMinutes 240 `
+  -Json `
+  -OutputFile .agent/tmp/dev-queue-189-200-dry-run.json
+```
+
+Dry-run remains the default and should leave `git status --short` clean because reports and runner state are written under ignored `.agent/tmp` and `.agent/campaign-runners`. Actual execution still requires `-Apply`, a clean latest `main`, no active tasks, no stale leases and reviewed operator approval.
+
+Post-merge launch command:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 `
+  -GoalPackDir .\goals\dev-queue-189-200 `
+  -CampaignId dev-queue-189-200 `
+  -MaxSteps 12 `
+  -MaxTasks 12 `
+  -MaxRuntimeMinutes 240 `
+  -Apply `
+  -Json `
+  -OutputFile .agent/tmp/dev-queue-189-200-runner-report.json
+```
+
+Do not run the launch command before the preparation PR is merged and reviewed. Do not run it from a draft/manual parent PR.

@@ -637,4 +637,35 @@ The Goal 188 autonomous runner is expected to use the `laptop-zenbookduo` worker
 
 Before starting a real queue run, verify the worker can heartbeat, project control is paused, `stop_requested=false`, active queued/claimed/running tasks are zero and stale leases are zero. The runner must be stopped or held before the operator exits.
 
-Do not run the `dev-queue-189-200` unattended queue from an unmerged feature branch. After merge and any required server deployment, use `scripts/powershell/start-dev-queue-189-200.ps1 -Apply` with the real API base, token file and Hermes env file.
+Do not run the `dev-queue-189-200` unattended queue from an unmerged feature branch. Goal 188A expanded the Goal 189-200 files and fixed launch dry-run UX; those changes must be merged and reviewed before launch.
+
+Dry-run validation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 `
+  -GoalPackDir .\goals\dev-queue-189-200 `
+  -CampaignId dev-queue-189-200 `
+  -MaxSteps 12 `
+  -MaxTasks 12 `
+  -MaxRuntimeMinutes 240 `
+  -Json `
+  -OutputFile .agent/tmp/dev-queue-189-200-dry-run.json
+```
+
+Dry-run writes under ignored `.agent/tmp` and `.agent/campaign-runners`, so it should not dirty the repository. If `git status --short` changes after dry-run, hold the launch and inspect the new paths.
+
+Post-merge launch from clean latest `main`:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 `
+  -GoalPackDir .\goals\dev-queue-189-200 `
+  -CampaignId dev-queue-189-200 `
+  -MaxSteps 12 `
+  -MaxTasks 12 `
+  -MaxRuntimeMinutes 240 `
+  -Apply `
+  -Json `
+  -OutputFile .agent/tmp/dev-queue-189-200-runner-report.json
+```
+
+Before running with `-Apply`, confirm project control is paused, active tasks are zero, stale leases are zero, no runner lock is active, the worker profile can heartbeat, and the parent PR is no longer draft/manual.
