@@ -16,7 +16,7 @@ Mutating commands remain dry-run by default. Use `-Apply` only after status and 
 
 ## State And Locks
 
-Local runner state is stored under `.agent/campaign-runners`:
+Local runner state is stored under ignored `.agent/campaign-runners`:
 
 - `*.runner.json`: runner id, campaign id, project id, status, step/task counts, last decision, hold reason, resume hash, approval scope and audit log.
 - `locks/*.lock.json`: campaign lock id, owner, active/released/stale status, heartbeat, expiry and release reason.
@@ -37,12 +37,40 @@ The runner does not execute production deploy, secret rotation, server root conf
 
 `skybridge-pr-finalize.ps1` detects PR state, changed files and CI classification. It waits/blocks on pending or unknown state, retries transient failures once, blocks real CI failures and unsafe files, marks safe draft PRs ready, optionally enables auto-merge, and can repair task evidence after merge.
 
+Dry-run reports are written under ignored `.agent/tmp` by default. Goal 188A added `.agent/campaign-runners/` to `.gitignore`, so dry-run runner state should not dirty `git status`.
+
+## Dev Queue Launch Wrapper
+
+`scripts/powershell/start-dev-queue-189-200.ps1` accepts these queue launch parameters:
+
+- `-GoalPackDir`, default `goals/dev-queue-189-200`
+- `-CampaignId`, default `dev-queue-189-200`
+- `-MaxSteps`, default `12`
+- `-MaxTasks`, default `12`
+- `-MaxRuntimeMinutes`, default `240`
+- `-OutputDir`, default `.agent/tmp`
+- `-OutputFile`, optional JSON runner report path
+- `-DryRun`, optional explicit dry-run marker
+- `-Apply`, required for actual execution
+
+The wrapper returns resolved parameters in JSON when `-Json` is used. Dry-run can be validated from a clean feature branch. `-Apply` still requires clean latest `main`.
+
 ## Post-merge Launch
 
-After Goal 188 is merged and deployed, run:
+After Goal 188A is merged, reviewed and any required server deployment is complete, run from clean latest `main`:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 -Apply -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.ps1 `
+  -GoalPackDir .\goals\dev-queue-189-200 `
+  -CampaignId dev-queue-189-200 `
+  -MaxSteps 12 `
+  -MaxTasks 12 `
+  -MaxRuntimeMinutes 240 `
+  -Apply `
+  -Json `
+  -OutputFile .agent/tmp/dev-queue-189-200-runner-report.json
 ```
 
 The script verifies clean latest `main`, validates and imports the queue, checks active tasks and stale leases, then starts `run-until-hold` with bounded limits and reports under `.agent/tmp`.
+
+Do not run this command while the parent PR is draft/manual or before the expanded Goal 189-200 files are reviewed.

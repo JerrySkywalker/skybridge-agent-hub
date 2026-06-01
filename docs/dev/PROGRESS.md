@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-06-01 Goal 188A Dev Queue Expansion and Launch UX
+
+- Started from clean latest `main` after Super 188 merged and created branch `ai/goal-188a-expand-dev-queue-goals-launch-ux`.
+- Preflight against the cloud control plane confirmed project control `paused`, active queued/claimed/running tasks `0`, stale leases `0`, campaign `dev-queue-189-200` present as `draft`, no runner lock active, `laptop-zenbookduo` heartbeat online after refresh, Hermes direct HTTPS healthy, and `token_printed=false`.
+- Expanded all 12 files under `goals/dev-queue-189-200` from thin notes into full Super Goal style documents with context, mission, safety boundaries, phased implementation, validation, final status, PR package, success criteria, stop/hold conditions and evidence requirements.
+- Preserved the Goal 189-200 dependency chain and kept Goal 199 as proposed-goal generation only and Goal 200 as controlled review/import only.
+- Updated `start-dev-queue-189-200.ps1` with `-GoalPackDir`, `-CampaignId`, `-MaxSteps`, `-MaxTasks`, `-OutputFile`, `-OutputDir` and `-DryRun`. `-Apply` remains required for execution and still requires clean latest `main`.
+- Added `.agent/campaign-runners/` to `.gitignore`; dry-run reports remain under ignored `.agent/tmp`, and the clean-tree smoke proved dry-run runner state does not dirty `git status`.
+- Added focused dry-run/local smokes for expanded goal files, pack validation, import dry-run, launch parameters, output-file resolution and dry-run clean-tree behavior.
+- Validation so far: `validate-pack` passed with 12 goals and updated markdown hashes; `import -DryRun` passed; `start-dev-queue-189-200.ps1` dry-run returned resolved parameters, active tasks `0`, stale leases `0`, planned all 12 steps in dry-run state and left `git status` clean.
+- No `-Apply` launch was run, no Goal 189-200 execution occurred, no campaign-step-derived tasks were created, no worker loop was started, and no GitHub settings, branch protection, production, server-root, DNS, OpenResty or Hermes server mutation occurred.
+
 ## 2026-05-31 Super Goal 187 Campaign Step Executor and Bootstrap MVP Pilot
 
 - Started from latest `main` after PR #91 and created branch `ai/super-187-campaign-step-executor-bootstrap-mvp`.
