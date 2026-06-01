@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-06-01 Goal 188C Watch CLI and Dev Queue Control
+
+- Added `skybridge-campaign-watch.ps1`, a read-only Docker BuildKit-style watch CLI with spinner frames, colorized status output, `-Once`, `-NoClear`, `-Compact`, `-ShowEvents`, JSON output and demo frames.
+- Added `skybridge-dev-queue-control.ps1` with `preflight`, `watch`, `start-one`, `start-all`, `safe-pause`, `emergency-stop`, `resume`, `report` and `unlock-stale-runner` commands.
+- Added dry-run/local smokes for watch output, demo output, JSON cleanliness, color suppression, control preflight, dry-run starts, pause/stop previews and reports.
+- Recommended launch workflow is now two windows: watch in Window A, control commands in Window B, with `start-one` before `start-all`.
+- No Goal 189-200 execution is part of Goal 188C; mutating control paths require `-Apply` and the queue remains paused before launch.
+
 ## 2026-06-01 Goal 188A Dev Queue Expansion and Launch UX
 
 - Started from clean latest `main` after Super 188 merged and created branch `ai/goal-188a-expand-dev-queue-goals-launch-ux`.

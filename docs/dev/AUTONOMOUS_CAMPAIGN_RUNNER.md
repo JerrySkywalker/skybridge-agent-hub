@@ -74,3 +74,72 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.
 The script verifies clean latest `main`, validates and imports the queue, checks active tasks and stale leases, then starts `run-until-hold` with bounded limits and reports under `.agent/tmp`.
 
 Do not run this command while the parent PR is draft/manual or before the expanded Goal 189-200 files are reviewed.
+
+## Operator Watch And Control
+
+Goal 188C adds two launch-day scripts:
+
+- `scripts/powershell/skybridge-campaign-watch.ps1`: read-only Docker BuildKit-style live watch with spinner frames, colored statuses, current-step context, nearby queue entries and recent runner audit entries.
+- `scripts/powershell/skybridge-dev-queue-control.ps1`: preflight/control wrapper for the dev queue.
+
+Recommended two-window operation:
+
+```powershell
+# Window A: read-only watch
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command watch `
+  -CampaignId dev-queue-189-200 `
+  -ColorMode Always
+
+# Window B: control commands
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command preflight `
+  -Json
+```
+
+Preview the watch UI without cloud mutation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -Demo `
+  -Once `
+  -ColorMode Always
+```
+
+Use `start-one` before `start-all`:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-one `
+  -DryRun `
+  -Json
+
+# After review, from clean latest main only:
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-one `
+  -Apply `
+  -Json
+```
+
+If Goal 189 succeeds and the report is clean, start the remaining queue:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command start-all `
+  -Apply `
+  -Json
+```
+
+Use `safe-pause -Apply -Reason` for normal operator holds. Use `emergency-stop -Apply -Reason` only when the runner must stop quickly; it sets project stop requested and prints the instruction to press Ctrl+C in the runner window if it is still running. `resume -Apply` first returns project control to paused/no-stop state, refreshes worker heartbeat and resumes the bounded campaign runner.
+
+Stale runner locks must be inspected before unlock:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command unlock-stale-runner `
+  -Reason "inspected stale runner lock" `
+  -Apply `
+  -Json
+```
+
+The wrapper refuses to unlock an active non-stale runner lock.

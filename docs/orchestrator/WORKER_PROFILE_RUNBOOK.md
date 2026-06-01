@@ -114,6 +114,20 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
   -ShowLeases
 ```
 
+## Dev Queue Watch And Control
+
+For the Goal 189-200 dev queue, use the laptop worker profile and keep the project paused until the reviewed launch command is run from clean latest `main`.
+
+Recommended operator workflow:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command preflight -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command watch -ColorMode Always
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command start-one -Apply -Json
+```
+
+Keep the watch command in a separate window. If Goal 189 succeeds, run `start-all -Apply -Json`; if the runner holds, run `report -Json` and inspect the current step, PR, CI and evidence fields before resuming. Use `safe-pause -Apply -Reason` for normal holds and `emergency-stop -Apply -Reason` only when the runner must be interrupted immediately. `unlock-stale-runner -Apply -Reason` is only for inspected stale runner locks; active locks are not force-unlocked by the wrapper.
+
 Campaign status is metadata-only and does not start workers. Operators can inspect imported Goal Packs and deterministic advance gates with:
 
 ```powershell
