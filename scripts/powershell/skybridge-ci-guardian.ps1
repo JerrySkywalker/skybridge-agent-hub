@@ -4,6 +4,9 @@ param(
   [switch]$CurrentBranch,
   [switch]$Watch,
   [int]$MaxRepairAttempts = 3,
+  [int]$MaxTransientRetryCount = 1,
+  [int]$PendingCheckTimeoutSeconds = 900,
+  [int]$PollIntervalSeconds = 30,
   [switch]$DryRun,
   [switch]$UpdatePRBody,
   [switch]$EnableAutoMerge,
@@ -112,6 +115,47 @@ function Get-PrAutoMergeEligibility {
   }
 }
 
+function Get-GuardianCheckState {
+  param([string]$ChecksText)
+
+  $text = $ChecksText.ToLowerInvariant()
+  if ($text -match "pending|queued|in_progress|waiting|requested") {
+    return "pending"
+  }
+  if ($text -match "fail|cancel|timed_out|action_required") {
+    if ($text -match "checkout|network|cache|setup|rate limit|timeout") {
+      return "transient_failed"
+    }
+    return "real_failed"
+  }
+  return "passed"
+}
+
+function Get-GuardianRetryState {
+  param([string]$RunDir)
+
+  $path = Join-Path $RunDir "transient-retry-state.json"
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    return [pscustomobject]@{ path = $path; attempts = 0 }
+  }
+  try {
+    $state = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    return [pscustomobject]@{ path = $path; attempts = [int]$state.attempts }
+  } catch {
+    return [pscustomobject]@{ path = $path; attempts = 0 }
+  }
+}
+
+function Set-GuardianRetryState {
+  param([string]$Path, [int]$Attempts, [string]$Reason)
+
+  [pscustomobject]@{
+    attempts = $Attempts
+    reason = $Reason
+    updated_at = (Get-Date).ToUniversalTime().ToString("o")
+  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
 $prNumber = Get-CurrentPrNumber
 if ($prNumber -le 0) {
   Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI Guardian" -Message "No pull request could be identified."
@@ -128,21 +172,53 @@ Invoke-BootstrapNotification -Severity "info" -Title "SkyBridge CI Guardian star
 Send-GuardianEvent -Type "iteration.ci_pending" -Payload @{ pr_number = $prNumber; dry_run = [bool]$DryRun }
 
 if ($DryRun) {
-  @{ ok = $true; pr_number = $prNumber; dry_run = $true; auto_merge = [bool]$EnableAutoMerge; max_repair_attempts = $MaxRepairAttempts; policy_required_checks = @($autoMergePolicy.required_checks) } | ConvertTo-Json -Depth 8
+  @{ ok = $true; pr_number = $prNumber; dry_run = $true; auto_merge = [bool]$EnableAutoMerge; max_repair_attempts = $MaxRepairAttempts; max_transient_retry_count = $MaxTransientRetryCount; pending_check_timeout_seconds = $PendingCheckTimeoutSeconds; policy_required_checks = @($autoMergePolicy.required_checks) } | ConvertTo-Json -Depth 8
   exit 0
 }
 
 $attempt = 0
+$pendingStartedAt = Get-Date
 while ($attempt -le $MaxRepairAttempts) {
   $attempt += 1
   $checksOutput = gh pr checks $prNumber 2>&1
   $checksOutput | Set-Content -LiteralPath (Join-Path $runDir "checks-$attempt.log") -Encoding UTF8
   $checksText = $checksOutput -join "`n"
+  $checkState = Get-GuardianCheckState -ChecksText $checksText
 
-  if ($checksText -match "fail|cancel|timed_out|action_required") {
+  if ($checkState -eq "pending") {
+    $elapsed = [int]((Get-Date) - $pendingStartedAt).TotalSeconds
+    Send-GuardianEvent -Type "iteration.ci_pending" -Payload @{ pr_number = $prNumber; attempt = $attempt; elapsed_seconds = $elapsed; timeout_seconds = $PendingCheckTimeoutSeconds }
+    if ($elapsed -ge $PendingCheckTimeoutSeconds -or -not $Watch) {
+      Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI pending" -Message "PR #$prNumber checks are still pending."
+      @{ ok = $false; pr_number = $prNumber; state = "ci_pending"; attempts = $attempt; elapsed_seconds = $elapsed; timeout_seconds = $PendingCheckTimeoutSeconds } | ConvertTo-Json -Depth 8
+      exit 1
+    }
+    $attempt -= 1
+    Start-Sleep -Seconds $PollIntervalSeconds
+    continue
+  }
+
+  if ($checkState -in @("transient_failed", "real_failed")) {
+    if ($checkState -eq "transient_failed") {
+      $retryState = Get-GuardianRetryState -RunDir $runDir
+      if ($retryState.attempts -lt $MaxTransientRetryCount) {
+        Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI transient failure" -Message "PR #$prNumber has transient-looking CI failure; retrying failed jobs once."
+        gh run rerun --failed | Out-Null
+        Set-GuardianRetryState -Path $retryState.path -Attempts ($retryState.attempts + 1) -Reason "transient_ci_failure"
+        Send-GuardianEvent -Type "iteration.ci_retry_started" -Payload @{ pr_number = $prNumber; attempt = $attempt; reason = "transient_ci_failure"; max_retries = $MaxTransientRetryCount }
+        if (-not $Watch) {
+          @{ ok = $true; pr_number = $prNumber; state = "transient_retry_started"; attempts = $attempt; retry_attempts = ($retryState.attempts + 1) } | ConvertTo-Json -Depth 8
+          exit 0
+        }
+        $attempt -= 1
+        Start-Sleep -Seconds $PollIntervalSeconds
+        continue
+      }
+    }
+
     Invoke-BootstrapNotification -Severity "warning" -Title "SkyBridge CI failed" -Message "PR #$prNumber failed checks; repair attempt $attempt of $MaxRepairAttempts."
     $workflowEvidence = Save-FailedWorkflowEvidence -PrNumber $prNumber -RunDir $runDir -Attempt $attempt
-    Send-GuardianEvent -Type "iteration.ci_failed" -Payload @{ pr_number = $prNumber; attempt = $attempt; workflow_logs_fetched = [bool]$workflowEvidence.fetched; raw_logs_local_only = $true }
+    Send-GuardianEvent -Type "iteration.ci_failed" -Payload @{ pr_number = $prNumber; attempt = $attempt; check_state = $checkState; workflow_logs_fetched = [bool]$workflowEvidence.fetched; raw_logs_local_only = $true }
     if ($attempt -gt $MaxRepairAttempts) { break }
 
     $repairPrompt = @"

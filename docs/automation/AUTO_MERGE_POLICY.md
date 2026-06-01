@@ -49,12 +49,36 @@ The local classifier reports:
 
 Only `low` is eligible for unattended auto-merge.
 
+## CI Guardian And Finalizer Behavior
+
+`skybridge-ci-guardian.ps1` and `skybridge-pr-finalize.ps1` use the same conservative operating model:
+
+- pending checks are reported as pending and may be watched only for a bounded timeout;
+- transient-looking failures such as checkout, setup, cache, network, rate-limit or timeout failures may be retried once;
+- real CI failures block auto-merge and stay available for human or bounded repair review;
+- low-risk draft child PRs may be marked ready only when changed files are within the expected or allowed path set;
+- high-risk draft PRs, unsafe paths, unknown CI, cancelled checks and repeated transient failures stay manual;
+- merged child PR evidence repair records safe metadata such as PR URL, changed files, CI status and merge commit, not raw command output or logs.
+
+The finalizer is dry-run unless `-Apply` is supplied. Evidence repair also requires `-AllowEvidenceRepair` and `-Apply`.
+
 ## Commands
 
 Validate the policy classifier:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-auto-merge-policy.ps1
+```
+
+Validate focused finalizer decisions:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-pending-wait.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-transient-retry.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-draft-ready.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-safe-merge.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-blocks-unsafe-files.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-pr-finalizer-evidence-repair.ps1
 ```
 
 Run the CI Guardian without auto-merge:
