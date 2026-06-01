@@ -154,3 +154,11 @@ Guide modes `hermes-health`, `hermes-preview` and `hermes-preview-summary` are p
 - Super 187 adds the restartable campaign MVP contract. Campaign locks are separate from task leases and local repo locks. One active campaign per project is the default, with explicit override evidence required for exceptions. Campaign event logs should record advance previews, blocked advances, retries, skips, holds, evidence attachments and export reports using bounded redacted payloads.
 
 This supervisor prepares the dogfood self-bootstrap sprint by connecting the existing planner, proposal review, task conversion, one-shot worker execution and recovered evidence semantics into one bounded operator workflow.
+
+## Goal 188 Runner Commands
+
+The autonomous campaign runner is the next layer above the bounded supervisor. It uses the existing campaign step executor, lease-backed worker flow, PR finalizer, evidence repair and gate evaluator, but owns campaign-level state and a campaign lock so only one active runner can control a project campaign by default.
+
+Use `skybridge-campaign.ps1 run-next` for a single-step execution, `run-until-hold` for unattended execution until a hold or limit, and `run-until-complete` only for a bounded campaign that is already approved for completion. `resume` inspects existing task, PR and evidence state before creating anything new. `runner-status` and `runner-report` are read-only inspection commands.
+
+Runner mutations remain dry-run by default. `runner-unlock` requires `-Apply` and a reason, and stale locks block automatic execution until inspected. The runner never overrides deterministic hard vetoes for active task residue, stale leases, unsafe paths, missing evidence, real CI failures, unapproved high-risk task types or uncertain Hermes gate output.

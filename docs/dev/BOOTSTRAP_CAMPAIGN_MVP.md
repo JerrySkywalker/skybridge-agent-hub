@@ -161,3 +161,11 @@ Pilot result:
 - current campaign step after pilot: `bootstrap-mvp:super-184b-operator-console-dashboard`
 
 The pilot did not execute Super 184B and did not change production deployment, server root configuration, secrets, GitHub settings or branch protection.
+
+## Goal 188 Autonomous Runner Extension
+
+Goal 188 extends the bootstrap campaign MVP from manual step execution into a bounded autonomous runner model. The runner owns a campaign lock, executes at most the configured number of steps and tasks, finalizes child PR evidence, runs deterministic plus Hermes gates and stops on any hold, failure, unsafe path, stale lease, stale lock or operator stop.
+
+The new development queue is seeded separately as `dev-queue-189-200`. Importing that queue does not execute it. The post-merge launch path is documented in `docs/dev/DEV_QUEUE_189_200.md` and wrapped by `scripts/powershell/start-dev-queue-189-200.ps1`.
+
+Goal 188 does not execute Goal 189-200 from the feature branch. The intended acceptance flow is merge, deploy the updated SkyBridge Server if needed, verify cloud hygiene, then start the bounded queue with explicit `-Apply` and delegated runner approval.

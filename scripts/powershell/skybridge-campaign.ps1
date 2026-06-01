@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("init", "validate-pack", "import", "list", "show", "steps", "status", "start", "pause", "hold", "resume", "advance-preview", "advance", "gate-preview", "hermes-gate-preview", "advance-with-gate", "attach-gate-evidence", "execute-preview", "execute-step", "link-task", "attach-execution-evidence", "step-report", "complete-step", "fail-step", "attach-evidence", "export-report")]
+  [ValidateSet("init", "validate-pack", "import", "list", "show", "steps", "status", "start", "pause", "hold", "resume", "advance-preview", "advance", "gate-preview", "hermes-gate-preview", "advance-with-gate", "attach-gate-evidence", "execute-preview", "execute-step", "link-task", "attach-execution-evidence", "step-report", "complete-step", "fail-step", "attach-evidence", "export-report", "run-next", "run-until-hold", "run-until-complete", "runner-status", "runner-report", "runner-stop", "runner-hold", "runner-unlock")]
   [string]$Command = "status",
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "http://127.0.0.1:8787" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -11,6 +11,7 @@ param(
   [string]$StepId,
   [string]$GoalId,
   [string]$WorkerId,
+  [string]$WorkerProfile,
   [string]$TaskId,
   [string]$ExecutionTaskType = "docs",
   [string[]]$ExpectedFiles = @(),
@@ -25,6 +26,18 @@ param(
   [string]$HermesGateFixtureFile,
   [string]$PromptVersion = "campaign-gate-v1",
   [string]$HumanApprovalReason,
+  [string]$RunnerApprovalScope,
+  [string]$RunnerUnlockReason,
+  [int]$MaxSteps = 1,
+  [int]$MaxTasks = 1,
+  [int]$MaxRuntimeMinutes = 30,
+  [int]$PollIntervalSeconds = 30,
+  [int]$IdleTimeoutSeconds = 600,
+  [switch]$StopOnFailure,
+  [switch]$StopOnHumanRequired,
+  [switch]$AllowAutoMerge,
+  [switch]$AllowEvidenceRepair,
+  [switch]$AllowServerDeploy,
   [string]$SaveGateInput,
   [string]$SaveGateOutput,
   [switch]$DryRun,
@@ -721,6 +734,455 @@ function New-CampaignExecutionPreview {
   }
 }
 
+function Get-CampaignRunnerRoot {
+  $root = Join-Path ".agent" "campaign-runners"
+  New-Item -ItemType Directory -Path $root -Force | Out-Null
+  return $root
+}
+
+function Get-CampaignRunnerStatePath {
+  param([string]$TargetCampaignId = $CampaignId)
+  if ([string]::IsNullOrWhiteSpace($TargetCampaignId)) { throw "$Command requires -CampaignId." }
+  Join-Path (Get-CampaignRunnerRoot) (($TargetCampaignId -replace '[^A-Za-z0-9_.-]', '_') + ".runner.json")
+}
+
+function Get-CampaignRunnerLockPath {
+  param([string]$TargetCampaignId = $CampaignId, [string]$TargetProjectId = $ProjectId)
+  if ([string]::IsNullOrWhiteSpace($TargetCampaignId)) { throw "$Command requires -CampaignId." }
+  $dir = Join-Path (Get-CampaignRunnerRoot) "locks"
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  $name = (($TargetProjectId + "__" + $TargetCampaignId) -replace '[^A-Za-z0-9_.-]', '_') + ".lock.json"
+  Join-Path $dir $name
+}
+
+function Read-CampaignRunnerJson {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
+}
+
+function Write-CampaignRunnerJson {
+  param($Value, [string]$Path)
+  $dir = Split-Path -Parent $Path
+  if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  $Value | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Get-CampaignRunnerNow {
+  (Get-Date).ToUniversalTime().ToString("o")
+}
+
+function Get-CampaignRunnerLockStatus {
+  param($Lock)
+  if (-not $Lock) { return "none" }
+  if ($Lock.lock_status -and $Lock.lock_status -ne "active") { return [string]$Lock.lock_status }
+  try {
+    $expiresAt = [datetimeoffset]::Parse([string]$Lock.expires_at).UtcDateTime
+    if ($expiresAt -lt [datetime]::UtcNow) { return "stale" }
+  } catch {
+    return "stale"
+  }
+  return "active"
+}
+
+function Get-CampaignRunnerApprovalScope {
+  $scope = $null
+  if (-not [string]::IsNullOrWhiteSpace($RunnerApprovalScope)) {
+    if (Test-Path -LiteralPath $RunnerApprovalScope -PathType Leaf) {
+      $scope = Get-Content -Raw -LiteralPath $RunnerApprovalScope | ConvertFrom-Json
+    } else {
+      $scope = $RunnerApprovalScope | ConvertFrom-Json
+    }
+  } elseif ($HumanApproved) {
+    $scope = [pscustomobject]@{
+      approved_by = "operator"
+      approved_at = Get-CampaignRunnerNow
+      campaign_id = $CampaignId
+      allowed_goal_ids = @("*")
+      max_steps = $MaxSteps
+      max_tasks = $MaxTasks
+      max_runtime_minutes = $MaxRuntimeMinutes
+      allowed_task_types = @("docs", "local-smoke", "refactor", "frontend", "backend", "test")
+      blocked_task_types = @("production_deploy", "secret_rotation", "server_root_config", "github_settings", "branch_protection")
+      allowed_paths = @("docs/**", "scripts/powershell/**", "apps/**", "packages/**", "goals/**")
+      human_approval_reason = $HumanApprovalReason
+      expires_at = (Get-Date).ToUniversalTime().AddMinutes([Math]::Max(1, $MaxRuntimeMinutes)).ToString("o")
+      revoked_at = $null
+    }
+  }
+  if ($scope) {
+    $json = $scope | ConvertTo-Json -Depth 40 -Compress
+    $scope | Add-Member -NotePropertyName scope_hash -NotePropertyValue (Get-JsonHash -Text $json) -Force
+  }
+  return $scope
+}
+
+function Test-CampaignRunnerApproval {
+  param($Step, $Scope)
+  if (-not $Scope) {
+    return [pscustomobject]@{
+      ok = $false
+      approval_type = "none"
+      blockers = @()
+      task_type = "unknown"
+      scope_hash = $null
+    }
+  }
+  $blocked = @()
+  $taskType = ([string]$Step.metadata.task_type).ToLowerInvariant()
+  if ([string]::IsNullOrWhiteSpace($taskType) -or $taskType -eq "super-goal") { $taskType = "docs" }
+  $blockedTypes = @($Scope.blocked_task_types | ForEach-Object { ([string]$_).ToLowerInvariant() })
+  if ($blockedTypes -contains $taskType) { $blocked += "blocked_task_type:$taskType" }
+  $stepBlockedTypes = @($Step.metadata.blocked_task_types | ForEach-Object { ([string]$_).ToLowerInvariant() })
+  if (@($stepBlockedTypes | Where-Object { $_ -in @("production_deploy", "secret_rotation", "server_root_config", "github_settings", "branch_protection") }).Count -gt 0 -and $taskType -in @("production_deploy", "secret_rotation", "server_root_config", "github_settings", "branch_protection")) {
+    $blocked += "high_risk_task_type:$taskType"
+  }
+  $allowedGoalIds = @($Scope.allowed_goal_ids | ForEach-Object { [string]$_ })
+  if ($allowedGoalIds.Count -gt 0 -and $allowedGoalIds -notcontains "*" -and $allowedGoalIds -notcontains [string]$Step.goal_id) {
+    $blocked += "goal_not_in_runner_approval_scope:$($Step.goal_id)"
+  }
+  if ($Scope.campaign_id -and [string]$Scope.campaign_id -ne [string]$Step.campaign_id) { $blocked += "campaign_not_in_runner_approval_scope" }
+  if ($Scope.revoked_at) { $blocked += "runner_approval_revoked" }
+  if ($Scope.expires_at) {
+    try {
+      if ([datetimeoffset]::Parse([string]$Scope.expires_at).UtcDateTime -lt [datetime]::UtcNow) { $blocked += "runner_approval_expired" }
+    } catch {
+      $blocked += "runner_approval_expiry_invalid"
+    }
+  }
+  [pscustomobject]@{
+    ok = ($blocked.Count -eq 0)
+    approval_type = if ($Scope) { "delegated_runner_approval" } else { "none" }
+    blockers = @($blocked)
+    task_type = $taskType
+    scope_hash = if ($Scope) { $Scope.scope_hash } else { $null }
+  }
+}
+
+function Get-CampaignRunnerSnapshot {
+  if ($GoalPackDir -or $ManifestFile) {
+    $validation = ConvertTo-CampaignImportPayload
+    if (-not $validation.ok) { throw "Goal pack validation failed: $(@($validation.errors) -join '; ')" }
+    $campaign = $validation.payload
+    $now = Get-CampaignRunnerNow
+    $steps = @($validation.payload.goals | Sort-Object order | ForEach-Object {
+      [pscustomobject]@{
+        campaign_step_id = "$($validation.payload.campaign_id):$($_.goal_id)"
+        campaign_id = $validation.payload.campaign_id
+        project_id = $validation.payload.project_id
+        goal_id = $_.goal_id
+        title = $_.title
+        order = $_.order
+        status = if ([int]$_.order -eq 1) { "ready" } else { "pending" }
+        dependencies = @($_.dependencies)
+        markdown_path = $_.markdown_path
+        markdown_hash = $_.markdown_hash
+        metadata = $_.metadata
+        advance_gate = $_.advance_gate
+        linked_task_ids = @()
+        linked_pr_urls = @()
+        created_at = $now
+        updated_at = $now
+      }
+    })
+    $campaignObject = [pscustomobject]@{
+      campaign_id = $validation.payload.campaign_id
+      project_id = $validation.payload.project_id
+      title = $validation.payload.title
+      source = $validation.payload.source
+      status = "ready"
+      current_step_id = if ($steps.Count -gt 0) { $steps[0].campaign_step_id } else { $null }
+      safety_policy = $validation.payload.safety_policy
+      metadata = $validation.payload.metadata
+      created_at = $now
+      updated_at = $now
+    }
+    return [pscustomobject]@{ campaign = $campaignObject; steps = @($steps); fixture = $true; validation = $validation }
+  }
+  $payload = Invoke-CampaignApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))"
+  return [pscustomobject]@{ campaign = $payload.campaign; steps = @($payload.steps | Sort-Object order); fixture = $false; validation = $null }
+}
+
+function Get-CampaignRunnerHygiene {
+  if ($GoalPackDir -or $ManifestFile) {
+    return [pscustomobject]@{ active_tasks = 0; stale_leases = 0; stale_locks = 0; stop_requested = $false; project_control = "paused"; blockers = @() }
+  }
+  $status = Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-status.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-TokenFile", $TokenFile, "-Hygiene", "-ShowLeases", "-ShowLocks", "-Json", "-ColorMode", "Never")
+  [pscustomobject]@{
+    active_tasks = [int]$status.task_summary.active
+    stale_leases = [int]$status.task_summary.stale_leases
+    stale_locks = if ($status.hygiene_summary.stale_locks) { [int]$status.hygiene_summary.stale_locks } else { 0 }
+    stop_requested = [bool]$status.control.stop_requested
+    project_control = [string]$status.control.state
+    blockers = @()
+    raw = $status
+  }
+}
+
+function New-CampaignRunnerState {
+  param($Snapshot, [string]$RunnerStatus = "running")
+  $now = Get-CampaignRunnerNow
+  [pscustomobject]@{
+    schema = "skybridge.campaign_runner_state.v1"
+    runner_id = "runner_$([Guid]::NewGuid().ToString("n"))"
+    campaign_id = $Snapshot.campaign.campaign_id
+    project_id = $Snapshot.campaign.project_id
+    runner_status = $RunnerStatus
+    current_step_id = $Snapshot.campaign.current_step_id
+    started_at = $now
+    updated_at = $now
+    stopped_at = $null
+    max_steps = $MaxSteps
+    max_tasks = $MaxTasks
+    max_runtime_minutes = $MaxRuntimeMinutes
+    steps_attempted = 0
+    steps_completed = 0
+    tasks_attempted = 0
+    tasks_completed = 0
+    last_decision = $null
+    last_error = $null
+    hold_reason = $null
+    resume_token = $null
+    resume_state_hash = $null
+    operator_approval_scope = $null
+    audit_log = @()
+  }
+}
+
+function Add-CampaignRunnerAudit {
+  param($State, [string]$Decision, [string]$StepId, [string]$Reason = "")
+  $entry = [pscustomobject]@{ at = Get-CampaignRunnerNow; decision = $Decision; step_id = $StepId; reason = $Reason }
+  $State.audit_log = @($State.audit_log) + @($entry)
+  $State.updated_at = $entry.at
+  $State.last_decision = $Decision
+  $State.resume_state_hash = Get-JsonHash -Text ($State | ConvertTo-Json -Depth 80 -Compress)
+}
+
+function Acquire-CampaignRunnerLock {
+  param($Snapshot, $State)
+  $lockPath = Get-CampaignRunnerLockPath -TargetCampaignId $Snapshot.campaign.campaign_id -TargetProjectId $Snapshot.campaign.project_id
+  $existing = Read-CampaignRunnerJson -Path $lockPath
+  $existingStatus = Get-CampaignRunnerLockStatus -Lock $existing
+  if ($existingStatus -eq "active") { throw "Active campaign runner lock exists for $($Snapshot.campaign.campaign_id)." }
+  if ($existingStatus -eq "stale" -and -not ($Command -eq "runner-unlock" -and $Apply)) { throw "Stale campaign runner lock blocks auto-run until inspected: $lockPath" }
+  $now = Get-CampaignRunnerNow
+  $lock = [pscustomobject]@{
+    schema = "skybridge.campaign_runner_lock.v1"
+    campaign_lock_id = "lock_$([Guid]::NewGuid().ToString("n"))"
+    campaign_id = $Snapshot.campaign.campaign_id
+    project_id = $Snapshot.campaign.project_id
+    lock_owner = $State.runner_id
+    lock_status = "active"
+    created_at = $now
+    heartbeat_at = $now
+    expires_at = (Get-Date).ToUniversalTime().AddMinutes([Math]::Max(1, $MaxRuntimeMinutes)).ToString("o")
+    release_reason = $null
+  }
+  Write-CampaignRunnerJson -Value $lock -Path $lockPath
+  return $lock
+}
+
+function Update-CampaignRunnerLockHeartbeat {
+  param($Lock)
+  if (-not $Lock) { return }
+  $Lock.heartbeat_at = Get-CampaignRunnerNow
+  $Lock.expires_at = (Get-Date).ToUniversalTime().AddMinutes([Math]::Max(1, $MaxRuntimeMinutes)).ToString("o")
+  Write-CampaignRunnerJson -Value $Lock -Path (Get-CampaignRunnerLockPath -TargetCampaignId $Lock.campaign_id -TargetProjectId $Lock.project_id)
+}
+
+function Release-CampaignRunnerLock {
+  param($Lock, [string]$Reason)
+  if (-not $Lock) { return }
+  $Lock.lock_status = "released"
+  $Lock.release_reason = $Reason
+  $Lock.heartbeat_at = Get-CampaignRunnerNow
+  Write-CampaignRunnerJson -Value $Lock -Path (Get-CampaignRunnerLockPath -TargetCampaignId $Lock.campaign_id -TargetProjectId $Lock.project_id)
+}
+
+function Get-CampaignRunnerStepPlan {
+  param($Snapshot, [int]$Index)
+  $steps = @($Snapshot.steps | Sort-Object order)
+  if ($Index -ge $steps.Count) { return $null }
+  return $steps[$Index]
+}
+
+function Invoke-CampaignRunner {
+  param([ValidateSet("run-next", "run-until-hold", "run-until-complete", "resume")] [string]$RunnerCommand)
+  if ([string]::IsNullOrWhiteSpace($CampaignId) -and -not [string]::IsNullOrWhiteSpace($GoalPackDir)) {
+    $script:CampaignId = (Read-JsonFile -Path (Get-GoalPackManifestPath)).campaign_id
+  }
+  $snapshot = Get-CampaignRunnerSnapshot
+  $scope = Get-CampaignRunnerApprovalScope
+  $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath -TargetCampaignId $snapshot.campaign.campaign_id)
+  if (-not $state -or $RunnerCommand -ne "resume") { $state = New-CampaignRunnerState -Snapshot $snapshot }
+  $state.operator_approval_scope = $scope
+  $planned = New-Object System.Collections.Generic.List[object]
+  $hardBlockers = New-Object System.Collections.Generic.List[string]
+  $started = [datetime]::UtcNow
+  $limitSteps = if ($RunnerCommand -eq "run-next") { 1 } else { [Math]::Max(1, $MaxSteps) }
+  $lock = $null
+  try {
+    $lock = if ($effectiveDryRun) { Read-CampaignRunnerJson -Path (Get-CampaignRunnerLockPath -TargetCampaignId $snapshot.campaign.campaign_id -TargetProjectId $snapshot.campaign.project_id) } else { Acquire-CampaignRunnerLock -Snapshot $snapshot -State $state }
+    $runnerLockStatus = Get-CampaignRunnerLockStatus -Lock $lock
+    if ($runnerLockStatus -eq "active") { $hardBlockers.Add("active_runner_lock") | Out-Null }
+    if ($runnerLockStatus -eq "stale") { $hardBlockers.Add("stale_runner_lock") | Out-Null }
+    $hygiene = Get-CampaignRunnerHygiene
+    if ($hygiene.active_tasks -gt 0) { $hardBlockers.Add("active_tasks_present") | Out-Null }
+    if ($hygiene.stale_leases -gt 0) { $hardBlockers.Add("stale_leases_present") | Out-Null }
+    if ($hygiene.stale_locks -gt 0) { $hardBlockers.Add("stale_locks_present") | Out-Null }
+    if ($hygiene.stop_requested) { $hardBlockers.Add("operator_stop_requested") | Out-Null }
+    if ((Get-GitMetadata).dirty -and -not ($GoalPackDir -or $ManifestFile)) { $hardBlockers.Add("worktree_dirty") | Out-Null }
+    if ($AllowServerDeploy) { $hardBlockers.Add("allow_server_deploy_not_supported_by_campaign_runner") | Out-Null }
+    if ($hardBlockers.Count -gt 0) {
+      $state.runner_status = "held"
+      $state.hold_reason = ($hardBlockers.ToArray() -join ",")
+      Add-CampaignRunnerAudit -State $state -Decision "hold" -StepId $state.current_step_id -Reason $state.hold_reason
+    } else {
+      for ($i = [int]$state.steps_attempted; $i -lt @($snapshot.steps).Count; $i++) {
+        if ($planned.Count -ge $limitSteps) { $state.runner_status = "held"; $state.hold_reason = "max_steps_reached"; break }
+        if ($state.tasks_attempted -ge [Math]::Max(1, $MaxTasks)) { $state.runner_status = "held"; $state.hold_reason = "max_tasks_reached"; break }
+        if ($MaxRuntimeMinutes -le 0 -or ([datetime]::UtcNow - $started).TotalMinutes -ge $MaxRuntimeMinutes) { $state.runner_status = "held"; $state.hold_reason = "max_runtime_reached"; break }
+        $step = Get-CampaignRunnerStepPlan -Snapshot $snapshot -Index $i
+        if (-not $step) { $state.runner_status = "completed"; $state.hold_reason = $null; break }
+        $approval = Test-CampaignRunnerApproval -Step $step -Scope $scope
+        $requiresHuman = [bool]$step.advance_gate.requires_human_approval
+        $stepBlockers = @($approval.blockers)
+        if ($requiresHuman -and -not $approval.ok) { $stepBlockers += "human_approval_required" }
+        if ($StopOnFailure -and $step.status -eq "failed") { $stepBlockers += "failed_unrecovered_step" }
+        $action = if ($stepBlockers.Count -gt 0) { "hold" } elseif ($effectiveDryRun) { "would_execute_step" } else { "execute_step" }
+        $planned.Add([pscustomobject]@{
+          step_id = $step.campaign_step_id
+          goal_id = $step.goal_id
+          title = $step.title
+          order = $step.order
+          action = $action
+          approval = $approval
+          blockers = @($stepBlockers)
+          finalizer = [pscustomobject]@{
+            wait_for_checks = $true
+            rerun_transient_failures_once = $true
+            allow_auto_merge = [bool]$AllowAutoMerge
+            allow_evidence_repair = [bool]$AllowEvidenceRepair
+          }
+        }) | Out-Null
+        $state.steps_attempted++
+        $state.tasks_attempted++
+        $state.current_step_id = $step.campaign_step_id
+        if ($stepBlockers.Count -gt 0) {
+          $state.runner_status = "held"
+          $state.hold_reason = ($stepBlockers -join ",")
+          Add-CampaignRunnerAudit -State $state -Decision "hold" -StepId $step.campaign_step_id -Reason $state.hold_reason
+          break
+        }
+        Add-CampaignRunnerAudit -State $state -Decision $action -StepId $step.campaign_step_id -Reason "planned"
+        if (-not $effectiveDryRun) {
+          $execute = Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "execute-step", "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-Apply", "-Json")
+          $taskId = @($execute.linked_task_ids)[0]
+          if ($taskId -and $WorkerProfile) {
+            Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-run-once.ps1", "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-WorkerProfile", $WorkerProfile, "-TaskId", $taskId, "-NoSubmit", "-Apply", "-AllowDirty", "-Json") | Out-Null
+          }
+          if ($taskId -and ($AllowAutoMerge -or $AllowEvidenceRepair)) {
+            Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-pr-finalize.ps1", "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-TaskId", $taskId, "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-AllowAutoMerge:$([bool]$AllowAutoMerge)", "-AllowEvidenceRepair:$([bool]$AllowEvidenceRepair)", "-Apply", "-Json") | Out-Null
+          }
+        }
+        $state.steps_completed++
+        $state.tasks_completed++
+        Update-CampaignRunnerLockHeartbeat -Lock $lock
+        if ($RunnerCommand -eq "run-next") { $state.runner_status = "idle"; $state.hold_reason = "run_next_completed"; break }
+      }
+      if ($planned.Count -eq @($snapshot.steps).Count -and -not $state.hold_reason -and $RunnerCommand -eq "run-until-complete") { $state.runner_status = "completed" }
+      if (-not $state.runner_status -or $state.runner_status -eq "running") { $state.runner_status = "held"; $state.hold_reason = "runner_loop_stopped" }
+    }
+  } catch {
+    $state.runner_status = "failed"
+    $state.last_error = $_.Exception.Message
+    Add-CampaignRunnerAudit -State $state -Decision "failed" -StepId $state.current_step_id -Reason $state.last_error
+  } finally {
+    $state.updated_at = Get-CampaignRunnerNow
+    if ($state.runner_status -in @("held", "completed", "failed", "aborted", "idle")) { $state.stopped_at = $state.updated_at }
+    Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath -TargetCampaignId $snapshot.campaign.campaign_id)
+    if (-not $effectiveDryRun -and $lock) { Release-CampaignRunnerLock -Lock $lock -Reason $state.runner_status }
+  }
+  [pscustomobject]@{
+    ok = ($state.runner_status -notin @("failed", "aborted"))
+    command = $RunnerCommand
+    mode = if ($effectiveDryRun) { "dry-run" } else { "apply" }
+    project_id = $snapshot.campaign.project_id
+    token_printed = $false
+    campaign = $snapshot.campaign
+    runner_state = $state
+    runner_lock = $lock
+    approval_scope = $scope
+    planned_actions = @($planned.ToArray())
+    hard_blockers = @($hardBlockers.ToArray())
+    stop_reason = if ($state.hold_reason) { $state.hold_reason } else { $state.runner_status }
+    safety = [pscustomobject]@{ dry_run_default = $true; mutations_require_apply = $true; deterministic_hard_veto_bypassed = $false; token_printed = $false }
+  }
+}
+
+function Get-CampaignRunnerStatus {
+  if ([string]::IsNullOrWhiteSpace($CampaignId) -and $GoalPackDir) { $script:CampaignId = (Read-JsonFile -Path (Get-GoalPackManifestPath)).campaign_id }
+  $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath)
+  $lock = Read-CampaignRunnerJson -Path (Get-CampaignRunnerLockPath)
+  $snapshot = $null
+  try { $snapshot = Get-CampaignRunnerSnapshot } catch {}
+  [pscustomobject]@{
+    ok = $true
+    command = $Command
+    mode = "read"
+    project_id = $ProjectId
+    token_printed = $false
+    campaign = if ($snapshot) { $snapshot.campaign } else { $null }
+    current_step_id = if ($snapshot) { $snapshot.campaign.current_step_id } elseif ($state) { $state.current_step_id } else { $null }
+    runner_state = $state
+    runner_lock = $lock
+    runner_lock_status = Get-CampaignRunnerLockStatus -Lock $lock
+    blockers = if ((Get-CampaignRunnerLockStatus -Lock $lock) -eq "stale") { @("stale_runner_lock") } else { @() }
+  }
+}
+
+function Export-CampaignRunnerReport {
+  $status = Get-CampaignRunnerStatus
+  $markdown = @"
+# Campaign Runner Report
+
+- Campaign: $CampaignId
+- Project: $ProjectId
+- Runner status: $($status.runner_state.runner_status)
+- Current step: $($status.current_step_id)
+- Lock status: $($status.runner_lock_status)
+- Stop reason: $($status.runner_state.hold_reason)
+- Token printed: false
+
+## Approval Scope
+
+````json
+$($status.runner_state.operator_approval_scope | ConvertTo-Json -Depth 20)
+````
+
+## Audit Log
+
+````json
+$($status.runner_state.audit_log | ConvertTo-Json -Depth 40)
+````
+"@
+  $jsonReport = [pscustomobject]@{ ok = $true; token_printed = $false; status = $status; markdown = $markdown }
+  if ($OutputFile) {
+    $dir = Split-Path -Parent $OutputFile
+    if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if ($OutputFile -like "*.md") { $markdown | Set-Content -LiteralPath $OutputFile -Encoding UTF8 }
+    else { $jsonReport | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $OutputFile -Encoding UTF8 }
+  }
+  [pscustomobject]@{
+    ok = $true
+    command = $Command
+    mode = "read"
+    project_id = $ProjectId
+    token_printed = $false
+    report = $jsonReport
+  }
+}
+
 function Write-CampaignResult {
   param($Result)
   if ($OutputFile) {
@@ -775,6 +1237,59 @@ $effectiveDryRun = $DryRun -or -not $Apply
 $result = $null
 
 switch ($Command) {
+  "run-next" {
+    $result = Invoke-CampaignRunner -RunnerCommand "run-next"
+  }
+  "run-until-hold" {
+    $result = Invoke-CampaignRunner -RunnerCommand "run-until-hold"
+  }
+  "run-until-complete" {
+    $result = Invoke-CampaignRunner -RunnerCommand "run-until-complete"
+  }
+  "runner-status" {
+    $result = Get-CampaignRunnerStatus
+  }
+  "runner-report" {
+    $result = Export-CampaignRunnerReport
+  }
+  "runner-stop" {
+    $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath)
+    if (-not $state) { $state = [pscustomobject]@{ runner_status = "idle"; campaign_id = $CampaignId; project_id = $ProjectId; audit_log = @() } }
+    $state.runner_status = "aborted"
+    $state.hold_reason = if ($Reason) { $Reason } else { "operator_stop" }
+    $state.stopped_at = Get-CampaignRunnerNow
+    $state.updated_at = $state.stopped_at
+    Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath)
+    $result = Get-CampaignRunnerStatus
+  }
+  "runner-hold" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "runner-hold requires -Reason." }
+    $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath)
+    if (-not $state) { $state = [pscustomobject]@{ runner_status = "held"; campaign_id = $CampaignId; project_id = $ProjectId; audit_log = @() } }
+    $state.runner_status = "held"
+    $state.hold_reason = $Reason
+    $state.stopped_at = Get-CampaignRunnerNow
+    $state.updated_at = $state.stopped_at
+    Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath)
+    $result = Get-CampaignRunnerStatus
+  }
+  "runner-unlock" {
+    $unlockReason = if ($RunnerUnlockReason) { $RunnerUnlockReason } else { $Reason }
+    if ([string]::IsNullOrWhiteSpace($unlockReason)) { throw "runner-unlock requires -Reason or -RunnerUnlockReason." }
+    $lockPath = Get-CampaignRunnerLockPath
+    $lock = Read-CampaignRunnerJson -Path $lockPath
+    if ($effectiveDryRun) {
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; campaign_id = $CampaignId; lock = $lock; would_unlock = $true; reason = $unlockReason }
+    } else {
+      if ($lock) {
+        $lock.lock_status = "released"
+        $lock.release_reason = $unlockReason
+        $lock.heartbeat_at = Get-CampaignRunnerNow
+        Write-CampaignRunnerJson -Value $lock -Path $lockPath
+      }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; project_id = $ProjectId; token_printed = $false; campaign_id = $CampaignId; lock = $lock; unlocked = $true; reason = $unlockReason }
+    }
+  }
   "init" {
     $target = if ($GoalPackDir) { $GoalPackDir } else { "goals/bootstrap-mvp" }
     $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; project_id = $ProjectId; token_printed = $false; would_create = $target }
@@ -844,7 +1359,13 @@ switch ($Command) {
   "start" { $targetStatusCommand = "start" }
   "pause" { $targetStatusCommand = "pause" }
   "hold" { $targetStatusCommand = "hold" }
-  "resume" { $targetStatusCommand = "resume" }
+  "resume" {
+    if ($GoalPackDir -or $ManifestFile -or $WorkerProfile -or $RunnerApprovalScope -or $AllowAutoMerge -or $AllowEvidenceRepair -or $HumanApproved -or $MaxSteps -gt 1 -or $MaxTasks -gt 1) {
+      $result = Invoke-CampaignRunner -RunnerCommand "resume"
+    } else {
+      $targetStatusCommand = "resume"
+    }
+  }
   "advance" {
     if ([string]::IsNullOrWhiteSpace($CampaignId)) { throw "advance requires -CampaignId." }
     if ($effectiveDryRun) {
