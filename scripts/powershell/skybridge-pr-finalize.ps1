@@ -72,7 +72,11 @@ function Convert-GhPrToSummary {
     url = [string]$Pr.url
     state = [string]$Pr.state
     isDraft = [bool]$Pr.isDraft
-    merged = [bool]$Pr.merged
+    merged = if ($null -ne $Pr.merged) {
+      [bool]$Pr.merged
+    } else {
+      ([string]$Pr.state -eq "MERGED") -or -not [string]::IsNullOrWhiteSpace([string]$Pr.mergedAt)
+    }
     mergeCommit = if ($Pr.mergeCommit.oid) { [string]$Pr.mergeCommit.oid } else { $null }
     files = @($files)
     checks = @($checks)
@@ -86,7 +90,7 @@ function Get-PrFixtureSummary {
 
 function Get-PrLiveSummary {
   param([int]$Number)
-  $json = gh pr view $Number --repo $Repo --json number,url,state,isDraft,merged,mergeCommit,files,statusCheckRollup
+  $json = gh pr view $Number --repo $Repo --json number,url,state,isDraft,mergedAt,mergeCommit,files,statusCheckRollup
   if ($LASTEXITCODE -ne 0) { throw "gh pr view failed for PR #$Number." }
   Convert-GhPrToSummary -Pr ($json | ConvertFrom-Json)
 }
@@ -313,3 +317,4 @@ Write-PrFinalizerResult ([pscustomobject]@{
     no_raw_token_output = $true
   }
 })
+
