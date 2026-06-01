@@ -91,6 +91,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
   -Command watch `
   -CampaignId dev-queue-189-200 `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
   -ColorMode Always
 ```
 
@@ -121,3 +123,28 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 ```
 
 Use `safe-pause -Apply -Reason` for normal holds and `emergency-stop -Apply -Reason` only for urgent interruption. For stale runner locks, use `unlock-stale-runner -Apply -Reason` after inspection. The control wrapper defaults to dry-run for start/pause/stop/unlock commands unless `-Apply` is supplied.
+
+## Goal 188D Operator Fix
+
+The control wrapper now tolerates mixed child output in JSON mode. A child script may emit a non-JSON prefix such as a `git fetch` line before the actual JSON object. The wrapper parses whole output first, then falls back to the final JSON object or array and records `child_parse_mode` plus `child_non_json_prefix_present` in `start-one`/`start-all` output.
+
+The watch command now renders locally every `-RenderIntervalMilliseconds` while polling remote state every `-PollIntervalSeconds`. Use the default production balance of 5 seconds polling and 250 ms rendering:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command watch `
+  -CampaignId dev-queue-189-200 `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
+  -ColorMode Always
+```
+
+Recommended launch procedure after this fix:
+
+1. Run `preflight -Json`.
+2. Open the watch command above in a separate window.
+3. Run `start-one -Apply -Json` from clean latest `main`.
+4. Review the `start-one` JSON, watch frame, report and any PR/CI evidence.
+5. Only then consider `start-all -Apply -Json`.
+
+Do not start the full queue until the one-step launch has been verified.
