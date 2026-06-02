@@ -180,3 +180,19 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 ```
 
 Do not run `start-all -Apply` until `start-one` has been reviewed and Goal 189 is confirmed clean.
+
+## Goal 188E Resume, Residue And Lease Hardening
+
+Goal 188E keeps Goal 190 unexecuted and hardens the runner before the next launch. Resume/start-one/start-all now classify existing step state before creating work:
+
+- no linked task: `execute-step` may create exactly one task;
+- linked queued/claimed/running task: wait and report the active task id;
+- linked failed task plus linked PR: resume finalizer/evidence repair without creating another PR;
+- linked merged PR missing evidence: repair evidence only;
+- completed/recovered linked task but missing campaign step evidence: attach campaign step evidence only;
+- completed/recovered/skipped step: skip by default;
+- campaign already advanced: continue from the campaign current step and treat old runner failure as historical.
+
+`runner-status` and `runner-report` now distinguish `current_blocker` from `historical_warning`. If `dev-queue-189-200` is current at Goal 190 and an old runner state failed on Goal 189, report it as historical residue, not a current runner failure.
+
+Hygiene findings include concrete ids and classifications such as `repairable_residue`, `safe_to_ignore_for_metadata_advance`, `unsafe_for_worker_execution` and `manual_review_required`.

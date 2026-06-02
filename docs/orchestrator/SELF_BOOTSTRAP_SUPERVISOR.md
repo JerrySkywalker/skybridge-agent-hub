@@ -163,6 +163,14 @@ Use `skybridge-campaign.ps1 run-next` for a single-step execution, `run-until-ho
 
 Runner mutations remain dry-run by default. `runner-unlock` requires `-Apply` and a reason, and stale locks block automatic execution until inspected. The runner never overrides deterministic hard vetoes for active task residue, stale leases, unsafe paths, missing evidence, real CI failures, unapproved high-risk task types or uncertain Hermes gate output.
 
+## Goal 188E Recovery Rules
+
+Campaign resume is idempotent across interrupted runner/finalizer sessions. A resumed runner inspects the current campaign step, linked task ids, linked PR urls and evidence before creating work. Existing active tasks are current blockers. Existing PRs route to finalizer/evidence repair. Merged PRs with missing evidence are repair-only. Completed or recovered steps are skipped by default.
+
+Old runner state is not automatically a blocker. If campaign metadata has advanced past the runner state's `current_step_id`, `runner-status` classifies the old state as `historical_warning`; the current campaign step remains authoritative.
+
+Hygiene classifications separate metadata advance from worker execution. Historical blocked tasks and approved-unconverted proposals can warn without blocking metadata advance. Failed unrecovered tasks warn for metadata advance but remain unsafe for worker execution unless explicitly reviewed and waived.
+
 ## Goal 188A Dev Queue Preparation
 
 Goal 188A prepares the `dev-queue-189-200` campaign for later unattended execution but does not launch it. The Goal 189-200 markdown files are expanded Super Goal documents and must be reviewed before the queue starts.

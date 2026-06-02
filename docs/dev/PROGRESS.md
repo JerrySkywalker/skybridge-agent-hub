@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-06-02 Goal 188E Runner Resume, Residue And Lease Hardening
+
+- Hardened campaign runner resume/idempotency so existing linked tasks, linked PRs, merged-PR evidence gaps, completed steps and already-advanced campaigns are handled without duplicate task or PR creation.
+- Added runner status/report classification for old failed runner state: a Goal 189 runner failure is `historical_warning` once the campaign current step is Goal 190.
+- Improved hygiene findings with concrete object ids, classifications and action hints for task residue, stale leases, PR evidence gaps, historical blocked tasks and approved-unconverted proposals.
+- Added worker active-task keepalive behavior: pre-task heartbeat, periodic heartbeat job during active task processing, post-task heartbeat and terminal lease release verification.
+- Added focused 188E smokes for runner resume cases, residue action hints, stale lease action hints, historical runner state and heartbeat lease renewal.
+- Goal 190 remains unexecuted; this goal is metadata/control-plane hardening only.
+
 ## 2026-06-01 Goal 188C Watch CLI and Dev Queue Control
 
 - Added `skybridge-campaign-watch.ps1`, a read-only Docker BuildKit-style watch CLI with spinner frames, colorized status output, `-Once`, `-NoClear`, `-Compact`, `-ShowEvents`, JSON output and demo frames.
