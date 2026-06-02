@@ -685,3 +685,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-dev-queue-189-200.
 ```
 
 Before running with `-Apply`, confirm project control is paused, active tasks are zero, stale leases are zero, no runner lock is active, the worker profile can heartbeat, and the parent PR is no longer draft/manual.
+
+## Goal 188E Heartbeat And Lease Keepalive
+
+Worker heartbeat refreshes the active task lease on the server. During active task execution, `skybridge-edge-worker.ps1` sends a pre-task heartbeat, starts a bounded keepalive job that periodically heartbeats while Codex/validation/PR/CI processing is active, and sends a post-task heartbeat when execution exits. Complete/fail/block still release the lease.
+
+If a child process is still running, status should show the worker with `current_task_id` instead of treating the worker as idle residue. If heartbeat cannot reach the control plane, hygiene surfaces the stale lease with task id, lease id and a `recover-lease` dry-run hint.
+
+Do not recover an active lease until confirming the child process is no longer running. Recovery remains `skybridge-hygiene.ps1 recover-lease -TaskId <id> -LeaseId <id> -Reason <reason>` first in dry-run, then `-Apply` only after review.

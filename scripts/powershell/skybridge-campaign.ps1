@@ -881,6 +881,7 @@ function Get-CampaignRunnerSnapshot {
         advance_gate = $_.advance_gate
         linked_task_ids = @()
         linked_pr_urls = @()
+        evidence_summary = $null
         created_at = $now
         updated_at = $now
       }
@@ -896,6 +897,55 @@ function Get-CampaignRunnerSnapshot {
       metadata = $validation.payload.metadata
       created_at = $now
       updated_at = $now
+    }
+    $fixtureCase = [string]$env:SKYBRIDGE_RUNNER_FIXTURE_CASE
+    if ($fixtureCase) {
+      $firstStep = @($steps | Select-Object -First 1)[0]
+      $secondStep = @($steps | Select-Object -Skip 1 -First 1)[0]
+      if ($firstStep) {
+        switch ($fixtureCase) {
+          "existing-task" {
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_task_status -NotePropertyValue "queued" -Force
+          }
+          "existing-pr" {
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.linked_pr_urls = @("https://github.com/jskyzero/skybridge-agent-hub/pull/99")
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_task_status -NotePropertyValue "failed" -Force
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_pr_merged -NotePropertyValue $false -Force
+          }
+          "merged-pr-repair-only" {
+            $firstStep.status = "running"
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.linked_pr_urls = @("https://github.com/jskyzero/skybridge-agent-hub/pull/99")
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_task_status -NotePropertyValue "failed" -Force
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_pr_merged -NotePropertyValue $true -Force
+          }
+          "skip-completed" {
+            $firstStep.status = "completed"
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.linked_pr_urls = @("https://github.com/jskyzero/skybridge-agent-hub/pull/99")
+            $firstStep.evidence_summary = [pscustomobject]@{ summary = "Fixture completed evidence."; recovered = $true }
+          }
+          "completed-missing-step-evidence" {
+            $firstStep.status = "completed"
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.linked_pr_urls = @("https://github.com/jskyzero/skybridge-agent-hub/pull/99")
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_task_status -NotePropertyValue "completed" -Force
+            $firstStep.metadata | Add-Member -NotePropertyName runner_fixture_task_recovered -NotePropertyValue $true -Force
+          }
+          "advanced-past-failed-state" {
+            $firstStep.status = "completed"
+            $firstStep.linked_task_ids = @("fixture-task-189")
+            $firstStep.linked_pr_urls = @("https://github.com/jskyzero/skybridge-agent-hub/pull/99")
+            $firstStep.evidence_summary = [pscustomobject]@{ summary = "Fixture recovered evidence."; recovered = $true }
+            if ($secondStep) {
+              $secondStep.status = "ready"
+              $campaignObject.current_step_id = $secondStep.campaign_step_id
+            }
+          }
+        }
+      }
     }
     return [pscustomobject]@{ campaign = $campaignObject; steps = @($steps); fixture = $true; validation = $validation }
   }
@@ -1005,6 +1055,133 @@ function Get-CampaignRunnerStepPlan {
   return $steps[$Index]
 }
 
+function Get-CampaignRunnerStepIndex {
+  param($Snapshot, [string]$StepId)
+  $steps = @($Snapshot.steps | Sort-Object order)
+  for ($i = 0; $i -lt $steps.Count; $i++) {
+    if ([string]$steps[$i].campaign_step_id -eq [string]$StepId) { return $i }
+  }
+  return 0
+}
+
+function Test-CampaignRunnerStepEvidence {
+  param($Step)
+  if (-not $Step) { return $false }
+  $summary = $Step.evidence_summary
+  if (-not $summary) { return $false }
+  if ($summary.summary) { return $true }
+  return (($summary | ConvertTo-Json -Depth 20 -Compress) -ne "{}")
+}
+
+function Get-CampaignRunnerLinkedTaskState {
+  param($Snapshot, $Step)
+  $tasks = New-Object System.Collections.Generic.List[object]
+  foreach ($linkedTaskId in @($Step.linked_task_ids | Where-Object { $_ })) {
+    $task = $null
+    if ($Snapshot.fixture) {
+      $status = if ($Step.metadata.runner_fixture_task_status) { [string]$Step.metadata.runner_fixture_task_status } else { "queued" }
+      $recovered = [bool]$Step.metadata.runner_fixture_task_recovered
+      $task = [pscustomobject]@{
+        task_id = [string]$linkedTaskId
+        status = $status
+        result = [pscustomobject]@{
+          pr_url = @($Step.linked_pr_urls | Select-Object -First 1)[0]
+          evidence_summary = if ($recovered) { [pscustomobject]@{ recovered = $true; summary = "Fixture task evidence." } } else { $null }
+        }
+      }
+    } else {
+      try { $task = (Invoke-CampaignApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString([string]$linkedTaskId))").task } catch {}
+    }
+    if ($task) { $tasks.Add($task) | Out-Null }
+  }
+  return @($tasks.ToArray())
+}
+
+function Resolve-CampaignRunnerStepAction {
+  param($Snapshot, $Step, $Approval)
+  $stepBlockers = @($Approval.blockers)
+  $requiresHuman = [bool]$Step.advance_gate.requires_human_approval
+  if ($requiresHuman -and -not $Approval.ok) { $stepBlockers += "human_approval_required" }
+  if ($StopOnFailure -and $Step.status -eq "failed") { $stepBlockers += "failed_unrecovered_step" }
+
+  $linkedTaskIds = @($Step.linked_task_ids | Where-Object { $_ })
+  $linkedPrUrls = @($Step.linked_pr_urls | Where-Object { $_ })
+  $linkedTasks = @(Get-CampaignRunnerLinkedTaskState -Snapshot $Snapshot -Step $Step)
+  $activeLinkedTasks = @($linkedTasks | Where-Object { [string]$_.status -in @("queued", "claimed", "running") })
+  $failedLinkedTasks = @($linkedTasks | Where-Object { [string]$_.status -eq "failed" })
+  $completedOrRecoveredTasks = @($linkedTasks | Where-Object {
+    [string]$_.status -eq "completed" -or
+    ($_.result -and $_.result.evidence_summary -and $_.result.evidence_summary.recovered -eq $true)
+  })
+  $hasStepEvidence = Test-CampaignRunnerStepEvidence -Step $Step
+  $fixtureMergedPr = [bool]$Step.metadata.runner_fixture_pr_merged
+
+  $action = if ($stepBlockers.Count -gt 0) { "hold" } elseif ($effectiveDryRun) { "would_execute_step" } else { "execute_step" }
+  $reason = "ready_for_execution"
+  $countsAsTaskAttempt = $true
+  $countsAsStepCompletion = $false
+
+  if ([string]$Step.status -in @("completed", "recovered", "skipped") -and -not $RetryAttempt) {
+    if (-not $hasStepEvidence -and $completedOrRecoveredTasks.Count -gt 0) {
+      if ($AllowEvidenceRepair) {
+        $action = if ($effectiveDryRun) { "would_attach_campaign_evidence" } else { "attach_campaign_evidence" }
+        $reason = "completed_task_missing_campaign_step_evidence"
+        $countsAsTaskAttempt = $false
+        $countsAsStepCompletion = $true
+      } else {
+        $action = "hold"
+        $stepBlockers += "campaign_step_evidence_missing"
+        $reason = "completed_task_missing_campaign_step_evidence"
+        $countsAsTaskAttempt = $false
+      }
+    } else {
+      $action = "skip_completed_step"
+      $reason = "step_already_completed"
+      $countsAsTaskAttempt = $false
+      $countsAsStepCompletion = $true
+    }
+  } elseif ($activeLinkedTasks.Count -gt 0) {
+    $action = "wait_existing_task"
+    $stepBlockers += @($activeLinkedTasks | ForEach-Object { "linked_active_task:$($_.task_id)" })
+    $reason = "linked_active_task_exists"
+    $countsAsTaskAttempt = $false
+  } elseif ($linkedPrUrls.Count -gt 0 -and $failedLinkedTasks.Count -gt 0) {
+    if ($fixtureMergedPr -and -not $hasStepEvidence) {
+      if ($AllowEvidenceRepair) {
+        $action = if ($effectiveDryRun) { "would_repair_merged_pr_evidence" } else { "repair_merged_pr_evidence" }
+        $reason = "merged_pr_missing_evidence"
+        $countsAsTaskAttempt = $false
+      } else {
+        $action = "hold"
+        $stepBlockers += "evidence_repair_requires_allow"
+        $reason = "merged_pr_missing_evidence"
+        $countsAsTaskAttempt = $false
+      }
+    } else {
+      $action = if ($effectiveDryRun) { "would_resume_existing_pr_finalizer" } else { "resume_existing_pr_finalizer" }
+      $reason = "linked_failed_task_has_pr"
+      $countsAsTaskAttempt = $false
+    }
+  } elseif ($linkedTaskIds.Count -gt 0 -and -not $RetryAttempt) {
+    $action = "hold"
+    $stepBlockers += @($linkedTaskIds | ForEach-Object { "linked_task_requires_review:$_" })
+    $reason = "linked_task_exists"
+    $countsAsTaskAttempt = $false
+  }
+
+  [pscustomobject]@{
+    action = $action
+    blockers = @($stepBlockers | Select-Object -Unique)
+    reason = $reason
+    linked_tasks = @($linkedTasks)
+    linked_task_ids = @($linkedTaskIds)
+    linked_pr_urls = @($linkedPrUrls)
+    has_step_evidence = $hasStepEvidence
+    counts_as_task_attempt = $countsAsTaskAttempt
+    counts_as_step_completion = $countsAsStepCompletion
+  }
+}
+
 function Invoke-CampaignRunner {
   param([ValidateSet("run-next", "run-until-hold", "run-until-complete", "resume")] [string]$RunnerCommand)
   if ([string]::IsNullOrWhiteSpace($CampaignId) -and -not [string]::IsNullOrWhiteSpace($GoalPackDir)) {
@@ -1014,6 +1191,17 @@ function Invoke-CampaignRunner {
   $scope = Get-CampaignRunnerApprovalScope
   $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath -TargetCampaignId $snapshot.campaign.campaign_id)
   if (-not $state -or $RunnerCommand -ne "resume") { $state = New-CampaignRunnerState -Snapshot $snapshot }
+  $historicalResumeState = $false
+  if ($RunnerCommand -eq "resume" -and $state -and [string]$state.current_step_id -and [string]$state.current_step_id -ne [string]$snapshot.campaign.current_step_id) {
+    $historicalResumeState = $true
+    Add-CampaignRunnerAudit -State $state -Decision "historical_state_superseded" -StepId $state.current_step_id -Reason "campaign_current_step_is_$($snapshot.campaign.current_step_id)"
+    $state.current_step_id = $snapshot.campaign.current_step_id
+    $state.runner_status = "running"
+    $state.hold_reason = $null
+    $state.last_error = $null
+    $state.steps_attempted = 0
+    $state.tasks_attempted = 0
+  }
   $state.operator_approval_scope = $scope
   $planned = New-Object System.Collections.Generic.List[object]
   $hardBlockers = New-Object System.Collections.Generic.List[string]
@@ -1038,26 +1226,32 @@ function Invoke-CampaignRunner {
       $state.hold_reason = ($hardBlockers.ToArray() -join ",")
       Add-CampaignRunnerAudit -State $state -Decision "hold" -StepId $state.current_step_id -Reason $state.hold_reason
     } else {
-      for ($i = [int]$state.steps_attempted; $i -lt @($snapshot.steps).Count; $i++) {
+      $startIndex = Get-CampaignRunnerStepIndex -Snapshot $snapshot -StepId $snapshot.campaign.current_step_id
+      if ($RunnerCommand -eq "resume" -and -not $historicalResumeState) {
+        $startIndex = [Math]::Max([int]$startIndex, [int]$state.steps_attempted)
+      }
+      for ($i = [int]$startIndex; $i -lt @($snapshot.steps).Count; $i++) {
         if ($planned.Count -ge $limitSteps) { $state.runner_status = "held"; $state.hold_reason = "max_steps_reached"; break }
         if ($state.tasks_attempted -ge [Math]::Max(1, $MaxTasks)) { $state.runner_status = "held"; $state.hold_reason = "max_tasks_reached"; break }
         if ($MaxRuntimeMinutes -le 0 -or ([datetime]::UtcNow - $started).TotalMinutes -ge $MaxRuntimeMinutes) { $state.runner_status = "held"; $state.hold_reason = "max_runtime_reached"; break }
         $step = Get-CampaignRunnerStepPlan -Snapshot $snapshot -Index $i
         if (-not $step) { $state.runner_status = "completed"; $state.hold_reason = $null; break }
         $approval = Test-CampaignRunnerApproval -Step $step -Scope $scope
-        $requiresHuman = [bool]$step.advance_gate.requires_human_approval
-        $stepBlockers = @($approval.blockers)
-        if ($requiresHuman -and -not $approval.ok) { $stepBlockers += "human_approval_required" }
-        if ($StopOnFailure -and $step.status -eq "failed") { $stepBlockers += "failed_unrecovered_step" }
-        $action = if ($stepBlockers.Count -gt 0) { "hold" } elseif ($effectiveDryRun) { "would_execute_step" } else { "execute_step" }
+        $resolution = Resolve-CampaignRunnerStepAction -Snapshot $snapshot -Step $step -Approval $approval
+        $stepBlockers = @($resolution.blockers)
+        $action = [string]$resolution.action
         $planned.Add([pscustomobject]@{
           step_id = $step.campaign_step_id
           goal_id = $step.goal_id
           title = $step.title
           order = $step.order
           action = $action
+          reason = $resolution.reason
           approval = $approval
           blockers = @($stepBlockers)
+          linked_task_ids = @($resolution.linked_task_ids)
+          linked_pr_urls = @($resolution.linked_pr_urls)
+          has_step_evidence = [bool]$resolution.has_step_evidence
           finalizer = [pscustomobject]@{
             wait_for_checks = $true
             rerun_transient_failures_once = $true
@@ -1066,7 +1260,7 @@ function Invoke-CampaignRunner {
           }
         }) | Out-Null
         $state.steps_attempted++
-        $state.tasks_attempted++
+        if ($resolution.counts_as_task_attempt) { $state.tasks_attempted++ }
         $state.current_step_id = $step.campaign_step_id
         if ($stepBlockers.Count -gt 0) {
           $state.runner_status = "held"
@@ -1076,8 +1270,21 @@ function Invoke-CampaignRunner {
         }
         Add-CampaignRunnerAudit -State $state -Decision $action -StepId $step.campaign_step_id -Reason "planned"
         if (-not $effectiveDryRun) {
-          $execute = Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "execute-step", "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-Apply", "-Json")
-          $taskId = @($execute.linked_task_ids)[0]
+          $taskId = $null
+          if ($action -eq "execute_step") {
+            $execute = Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "execute-step", "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-Apply", "-Json")
+            $taskId = @($execute.linked_task_ids)[0]
+          } elseif ($action -in @("attach_campaign_evidence", "repair_merged_pr_evidence")) {
+            $summary = if ($action -eq "repair_merged_pr_evidence") { "Campaign runner repaired evidence for merged linked PR without creating a new task or PR." } else { "Campaign runner attached missing campaign step evidence from completed linked task." }
+            $attachArgs = @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "attach-evidence", "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-EvidenceSummary", $summary)
+            if (@($resolution.linked_task_ids).Count -gt 0) { $attachArgs += @("-LinkedTaskIds") + @($resolution.linked_task_ids) }
+            if (@($resolution.linked_pr_urls).Count -gt 0) { $attachArgs += @("-LinkedPrUrls") + @($resolution.linked_pr_urls) }
+            $attachArgs += @("-Apply", "-Json")
+            Invoke-CampaignJsonScript -Arguments $attachArgs | Out-Null
+            $taskId = @($resolution.linked_task_ids | Select-Object -First 1)[0]
+          } elseif ($action -eq "resume_existing_pr_finalizer") {
+            $taskId = @($resolution.linked_task_ids | Select-Object -First 1)[0]
+          }
           if ($taskId -and $WorkerProfile) {
             Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-run-once.ps1", "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-WorkerProfile", $WorkerProfile, "-TaskId", $taskId, "-NoSubmit", "-Apply", "-AllowDirty", "-Json") | Out-Null
           }
@@ -1085,8 +1292,8 @@ function Invoke-CampaignRunner {
             Invoke-CampaignJsonScript -Arguments @("-File", ".\scripts\powershell\skybridge-pr-finalize.ps1", "-ApiBase", $ApiBase, "-ProjectId", $snapshot.campaign.project_id, "-TokenFile", $TokenFile, "-TaskId", $taskId, "-CampaignId", $snapshot.campaign.campaign_id, "-StepId", $step.campaign_step_id, "-AllowAutoMerge:$([bool]$AllowAutoMerge)", "-AllowEvidenceRepair:$([bool]$AllowEvidenceRepair)", "-Apply", "-Json") | Out-Null
           }
         }
-        $state.steps_completed++
-        $state.tasks_completed++
+        if ($resolution.counts_as_step_completion -or $action -in @("execute_step", "would_execute_step", "repair_merged_pr_evidence", "would_repair_merged_pr_evidence", "attach_campaign_evidence", "would_attach_campaign_evidence", "resume_existing_pr_finalizer", "would_resume_existing_pr_finalizer")) { $state.steps_completed++ }
+        if ($resolution.counts_as_task_attempt -and $action -in @("execute_step", "would_execute_step")) { $state.tasks_completed++ }
         if ($runnerOwnsLock) { Update-CampaignRunnerLockHeartbeat -Lock $lock }
         if ($RunnerCommand -eq "run-next") { $state.runner_status = "idle"; $state.hold_reason = "run_next_completed"; break }
       }
@@ -1111,6 +1318,7 @@ function Invoke-CampaignRunner {
     token_printed = $false
     campaign = $snapshot.campaign
     runner_state = $state
+    historical_resume_state = $historicalResumeState
     runner_lock = $lock
     approval_scope = $scope
     planned_actions = @($planned.ToArray())
@@ -1126,6 +1334,22 @@ function Get-CampaignRunnerStatus {
   $lock = Read-CampaignRunnerJson -Path (Get-CampaignRunnerLockPath)
   $snapshot = $null
   try { $snapshot = Get-CampaignRunnerSnapshot } catch {}
+  $campaignCurrentStepId = if ($snapshot) { [string]$snapshot.campaign.current_step_id } elseif ($state) { [string]$state.current_step_id } else { $null }
+  $stateStepId = if ($state) { [string]$state.current_step_id } else { $null }
+  $runnerStateClassification = if (-not $state) {
+    "none"
+  } elseif ($campaignCurrentStepId -and $stateStepId -and $campaignCurrentStepId -ne $stateStepId) {
+    "historical_warning"
+  } elseif ([string]$state.runner_status -in @("failed", "held")) {
+    "current_blocker"
+  } else {
+    "current"
+  }
+  $runnerStateActionHint = switch ($runnerStateClassification) {
+    "historical_warning" { "Campaign has advanced to $campaignCurrentStepId; treat runner state for $stateStepId as historical unless explicitly archiving old state." }
+    "current_blocker" { "Inspect runner_state.last_error/hold_reason before resuming or unlocking." }
+    default { $null }
+  }
   [pscustomobject]@{
     ok = $true
     command = $Command
@@ -1133,11 +1357,17 @@ function Get-CampaignRunnerStatus {
     project_id = $ProjectId
     token_printed = $false
     campaign = if ($snapshot) { $snapshot.campaign } else { $null }
-    current_step_id = if ($snapshot) { $snapshot.campaign.current_step_id } elseif ($state) { $state.current_step_id } else { $null }
+    current_step_id = $campaignCurrentStepId
     runner_state = $state
+    runner_state_classification = $runnerStateClassification
+    runner_state_action_hint = $runnerStateActionHint
+    historical_runner_state = ($runnerStateClassification -eq "historical_warning")
     runner_lock = $lock
     runner_lock_status = Get-CampaignRunnerLockStatus -Lock $lock
-    blockers = if ((Get-CampaignRunnerLockStatus -Lock $lock) -eq "stale") { @("stale_runner_lock") } else { @() }
+    blockers = @(
+      if ((Get-CampaignRunnerLockStatus -Lock $lock) -eq "stale") { "stale_runner_lock" }
+      if ($runnerStateClassification -eq "current_blocker") { "current_runner_state_$($state.runner_status)" }
+    )
   }
 }
 
@@ -1149,9 +1379,12 @@ function Export-CampaignRunnerReport {
 - Campaign: $CampaignId
 - Project: $ProjectId
 - Runner status: $($status.runner_state.runner_status)
+- Runner state classification: $($status.runner_state_classification)
 - Current step: $($status.current_step_id)
+- Runner state step: $($status.runner_state.current_step_id)
 - Lock status: $($status.runner_lock_status)
 - Stop reason: $($status.runner_state.hold_reason)
+- Action hint: $($status.runner_state_action_hint)
 - Token printed: false
 
 ## Approval Scope

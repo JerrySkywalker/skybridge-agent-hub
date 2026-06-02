@@ -122,6 +122,51 @@ function Test-EdgeWorkerReadiness {
   }
 }
 
+function Start-SkyBridgeTaskKeepalive {
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId)
+  if ($DryRun) { return $null }
+  $interval = if ($Config.lease_keepalive_interval_seconds) { [int]$Config.lease_keepalive_interval_seconds } else { 45 }
+  if ($interval -lt 10) { $interval = 10 }
+  $stopFile = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-keepalive-{0}-{1}.stop" -f $Config.worker_id, ([Guid]::NewGuid().ToString("n")))
+  $helperPath = Join-Path $PSScriptRoot "skybridge-worker-api.ps1"
+  $configJson = $Config | ConvertTo-Json -Depth 30 -Compress
+  $job = Start-Job -ScriptBlock {
+    param([string]$ConfigJson, [string]$HelperPath, [string]$StopFile, [int]$IntervalSeconds, [string]$ActiveTaskId)
+    $ErrorActionPreference = "SilentlyContinue"
+    . $HelperPath
+    $workerConfig = $ConfigJson | ConvertFrom-Json
+    while (-not (Test-Path -LiteralPath $StopFile -PathType Leaf)) {
+      try { Send-WorkerHeartbeat -Config $workerConfig -StatusNote "task-active:$ActiveTaskId" -Load 1 | Out-Null } catch {}
+      Start-Sleep -Seconds $IntervalSeconds
+    }
+  } -ArgumentList $configJson, $helperPath, $stopFile, $interval, $TaskId
+  [pscustomobject]@{
+    job = $job
+    stop_file = $stopFile
+    interval_seconds = $interval
+    task_id = $TaskId
+  }
+}
+
+function Stop-SkyBridgeTaskKeepalive {
+  param($Keepalive, $Config, [Parameter(Mandatory = $true)][string]$TaskId)
+  if (-not $Keepalive) { return $null }
+  try { New-Item -ItemType File -Path $Keepalive.stop_file -Force | Out-Null } catch {}
+  try { Wait-Job -Job $Keepalive.job -Timeout 5 | Out-Null } catch {}
+  try {
+    if ($Keepalive.job.State -eq "Running") { Stop-Job -Job $Keepalive.job | Out-Null }
+    Remove-Job -Job $Keepalive.job -Force | Out-Null
+  } catch {}
+  try { Remove-Item -LiteralPath $Keepalive.stop_file -Force -ErrorAction SilentlyContinue } catch {}
+  $heartbeat = $null
+  try { $heartbeat = Send-WorkerHeartbeat -Config $Config -StatusNote "task-finished:$TaskId" -Load 0 } catch {}
+  [pscustomobject]@{
+    stopped = $true
+    task_id = $TaskId
+    post_task_heartbeat = [bool]$heartbeat
+  }
+}
+
 function Invoke-EdgeWorkerOnce {
   param($Config, [string]$TargetTaskId)
 
@@ -181,6 +226,7 @@ function Invoke-EdgeWorkerOnce {
     }
 
     $repoLock = $null
+    $keepalive = $null
     try {
       $safety = Test-SkyBridgeWorkerTaskSafety -Config $Config -Task $claimed.task
       $steps += @{ step = "workspace_safety"; status = $(if ($safety.ok) { "passed" } else { "blocked" }); result = $safety }
@@ -207,6 +253,9 @@ function Invoke-EdgeWorkerOnce {
 
       $started = Start-Task -Config $Config -TaskId $next.task.task_id
       $steps += @{ step = "start"; status = "running"; task = $started.task }
+      $steps += @{ step = "pre_task_heartbeat"; response = Send-WorkerHeartbeat -Config $Config -StatusNote "task-started:$($next.task.task_id)" }
+      $keepalive = Start-SkyBridgeTaskKeepalive -Config $Config -TaskId $next.task.task_id
+      if ($keepalive) { $steps += @{ step = "lease_keepalive"; status = "started"; interval_seconds = $keepalive.interval_seconds; stop_file = $keepalive.stop_file } }
 
       $maxTransportRetries = if ($null -ne $Config.codex_transport_max_retries) { [int]$Config.codex_transport_max_retries } else { 1 }
       if ($maxTransportRetries -lt 0) { $maxTransportRetries = 0 }
@@ -309,6 +358,10 @@ function Invoke-EdgeWorkerOnce {
       Invoke-EdgeWorkerNotification -Config $Config -Severity "urgent" -Title "SkyBridge task failed" -Message "Task $($next.task.task_id) failed with an edge worker error." | Out-Null
       return @{ ok = $false; worker_id = $Config.worker_id; dry_run = $false; task_id = $next.task.task_id; steps = $steps }
     } finally {
+      if ($keepalive) {
+        $stoppedKeepalive = Stop-SkyBridgeTaskKeepalive -Keepalive $keepalive -Config $Config -TaskId $next.task.task_id
+        $steps += @{ step = "lease_keepalive"; status = "stopped"; result = $stoppedKeepalive }
+      }
       if ($repoLock -and $repoLock.ok) {
         Remove-SkyBridgeRepoLock -Lock $repoLock | Out-Null
       }

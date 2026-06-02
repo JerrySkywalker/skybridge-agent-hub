@@ -148,3 +148,11 @@ Recommended launch procedure after this fix:
 5. Only then consider `start-all -Apply -Json`.
 
 Do not start the full queue until the one-step launch has been verified.
+
+## Goal 188E Current State
+
+Goal 189 is complete/recovered and linked to PR #99. The campaign current step is `super-190-campaign-run-report-evidence-ledger`, but Goal 190 remains unexecuted. Goal 188E does not run `start-one`, `start-all`, a worker loop, or Goal 190.
+
+Before executing Goal 190, verify project control is `paused`, `stop_requested=false`, active tasks are `0`, stale leases are `0`, and `runner-status` shows old Goal 189 failures as `historical_warning`, not `current_blocker`.
+
+Resume rules for this queue are idempotent: existing task, PR and evidence links are recovered or skipped before any new campaign-step task can be created.

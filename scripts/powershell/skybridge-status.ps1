@@ -362,6 +362,49 @@ function Select-ProposalSummary {
   }
 }
 
+function Get-HygieneFindingClassification {
+  param([string]$Status, [string]$Kind = "task")
+  switch ($Status) {
+    "stale_claim" { return "current_blocker" }
+    "stale_running" { return "current_blocker" }
+    "lease_missing" { return "current_blocker" }
+    "lease_expired" { return "repairable_residue" }
+    "expired" { return "repairable_residue" }
+    "stale" { return "repairable_residue" }
+    "abandoned" { return "repairable_residue" }
+    "inconsistent" { return "manual_review_required" }
+    "pr_merged_needs_evidence" { return "repairable_residue" }
+    "failed_unrecovered" { return "unsafe_for_worker_execution" }
+    "blocked_historical" { return "historical_warning" }
+    "approved_unconverted" { return "safe_to_ignore_for_metadata_advance" }
+    "converted_unexecuted" { return "manual_review_required" }
+    default {
+      if ($Kind -eq "proposal") { return "safe_to_ignore_for_metadata_advance" }
+      return "manual_review_required"
+    }
+  }
+}
+
+function Get-HygieneFindingActionHint {
+  param($Task, $Proposal, [string]$Kind, [string]$Status)
+  if ($Kind -eq "lease") {
+    $leaseId = if ($Task.lease_id) { [string]$Task.lease_id } else { "<lease-id>" }
+    return "Inspect task $($Task.task_id), then dry-run: scripts/powershell/skybridge-hygiene.ps1 recover-lease -TaskId $($Task.task_id) -LeaseId $leaseId -Reason <reason>"
+  }
+  if ($Kind -eq "proposal") {
+    return "Proposal $($Proposal.proposal_id) is not targeted by campaign execution; leave it for explicit operator review unless this proposal is selected."
+  }
+  switch ($Status) {
+    "stale_claim" { return "Inspect active task $($Task.task_id), worker $($Task.worker_id), and lease $($Task.lease_id); recover lease only with -Apply and a reason." }
+    "stale_running" { return "Confirm the child process is not running for task $($Task.task_id), then recover lease only with -Apply and a reason." }
+    "lease_missing" { return "Task $($Task.task_id) is active without a lease; pause worker execution and recover manually." }
+    "pr_merged_needs_evidence" { return "Run bounded evidence reconciliation for task $($Task.task_id) and PR $($Task.pr_url); do not create a new task or PR." }
+    "failed_unrecovered" { return "Warn for metadata advance; block worker execution unless explicitly waived after reviewing task $($Task.task_id)." }
+    "blocked_historical" { return "Historical blocked task $($Task.task_id) should not block metadata advance; review only if targeted." }
+    default { return "Review $Kind $($Task.task_id) before mutation." }
+  }
+}
+
 function Get-ProposalSummaryCounts {
   param([array]$Proposals)
   $counts = [ordered]@{
@@ -397,36 +440,45 @@ function Get-HygieneReport {
   foreach ($task in $taskRows) {
     if ($task.task_hygiene_status -in @("stale_claim", "stale_running", "lease_missing", "lease_expired", "pr_merged_needs_evidence", "failed_unrecovered", "blocked_historical")) {
       $severity = if ($task.task_hygiene_status -in @("failed_unrecovered", "lease_expired", "stale_running")) { "warning" } else { "info" }
+      $classification = Get-HygieneFindingClassification -Status $task.task_hygiene_status -Kind "task"
       $findings.Add([pscustomobject]@{
         kind = "task"
         id = $task.task_id
+        task_id = $task.task_id
+        lease_id = $task.lease_id
+        pr_url = $task.pr_url
         status = $task.task_hygiene_status
+        classification = $classification
         severity = $severity
         summary = "$($task.task_id) is $($task.task_hygiene_status)"
-        recommended_action = if ($task.task_hygiene_status -eq "pr_merged_needs_evidence") { "inspect PR and run bounded evidence reconciliation if safe" } elseif ($task.task_hygiene_status -match "lease") { "inspect lease and recover only with -Apply and reason" } else { "review before mutation" }
+        recommended_action = Get-HygieneFindingActionHint -Task $task -Kind "task" -Status $task.task_hygiene_status
       }) | Out-Null
     }
     if ($task.lease_display_status -in @("expired", "stale", "abandoned", "inconsistent")) {
+      $classification = Get-HygieneFindingClassification -Status $task.lease_display_status -Kind "lease"
       $findings.Add([pscustomobject]@{
         kind = "lease"
         id = $task.lease_id
         task_id = $task.task_id
         status = $task.lease_display_status
+        classification = $classification
         severity = "warning"
         summary = "$($task.task_id) lease is $($task.lease_display_status)"
-        recommended_action = "dry-run recover-lease before applying any lease mutation"
+        recommended_action = Get-HygieneFindingActionHint -Task $task -Kind "lease" -Status $task.lease_display_status
       }) | Out-Null
     }
   }
   foreach ($proposal in $proposalRows) {
     if ($proposal.derived_execution_status -in @("approved_unconverted", "converted_unexecuted")) {
+      $classification = Get-HygieneFindingClassification -Status $proposal.derived_execution_status -Kind "proposal"
       $findings.Add([pscustomobject]@{
         kind = "proposal"
         id = $proposal.proposal_id
         status = $proposal.derived_execution_status
+        classification = $classification
         severity = "info"
         summary = "$($proposal.proposal_id) is $($proposal.derived_execution_status)"
-        recommended_action = "leave queued for operator review or reconcile only with explicit command"
+        recommended_action = Get-HygieneFindingActionHint -Proposal $proposal -Kind "proposal" -Status $proposal.derived_execution_status
       }) | Out-Null
     }
   }
