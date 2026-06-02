@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output", "header-format", "summary-format", "active-only-empty", "summary-counts", "proposal-summary", "show-proposals", "approved-only", "pending-review-only", "color-auto", "color-never-json-clean", "color-task-states", "lease-expiry-detection", "lease-stale-active-task", "lease-release-stale-dry-run", "lease-recovery-requires-apply", "task-stale-claim-detection", "task-stale-running-detection", "task-missing-lease-detection", "task-pr-merged-needs-evidence", "proposal-derived-executed-status", "proposal-converted-unexecuted-count", "proposal-approved-unconverted-count", "proposal-reconciliation", "hygiene-audit", "hygiene-report-json", "hygiene-recover-lease-dry-run", "hygiene-requires-apply")]
+  [ValidateSet("task-limit", "recent-tasks", "active-only", "task-status-filter", "worker-filter", "recovered-filter", "task-detail-event-limit", "json-output", "header-format", "summary-format", "active-only-empty", "summary-counts", "proposal-summary", "show-proposals", "approved-only", "pending-review-only", "color-auto", "color-never-json-clean", "color-task-states", "lease-expiry-detection", "lease-stale-active-task", "lease-release-stale-dry-run", "lease-recovery-requires-apply", "task-stale-claim-detection", "task-stale-running-detection", "task-missing-lease-detection", "task-pr-merged-needs-evidence", "proposal-derived-executed-status", "proposal-converted-unexecuted-count", "proposal-approved-unconverted-count", "proposal-reconciliation", "hygiene-audit", "hygiene-report-json", "hygiene-recover-lease-dry-run", "hygiene-requires-apply", "hygiene-residue-action-hints", "worker-stale-lease-action-hint")]
   [string]$Scenario,
   [int]$Port = 0,
   [switch]$Json
@@ -431,6 +431,23 @@ updateTask('status-missing-lease', (task) => {
       Invoke-HygieneJson -Arguments @("mark-abandoned", "-TaskId", "status-stale-claim", "-Reason", "fixture apply guard") | Out-Null
       $after = Invoke-StatusJson -Arguments @("-TaskId", "status-stale-claim", "-ShowLeases")
       if (@($after.tasks)[0].lease_status -ne @($before.tasks)[0].lease_status) { throw "Expected no mark-abandoned mutation without -Apply." }
+    }
+    "hygiene-residue-action-hints" {
+      $status = Invoke-StatusJson -Arguments @("-Hygiene", "-ShowProposals", "-ShowLeases", "-ShowAll")
+      $taskFinding = @($status.hygiene_findings | Where-Object { $_.kind -eq "task" -and $_.status -eq "pr_merged_needs_evidence" } | Select-Object -First 1)[0]
+      if (-not $taskFinding -or $taskFinding.classification -ne "repairable_residue") { throw "Expected repairable task residue classification." }
+      if (-not $taskFinding.task_id -or -not $taskFinding.pr_url) { throw "Expected task id and PR URL on residue finding." }
+      if ([string]$taskFinding.recommended_action -notmatch "do not create a new task or PR") { throw "Expected concrete evidence repair hint." }
+      $proposalFinding = @($status.hygiene_findings | Where-Object { $_.kind -eq "proposal" -and $_.status -eq "approved_unconverted" } | Select-Object -First 1)[0]
+      if (-not $proposalFinding -or $proposalFinding.classification -ne "safe_to_ignore_for_metadata_advance") { throw "Expected approved proposal warning-only classification." }
+    }
+    "worker-stale-lease-action-hint" {
+      $status = Invoke-StatusJson -Arguments @("-Hygiene", "-ShowLeases", "-ShowAll")
+      $leaseFinding = @($status.hygiene_findings | Where-Object { $_.kind -eq "lease" -and $_.task_id -eq "status-stale-claim" } | Select-Object -First 1)[0]
+      if (-not $leaseFinding) { throw "Expected stale lease finding." }
+      if (-not $leaseFinding.id) { throw "Expected lease id." }
+      if ($leaseFinding.classification -notin @("repairable_residue", "current_blocker")) { throw "Expected actionable stale lease classification." }
+      if ([string]$leaseFinding.recommended_action -notmatch "recover-lease") { throw "Expected recover-lease action hint." }
     }
   }
 

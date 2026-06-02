@@ -47,6 +47,18 @@ function Assert-True {
   if (-not $Condition) { throw $Message }
 }
 
+function Invoke-FixtureCase {
+  param([string]$Case, [string[]]$Arguments)
+  $old = $env:SKYBRIDGE_RUNNER_FIXTURE_CASE
+  try {
+    $env:SKYBRIDGE_RUNNER_FIXTURE_CASE = $Case
+    return Invoke-RunnerJson $Arguments
+  } finally {
+    if ($null -eq $old) { Remove-Item Env:\SKYBRIDGE_RUNNER_FIXTURE_CASE -ErrorAction SilentlyContinue }
+    else { $env:SKYBRIDGE_RUNNER_FIXTURE_CASE = $old }
+  }
+}
+
 try {
   Clear-RunnerState
   switch ($Scenario) {
@@ -146,6 +158,71 @@ try {
       $result = Invoke-RunnerJson @("run-next", "-GoalPackDir", $goalPack, "-DryRun")
       $text = $result | ConvertTo-Json -Depth 80
       Assert-True ($text -notmatch "(?i)(sk-[A-Za-z0-9_-]{20,}|worker-token|hermes_api_key|private key)") "Runner JSON should not contain secrets."
+    }
+    "resume-existing-task" {
+      $result = Invoke-FixtureCase "existing-task" @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture")
+      $action = @($result.planned_actions)[0]
+      Assert-True ($action.action -eq "wait_existing_task") "Expected existing active linked task to wait, not create a duplicate task."
+      Assert-True (@($action.blockers) -contains "linked_active_task:fixture-task-189") "Expected active linked task blocker."
+    }
+    "resume-existing-pr" {
+      $result = Invoke-FixtureCase "existing-pr" @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture", "-AllowEvidenceRepair")
+      $action = @($result.planned_actions)[0]
+      Assert-True ($action.action -eq "would_resume_existing_pr_finalizer") "Expected existing linked PR to resume finalizer, not create a duplicate PR."
+      Assert-True (@($action.linked_pr_urls).Count -eq 1) "Expected linked PR URL in plan."
+    }
+    "resume-merged-pr-repair-only" {
+      $result = Invoke-FixtureCase "merged-pr-repair-only" @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture", "-AllowEvidenceRepair")
+      $action = @($result.planned_actions)[0]
+      Assert-True ($action.action -eq "would_repair_merged_pr_evidence") "Expected merged PR missing evidence to be repair-only."
+      Assert-True ($action.reason -eq "merged_pr_missing_evidence") "Expected merged PR evidence repair reason."
+    }
+    "skip-completed-step" {
+      $result = Invoke-FixtureCase "skip-completed" @("run-next", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture")
+      $action = @($result.planned_actions)[0]
+      Assert-True ($action.action -eq "skip_completed_step") "Expected completed step to be skipped."
+    }
+    "advanced-past-failed-state" {
+      $old = $env:SKYBRIDGE_RUNNER_FIXTURE_CASE
+      try {
+        $env:SKYBRIDGE_RUNNER_FIXTURE_CASE = "advanced-past-failed-state"
+        $statePath = Join-Path $runnerRoot "dev-queue-189-200.runner.json"
+        New-Item -ItemType Directory -Path $runnerRoot -Force | Out-Null
+        @{
+          schema = "skybridge.campaign_runner_state.v1"
+          runner_id = "runner_old_failed"
+          campaign_id = "dev-queue-189-200"
+          project_id = "skybridge-agent-hub"
+          runner_status = "failed"
+          current_step_id = "dev-queue-189-200:super-189-ci-guardian-pr-finalizer-hardening"
+          started_at = (Get-Date).ToUniversalTime().AddHours(-1).ToString("o")
+          updated_at = (Get-Date).ToUniversalTime().AddHours(-1).ToString("o")
+          stopped_at = (Get-Date).ToUniversalTime().AddHours(-1).ToString("o")
+          max_steps = 12
+          max_tasks = 12
+          max_runtime_minutes = 30
+          steps_attempted = 1
+          steps_completed = 0
+          tasks_attempted = 1
+          tasks_completed = 0
+          last_decision = "failed"
+          last_error = "old Goal 189 failure"
+          hold_reason = $null
+          resume_token = $null
+          resume_state_hash = $null
+          operator_approval_scope = $null
+          audit_log = @()
+        } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $statePath -Encoding UTF8
+        $status = Invoke-RunnerJson @("runner-status", "-CampaignId", "dev-queue-189-200", "-GoalPackDir", $goalPack)
+        Assert-True ($status.runner_state_classification -eq "historical_warning") "Expected old failed runner state to be historical."
+        $result = Invoke-RunnerJson @("resume", "-GoalPackDir", $goalPack, "-DryRun", "-HumanApproved", "-HumanApprovalReason", "fixture")
+        $action = @($result.planned_actions)[0]
+        Assert-True ($action.goal_id -eq "super-190-campaign-run-report-evidence-ledger") "Expected resume to continue at Goal 190."
+        Assert-True ($result.historical_resume_state -eq $true) "Expected historical resume state flag."
+      } finally {
+        if ($null -eq $old) { Remove-Item Env:\SKYBRIDGE_RUNNER_FIXTURE_CASE -ErrorAction SilentlyContinue }
+        else { $env:SKYBRIDGE_RUNNER_FIXTURE_CASE = $old }
+      }
     }
     default { throw "Unknown campaign runner fixture scenario: $Scenario" }
   }
