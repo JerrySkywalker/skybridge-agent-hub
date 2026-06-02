@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-06-02 Goal 188G Operator Control Drill
+
+- Hardened `skybridge-dev-queue-control.ps1` preflight for the post-188F state: Goal 189 completed/recovered with PR #99 and Goal 190 ready/current but unexecuted is now a healthy control-plane state.
+- Changed `resume` without `-Apply` into a dry-run preview that reports the current step, emergency-stop recovery action, Goal 190 execution block and next safe action.
+- Hardened safe-pause, emergency-stop and stale-runner unlock output so dry-runs are explicit, emergency-stop reports Ctrl+C instructions and no task creation, and no-lock unlock is a no-op.
+- Fixed runner stop/hold state updates for older/minimal local runner state files that lack optional fields.
+- Added 188G smokes for safe-pause, emergency-stop, resume dry-run, Goal 190 report display, unlock reason/apply requirements and active lock refusal.
+- Updated operator docs with the two-window workflow, safe-pause vs emergency-stop semantics, resume recovery, runner-report inspection and the Pre-190 Acceptance Gate warning.
+- Goal 190 remains unexecuted; this goal does not run `start-one`, `start-all`, a worker loop or campaign-step task creation.
+
 ## 2026-06-02 Goal 188E Runner Resume, Residue And Lease Hardening
 
 - Hardened campaign runner resume/idempotency so existing linked tasks, linked PRs, merged-PR evidence gaps, completed steps and already-advanced campaigns are handled without duplicate task or PR creation.

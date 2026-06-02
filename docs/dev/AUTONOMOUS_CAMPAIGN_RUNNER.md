@@ -196,3 +196,36 @@ Goal 188E keeps Goal 190 unexecuted and hardens the runner before the next launc
 `runner-status` and `runner-report` now distinguish `current_blocker` from `historical_warning`. If `dev-queue-189-200` is current at Goal 190 and an old runner state failed on Goal 189, report it as historical residue, not a current runner failure.
 
 Hygiene findings include concrete ids and classifications such as `repairable_residue`, `safe_to_ignore_for_metadata_advance`, `unsafe_for_worker_execution` and `manual_review_required`.
+
+## Goal 188G Control Drill
+
+Goal 188G hardens operator controls while `dev-queue-189-200` is paused at Goal 190. It must not execute Goal 190, create campaign-step tasks, run a worker loop, or create child PRs.
+
+Recommended operations remain two-window:
+
+```powershell
+# Window A: read-only state fusion
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Normal
+
+# Window B: read/report/control
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command report `
+  -Json
+```
+
+Pause and stop behavior:
+
+- `safe-pause` is the normal hold. Without `-Apply`, it is a preview. With `-Apply`, it pauses project control, keeps `stop_requested=false`, and records a runner hold reason.
+- `emergency-stop` is for urgent interruption. Without `-Apply`, it is a preview. With `-Apply`, it sets `stop_requested=true`, creates no task, and instructs the operator to Ctrl+C any live runner process.
+- Recovery after emergency stop is `safe-pause -Apply -Reason <reason>`, then `resume` dry-run. The dry-run must still show `would_execute_goal_190=false` during Goal 188G.
+
+Runner report and unlock behavior:
+
+- `runner-report`/`dev-queue-control report` must show Goal 189 completed/recovered and Goal 190 ready/current.
+- A failed Goal 189 runner state is historical once campaign current step is Goal 190. It is not a reason to execute Goal 190 or create a new Goal 189 task.
+- `unlock-stale-runner` requires a reason. Without `-Apply`, it is a dry-run. With no stale lock it returns a no-op. Active non-stale locks are refused.
+- Never delete runner state by hand during this drill. Use reports and dry-runs first.
+
+Pre-190 warning: do not start Goal 190 until the Pre-190 Acceptance Gate passes and the operator explicitly approves `start-one` or an equivalent bounded launch.
