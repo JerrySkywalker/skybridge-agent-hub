@@ -156,3 +156,41 @@ Goal 189 is complete/recovered and linked to PR #99. The campaign current step i
 Before executing Goal 190, verify project control is `paused`, `stop_requested=false`, active tasks are `0`, stale leases are `0`, and `runner-status` shows old Goal 189 failures as `historical_warning`, not `current_blocker`.
 
 Resume rules for this queue are idempotent: existing task, PR and evidence links are recovered or skipped before any new campaign-step task can be created.
+
+## Goal 188F Watch Modes
+
+`skybridge-campaign-watch.ps1` remains read-only. It polls bounded remote status in the background and keeps the local render loop moving from the latest cached snapshot, so a slow status, hygiene, campaign, runner, task, PR, CI or evidence read should not freeze the spinner.
+
+Recommended modes:
+
+```powershell
+# Normal operator view: current step, previous completed step, PR/CI/evidence, nearby queue.
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Normal `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
+  -ColorMode Always
+
+# Compact status line for a narrow terminal or dashboard pane.
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Compact `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250
+
+# Debug fusion view when campaign, runner, task, PR or hygiene state looks inconsistent.
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Debug `
+  -ShowEvents `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250
+```
+
+Troubleshooting:
+
+- If the spinner advances but `refreshed=` grows, remote polling is slow or unavailable; the displayed state is cached and the watch is still read-only.
+- If an old Goal 189 runner failure appears with `historical_warning`, treat it as history once the campaign current step is Goal 190. It is not a current blocker by itself.
+- If Debug mode shows `active_tasks: 0`, `stale_leases: 0`, project `paused`, and current step `super-190-campaign-run-report-evidence-ledger`, Goal 190 is ready/current but still unexecuted.
+- Use JSON mode for machine checks; JSON output disables ANSI color even when `-ColorMode Always` is passed.

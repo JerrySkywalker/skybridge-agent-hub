@@ -37,19 +37,23 @@ function Get-LastJsonPayloadFromOutput {
   for ($i = 0; $i -lt $Text.Length; $i++) {
     if ($Text[$i] -eq "{" -or $Text[$i] -eq "[") { $starts.Add($i) | Out-Null }
   }
-  for ($s = $starts.Count - 1; $s -ge 0; $s--) {
-    $start = $starts[$s]
-    for ($end = $Text.Length; $end -gt $start; $end--) {
-      $candidate = $Text.Substring($start, $end - $start).Trim()
-      if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
-      try {
-        $null = $candidate | ConvertFrom-Json -ErrorAction Stop
-        return [pscustomobject]@{
-          json = $candidate
-          prefix = $Text.Substring(0, $start)
-          suffix = $Text.Substring($end)
+  foreach ($RequireCleanSuffix in @($true, $false)) {
+    for ($s = $starts.Count - 1; $s -ge 0; $s--) {
+      $start = $starts[$s]
+      for ($end = $Text.Length; $end -gt $start; $end--) {
+        $suffix = $Text.Substring($end)
+        if ($RequireCleanSuffix -and -not [string]::IsNullOrWhiteSpace($suffix)) { continue }
+        $candidate = $Text.Substring($start, $end - $start).Trim()
+        if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+        try {
+          $null = $candidate | ConvertFrom-Json -ErrorAction Stop
+          return [pscustomobject]@{
+            json = $candidate
+            prefix = $Text.Substring(0, $start)
+            suffix = $suffix
+          }
+        } catch {
         }
-      } catch {
       }
     }
   }
