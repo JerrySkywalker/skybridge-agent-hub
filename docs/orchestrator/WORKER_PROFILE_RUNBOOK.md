@@ -693,3 +693,40 @@ Worker heartbeat refreshes the active task lease on the server. During active ta
 If a child process is still running, status should show the worker with `current_task_id` instead of treating the worker as idle residue. If heartbeat cannot reach the control plane, hygiene surfaces the stale lease with task id, lease id and a `recover-lease` dry-run hint.
 
 Do not recover an active lease until confirming the child process is no longer running. Recovery remains `skybridge-hygiene.ps1 recover-lease -TaskId <id> -LeaseId <id> -Reason <reason>` first in dry-run, then `-Apply` only after review.
+
+## Goal 188G Operator Stop/Resume Drill
+
+For `dev-queue-189-200`, the worker profile is only a readiness target until Goal 190 receives explicit approval. Goal 188G validates control behavior without running the worker loop or creating a campaign-step task.
+
+Two-window workflow:
+
+```powershell
+# Window A: watch only
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Normal `
+  -PollIntervalSeconds 5
+
+# Window B: heartbeat, preflight, reports and controls
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-status.ps1 `
+  -Command register-heartbeat `
+  -ConfigFile "$HOME\.skybridge\worker.laptop-zenbookduo.json" `
+  -Json
+```
+
+Safe-pause vs emergency-stop:
+
+- Use `safe-pause -Apply -Reason <reason>` for normal operator holds. It should finish with project control `paused` and `stop_requested=false`.
+- Use `emergency-stop -Apply -Reason <reason>` only when the operator needs every runner to stop now. It sets `stop_requested=true`; the operator must press Ctrl+C in any live runner window.
+- To recover from emergency stop, run `safe-pause -Apply -Reason <reason>`, then run `resume` without `-Apply` and verify it is still dry-run.
+
+Before any Goal 190 execution:
+
+- worker heartbeat refresh succeeds and `current_task_id` is empty;
+- `skybridge-status.ps1 -ActiveOnly` shows active tasks `0`;
+- hygiene shows stale leases `0`;
+- campaign status shows current step `super-190-campaign-run-report-evidence-ledger`;
+- Goal 190 has no linked task ids or PR URLs;
+- runner report classifies old Goal 189 failures as historical when applicable.
+
+Do not start Goal 190 until the Pre-190 Acceptance Gate passes.

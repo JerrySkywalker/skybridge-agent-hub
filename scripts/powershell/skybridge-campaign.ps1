@@ -1008,6 +1008,19 @@ function Add-CampaignRunnerAudit {
   $State.resume_state_hash = Get-JsonHash -Text ($State | ConvertTo-Json -Depth 80 -Compress)
 }
 
+function Set-ObjectProperty {
+  param(
+    [Parameter(Mandatory = $true)]$Target,
+    [Parameter(Mandatory = $true)][string]$Name,
+    $Value
+  )
+  if ($Target.PSObject.Properties[$Name]) {
+    $Target.$Name = $Value
+  } else {
+    $Target | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+  }
+}
+
 function Acquire-CampaignRunnerLock {
   param($Snapshot, $State)
   $lockPath = Get-CampaignRunnerLockPath -TargetCampaignId $Snapshot.campaign.campaign_id -TargetProjectId $Snapshot.campaign.project_id
@@ -1488,10 +1501,10 @@ switch ($Command) {
   "runner-stop" {
     $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath)
     if (-not $state) { $state = [pscustomobject]@{ runner_status = "idle"; campaign_id = $CampaignId; project_id = $ProjectId; audit_log = @() } }
-    $state.runner_status = "aborted"
-    $state.hold_reason = if ($Reason) { $Reason } else { "operator_stop" }
-    $state.stopped_at = Get-CampaignRunnerNow
-    $state.updated_at = $state.stopped_at
+    Set-ObjectProperty -Target $state -Name "runner_status" -Value "aborted"
+    Set-ObjectProperty -Target $state -Name "hold_reason" -Value $(if ($Reason) { $Reason } else { "operator_stop" })
+    Set-ObjectProperty -Target $state -Name "stopped_at" -Value (Get-CampaignRunnerNow)
+    Set-ObjectProperty -Target $state -Name "updated_at" -Value $state.stopped_at
     Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath)
     $result = Get-CampaignRunnerStatus
   }
@@ -1499,10 +1512,10 @@ switch ($Command) {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "runner-hold requires -Reason." }
     $state = Read-CampaignRunnerJson -Path (Get-CampaignRunnerStatePath)
     if (-not $state) { $state = [pscustomobject]@{ runner_status = "held"; campaign_id = $CampaignId; project_id = $ProjectId; audit_log = @() } }
-    $state.runner_status = "held"
-    $state.hold_reason = $Reason
-    $state.stopped_at = Get-CampaignRunnerNow
-    $state.updated_at = $state.stopped_at
+    Set-ObjectProperty -Target $state -Name "runner_status" -Value "held"
+    Set-ObjectProperty -Target $state -Name "hold_reason" -Value $Reason
+    Set-ObjectProperty -Target $state -Name "stopped_at" -Value (Get-CampaignRunnerNow)
+    Set-ObjectProperty -Target $state -Name "updated_at" -Value $state.stopped_at
     Write-CampaignRunnerJson -Value $state -Path (Get-CampaignRunnerStatePath)
     $result = Get-CampaignRunnerStatus
   }

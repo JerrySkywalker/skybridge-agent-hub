@@ -33,6 +33,21 @@ $ErrorActionPreference = "Stop"
 function Get-LastJsonPayloadFromOutput {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+  $lines = @($Text -split "(`r`n|`n|`r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+  for ($lineIndex = $lines.Count - 1; $lineIndex -ge 0; $lineIndex--) {
+    $candidate = ([string]$lines[$lineIndex]).Trim()
+    if (-not ($candidate.StartsWith("{") -or $candidate.StartsWith("["))) { continue }
+    try {
+      $null = $candidate | ConvertFrom-Json -ErrorAction Stop
+      $prefixLines = if ($lineIndex -gt 0) { @($lines | Select-Object -First $lineIndex) } else { @() }
+      return [pscustomobject]@{
+        json = $candidate
+        prefix = ($prefixLines -join "`n")
+        suffix = ""
+      }
+    } catch {
+    }
+  }
   $starts = New-Object System.Collections.Generic.List[int]
   for ($i = 0; $i -lt $Text.Length; $i++) {
     if ($Text[$i] -eq "{" -or $Text[$i] -eq "[") { $starts.Add($i) | Out-Null }
@@ -166,13 +181,25 @@ function Invoke-Preflight {
     $worker = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-worker-status.ps1", "-Command", "status", "-ConfigFile", $WorkerProfile, "-Json")
   }
   $goal189 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" })[0]
+  $goal190 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-190-campaign-run-report-evidence-ledger" })[0]
+  $goal189Recovered = $false
+  if ($goal189 -and $goal189.evidence_summary) {
+    $goal189Recovered = [bool]$goal189.evidence_summary.recovered -or [string]$goal189.evidence_summary.recovery_status -in @("recovered", "completed")
+  }
+  $goal190LinkedTaskCount = if ($goal190) { @($goal190.linked_task_ids).Count } else { 0 }
+  $goal190LinkedPrCount = if ($goal190) { @($goal190.linked_pr_urls).Count } else { 0 }
+  $goal190Unexecuted = ($goal190 -and $goal190LinkedTaskCount -eq 0 -and $goal190LinkedPrCount -eq 0)
   $checks = [ordered]@{
     git_clean = -not [bool]$git.dirty
     active_tasks_zero = ([int]$active.task_summary.active -eq 0)
     stale_leases_zero = ([int]$hygiene.task_summary.stale_leases -eq 0)
     runner_lock_clear = ([string]$runner.runner_lock_status -in @("none", "released"))
     campaign_exists = ($null -ne $campaign.campaign)
-    goal_189_ready = ($goal189 -and [string]$goal189.status -eq "ready")
+    goal_189_completed = ($goal189 -and [string]$goal189.status -eq "completed")
+    goal_189_recovered_or_evidence_complete = ($goal189 -and $goal189Recovered)
+    goal_190_current = ($goal190 -and [string]$campaign.campaign.current_step_id -eq [string]$goal190.campaign_step_id)
+    goal_190_ready = ($goal190 -and [string]$goal190.status -eq "ready")
+    goal_190_unexecuted = $goal190Unexecuted
     project_paused = ([string]$active.control.state -eq "paused")
   }
   [pscustomobject]@{
@@ -187,9 +214,12 @@ function Invoke-Preflight {
     runner_lock_status = [string]$runner.runner_lock_status
     campaign_status = [string]$campaign.campaign.status
     current_step = [string]$campaign.campaign.current_step_id
+    previous_step = if ($goal189) { [pscustomobject]@{ goal_id = [string]$goal189.goal_id; status = [string]$goal189.status; linked_task_ids = @($goal189.linked_task_ids); linked_pr_urls = @($goal189.linked_pr_urls); recovered = $goal189Recovered } } else { $null }
+    current_step_detail = if ($goal190) { [pscustomobject]@{ goal_id = [string]$goal190.goal_id; status = [string]$goal190.status; linked_task_ids = @($goal190.linked_task_ids); linked_pr_urls = @($goal190.linked_pr_urls); unexecuted = $goal190Unexecuted } } else { $null }
     worker_status = if ($worker) { [string]$worker.remote_status } else { "unknown" }
     worker_current_task_id = if ($worker) { $worker.current_task_id } else { $null }
-    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id)"
+    next_safe_action = "Run the Pre-190 Acceptance Gate before any start-one/start-all/resume -Apply. Goal 190 must remain unexecuted until that gate passes."
+    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal190_unexecuted=$goal190Unexecuted"
   }
 }
 
@@ -261,29 +291,59 @@ switch ($Command) {
   "safe-pause" {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "safe-pause requires -Reason." }
     if (-not $Apply) {
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_pause_project = $true; would_hold_runner = $true; reason = $Reason }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_pause_project = $true; would_hold_runner = $true; would_set_stop_requested = $false; mutates = $false; reason = $Reason; summary = "safe-pause dry-run: no mutation; would pause project and hold runner with stop_requested=false." }
     } else {
       $control = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "pause", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
       $hold = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-hold", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Reason", $Reason, "-Apply", "-Json"))
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; runner = $hold; reason = $Reason }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; runner = $hold; stop_requested = [bool]$control.control.stop_requested; reason = $Reason; summary = "safe-pause applied: project paused and stop_requested=false." }
     }
   }
   "emergency-stop" {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "emergency-stop requires -Reason." }
     if (-not $Apply) {
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_stop_project = $true; reason = $Reason; instructions = "Dry-run only. With -Apply, press Ctrl+C in the runner window if it is still running." }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_stop_project = $true; would_set_stop_requested = $true; mutates = $false; reason = $Reason; instructions = "Dry-run only. With -Apply, press Ctrl+C in the runner window if it is still running."; summary = "emergency-stop dry-run: no mutation; would set stop_requested=true and require operator Ctrl+C for any live runner." }
     } else {
       $control = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "stop", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; reason = $Reason; instructions = "Press Ctrl+C in the runner window if it is still running." }
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; stop_requested = [bool]$control.control.stop_requested; task_created = $false; reason = $Reason; instructions = "Press Ctrl+C in the runner window if it is still running."; summary = "emergency-stop applied: stop_requested=true; no task was created." }
     }
   }
   "resume" {
-    if (-not $Apply) { throw "resume requires -Apply." }
-    Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "pause", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json")) | Out-Null
-    if (Test-Path -LiteralPath $WorkerProfile -PathType Leaf) {
-      Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-worker-status.ps1", "-Command", "register-heartbeat", "-ConfigFile", $WorkerProfile, "-Json") | Out-Null
+    $preflight = Invoke-Preflight
+    if (-not $Apply) {
+      $stopRequested = $false
+      try {
+        $controlState = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "status", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
+        $stopRequested = [bool]$controlState.control.stop_requested
+      } catch {
+        $controlState = $null
+      }
+      $goal190Unexecuted = $false
+      if ($preflight.current_step_detail) { $goal190Unexecuted = [bool]$preflight.current_step_detail.unexecuted }
+      $result = [pscustomobject]@{
+        ok = $true
+        command = $Command
+        mode = "dry-run"
+        token_printed = $false
+        mutates = $false
+        would_clear_stop_requested = $true
+        stop_requested_current = $stopRequested
+        required_recovery_action = if ($stopRequested) { "Run safe-pause -Apply first to restore paused stop_requested=false, then rerun resume dry-run." } else { $null }
+        would_refresh_worker_heartbeat = (Test-Path -LiteralPath $WorkerProfile -PathType Leaf)
+        would_resume_runner = $true
+        would_execute_goal_190 = $false
+        current_step = [string]$preflight.current_step
+        goal_190_unexecuted = $goal190Unexecuted
+        preflight = $preflight
+        next_safe_action = "Do not execute Goal 190 from Goal 188G. Run the Pre-190 Acceptance Gate, then use start-one only after explicit operator approval."
+        summary = "resume dry-run: no mutation; current step is $($preflight.current_step); Goal 190 execution is blocked in this goal."
+      }
+    } else {
+      Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "pause", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json")) | Out-Null
+      if (Test-Path -LiteralPath $WorkerProfile -PathType Leaf) {
+        Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-worker-status.ps1", "-Command", "register-heartbeat", "-ConfigFile", $WorkerProfile, "-Json") | Out-Null
+      }
+      $result = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "resume", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-MaxSteps", "12", "-MaxTasks", "12", "-StopOnFailure", "-AllowAutoMerge", "-AllowEvidenceRepair", "-HumanApproved", "-HumanApprovalReason", "Operator resumed bounded dev queue execution.", "-Apply", "-Json") + $tokenArgs)
     }
-    $result = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "resume", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-MaxSteps", "12", "-MaxTasks", "12", "-StopOnFailure", "-AllowAutoMerge", "-AllowEvidenceRepair", "-HumanApproved", "-HumanApprovalReason", "Operator resumed bounded dev queue execution.", "-Apply", "-Json") + $tokenArgs)
   }
   "report" {
     $report = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-report", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
@@ -295,9 +355,29 @@ switch ($Command) {
     $status = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-status", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
     if ([string]$status.runner_lock_status -eq "active") { throw "Refusing to unlock active non-stale runner lock." }
     if ([string]$status.runner_lock_status -notin @("stale", "released", "none")) { throw "Unsupported runner lock status: $($status.runner_lock_status)" }
+    if ([string]$status.runner_lock_status -in @("released", "none")) {
+      $result = [pscustomobject]@{
+        ok = $true
+        command = $Command
+        mode = if ($Apply) { "apply" } else { "dry-run" }
+        token_printed = $false
+        runner_lock_status = [string]$status.runner_lock_status
+        lock = $status.runner_lock
+        would_unlock = $false
+        unlocked = $false
+        requires_apply = (-not $Apply)
+        reason = $Reason
+        summary = "No stale runner lock is present; unlock is a no-op."
+      }
+      break
+    }
     $unlockArgs = @("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-unlock", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Reason", $Reason, "-Json")
     if ($Apply) { $unlockArgs += "-Apply" } else { $unlockArgs += "-DryRun" }
     $result = Invoke-JsonScript $unlockArgs
+    $result | Add-Member -NotePropertyName command -NotePropertyValue $Command -Force
+    $result | Add-Member -NotePropertyName mode -NotePropertyValue $(if ($Apply) { "apply" } else { "dry-run" }) -Force
+    $result | Add-Member -NotePropertyName requires_apply -NotePropertyValue (-not $Apply) -Force
+    $result | Add-Member -NotePropertyName reason -NotePropertyValue $Reason -Force
   }
 }
 

@@ -194,3 +194,46 @@ Troubleshooting:
 - If an old Goal 189 runner failure appears with `historical_warning`, treat it as history once the campaign current step is Goal 190. It is not a current blocker by itself.
 - If Debug mode shows `active_tasks: 0`, `stale_leases: 0`, project `paused`, and current step `super-190-campaign-run-report-evidence-ledger`, Goal 190 is ready/current but still unexecuted.
 - Use JSON mode for machine checks; JSON output disables ANSI color even when `-ColorMode Always` is passed.
+
+## Goal 188G Operator Control Drill
+
+Goal 188G validates operator control before Goal 190. It does not run `start-one`, `start-all`, a worker loop, campaign-step task creation or Goal 190 execution.
+
+Use the two-window workflow:
+
+```powershell
+# Window A: read-only watch
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign-watch.ps1 `
+  -CampaignId dev-queue-189-200 `
+  -Layout Normal `
+  -PollIntervalSeconds 5 `
+  -RenderIntervalMilliseconds 250 `
+  -ColorMode Always
+
+# Window B: control and reports
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command preflight `
+  -Json
+```
+
+Control command meanings:
+
+- `safe-pause -Reason <text>` is a no-mutation preview. `safe-pause -Apply -Reason <text>` pauses project control, keeps `stop_requested=false`, and records an operator runner hold.
+- `emergency-stop -Reason <text>` is a no-mutation preview. `emergency-stop -Apply -Reason <text>` sets `stop_requested=true`, creates no task, and tells the operator to press Ctrl+C in any live runner window.
+- `resume` without `-Apply` is a dry-run. It reports the current campaign step, whether Goal 190 is unexecuted, and whether `safe-pause -Apply` is required to clear an emergency stop.
+- `resume -Apply` is for the next execution window only. Do not use it in Goal 188G.
+- `report -Json` shows the campaign runner report and hygiene summary. Old Goal 189 failures should be historical once Goal 190 is current.
+- `unlock-stale-runner -Reason <text>` is a dry-run/no-op unless a stale runner lock exists. `unlock-stale-runner -Apply -Reason <text>` is only for inspected stale locks; active non-stale locks are refused.
+
+Before Goal 190, confirm:
+
+- project control is `paused`;
+- `stop_requested=false`;
+- active tasks are `0`;
+- stale leases are `0`;
+- current campaign step is `super-190-campaign-run-report-evidence-ledger`;
+- Goal 190 has no linked task ids and no PR URLs;
+- worker heartbeat can be refreshed;
+- `report` and Debug watch show old Goal 189 runner failures as historical, not current execution blockers.
+
+Do not start Goal 190 until the Pre-190 Acceptance Gate passes.
