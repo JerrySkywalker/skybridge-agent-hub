@@ -32,6 +32,8 @@ build/
 .next/
 .vite/
 coverage/
+apps/*/src-tauri/target/
+apps/*/src-tauri/gen/
 
 # logs
 *.log
@@ -49,6 +51,7 @@ logs/
 .agent/workers/
 .agent/self-bootstrap/
 .agent/codex-phone-smoke/
+.agent/desktop-client/
 .agent/codex-phone-*.md
 .agent/last-message.md
 .data/

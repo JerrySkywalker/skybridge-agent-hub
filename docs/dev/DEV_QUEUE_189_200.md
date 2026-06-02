@@ -237,3 +237,19 @@ Before Goal 190, confirm:
 - `report` and Debug watch show old Goal 189 runner failures as historical, not current execution blockers.
 
 Do not start Goal 190 until the Pre-190 Acceptance Gate passes.
+
+## Goal 188H Desktop Client MVP
+
+Goal 188H adds `apps/desktop`, a Tauri v2 standby desktop client. It provides a tray and read-only GUI for operator status. It does not run `start-one`, `start-all`, a worker loop, campaign-step task creation or Goal 190 execution.
+
+The desktop status panel reads:
+
+- `skybridge-status.ps1 -ActiveOnly -Json`;
+- `skybridge-campaign.ps1 status -CampaignId dev-queue-189-200 -Json`;
+- `skybridge-worker-status.ps1 -Command status -Json`.
+
+The only MVP mutation is the explicitly labeled Heartbeat Now button, which runs `skybridge-worker-status.ps1 -Command register-heartbeat -Json`. This refreshes worker heartbeat only and must not claim tasks.
+
+Local desktop metadata is written under ignored `.agent/desktop-client/status.json` and `.agent/desktop-client/logs/`. Token contents must not be written or displayed; UI and JSON status keep `token_printed=false`.
+
+See `docs/dev/DESKTOP_CLIENT_MVP.md` for the desktop scope and future roadmap.

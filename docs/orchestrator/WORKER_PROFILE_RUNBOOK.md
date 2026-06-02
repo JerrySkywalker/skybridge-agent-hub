@@ -730,3 +730,20 @@ Before any Goal 190 execution:
 - runner report classifies old Goal 189 failures as historical when applicable.
 
 Do not start Goal 190 until the Pre-190 Acceptance Gate passes.
+
+## Desktop Standby Client
+
+Goal 188H introduces `apps/desktop`, a Tauri v2 tray app for read-only worker/campaign status. It uses the `laptop-zenbookduo` worker profile for status and heartbeat only.
+
+Allowed commands in the MVP:
+
+```powershell
+skybridge-status.ps1 -ActiveOnly -Json
+skybridge-campaign.ps1 status -CampaignId dev-queue-189-200 -Json
+skybridge-worker-status.ps1 -Command status -Json
+skybridge-worker-status.ps1 -Command register-heartbeat -Json
+```
+
+The last command is exposed as Heartbeat Now and is the only mutation. It must not claim tasks or start the worker loop. The app writes safe local metadata under `.agent/desktop-client/`, which is ignored by git.
+
+The desktop client is a standby surface, not an execution surface. Do not use it to start Goal 190; the Pre-190 Acceptance Gate and explicit operator approval are still required before any bounded execution.
