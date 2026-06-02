@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-06-02 Goal 188H Tauri Desktop Client MVP
+
+- Added `apps/desktop`, a Tauri v2, React, TypeScript and Vite desktop app named `@skybridge/desktop` with identifier `space.jerryskywalker.skybridge.desktop`.
+- Implemented a tray menu with Open SkyBridge, Refresh Status, Open Logs and Quit. Tray actions do not claim tasks or execute campaign steps.
+- Added a read-only status panel for `laptop-zenbookduo`, `skybridge-agent-hub`, `dev-queue-189-200`, Goal 190 current state, Goal 189 completed state, active tasks, stale leases, last refresh and `token_printed=false`.
+- Added a safe Rust bridge to existing PowerShell status commands and an explicitly labeled Heartbeat Now action that only runs worker register-heartbeat.
+- Added ignored local metadata paths under `.agent/desktop-client/` for `status.json` and logs.
+- Added desktop package, Tauri config, read-only bridge and no-task-execution smokes.
+- Goal 190 remains unexecuted; this goal does not run `start-one`, `start-all`, a worker loop or campaign-step task creation.
+
 ## 2026-06-02 Goal 188G Operator Control Drill
 
 - Hardened `skybridge-dev-queue-control.ps1` preflight for the post-188F state: Goal 189 completed/recovered with PR #99 and Goal 190 ready/current but unexecuted is now a healthy control-plane state.
