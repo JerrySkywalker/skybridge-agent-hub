@@ -73,10 +73,12 @@ try {
       Assert-True ($result.safe_to_mark_ready -eq $false) "Expected high-risk draft ready block."
     }
     "evidence-repair" {
-      $fixture = Write-Fixture @{ number = 13; url = "https://github.com/example/repo/pull/13"; state = "MERGED"; isDraft = $false; merged = $true; mergeCommit = @{ oid = "abc123" }; files = @(@{ path = "docs/dev/example.md" }); statusCheckRollup = @(@{ name = "Project check"; status = "COMPLETED"; conclusion = "SUCCESS" }) }
-      $result = Invoke-Finalizer -Fixture $fixture -Extra @("-AllowEvidenceRepair")
+      $fixture = Write-Fixture @{ number = 13; url = "https://github.com/example/repo/pull/13"; state = "MERGED"; isDraft = $false; mergedAt = "2026-06-01T10:58:51Z"; mergeCommit = @{ oid = "abc123" }; files = @(@{ path = "docs/dev/example.md" }); statusCheckRollup = @(@{ name = "Project check"; status = "COMPLETED"; conclusion = "SUCCESS" }) }
+      $result = Invoke-Finalizer -Fixture $fixture -Extra @("-AllowAutoMerge", "-AllowEvidenceRepair")
       Assert-True ($result.ci_status -eq "passed") "Expected passed CI."
-      Assert-True ($result.decision -eq "safe_no_auto_merge") "Expected safe no auto merge."
+      Assert-True ($result.pr.merged -eq $true) "Expected merged state derived from mergedAt."
+      Assert-True ($result.decision -eq "already_merged") "Expected already_merged."
+      Assert-True (@($result.actions).Count -eq 0) "Expected no merge action for already merged PR."
     }
     default { throw "Unknown PR finalizer scenario: $Scenario" }
   }

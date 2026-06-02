@@ -227,6 +227,31 @@ function Set-TransientRetryState {
   } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $RetryStateFile -Encoding UTF8
 }
 
+function Attach-CampaignStepEvidence {
+  param($Summary, [string]$CiStatus)
+  if (-not $CampaignId -or -not $StepId -or $DryRun -or -not $Apply -or $FixtureFile) { return $false }
+  $config = [pscustomobject]@{ api_base = $ApiBase; project_id = $ProjectId; auth_mode = if ($TokenFile -or $TokenEnvVar) { "bearer_token" } else { "none" }; token_file = $TokenFile; token_env_var = $TokenEnvVar }
+  $linkedTaskIds = @()
+  if ($TaskId) { $linkedTaskIds += $TaskId }
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))/steps/$([uri]::EscapeDataString($StepId))/attach-evidence" -ApiBase $ApiBase -Config $config -Body @{
+    linked_task_ids = @($linkedTaskIds)
+    linked_pr_urls = @($Summary.url)
+    evidence_summary = @{
+      summary = "Recovered Goal 189 after PR #$($Summary.number) was merged and finalizer evidence reconciliation completed."
+      task_id = $TaskId
+      pr_url = $Summary.url
+      merge_commit = $Summary.mergeCommit
+      changed_files = @($Summary.files)
+      validation_status = if ($CiStatus -eq "passed") { "passed" } else { "unknown" }
+      ci_status = $CiStatus
+      recovered = $true
+      recovery_status = "recovered"
+      created_at = (Get-Date).ToUniversalTime().ToString("o")
+    }
+  } | Out-Null
+  return $true
+}
+
 $effectiveDryRun = $DryRun -or -not $Apply
 $summary = if ($FixtureFile) { Get-PrFixtureSummary } else { Get-PrLiveSummary -Number (Get-PrNumberFromInput) }
 $waitResult = Wait-PrChecksIfNeeded -InitialSummary $summary
@@ -247,6 +272,8 @@ $retryDecision = [pscustomobject]@{
 }
 $decision = if ($unsafeReasons.Count -gt 0) {
   "blocked_unsafe_files"
+} elseif ($summary.merged) {
+  "already_merged"
 } elseif ($safeToMarkReady) {
   if ($effectiveDryRun) { "would_mark_ready" } else { "mark_ready" }
 } elseif ($ciStatus -eq "pending") {
@@ -280,7 +307,9 @@ if (-not $effectiveDryRun -and -not $FixtureFile) {
     $actions += "enabled_auto_merge"
   }
 }
-$evidenceRepaired = if ($summary.merged -or $decision -in @("safe_no_auto_merge", "auto_merge", "would_auto_merge")) { Repair-TaskEvidence -Summary $summary -CiStatus $ciStatus } else { $false }
+$evidenceEligible = ($summary.merged -or $decision -in @("safe_no_auto_merge", "auto_merge", "would_auto_merge", "already_merged"))
+$evidenceRepaired = if ($evidenceEligible) { Repair-TaskEvidence -Summary $summary -CiStatus $ciStatus } else { $false }
+$campaignEvidenceAttached = if ($evidenceEligible) { Attach-CampaignStepEvidence -Summary $summary -CiStatus $ciStatus } else { $false }
 
 Write-PrFinalizerResult ([pscustomobject]@{
   ok = ($decision -notin @("blocked_unsafe_files", "blocked_real_ci_failure", "blocked_unknown_ci", "blocked_transient_ci_after_retry", "timed_out_pending_checks"))
@@ -304,10 +333,15 @@ Write-PrFinalizerResult ([pscustomobject]@{
   actions = @($actions)
   evidence_repaired = [bool]$evidenceRepaired
   evidence_repair = @{
-    attempted = [bool]($summary.merged -or $decision -in @("safe_no_auto_merge", "auto_merge", "would_auto_merge"))
+    attempted = [bool]$evidenceEligible
     repaired = [bool]$evidenceRepaired
     before_status = "failed_or_missing_evidence"
     after_status = if ($evidenceRepaired) { "recovered" } elseif ($effectiveDryRun) { "dry_run_not_mutated" } else { "unchanged" }
+  }
+  campaign_evidence = @{
+    attempted = [bool]($evidenceEligible -and $CampaignId -and $StepId)
+    attached = [bool]$campaignEvidenceAttached
+    after_status = if ($campaignEvidenceAttached) { "attached" } elseif ($effectiveDryRun) { "dry_run_not_mutated" } else { "unchanged" }
   }
   safety = @{
     no_auto_merge_outside_allowed_paths = $true
