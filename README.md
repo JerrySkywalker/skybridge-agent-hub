@@ -229,6 +229,8 @@ Cloud server and first remote worker registration templates are documented in [d
 
 Remote worker reliability helpers include `skybridge-status.ps1`, `skybridge-control.ps1`, `skybridge-worker-status.ps1`, `skybridge-rerun-ci.ps1` and task evidence repair. Keep real worker tokens in local token files and use bounded `-PollOnce` workflows until the always-on remote loop is explicitly enabled.
 
+SkyBridge Desktop is the local standby client for the pre-Goal-190 operator gate. It remains read-only except for an explicitly labeled worker heartbeat mutation. See [docs/dev/DESKTOP_CLIENT_READINESS.md](docs/dev/DESKTOP_CLIENT_READINESS.md) before using it as the resident status tool.
+
 For one-shot operator work, use `skybridge-guide.ps1` for the guided status -> submit-preview -> submit-apply -> run-once-preview -> run-once-apply -> inspect-task flow. The guide wraps `skybridge-submit.ps1` and `skybridge-run-once.ps1`, keeps preview as the default, uses `-PollOnce` only and leaves long-running remote loops deferred.
 
 Master goal planning is documented in [docs/orchestrator/MASTER_GOAL_PLANNER.md](docs/orchestrator/MASTER_GOAL_PLANNER.md). Use `skybridge-plan.ps1` to generate reviewable task proposals from a high-level goal, then `skybridge-proposal.ps1` to review, accept and convert proposals into normal queued tasks. Hermes preview operators should prefer `skybridge-hermes-preview.ps1` and the direct API runbook in [docs/operations/HERMES_DIRECT_API.md](docs/operations/HERMES_DIRECT_API.md).

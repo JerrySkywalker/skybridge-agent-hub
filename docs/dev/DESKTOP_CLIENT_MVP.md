@@ -56,6 +56,8 @@ This refreshes worker registration/heartbeat only. It does not claim tasks, star
 
 Goal 190 remains ready/current but unexecuted. The Desktop Client MVP must not be used as an execution control surface. Before any future execution mode exists, the Pre-190 Acceptance Gate must pass and the operator must explicitly approve a bounded launch.
 
+Goal 188I adds the readiness gate for using the desktop client before Goal 190. See [DESKTOP_CLIENT_READINESS.md](DESKTOP_CLIENT_READINESS.md) for the MVP-readiness, operator-readiness and future execution-readiness definitions, manual drill, safe log locations and validation commands.
+
 ## Roadmap
 
 Future desktop work can add:

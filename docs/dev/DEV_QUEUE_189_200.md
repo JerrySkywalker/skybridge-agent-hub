@@ -253,3 +253,9 @@ The only MVP mutation is the explicitly labeled Heartbeat Now button, which runs
 Local desktop metadata is written under ignored `.agent/desktop-client/status.json` and `.agent/desktop-client/logs/`. Token contents must not be written or displayed; UI and JSON status keep `token_printed=false`.
 
 See `docs/dev/DESKTOP_CLIENT_MVP.md` for the desktop scope and future roadmap.
+
+## Goal 188I Desktop Readiness Gate
+
+Goal 188I hardens the desktop standby client before Goal 190. The app remains read-only except for the explicitly labeled Heartbeat Now mutation, which only refreshes worker heartbeat. Execution controls stay disabled: no `start-one`, no `start-all`, no worker loop, no campaign-step task creation, no task claim, no desktop PR creation and no Goal 190 execution.
+
+Before Goal 190, run the desktop readiness smokes, desktop frontend build, Rust check and Tauri bundle attempt from clean latest `main`. Goal 188I validated local Windows MSI and NSIS bundle generation after adding the existing `.ico` file to the Tauri bundle icon list. Goal 190 should not proceed until desktop readiness checks pass and the operator explicitly approves the next bounded goal.
