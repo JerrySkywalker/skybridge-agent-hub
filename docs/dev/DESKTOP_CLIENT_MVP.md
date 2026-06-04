@@ -6,6 +6,14 @@ SkyBridge Desktop is the first local resident client for operators who want SkyB
 
 The current app lives in `apps/desktop` and uses Tauri v2, React, TypeScript and Vite. It is packaged as `@skybridge/desktop` with Tauri identifier `space.jerryskywalker.skybridge.desktop`.
 
+Development commands:
+
+- `corepack pnpm -C apps/desktop dev` starts Vite only on `127.0.0.1:1420`.
+- `corepack pnpm -C apps/desktop tauri:dev` starts the full Tauri desktop app.
+- `corepack pnpm -C apps/desktop tauri dev` also starts the full Tauri desktop app.
+
+`dev` must not call `tauri dev` because Tauri already runs `corepack pnpm dev` as `beforeDevCommand`.
+
 The MVP displays:
 
 - worker id `laptop-zenbookduo`;
@@ -57,6 +65,8 @@ This refreshes worker registration/heartbeat only. It does not claim tasks, star
 Goal 190 remains ready/current but unexecuted. The Desktop Client MVP must not be used as an execution control surface. Before any future execution mode exists, the Pre-190 Acceptance Gate must pass and the operator must explicitly approve a bounded launch.
 
 Goal 188I adds the readiness gate for using the desktop client before Goal 190. See [DESKTOP_CLIENT_READINESS.md](DESKTOP_CLIENT_READINESS.md) for the MVP-readiness, operator-readiness and future execution-readiness definitions, manual drill, safe log locations and validation commands.
+
+Goal 188I follow-up also adds fixture-only desktop visual QA. It captures local screenshots under `.agent/tmp/desktop-visual-qa/` and does not call Tauri commands, production endpoints or worker token files.
 
 ## Roadmap
 

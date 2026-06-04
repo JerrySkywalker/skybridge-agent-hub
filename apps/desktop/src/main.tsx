@@ -78,6 +78,39 @@ const emptyStatus: DesktopStatus = {
   errors: [],
 };
 
+const fixtureStatus: DesktopStatus = {
+  ok: true,
+  mode_banner: "STANDBY / READ ONLY",
+  mutation_scope: "HEARTBEAT ONLY MUTATION",
+  execution_disabled: true,
+  project_id: "skybridge-agent-hub",
+  campaign_id: "dev-queue-189-200",
+  worker_id: "laptop-zenbookduo",
+  worker_status: "online",
+  current_step: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
+  current_goal_id: "super-190-campaign-run-report-evidence-ledger",
+  current_goal_status: "ready",
+  current_goal_linked_task_ids: [],
+  current_goal_linked_pr_urls: [],
+  previous_goal_id: "super-189-ci-guardian-pr-finalizer-hardening",
+  previous_goal_status: "completed",
+  goal_190_linked_task_ids_count: 0,
+  goal_190_linked_pr_urls_count: 0,
+  active_tasks: 0,
+  stale_leases: 0,
+  token_printed: false,
+  last_refresh_time: "unix:1800000000",
+  status_age_seconds: 0,
+  pre190_readiness: {
+    state: "PASS",
+    reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "Goal 190 is current/ready and unexecuted"],
+  },
+  status_file: ".agent/tmp/desktop-visual-qa/status.fixture.json",
+  log_file: ".agent/tmp/desktop-visual-qa/desktop-client.fixture.log",
+  warnings: [],
+  errors: [],
+};
+
 function StatusValue({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="status-row">
@@ -88,12 +121,18 @@ function StatusValue({ label, value }: { label: string; value: React.ReactNode }
 }
 
 function App() {
-  const [status, setStatus] = React.useState<DesktopStatus>(emptyStatus);
+  const fixtureOnly = isFixtureMode();
+  const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
   const [busy, setBusy] = React.useState(false);
-  const [message, setMessage] = React.useState("Standby");
+  const [message, setMessage] = React.useState(fixtureOnly ? "Fixture-only visual QA" : "Standby");
   const [nowSeconds, setNowSeconds] = React.useState(() => Math.floor(Date.now() / 1000));
 
   const refresh = React.useCallback(async () => {
+    if (fixtureOnly) {
+      setStatus(fixtureStatus);
+      setMessage("Fixture-only status rendered");
+      return;
+    }
     setBusy(true);
     setMessage("Refreshing read-only status");
     try {
@@ -105,9 +144,13 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [fixtureOnly]);
 
   const heartbeat = React.useCallback(async () => {
+    if (fixtureOnly) {
+      setMessage("Fixture-only: heartbeat command disabled");
+      return;
+    }
     setBusy(true);
     setMessage("Sending heartbeat mutation only");
     try {
@@ -119,7 +162,7 @@ function App() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [fixtureOnly]);
 
   React.useEffect(() => {
     void refresh();
@@ -229,6 +272,10 @@ function parseUnixTimestamp(value: string) {
   }
   const parsed = Number.parseInt(value.slice("unix:".length), 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isFixtureMode() {
+  return new URLSearchParams(window.location.search).get("fixture") === "desktop-pre190-pass";
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);

@@ -57,6 +57,14 @@ The desktop app must not:
 For development readiness:
 
 ```powershell
+corepack pnpm -C apps/desktop tauri:dev
+```
+
+`corepack pnpm -C apps/desktop dev` starts Vite only on `127.0.0.1:1420`. This is intentional because Tauri's `beforeDevCommand` is `corepack pnpm dev`; making `dev` call `tauri dev` recursively starts `tauri dev -> beforeDevCommand -> pnpm dev -> tauri dev` until Windows fails with an input-line-length error.
+
+Equivalent full desktop command:
+
+```powershell
 corepack pnpm -C apps/desktop tauri dev
 ```
 
@@ -79,6 +87,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-readiness-
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-safe-metadata.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-pre190-gate.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-heartbeat-only.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-dev-command-no-recursion.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.ps1 -SkipWhenUnavailable
 ```
 
 Every smoke must return JSON with `ok=true` and `token_printed=false`.
@@ -158,7 +168,7 @@ Do not run unsafe actions during this drill.
 1. Start the app:
 
 ```powershell
-corepack pnpm -C apps/desktop tauri dev
+corepack pnpm -C apps/desktop tauri:dev
 ```
 
 2. Verify the window opens.
@@ -177,6 +187,41 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 10. Inspect `.agent/desktop-client/logs/`.
 11. Confirm `token_printed=false`.
 12. Confirm `git status --short` is clean except ignored `.agent/desktop-client/` metadata.
+
+The Goal 188I manual GUI drill found the original dev-command recursion bug. The fixed package scripts are:
+
+- `corepack pnpm -C apps/desktop dev`: Vite only;
+- `corepack pnpm -C apps/desktop tauri:dev`: full Tauri dev app;
+- `corepack pnpm -C apps/desktop tauri dev`: full Tauri dev app through the Tauri CLI.
+
+## Fixture Visual QA
+
+Desktop browser visual QA uses a fixture-only React route:
+
+```text
+http://127.0.0.1:1420/?fixture=desktop-pre190-pass
+```
+
+The fixture renders fixed Pre-190 PASS data and does not call production endpoints, Tauri commands, worker token files or local status bridges. Run:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.ps1 -SkipWhenUnavailable
+```
+
+When Playwright is available, the smoke captures:
+
+```text
+.agent/tmp/desktop-visual-qa/desktop-pre190-pass.png
+.agent/tmp/desktop-visual-qa/manifest.json
+```
+
+The manifest records `fixture_only=true`, `production_endpoint_used=false` and `token_printed=false`. The smoke refuses non-loopback bases, fails on blank pages, missing required text, browser console errors, token-looking rendered text or Authorization-looking content. If Playwright is unavailable and `-SkipWhenUnavailable` is passed, the smoke returns a safe skipped JSON result.
+
+Screenshots are local artifacts. They must not contain real tokens, prompts, raw logs, Authorization headers or secret-bearing pages.
+
+## Optional Local Window Screenshot
+
+A local Tauri window screenshot remains optional/manual. It is not a public CI hard gate. If added or run later, it must capture only the local `SkyBridge Desktop` window, write under `.agent/tmp/`, upload nothing, and avoid `start-one`, `start-all`, worker loops and Goal 190 execution.
 
 ## Bundle Status
 
