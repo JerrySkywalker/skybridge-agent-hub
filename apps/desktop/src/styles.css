@@ -69,22 +69,21 @@ p {
   margin-top: 4px;
 }
 
-.badge {
-  border-radius: 999px;
-  padding: 7px 12px;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
+.mode-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.badge-safe {
-  background: #dff4ea;
-  color: #17543a;
-}
-
-.badge-warn {
-  background: #fff0d6;
-  color: #7b4a00;
+.mode-strip span {
+  border: 1px solid #b9c3c9;
+  background: #eef3f5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .toolbar {
@@ -104,6 +103,44 @@ p {
   border-radius: 8px;
   padding: 18px;
   margin-bottom: 16px;
+}
+
+.readiness {
+  border: 1px solid #d9e0e4;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.topbar .readiness {
+  margin-bottom: 0;
+  min-width: 150px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.readiness-pass {
+  background: #dff4ea;
+  border-color: #8fc7ad;
+  color: #17543a;
+}
+
+.readiness-warn {
+  background: #fff0d6;
+  border-color: #dfb66f;
+  color: #7b4a00;
+}
+
+.readiness-block {
+  background: #ffe4e1;
+  border-color: #e1a09a;
+  color: #8a251f;
+}
+
+.readiness p {
+  color: inherit;
 }
 
 dl {
@@ -140,4 +177,29 @@ dd {
 
 .errors li {
   margin: 6px 0;
+}
+
+@media (max-width: 820px) {
+  body {
+    min-width: 0;
+  }
+
+  .shell {
+    padding: 18px;
+  }
+
+  .topbar,
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mode-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .status-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
 }

@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-06-04 Goal 188I Desktop Readiness Gate
+
+- Hardened the desktop standby status contract with explicit `STANDBY / READ ONLY`, `HEARTBEAT ONLY MUTATION` and `EXECUTION DISABLED` mode fields.
+- Added structured Pre-190 readiness output with PASS/WARN/BLOCK semantics for active tasks, stale leases, `token_printed`, current Goal 190 state and Goal 190 linked task/PR counts.
+- Kept Heartbeat Now as the only mutation and documented it as heartbeat-only.
+- Added desktop readiness documentation and a manual operator drill.
+- Added focused desktop smokes for readiness contract, safe metadata, Pre-190 gate fixtures and heartbeat-only behavior.
+- Fixed Tauri bundle icon configuration and validated that Windows MSI and NSIS bundle generation passes locally.
+- Fixed the desktop dev-command recursion found during manual GUI drill: `pnpm dev` now starts Vite only, while `pnpm tauri:dev` or `pnpm tauri dev` starts the full Tauri app.
+- Added fixture-only desktop visual QA support with local screenshot/manifest artifacts under `.agent/tmp/desktop-visual-qa/`.
+- Goal 190 remains unexecuted; this goal does not run `start-one`, `start-all`, a worker loop or campaign-step task creation.
+
 ## 2026-06-02 Goal 188H Tauri Desktop Client MVP
 
 - Added `apps/desktop`, a Tauri v2, React, TypeScript and Vite desktop app named `@skybridge/desktop` with identifier `space.jerryskywalker.skybridge.desktop`.

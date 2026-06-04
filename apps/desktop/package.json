@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
+    "dev": "vite --host 127.0.0.1 --port 1420",
     "tauri": "tauri",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "build": "tsc -p tsconfig.json && vite build"
+    "build": "tsc -p tsconfig.json && vite build",
+    "tauri:dev": "tauri dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
