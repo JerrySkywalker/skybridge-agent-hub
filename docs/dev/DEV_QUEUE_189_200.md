@@ -259,3 +259,26 @@ See `docs/dev/DESKTOP_CLIENT_MVP.md` for the desktop scope and future roadmap.
 Goal 188I hardens the desktop standby client before Goal 190. The app remains read-only except for the explicitly labeled Heartbeat Now mutation, which only refreshes worker heartbeat. Execution controls stay disabled: no `start-one`, no `start-all`, no worker loop, no campaign-step task creation, no task claim, no desktop PR creation and no Goal 190 execution.
 
 Before Goal 190, run the desktop readiness smokes, desktop frontend build, Rust check and Tauri bundle attempt from clean latest `main`. Goal 188I validated local Windows MSI and NSIS bundle generation after adding the existing `.ico` file to the Tauri bundle icon list. Goal 190 should not proceed until desktop readiness checks pass and the operator explicitly approves the next bounded goal.
+
+## Goal 190 Report And Evidence Ledger
+
+Goal 190 adds a read-only campaign report and evidence ledger. Generate it with:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command report `
+  -Json
+```
+
+The underlying `runner-report` command writes safe ignored artifacts under `.agent/tmp/campaign-reports/`:
+
+```text
+dev-queue-189-200-campaign-report.json
+dev-queue-189-200-campaign-report.md
+```
+
+The report distinguishes current blockers from historical warnings, recovered evidence from missing evidence, and pending future-step evidence from not-applicable evidence. For the current campaign state, Goal 189 is completed/recovered with PR evidence, while Goal 190 is current/ready/unexecuted with no linked task ids and no linked PR URLs.
+
+Desktop and Web queue controls should consume `queue_control_readiness` rather than inferring button state from individual counters. Treat `blockers[]` as disabling, show `warnings[]`, require `required_human_action[]`, and display `next_safe_action` before any future mutating control. Report generation does not complete Goal 190 and must not start Goal 191.
+
+See [CAMPAIGN_REPORT_EVIDENCE_LEDGER.md](CAMPAIGN_REPORT_EVIDENCE_LEDGER.md).

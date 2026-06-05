@@ -12,6 +12,18 @@ Goal 188 adds a bounded campaign runner around the existing campaign pack, step 
 - `runner-report`: writes Markdown or JSON runner reports.
 - `runner-stop`, `runner-hold`, `runner-unlock`: explicit operator controls. Unlock requires `-Apply` and a reason.
 
+Goal 190 expands `runner-report` into a stable read-only campaign report and evidence ledger. The JSON schema is `skybridge.campaign_run_report.v1`; the Markdown report is generated beside it under `.agent/tmp/campaign-reports/`. The report includes campaign summary, current and previous step summaries, step ledger, evidence ledger, PR/CI/finalizer summaries, recovered evidence, missing evidence, hygiene, runner/lock summaries, blockers, warnings, queue-control readiness and acceptance summary. It keeps `token_printed=false` and does not include runtime transcripts, prompt bodies, command output streams, patches or secrets.
+
+Use the dev queue wrapper for the operator-facing read:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 `
+  -Command report `
+  -Json
+```
+
+Later Desktop and Web queue controls should consume `queue_control_readiness`. They must disable controls on `blockers[]`, show historical `warnings[]` separately, require `required_human_action[]` and use `next_safe_action` as the operator-facing guidance.
+
 Mutating commands remain dry-run by default. Use `-Apply` only after status and hygiene checks are clean.
 
 ## State And Locks

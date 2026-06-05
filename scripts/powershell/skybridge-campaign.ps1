@@ -1384,54 +1384,377 @@ function Get-CampaignRunnerStatus {
   }
 }
 
+function ConvertTo-SafeEvidenceStatus {
+  param($Step)
+  if (-not $Step) { return "not_applicable" }
+  if ([string]$Step.status -eq "pending") { return "not_applicable" }
+  if ([string]$Step.status -eq "ready" -and @($Step.linked_task_ids).Count -eq 0 -and @($Step.linked_pr_urls).Count -eq 0) { return "missing" }
+  if ($Step.evidence_summary -and (($Step.evidence_summary | ConvertTo-Json -Depth 20 -Compress) -ne "{}")) {
+    if ($Step.evidence_summary.recovered -eq $true -or [string]$Step.evidence_summary.recovery_status -eq "recovered") { return "recovered" }
+    return "present"
+  }
+  if ([string]$Step.status -in @("completed", "recovered", "failed")) { return "missing" }
+  if ([string]$Step.status -eq "skipped") { return "skipped" }
+  return "not_applicable"
+}
+
+function ConvertTo-SafeStepLedgerEntry {
+  param($Step, [string]$CurrentStepId)
+  $linkedTaskIds = @($Step.linked_task_ids | Where-Object { $_ })
+  $linkedPrUrls = @($Step.linked_pr_urls | Where-Object { $_ })
+  $evidenceStatus = ConvertTo-SafeEvidenceStatus -Step $Step
+  [pscustomobject]@{
+    campaign_step_id = [string]$Step.campaign_step_id
+    goal_id = [string]$Step.goal_id
+    order = [int]$Step.order
+    title = [string]$Step.title
+    status = [string]$Step.status
+    is_current = ([string]$Step.campaign_step_id -eq [string]$CurrentStepId)
+    dependencies = @($Step.dependencies | ForEach-Object { [string]$_ })
+    linked_task_ids = @($linkedTaskIds | ForEach-Object { [string]$_ })
+    linked_pr_urls = @($linkedPrUrls | ForEach-Object { [string]$_ })
+    linked_task_count = $linkedTaskIds.Count
+    linked_pr_count = $linkedPrUrls.Count
+    evidence_status = $evidenceStatus
+    recovered = ($evidenceStatus -eq "recovered")
+    missing_evidence = ($evidenceStatus -eq "missing")
+    skipped_evidence = ($evidenceStatus -eq "skipped")
+    not_applicable_evidence = ($evidenceStatus -eq "not_applicable")
+    operator_action_required = ($evidenceStatus -eq "missing" -and [string]$Step.status -in @("completed", "recovered", "failed"))
+  }
+}
+
+function New-EvidenceLedgerEntry {
+  param(
+    [string]$Kind,
+    [string]$StepId,
+    [string]$GoalId,
+    [string]$EvidenceId,
+    [string]$Status,
+    [string]$Classification,
+    [string]$Summary,
+    [bool]$Recovered = $false,
+    [bool]$Missing = $false,
+    [bool]$Skipped = $false,
+    [bool]$NotApplicable = $false,
+    [bool]$OperatorActionRequired = $false
+  )
+  [pscustomobject]@{
+    kind = $Kind
+    campaign_step_id = $StepId
+    goal_id = $GoalId
+    evidence_id = $EvidenceId
+    status = $Status
+    classification = $Classification
+    recovered = $Recovered
+    missing = $Missing
+    skipped = $Skipped
+    not_applicable = $NotApplicable
+    operator_action_required = $OperatorActionRequired
+    summary = $Summary
+  }
+}
+
+function New-CampaignEvidenceLedger {
+  param([array]$Steps)
+  $entries = New-Object System.Collections.Generic.List[object]
+  foreach ($step in @($Steps | Sort-Object order)) {
+    $stepId = [string]$step.campaign_step_id
+    $goalId = [string]$step.goal_id
+    $stepEvidenceStatus = ConvertTo-SafeEvidenceStatus -Step $step
+    $stepRecovered = ($stepEvidenceStatus -eq "recovered")
+    $stepMissing = ($stepEvidenceStatus -eq "missing")
+    $stepSkipped = ($stepEvidenceStatus -eq "skipped")
+    $stepNa = ($stepEvidenceStatus -eq "not_applicable")
+    $entries.Add((New-EvidenceLedgerEntry -Kind "step" -StepId $stepId -GoalId $goalId -EvidenceId $stepId -Status $stepEvidenceStatus -Classification $(if ($stepMissing) { "missing_evidence" } elseif ($stepRecovered) { "recovered_evidence" } elseif ($stepSkipped) { "skipped_evidence" } elseif ($stepNa) { "not_applicable_evidence" } else { "present_evidence" }) -Recovered $stepRecovered -Missing $stepMissing -Skipped $stepSkipped -NotApplicable $stepNa -OperatorActionRequired ($stepMissing -and [string]$step.status -in @("completed", "recovered", "failed")) -Summary "Campaign step evidence status is $stepEvidenceStatus.")) | Out-Null
+
+    $taskIds = @($step.linked_task_ids | Where-Object { $_ })
+    if ($taskIds.Count -eq 0) {
+      $missing = ([string]$step.status -eq "ready")
+      $entries.Add((New-EvidenceLedgerEntry -Kind "task" -StepId $stepId -GoalId $goalId -EvidenceId "none" -Status $(if ($missing) { "missing" } else { "not_applicable" }) -Classification $(if ($missing) { "missing_evidence" } else { "not_applicable_evidence" }) -Missing $missing -NotApplicable (-not $missing) -Summary $(if ($missing) { "No linked task ids are present for the ready current step." } else { "No task evidence is expected for this step status." }))) | Out-Null
+    } else {
+      foreach ($taskId in $taskIds) {
+        $entries.Add((New-EvidenceLedgerEntry -Kind "task" -StepId $stepId -GoalId $goalId -EvidenceId ([string]$taskId) -Status "present" -Classification $(if ($stepRecovered) { "recovered_evidence" } else { "present_evidence" }) -Recovered $stepRecovered -Summary "Linked task id is present.")) | Out-Null
+      }
+    }
+
+    $prUrls = @($step.linked_pr_urls | Where-Object { $_ })
+    if ($prUrls.Count -eq 0) {
+      $missing = ([string]$step.status -eq "ready")
+      $entries.Add((New-EvidenceLedgerEntry -Kind "pr" -StepId $stepId -GoalId $goalId -EvidenceId "none" -Status $(if ($missing) { "missing" } else { "not_applicable" }) -Classification $(if ($missing) { "missing_evidence" } else { "not_applicable_evidence" }) -Missing $missing -NotApplicable (-not $missing) -Summary $(if ($missing) { "No linked PR URLs are present for the ready current step." } else { "No PR evidence is expected for this step status." }))) | Out-Null
+      $entries.Add((New-EvidenceLedgerEntry -Kind "ci" -StepId $stepId -GoalId $goalId -EvidenceId "none" -Status $(if ($missing) { "missing" } else { "not_applicable" }) -Classification $(if ($missing) { "missing_evidence" } else { "not_applicable_evidence" }) -Missing $missing -NotApplicable (-not $missing) -Summary $(if ($missing) { "No CI evidence exists because there is no linked PR." } else { "CI evidence is not applicable without a linked PR." }))) | Out-Null
+      $entries.Add((New-EvidenceLedgerEntry -Kind "finalizer" -StepId $stepId -GoalId $goalId -EvidenceId "none" -Status $(if ($missing) { "missing" } else { "not_applicable" }) -Classification $(if ($missing) { "missing_evidence" } else { "not_applicable_evidence" }) -Missing $missing -NotApplicable (-not $missing) -Summary $(if ($missing) { "No finalizer evidence exists because no PR was finalized for this step." } else { "Finalizer evidence is not applicable without a linked PR." }))) | Out-Null
+    } else {
+      foreach ($prUrl in $prUrls) {
+        $entries.Add((New-EvidenceLedgerEntry -Kind "pr" -StepId $stepId -GoalId $goalId -EvidenceId ([string]$prUrl) -Status "present" -Classification $(if ($stepRecovered) { "recovered_evidence" } else { "present_evidence" }) -Recovered $stepRecovered -Summary "Linked PR URL is present.")) | Out-Null
+        $ciStatus = if ($step.evidence_summary -and $step.evidence_summary.ci_status) { [string]$step.evidence_summary.ci_status } else { "missing" }
+        $entries.Add((New-EvidenceLedgerEntry -Kind "ci" -StepId $stepId -GoalId $goalId -EvidenceId ([string]$prUrl) -Status $ciStatus -Classification $(if ($ciStatus -eq "missing") { "missing_evidence" } elseif ($stepRecovered) { "recovered_evidence" } else { "present_evidence" }) -Recovered $stepRecovered -Missing ($ciStatus -eq "missing") -OperatorActionRequired ($ciStatus -eq "missing" -and [string]$step.status -in @("completed", "recovered", "failed")) -Summary "CI evidence status is $ciStatus.")) | Out-Null
+        $finalizerStatus = if ($stepRecovered) { "recovered" } elseif ($ciStatus -ne "missing") { "present" } else { "missing" }
+        $entries.Add((New-EvidenceLedgerEntry -Kind "finalizer" -StepId $stepId -GoalId $goalId -EvidenceId ([string]$prUrl) -Status $finalizerStatus -Classification $(if ($finalizerStatus -eq "missing") { "missing_evidence" } elseif ($stepRecovered) { "recovered_evidence" } else { "present_evidence" }) -Recovered $stepRecovered -Missing ($finalizerStatus -eq "missing") -OperatorActionRequired ($finalizerStatus -eq "missing" -and [string]$step.status -in @("completed", "recovered", "failed")) -Summary "Finalizer evidence status is $finalizerStatus.")) | Out-Null
+      }
+    }
+
+    $gateStatus = if ($step.gate_summary -and $step.gate_summary.final_decision) { [string]$step.gate_summary.final_decision } elseif ($step.evidence_summary -and $step.evidence_summary.gate_result) { [string]$step.evidence_summary.gate_result.final_decision } else { "not_applicable" }
+    $entries.Add((New-EvidenceLedgerEntry -Kind "gate" -StepId $stepId -GoalId $goalId -EvidenceId $stepId -Status $gateStatus -Classification $(if ($gateStatus -eq "not_applicable") { "not_applicable_evidence" } else { "present_evidence" }) -NotApplicable ($gateStatus -eq "not_applicable") -Summary "Gate evidence status is $gateStatus.")) | Out-Null
+  }
+  return @($entries.ToArray())
+}
+
+function New-QueueControlReadiness {
+  param($Campaign, $CurrentStep, $Status, $Hygiene, [array]$CurrentBlockers, [array]$Warnings)
+  $activeTasks = if ($Hygiene) { [int]$Hygiene.active_tasks } else { 0 }
+  $staleLeases = if ($Hygiene) { [int]$Hygiene.stale_leases } else { 0 }
+  $projectControl = if ($Hygiene) { [string]$Hygiene.project_control } else { "unknown" }
+  $lockStatus = [string]$Status.runner_lock_status
+  $goalUnexecuted = ($CurrentStep -and @($CurrentStep.linked_task_ids).Count -eq 0 -and @($CurrentStep.linked_pr_urls).Count -eq 0)
+  $blockers = @($CurrentBlockers | Where-Object { $_ } | Select-Object -Unique)
+  $requiredHuman = @()
+  if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
+  $canStart = ($blockers.Count -eq 0 -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $lockStatus -in @("none", "released") -and [string]$CurrentStep.status -eq "ready" -and $goalUnexecuted)
+  [pscustomobject]@{
+    can_start_one = $canStart
+    can_start_queue = $false
+    can_pause = ($projectControl -ne "paused")
+    can_stop = $true
+    can_emergency_stop = $true
+    can_resume = ($projectControl -eq "paused" -and $lockStatus -in @("none", "released") -and $activeTasks -eq 0 -and $staleLeases -eq 0)
+    blockers = @($blockers)
+    warnings = @($Warnings | Where-Object { $_ } | Select-Object -Unique)
+    required_human_action = @($requiredHuman)
+    next_safe_action = if ($canStart) { "Generate and review this report artifact; after merge, a human may separately approve attaching Goal 190 evidence and completing the step. Do not start Goal 191 from this report." } elseif ($blockers.Count -gt 0) { "Resolve current blockers before any queue control action." } else { "Keep campaign paused and inspect warnings before any execution control." }
+    worker_required = $true
+    worker_status = "unknown"
+    run_budget_required = $true
+    reason_required = $true
+  }
+}
+
+function ConvertTo-CampaignReportMarkdown {
+  param($Report)
+  $lines = New-Object System.Collections.Generic.List[string]
+  $lines.Add("# Campaign Runner Report") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Campaign Summary") | Out-Null
+  $lines.Add("- Campaign: $($Report.campaign_id)") | Out-Null
+  $lines.Add("- Project: $($Report.project_id)") | Out-Null
+  $lines.Add("- Status: $($Report.campaign_status)") | Out-Null
+  $lines.Add("- Current step: $($Report.current_step_id)") | Out-Null
+  $lines.Add("- Current goal: $($Report.current_goal_id)") | Out-Null
+  $lines.Add("- Current goal status: $($Report.current_goal_status)") | Out-Null
+  $lines.Add("- Current goal unexecuted: $($Report.current_goal_unexecuted)") | Out-Null
+  $lines.Add("- Token printed: false") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Current Step") | Out-Null
+  $lines.Add("- Goal: $($Report.current_step_summary.goal_id)") | Out-Null
+  $lines.Add("- Status: $($Report.current_step_summary.status)") | Out-Null
+  $lines.Add("- Linked task ids: $(@($Report.current_step_summary.linked_task_ids) -join ', ')") | Out-Null
+  $lines.Add("- Linked PR URLs: $(@($Report.current_step_summary.linked_pr_urls) -join ', ')") | Out-Null
+  $lines.Add("- Evidence status: $($Report.current_step_summary.evidence_status)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Previous Step") | Out-Null
+  if ($Report.previous_step_summary) {
+    $lines.Add("- Goal: $($Report.previous_step_summary.goal_id)") | Out-Null
+    $lines.Add("- Status: $($Report.previous_step_summary.status)") | Out-Null
+    $lines.Add("- Recovered: $($Report.previous_step_summary.recovered)") | Out-Null
+    $lines.Add("- Linked task ids: $(@($Report.previous_step_summary.linked_task_ids) -join ', ')") | Out-Null
+    $lines.Add("- Linked PR URLs: $(@($Report.previous_step_summary.linked_pr_urls) -join ', ')") | Out-Null
+  } else {
+    $lines.Add("- none") | Out-Null
+  }
+  $lines.Add("") | Out-Null
+  $lines.Add("## Step Ledger") | Out-Null
+  $lines.Add("| Order | Goal | Status | Evidence | Tasks | PRs | Current |") | Out-Null
+  $lines.Add("| --- | --- | --- | --- | ---: | ---: | --- |") | Out-Null
+  foreach ($step in @($Report.step_ledger | Sort-Object order)) {
+    $lines.Add("| $($step.order) | $($step.goal_id) | $($step.status) | $($step.evidence_status) | $($step.linked_task_count) | $($step.linked_pr_count) | $($step.is_current) |") | Out-Null
+  }
+  $lines.Add("") | Out-Null
+  $lines.Add("## Evidence Ledger") | Out-Null
+  $lines.Add("| Kind | Goal | Status | Classification | Summary |") | Out-Null
+  $lines.Add("| --- | --- | --- | --- | --- |") | Out-Null
+  foreach ($entry in @($Report.evidence_ledger.all | Select-Object -First 80)) {
+    $summary = ([string]$entry.summary).Replace("|", "/")
+    $lines.Add("| $($entry.kind) | $($entry.goal_id) | $($entry.status) | $($entry.classification) | $summary |") | Out-Null
+  }
+  $lines.Add("") | Out-Null
+  $lines.Add("## PR/CI Summary") | Out-Null
+  $lines.Add("- PR evidence entries: $(@($Report.evidence_ledger.pr).Count)") | Out-Null
+  $lines.Add("- CI evidence entries: $(@($Report.evidence_ledger.ci).Count)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Finalizer Summary") | Out-Null
+  $lines.Add("- Finalizer evidence entries: $(@($Report.evidence_ledger.finalizer).Count)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Recovery Summary") | Out-Null
+  $lines.Add("- Recovered evidence entries: $(@($Report.recovery_ledger).Count)") | Out-Null
+  foreach ($entry in @($Report.recovery_ledger | Select-Object -First 20)) {
+    $lines.Add("- $($entry.goal_id): $($entry.kind) $($entry.status)") | Out-Null
+  }
+  $lines.Add("") | Out-Null
+  $lines.Add("## Hygiene Summary") | Out-Null
+  $lines.Add("- Active tasks: $($Report.hygiene_summary.active_tasks)") | Out-Null
+  $lines.Add("- Stale leases: $($Report.hygiene_summary.stale_leases)") | Out-Null
+  $lines.Add("- Historical blocked tasks: $($Report.hygiene_summary.historical_blocked_tasks)") | Out-Null
+  $lines.Add("- Failed unrecovered tasks: $($Report.hygiene_summary.failed_unrecovered_tasks)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Queue Control Readiness") | Out-Null
+  $lines.Add("- can_start_one: $($Report.queue_control_readiness.can_start_one)") | Out-Null
+  $lines.Add("- can_start_queue: $($Report.queue_control_readiness.can_start_queue)") | Out-Null
+  $lines.Add("- can_pause: $($Report.queue_control_readiness.can_pause)") | Out-Null
+  $lines.Add("- can_stop: $($Report.queue_control_readiness.can_stop)") | Out-Null
+  $lines.Add("- can_emergency_stop: $($Report.queue_control_readiness.can_emergency_stop)") | Out-Null
+  $lines.Add("- can_resume: $($Report.queue_control_readiness.can_resume)") | Out-Null
+  $lines.Add("- next_safe_action: $($Report.queue_control_readiness.next_safe_action)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Blockers And Warnings") | Out-Null
+  $lines.Add("- Current blockers: $(@($Report.blockers) -join ', ')") | Out-Null
+  $lines.Add("- Warnings: $(@($Report.warnings) -join ', ')") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Acceptance Summary") | Out-Null
+  $lines.Add("- Git clean: $($Report.acceptance_summary.git_clean)") | Out-Null
+  $lines.Add("- Active tasks zero: $($Report.acceptance_summary.active_tasks_zero)") | Out-Null
+  $lines.Add("- Stale leases zero: $($Report.acceptance_summary.stale_leases_zero)") | Out-Null
+  $lines.Add("- Goal 189 recovered: $($Report.acceptance_summary.goal_189_recovered)") | Out-Null
+  $lines.Add("- Goal 190 current ready unexecuted: $($Report.acceptance_summary.goal_190_current_ready_unexecuted)") | Out-Null
+  $lines.Add("- Token printed: false") | Out-Null
+  return ($lines -join "`r`n")
+}
+
 function Export-CampaignRunnerReport {
   $status = Get-CampaignRunnerStatus
-  $markdown = @"
-# Campaign Runner Report
-
-- Campaign: $CampaignId
-- Project: $ProjectId
-- Runner status: $($status.runner_state.runner_status)
-- Runner state classification: $($status.runner_state_classification)
-- Current step: $($status.current_step_id)
-- Runner state step: $($status.runner_state.current_step_id)
-- Lock status: $($status.runner_lock_status)
-- Stop reason: $($status.runner_state.hold_reason)
-- Action hint: $($status.runner_state_action_hint)
-- Token printed: false
-
-## Approval Scope
-
-````json
-$($status.runner_state.operator_approval_scope | ConvertTo-Json -Depth 20)
-````
-
-## Audit Log
-
-````json
-$($status.runner_state.audit_log | ConvertTo-Json -Depth 40)
-````
-"@
-  $jsonReport = [pscustomobject]@{ ok = $true; token_printed = $false; status = $status; markdown = $markdown }
-  if ($OutputFile) {
-    $dir = Split-Path -Parent $OutputFile
-    if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    if ($OutputFile -like "*.md") { $markdown | Set-Content -LiteralPath $OutputFile -Encoding UTF8 }
-    else { $jsonReport | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $OutputFile -Encoding UTF8 }
+  $snapshot = Get-CampaignRunnerSnapshot
+  $hygiene = Get-CampaignRunnerHygiene
+  $git = Get-GitMetadata
+  $steps = @($snapshot.steps | Sort-Object order)
+  $campaign = $snapshot.campaign
+  $currentStep = @($steps | Where-Object { [string]$_.campaign_step_id -eq [string]$campaign.current_step_id } | Select-Object -First 1)[0]
+  $previousStep = if ($currentStep) { @($steps | Where-Object { [int]$_.order -lt [int]$currentStep.order } | Sort-Object order -Descending | Select-Object -First 1)[0] } else { $null }
+  $stepLedger = @($steps | ForEach-Object { ConvertTo-SafeStepLedgerEntry -Step $_ -CurrentStepId $campaign.current_step_id })
+  $evidenceEntries = @(New-CampaignEvidenceLedger -Steps $steps)
+  $currentBlockers = @()
+  if ([int]$hygiene.active_tasks -gt 0) { $currentBlockers += "active_tasks_present" }
+  if ([int]$hygiene.stale_leases -gt 0) { $currentBlockers += "stale_leases_present" }
+  if ([bool]$git.dirty) { $currentBlockers += "worktree_dirty" }
+  if ([string]$status.runner_lock_status -eq "stale") { $currentBlockers += "stale_runner_lock" }
+  if ([string]$status.runner_state_classification -eq "current_blocker") { $currentBlockers += "current_runner_state_$($status.runner_state.runner_status)" }
+  $warnings = @()
+  if ([string]$status.runner_state_classification -eq "historical_warning") { $warnings += "historical_runner_state" }
+  if ($hygiene.raw -and $hygiene.raw.hygiene_summary) {
+    if ([int]$hygiene.raw.hygiene_summary.historical_blocked_tasks -gt 0) { $warnings += "historical_blocked_tasks_present" }
+    if ([int]$hygiene.raw.hygiene_summary.failed_unrecovered_tasks -gt 0) { $warnings += "failed_unrecovered_tasks_present_historical_or_not_current" }
+    if ([int]$hygiene.raw.hygiene_summary.approved_unconverted_proposals -gt 0) { $warnings += "approved_unconverted_proposals_present" }
   }
-  [pscustomobject]@{
+  $currentSummary = @($stepLedger | Where-Object { $_.is_current } | Select-Object -First 1)[0]
+  $previousSummary = if ($previousStep) { @($stepLedger | Where-Object { $_.campaign_step_id -eq [string]$previousStep.campaign_step_id } | Select-Object -First 1)[0] } else { $null }
+  $goal190Unexecuted = ($currentStep -and [string]$currentStep.goal_id -eq "super-190-campaign-run-report-evidence-ledger" -and @($currentStep.linked_task_ids).Count -eq 0 -and @($currentStep.linked_pr_urls).Count -eq 0)
+  $queueReadiness = New-QueueControlReadiness -Campaign $campaign -CurrentStep $currentStep -Status $status -Hygiene $hygiene -CurrentBlockers $currentBlockers -Warnings $warnings
+  $safeHygieneSummary = if ($hygiene.raw -and $hygiene.raw.hygiene_summary) { $hygiene.raw.hygiene_summary } else { [pscustomobject]@{ active_tasks = [int]$hygiene.active_tasks; stale_leases = [int]$hygiene.stale_leases; historical_blocked_tasks = 0; failed_unrecovered_tasks = 0 } }
+  $report = [pscustomobject]@{
+    schema = "skybridge.campaign_run_report.v1"
+    generated_at = (Get-Date).ToUniversalTime().ToString("o")
+    ok = $true
+    project_id = [string]$campaign.project_id
+    campaign_id = [string]$campaign.campaign_id
+    campaign_status = [string]$campaign.status
+    current_step_id = [string]$campaign.current_step_id
+    current_goal_id = if ($currentStep) { [string]$currentStep.goal_id } else { $null }
+    current_goal_status = if ($currentStep) { [string]$currentStep.status } else { $null }
+    current_goal_unexecuted = [bool]$goal190Unexecuted
+    campaign_summary = [pscustomobject]@{
+      campaign_id = [string]$campaign.campaign_id
+      project_id = [string]$campaign.project_id
+      title = [string]$campaign.title
+      status = [string]$campaign.status
+      current_step_id = [string]$campaign.current_step_id
+      step_count = $steps.Count
+      source = [string]$campaign.source
+      goal_pack_hash = [string]$campaign.goal_pack_hash
+    }
+    current_step_summary = $currentSummary
+    previous_step_summary = $previousSummary
+    step_ledger = @($stepLedger)
+    evidence_ledger = [pscustomobject]@{
+      all = @($evidenceEntries)
+      task = @($evidenceEntries | Where-Object { $_.kind -eq "task" })
+      pr = @($evidenceEntries | Where-Object { $_.kind -eq "pr" })
+      ci = @($evidenceEntries | Where-Object { $_.kind -eq "ci" })
+      finalizer = @($evidenceEntries | Where-Object { $_.kind -eq "finalizer" })
+      gate = @($evidenceEntries | Where-Object { $_.kind -eq "gate" })
+      missing = @($evidenceEntries | Where-Object { $_.missing })
+      recovered = @($evidenceEntries | Where-Object { $_.recovered })
+      skipped = @($evidenceEntries | Where-Object { $_.skipped })
+      not_applicable = @($evidenceEntries | Where-Object { $_.not_applicable })
+    }
+    recovery_ledger = @($evidenceEntries | Where-Object { $_.recovered })
+    hygiene_summary = $safeHygieneSummary
+    runner_state_summary = [pscustomobject]@{
+      status = if ($status.runner_state) { [string]$status.runner_state.runner_status } else { "none" }
+      classification = [string]$status.runner_state_classification
+      historical_runner_state = [bool]$status.historical_runner_state
+      current_step_id = [string]$status.current_step_id
+      runner_state_step_id = if ($status.runner_state) { [string]$status.runner_state.current_step_id } else { $null }
+      action_hint = [string]$status.runner_state_action_hint
+    }
+    lock_summary = [pscustomobject]@{
+      runner_lock_status = [string]$status.runner_lock_status
+      has_runner_lock = ($null -ne $status.runner_lock)
+    }
+    blocker_summary = [pscustomobject]@{
+      current = @($currentBlockers | Select-Object -Unique)
+      historical = @($warnings | Where-Object { $_ -match "historical" })
+      operator_action_required = @($evidenceEntries | Where-Object { $_.operator_action_required } | ForEach-Object { "$($_.kind):$($_.goal_id)" } | Select-Object -Unique)
+    }
+    warning_summary = [pscustomobject]@{
+      historical = @($warnings | Where-Object { $_ -match "historical" })
+      current = @($warnings | Where-Object { $_ -notmatch "historical" })
+    }
+    queue_control_readiness = $queueReadiness
+    blockers = @($currentBlockers | Select-Object -Unique)
+    warnings = @($warnings | Select-Object -Unique)
+    acceptance_summary = [pscustomobject]@{
+      git_clean = (-not [bool]$git.dirty)
+      active_tasks_zero = ([int]$hygiene.active_tasks -eq 0)
+      stale_leases_zero = ([int]$hygiene.stale_leases -eq 0)
+      runner_lock_none = ([string]$status.runner_lock_status -in @("none", "released"))
+      project_paused = ([string]$hygiene.project_control -eq "paused")
+      goal_189_completed = ($previousStep -and [string]$previousStep.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" -and [string]$previousStep.status -eq "completed")
+      goal_189_recovered = ($previousStep -and [string]$previousStep.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" -and ($previousStep.evidence_summary.recovered -eq $true -or [string]$previousStep.evidence_summary.recovery_status -eq "recovered"))
+      goal_190_current_ready_unexecuted = [bool]$goal190Unexecuted
+      token_printed = $false
+    }
+    artifact_summary = [pscustomobject]@{
+      safe_to_paste = @("JSON report", "Markdown report")
+      local_only = @("worker runtime logs", "Codex runtime logs", "command output streams", "prompt transcripts", "token files")
+    }
+    artifact_paths = @()
+    token_printed = $false
+  }
+  $markdown = ConvertTo-CampaignReportMarkdown -Report $report
+  $defaultDir = Join-Path ".agent" (Join-Path "tmp" "campaign-reports")
+  $baseName = "$($campaign.campaign_id)-campaign-report"
+  $jsonPath = if ($OutputFile -and $OutputFile -notlike "*.md") { $OutputFile } else { Join-Path $defaultDir "$baseName.json" }
+  $markdownPath = if ($OutputFile -and $OutputFile -like "*.md") { $OutputFile } else { Join-Path $defaultDir "$baseName.md" }
+  foreach ($path in @($jsonPath, $markdownPath)) {
+    $dir = Split-Path -Parent $path
+    if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  }
+  $report.artifact_paths = @([string]$jsonPath, [string]$markdownPath)
+  $report | Add-Member -NotePropertyName markdown -NotePropertyValue $markdown -Force
+  $report | Add-Member -NotePropertyName status -NotePropertyValue $status -Force
+  $report | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+  $markdown | Set-Content -LiteralPath $markdownPath -Encoding UTF8
+  [pscustomObject]@{
     ok = $true
     command = $Command
     mode = "read"
     project_id = $ProjectId
     token_printed = $false
-    report = $jsonReport
+    report = $report
   }
 }
 
 function Write-CampaignResult {
   param($Result)
-  if ($OutputFile) {
+  if ($OutputFile -and [string]$Result.command -ne "runner-report") {
     $dir = Split-Path -Parent $OutputFile
     if ($dir) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     $Result | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $OutputFile -Encoding UTF8
