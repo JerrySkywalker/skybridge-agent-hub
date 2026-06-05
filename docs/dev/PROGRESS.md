@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-06-05 Goal 191E Desktop Async Refresh and Nonblocking Bridge Hardening
+
+- Moved Desktop status refresh into an async Tauri command and made tray refresh fire the bridge work on a background task.
+- Split status, campaign, worker and report bridge outcomes into structured warning records with bounded timeouts.
+- Preserved cached report snapshots when fresh report generation fails, including cached age and safe summary generation from the cached snapshot.
+- Updated Desktop UI refresh generation tracking so overlapping refreshes ignore stale responses and the last known report remains visible while refresh is pending.
+- Replaced the post-Goal-190 primary banner with Queue Readiness / Operator Readiness and hid Goal 190-specific link counters unless Goal 190 is current.
+- Hardened Open report to only open ignored `.agent/tmp/campaign-reports/` artifacts without a blocking refresh, and kept Copy safe summary snapshot-only with secret-pattern guarding.
+- Added focused async refresh, timeout, open-report, no-Pre-190 and cached-summary smokes plus fixture visual QA timeout-warning coverage.
+- Goal 191E does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or campaign state mutation.
+
 ## 2026-06-05 Goal 191D Unified Queue Dashboard Foundation
 
 - Added a shared typed `skybridge.campaign_run_report.v1` consumer in `@skybridge-agent-hub/client`, including evidence counts and a safe summary payload.

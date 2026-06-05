@@ -13,6 +13,8 @@ const requiredText = [
   "Read-only Queue Dashboard",
   "STANDBY / READ ONLY",
   "EXECUTION DISABLED",
+  "Queue Readiness",
+  "Operator Readiness",
   "super-191-readonly-operator-dashboard",
   "Queue Control Readiness",
   "worker_offline",
@@ -22,6 +24,9 @@ const requiredText = [
   "Stale leases",
   "Token printed",
   "false",
+  "Bridge Warnings",
+  "worker_status",
+  "status bridge command timed out after 30s",
 ];
 
 const args = new Set(process.argv.slice(2));

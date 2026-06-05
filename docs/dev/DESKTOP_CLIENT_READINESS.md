@@ -1,6 +1,20 @@
-# Desktop Client Readiness Before Goal 190
+# Desktop Client Readiness
 
 SkyBridge Desktop is a standby operator tool. It is not an execution surface.
+
+## Goal 191E Async Refresh
+
+Goal 191E changes the resident queue dashboard from a blocking refresh flow to an async snapshot flow.
+
+- Refresh sets a busy message immediately and keeps the last known good report visible.
+- Status, campaign, worker and report bridge calls are isolated with bounded timeouts.
+- A slow or timed-out status bridge creates a structured Bridge Warning instead of blanking the dashboard.
+- Report data remains usable when status fails. If report generation fails and an ignored cached JSON report exists under `.agent/tmp/campaign-reports/`, Desktop shows the cached report with its age.
+- Overlapping refreshes use a generation/request id; older responses are ignored and cannot overwrite newer state.
+- Open report opens only `.agent/tmp/campaign-reports/dev-queue-189-200-campaign-report.md` and does not trigger a full blocking refresh first.
+- Copy safe summary uses the current cached snapshot and never waits for a slow refresh.
+
+For Goal 191 and later, the primary status label is `Queue Readiness` / `Operator Readiness`, not `Pre-190`. Goal 190-specific linked task/PR counters are shown only when Goal 190 is current.
 
 ## Readiness Levels
 
@@ -81,6 +95,12 @@ corepack pnpm -C apps/desktop tauri build
 Run:
 
 ```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-refresh-nonblocking.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-async-bridge-contract.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-status-timeout-nonfatal.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-no-pre190-after-goal191.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-open-report-safe-path.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-safe-summary-cached.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-package.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-tauri-config.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-readonly-bridge.ps1
@@ -95,9 +115,9 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.
 
 Every smoke must return JSON with `ok=true` and `token_printed=false`.
 
-## Pre-190 Readiness
+## Legacy Pre-190 Readiness
 
-The panel shows PASS only when:
+The Pre-190 gate is legacy readiness for the period before Goal 190 execution. It must not be used as the primary banner once the campaign current goal is Goal 191 or later. The legacy gate shows PASS only when:
 
 - active tasks are `0`;
 - stale leases are `0`;
@@ -176,19 +196,21 @@ corepack pnpm -C apps/desktop tauri:dev
 2. Verify the window opens.
 3. Verify tray items: Open SkyBridge, Refresh Status, Open Logs, Quit.
 4. Verify the mode strip shows `STANDBY / READ ONLY`, `HEARTBEAT ONLY MUTATION` and `EXECUTION DISABLED`.
-5. Verify campaign, safety gate and Pre-190 readiness fields.
-6. Click Refresh Status.
-7. Click Heartbeat Now (heartbeat-only).
-8. Confirm no task was created, no task was claimed, no PR was created, no worker loop started, and Goal 190 remains unexecuted:
+5. Verify campaign, safety gate and Operator Readiness fields.
+6. Click Refresh repeatedly and verify the window remains responsive while the status message changes immediately.
+7. If a status/report bridge times out, verify Bridge Warnings shows a warning and the cached report remains visible.
+8. Click Open report and verify only the ignored `.agent/tmp/campaign-reports/` Markdown artifact is opened.
+9. Click Copy safe summary and verify the copied JSON has `token_printed=false` and no raw logs, prompts, stdout/stderr, Authorization headers or token-looking values.
+10. Confirm no task was created, no task was claimed, no PR was created, no worker loop started, and campaign state remains unchanged:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command preflight -Json
 ```
 
-9. Inspect `.agent/desktop-client/status.json`.
-10. Inspect `.agent/desktop-client/logs/`.
-11. Confirm `token_printed=false`.
-12. Confirm `git status --short` is clean except ignored `.agent/desktop-client/` metadata.
+11. Inspect `.agent/desktop-client/status.json`.
+12. Inspect `.agent/desktop-client/logs/`.
+13. Confirm `token_printed=false`.
+14. Confirm `git status --short` is clean except ignored `.agent/desktop-client/` metadata.
 
 The Goal 188I manual GUI drill found the original dev-command recursion bug. The fixed package scripts are:
 
@@ -204,7 +226,7 @@ Desktop browser visual QA uses a fixture-only React route:
 http://127.0.0.1:1420/?fixture=desktop-queue-dashboard
 ```
 
-The fixture renders fixed queue-dashboard data and does not call production endpoints, Tauri commands, worker token files or local status bridges. Run:
+The fixture renders fixed queue-dashboard data, including an async timeout warning state, and does not call production endpoints, Tauri commands, worker token files or local status bridges. Run:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.ps1 -SkipWhenUnavailable
