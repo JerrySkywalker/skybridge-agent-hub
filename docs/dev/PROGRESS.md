@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-06-05 Goal 190 Campaign Run Report and Evidence Ledger
+
+- Added a read-only `skybridge.campaign_run_report.v1` report contract to `skybridge-campaign.ps1 runner-report`, with JSON and Markdown artifacts under ignored `.agent/tmp/campaign-reports/`.
+- Added step, task, PR, CI, finalizer, gate, recovery, hygiene, runner, lock, blocker, warning, queue-control readiness and acceptance summaries.
+- Kept `skybridge-dev-queue-control.ps1 -Command report -Json` compatible while returning the richer report object.
+- Added focused campaign report smokes for schema, Markdown headings, evidence ledger, recovered Goal 189 evidence, current Goal 190 state, queue-control readiness and no-secret output.
+- Goal 190 remains current/ready/unexecuted; this implementation does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or Goal 191.
+
 ## 2026-06-04 Goal 188I Desktop Readiness Gate
 
 - Hardened the desktop standby status contract with explicit `STANDBY / READ ONLY`, `HEARTBEAT ONLY MUTATION` and `EXECUTION DISABLED` mode fields.

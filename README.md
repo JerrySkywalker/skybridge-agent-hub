@@ -237,6 +237,8 @@ For one-shot operator work, use `skybridge-guide.ps1` for the guided status -> s
 
 Master goal planning is documented in [docs/orchestrator/MASTER_GOAL_PLANNER.md](docs/orchestrator/MASTER_GOAL_PLANNER.md). Use `skybridge-plan.ps1` to generate reviewable task proposals from a high-level goal, then `skybridge-proposal.ps1` to review, accept and convert proposals into normal queued tasks. Hermes preview operators should prefer `skybridge-hermes-preview.ps1` and the direct API runbook in [docs/operations/HERMES_DIRECT_API.md](docs/operations/HERMES_DIRECT_API.md).
 
+Campaign run reports and the safe evidence ledger are documented in [docs/dev/CAMPAIGN_REPORT_EVIDENCE_LEDGER.md](docs/dev/CAMPAIGN_REPORT_EVIDENCE_LEDGER.md). Use `skybridge-dev-queue-control.ps1 -Command report -Json` for the current `dev-queue-189-200` report; generated JSON and Markdown artifacts stay under ignored `.agent/tmp/campaign-reports/`.
+
 The bounded self-bootstrap supervisor is documented in [docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md](docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md). Use `skybridge-supervise.ps1` to preview or apply one safe plan -> proposal -> convert -> run-once round with explicit limits; it is dry-run by default and does not start a long-running worker loop.
 
 Validate the local cloud-control-plane foundations:
