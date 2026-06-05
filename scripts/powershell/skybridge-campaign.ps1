@@ -1673,7 +1673,8 @@ function Export-CampaignRunnerReport {
   }
   $currentSummary = @($stepLedger | Where-Object { $_.is_current } | Select-Object -First 1)[0]
   $previousSummary = if ($previousStep) { @($stepLedger | Where-Object { $_.campaign_step_id -eq [string]$previousStep.campaign_step_id } | Select-Object -First 1)[0] } else { $null }
-  $goal190Unexecuted = ($currentStep -and [string]$currentStep.goal_id -eq "super-190-campaign-run-report-evidence-ledger" -and @($currentStep.linked_task_ids).Count -eq 0 -and @($currentStep.linked_pr_urls).Count -eq 0)
+  $currentGoalUnexecuted = ($currentStep -and @($currentStep.linked_task_ids).Count -eq 0 -and @($currentStep.linked_pr_urls).Count -eq 0)
+  $goal190Unexecuted = ($currentStep -and [string]$currentStep.goal_id -eq "super-190-campaign-run-report-evidence-ledger" -and $currentGoalUnexecuted)
   $queueReadiness = New-QueueControlReadiness -Campaign $campaign -CurrentStep $currentStep -Status $status -Hygiene $hygiene -CurrentBlockers $currentBlockers -Warnings $warnings
   $safeHygieneSummary = if ($hygiene.raw -and $hygiene.raw.hygiene_summary) { $hygiene.raw.hygiene_summary } else { [pscustomobject]@{ active_tasks = [int]$hygiene.active_tasks; stale_leases = [int]$hygiene.stale_leases; historical_blocked_tasks = 0; failed_unrecovered_tasks = 0 } }
   $report = [pscustomobject]@{
@@ -1686,7 +1687,7 @@ function Export-CampaignRunnerReport {
     current_step_id = [string]$campaign.current_step_id
     current_goal_id = if ($currentStep) { [string]$currentStep.goal_id } else { $null }
     current_goal_status = if ($currentStep) { [string]$currentStep.status } else { $null }
-    current_goal_unexecuted = [bool]$goal190Unexecuted
+    current_goal_unexecuted = [bool]$currentGoalUnexecuted
     campaign_summary = [pscustomobject]@{
       campaign_id = [string]$campaign.campaign_id
       project_id = [string]$campaign.project_id

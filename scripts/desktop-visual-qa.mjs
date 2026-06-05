@@ -4,17 +4,19 @@ import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const artifactDir = path.join(repoRoot, ".agent", "tmp", "desktop-visual-qa");
-const screenshotPath = path.join(artifactDir, "desktop-pre190-pass.png");
+const screenshotPath = path.join(artifactDir, "desktop-queue-dashboard.png");
 const manifestPath = path.join(artifactDir, "manifest.json");
 const scenario = "desktop-visual-qa";
 const token_printed = false;
 const requiredText = [
   "SkyBridge Desktop",
-  "Pre-190 PASS",
+  "Read-only Queue Dashboard",
   "STANDBY / READ ONLY",
-  "HEARTBEAT ONLY MUTATION",
   "EXECUTION DISABLED",
-  "super-190-campaign-run-report-evidence-ledger",
+  "super-191-readonly-operator-dashboard",
+  "Queue Control Readiness",
+  "worker_offline",
+  "Verify or register an online worker",
   "Active tasks",
   "0",
   "Stale leases",
@@ -27,7 +29,7 @@ const requirePlaywright = args.has("--require-playwright");
 const skipWhenUnavailable = args.has("--skip-when-unavailable");
 const webBase = readArg("--web-base") ?? "http://127.0.0.1:1420";
 const origin = new URL(webBase).origin;
-const targetUrl = `${origin}/?fixture=desktop-pre190-pass`;
+const targetUrl = `${origin}/?fixture=desktop-queue-dashboard`;
 let serverProcess = null;
 
 function readArg(name) {

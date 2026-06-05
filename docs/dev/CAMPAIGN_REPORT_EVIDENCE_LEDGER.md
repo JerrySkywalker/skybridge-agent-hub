@@ -92,6 +92,8 @@ Desktop/Web controls must treat `blockers[]` as disabling. Historical warnings c
 
 Start controls must also require worker readiness. When `worker_required=true`, Desktop/Web controls must keep `start-one`, `start-queue` and apply-mode resume disabled unless `worker_status` is `online` or `ready`. Values such as `unknown`, `offline`, `stale` or `missing` are execution blockers and should surface `verify_worker_online_before_execution` before any start action. `can_stop` and `can_emergency_stop` can remain enabled because they are conservative no-regret controls.
 
+Goal 191D adds the first shared dashboard consumer for this contract. Web and Desktop use the same typed model, evidence count helper and safe summary builder from `@skybridge-agent-hub/client`. Dashboard rendering is read-only: `queue_control_readiness` may be displayed, but active queue mutations are deferred to Goal 192A/192B.
+
 ## Current Goal 190 State
 
 During Goal 190 implementation, the campaign remains:

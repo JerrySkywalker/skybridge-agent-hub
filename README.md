@@ -239,6 +239,8 @@ Master goal planning is documented in [docs/orchestrator/MASTER_GOAL_PLANNER.md]
 
 Campaign run reports and the safe evidence ledger are documented in [docs/dev/CAMPAIGN_REPORT_EVIDENCE_LEDGER.md](docs/dev/CAMPAIGN_REPORT_EVIDENCE_LEDGER.md). Use `skybridge-dev-queue-control.ps1 -Command report -Json` for the current `dev-queue-189-200` report; generated JSON and Markdown artifacts stay under ignored `.agent/tmp/campaign-reports/`.
 
+The shared read-only Desktop/Web queue dashboard foundation is documented in [docs/dev/UNIFIED_QUEUE_DASHBOARD.md](docs/dev/UNIFIED_QUEUE_DASHBOARD.md). It consumes the same report contract and keeps execution controls disabled until later Goal 192 work.
+
 The bounded self-bootstrap supervisor is documented in [docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md](docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md). Use `skybridge-supervise.ps1` to preview or apply one safe plan -> proposal -> convert -> run-once round with explicit limits; it is dry-run by default and does not start a long-running worker loop.
 
 Validate the local cloud-control-plane foundations:

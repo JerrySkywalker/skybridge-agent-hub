@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-06-05 Goal 191D Unified Queue Dashboard Foundation
+
+- Added a shared typed `skybridge.campaign_run_report.v1` consumer in `@skybridge-agent-hub/client`, including evidence counts and a safe summary payload.
+- Added a read-only Web Campaign Queue route that displays campaign state, Goal 190/191 state, evidence counts, worker readiness, blockers, warnings, `next_safe_action` and disabled future-control placeholders.
+- Upgraded SkyBridge Desktop with a read-only Queue Dashboard section, report artifact opening and copy-safe-summary support while keeping execution controls out of scope.
+- Added fixture-only Web/Desktop visual QA coverage and focused no-mutation/safe-summary smokes.
+- Goal 191D does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or campaign state mutation.
+
 ## 2026-06-05 Goal 190 Campaign Run Report and Evidence Ledger
 
 - Added a read-only `skybridge.campaign_run_report.v1` report contract to `skybridge-campaign.ps1 runner-report`, with JSON and Markdown artifacts under ignored `.agent/tmp/campaign-reports/`.

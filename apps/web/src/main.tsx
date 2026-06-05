@@ -15,6 +15,10 @@ import {
   SkyBridgeClient,
   type AutoMergeSummary,
   type AuditEntry,
+  type CampaignRunReport,
+  createCampaignSafeSummary,
+  fixtureCampaignRunReport,
+  summarizeCampaignEvidence,
   type HermesSummary,
   type IterationsSummary,
   type NotificationsSummary,
@@ -38,6 +42,7 @@ type Route =
   | "overview"
   | "runs"
   | "iterations"
+  | "campaign-queue"
   | "goals"
   | "workers"
   | "tasks"
@@ -53,6 +58,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "overview", label: "Overview" },
   { route: "runs", label: "Runs" },
   { route: "iterations", label: "Iterations" },
+  { route: "campaign-queue", label: "Campaign Queue" },
   { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
   { route: "tasks", label: "Task Queue" },
@@ -127,6 +133,7 @@ function App() {
           />
         ) : null}
         {route === "iterations" ? <IterationsPage apiBase={apiBase} /> : null}
+        {route === "campaign-queue" ? <CampaignQueuePage /> : null}
         {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
@@ -258,6 +265,246 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
         </aside>
       </section>
       {data.error ? <p className="skybridge-error">{data.error}</p> : null}
+    </div>
+  );
+}
+
+function CampaignQueuePage() {
+  const report = fixtureCampaignRunReport;
+  const evidence = summarizeCampaignEvidence(report);
+  const readiness = report.queue_control_readiness;
+  const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
+  const safeSummary = createCampaignSafeSummary(report);
+
+  return (
+    <div className="route-stack campaign-queue" data-readonly-dashboard="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>Campaign Queue</h2>
+          <p>{readiness.next_safe_action}</p>
+        </div>
+        <span className={badgeClass(readiness.worker_status === "online" || readiness.worker_status === "ready" ? "ok" : "bad")}>
+          worker {readiness.worker_status}
+        </span>
+      </section>
+
+      <section className="kpi-grid">
+        <Kpi label="Campaign" value={report.campaign_id} />
+        <Kpi label="Status" value={report.campaign_status} />
+        <Kpi label="Current goal" value={report.current_goal_id} />
+        <Kpi label="Remaining steps" value={remainingSteps.length} />
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <CampaignStepPanel
+            title="Current Step"
+            step={report.current_step_summary}
+          />
+          {report.previous_step_summary ? (
+            <CampaignStepPanel
+              title="Previous Completed Step"
+              step={report.previous_step_summary}
+            />
+          ) : null}
+          <CampaignStepLedger steps={report.step_ledger} />
+        </div>
+        <aside className="dashboard-grid__side">
+          <QueueReadinessPanel readiness={readiness} />
+          <QueuePlaceholderControls readiness={readiness} />
+          <SummaryCard
+            title="Evidence ledger"
+            state={`${evidence.total} entries`}
+            lines={[
+              `Present: ${evidence.present}`,
+              `Recovered: ${evidence.recovered}`,
+              `Missing: ${evidence.missing}`,
+              `Skipped: ${evidence.skipped}`,
+              `Not applicable: ${evidence.not_applicable}`,
+            ]}
+          />
+          <SummaryCard
+            title="Safe summary"
+            state="copy-safe"
+            lines={[
+              `Campaign: ${safeSummary.campaign_id}`,
+              `Current: ${safeSummary.current_goal_id}`,
+              `Worker: ${safeSummary.worker_status}`,
+              `token_printed=${String(safeSummary.token_printed)}`,
+            ]}
+          />
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+function CampaignStepPanel({
+  title,
+  step,
+}: {
+  title: string;
+  step: CampaignRunReport["current_step_summary"];
+}) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Campaign</p>
+          <h2>{title}</h2>
+        </div>
+        <span className={badgeClass(step.status === "completed" || step.status === "ready" ? "ok" : "bad")}>
+          {step.status}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Goal</dt>
+          <dd>{step.goal_id}</dd>
+        </div>
+        <div>
+          <dt>Step</dt>
+          <dd>{step.campaign_step_id}</dd>
+        </div>
+        <div>
+          <dt>Evidence</dt>
+          <dd>{step.evidence_status}</dd>
+        </div>
+        <div>
+          <dt>Links</dt>
+          <dd>{step.linked_task_count} task / {step.linked_pr_count} PR</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+function CampaignStepLedger({
+  steps,
+}: {
+  steps: CampaignRunReport["step_ledger"];
+}) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Queue</p>
+          <h2>Step Ledger</h2>
+        </div>
+        <span className="skybridge-state">{steps.length} steps</span>
+      </div>
+      <div className="data-table data-table--campaign">
+        <div className="data-table__head">
+          <span>Order</span>
+          <span>Goal</span>
+          <span>Status</span>
+          <span>Evidence</span>
+        </div>
+        {steps.map((step) => (
+          <div className="data-table__row" key={step.campaign_step_id}>
+            <span>{step.order}</span>
+            <span>
+              {step.title}
+              <small>{step.goal_id}</small>
+            </span>
+            <span>{step.is_current ? `${step.status} current` : step.status}</span>
+            <span>{step.evidence_status}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QueueReadinessPanel({
+  readiness,
+}: {
+  readiness: CampaignRunReport["queue_control_readiness"];
+}) {
+  return (
+    <section className="skybridge-panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Queue Control Readiness</p>
+          <h2>Read-only Gate</h2>
+        </div>
+        <span className={badgeClass(readiness.blockers.length ? "bad" : "ok")}>
+          {readiness.blockers.length ? "blocked" : "ready"}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>can_start_one</dt>
+          <dd>{String(readiness.can_start_one)}</dd>
+        </div>
+        <div>
+          <dt>can_start_queue</dt>
+          <dd>{String(readiness.can_start_queue)}</dd>
+        </div>
+        <div>
+          <dt>can_resume</dt>
+          <dd>{String(readiness.can_resume)}</dd>
+        </div>
+        <div>
+          <dt>Worker status</dt>
+          <dd>{readiness.worker_status}</dd>
+        </div>
+      </dl>
+      <QueueList title="Blockers" items={readiness.blockers} fallback="No current blockers." />
+      <QueueList title="Warnings" items={readiness.warnings} fallback="No warnings." />
+      <QueueList title="Required human action" items={readiness.required_human_action} fallback="No required action." />
+    </section>
+  );
+}
+
+function QueuePlaceholderControls({
+  readiness,
+}: {
+  readiness: CampaignRunReport["queue_control_readiness"];
+}) {
+  return (
+    <section className="skybridge-panel queue-placeholder-controls" aria-label="Future queue controls">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Future Controls</p>
+          <h2>Disabled Placeholders</h2>
+        </div>
+      </div>
+      <button type="button" disabled aria-disabled="true">
+        Start One disabled
+      </button>
+      <button type="button" disabled aria-disabled="true">
+        Start Queue disabled
+      </button>
+      <button type="button" disabled aria-disabled="true">
+        Resume disabled
+      </button>
+      <span>Stop future control only: {String(readiness.can_stop)}</span>
+      <span>Emergency Stop future control only: {String(readiness.can_emergency_stop)}</span>
+    </section>
+  );
+}
+
+function QueueList({
+  title,
+  items,
+  fallback,
+}: {
+  title: string;
+  items: string[];
+  fallback: string;
+}) {
+  return (
+    <div className="queue-list">
+      <strong>{title}</strong>
+      {items.length === 0 ? <p>{fallback}</p> : null}
+      {items.length > 0 ? (
+        <ul>
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -1223,6 +1470,7 @@ function parseRoute(): Route {
 function titleForRoute(route: Route): string {
   if (route === "pr-ci") return "PR/CI";
   if (route === "hermes") return "Hermes Adapter";
+  if (route === "campaign-queue") return "Campaign Queue";
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "tasks") return "Task Queue";

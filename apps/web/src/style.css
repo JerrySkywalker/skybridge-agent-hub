@@ -160,6 +160,10 @@ h2 {
   margin: 0;
 }
 
+.hero-panel--queue {
+  background: #233544;
+}
+
 .kpi-grid {
   display: grid;
   gap: 12px;
@@ -478,6 +482,12 @@ h2 {
   min-width: 860px;
 }
 
+.data-table--campaign .data-table__head,
+.data-table--campaign .data-table__row {
+  grid-template-columns: 0.3fr 1.4fr 0.6fr 0.7fr;
+  min-width: 720px;
+}
+
 .data-table__head {
   border-bottom: 1px solid #dbe4ef;
   color: #52627a;
@@ -548,6 +558,73 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.queue-definition-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.queue-definition-list div {
+  border-bottom: 1px solid #edf2f8;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 150px minmax(0, 1fr);
+  padding-bottom: 8px;
+}
+
+.queue-definition-list dt {
+  color: #52627a;
+  font-size: 12px;
+}
+
+.queue-definition-list dd {
+  font-weight: 650;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.queue-list {
+  border-top: 1px solid #edf2f8;
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.queue-list p,
+.queue-list ul {
+  color: #52627a;
+  margin: 0;
+}
+
+.queue-list ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}
+
+.queue-placeholder-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-placeholder-controls button {
+  background: #edf2f8;
+  border: 1px solid #cbd7e6;
+  border-radius: 6px;
+  color: #52627a;
+  cursor: not-allowed;
+  font: inherit;
+  font-weight: 650;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.queue-placeholder-controls span {
+  color: #52627a;
+  font-size: 13px;
+}
+
 .embed-page {
   margin: 0 auto;
   max-width: 420px;
@@ -581,7 +658,8 @@ h2 {
   .kpi-grid,
   .product-row,
   .skybridge-filterbar,
-  .skybridge-metrics {
+  .skybridge-metrics,
+  .queue-definition-list div {
     grid-template-columns: 1fr;
   }
 
