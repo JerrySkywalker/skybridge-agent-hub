@@ -90,6 +90,8 @@ Fields:
 
 Desktop/Web controls must treat `blockers[]` as disabling. Historical warnings can be displayed without becoming current blockers. A control surface must still require a human reason for mutating actions and must never infer permission from `can_start_one` alone.
 
+Start controls must also require worker readiness. When `worker_required=true`, Desktop/Web controls must keep `start-one`, `start-queue` and apply-mode resume disabled unless `worker_status` is `online` or `ready`. Values such as `unknown`, `offline`, `stale` or `missing` are execution blockers and should surface `verify_worker_online_before_execution` before any start action. `can_stop` and `can_emergency_stop` can remain enabled because they are conservative no-regret controls.
+
 ## Current Goal 190 State
 
 During Goal 190 implementation, the campaign remains:
