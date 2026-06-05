@@ -26,6 +26,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@skybridge-agent-hub/client':
+        specifier: workspace:*
+        version: link:../../packages/client
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.11.0

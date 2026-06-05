@@ -21,6 +21,7 @@ const requiredConsoleText = [
 
 const viewports = [
   { name: "overview-desktop", path: "/#/overview", width: 1440, height: 1000, requiredText: requiredConsoleText },
+  { name: "campaign-queue-desktop", path: "/#/campaign-queue", width: 1440, height: 1000, requiredText: ["Campaign Queue", "Queue Control Readiness", "worker_offline", "Start One disabled"] },
   { name: "pr-ci-desktop", path: "/#/pr-ci", width: 1440, height: 1000, requiredText: ["PR/CI", "PR and CI readiness", "Auto-merge dry-run"] },
   { name: "hermes-desktop", path: "/#/hermes", width: 1440, height: 1000, requiredText: ["Hermes", "Supervisor", "Cloud supervisor runbook"] },
   { name: "notifications-desktop", path: "/#/notifications", width: 1440, height: 1000, requiredText: ["Notifications", "Notification Matrix", "Bootstrap"] },

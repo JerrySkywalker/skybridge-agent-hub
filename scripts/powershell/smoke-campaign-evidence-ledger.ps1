@@ -6,8 +6,11 @@ if (-not $ledger) { throw "Missing evidence_ledger." }
 foreach ($section in @("all", "task", "pr", "ci", "finalizer", "gate", "missing", "recovered", "not_applicable")) {
   if (-not $ledger.PSObject.Properties[$section]) { throw "Evidence ledger missing section: $section" }
 }
-if (@($ledger.missing | Where-Object { $_.goal_id -eq "super-190-campaign-run-report-evidence-ledger" }).Count -lt 1) {
-  throw "Expected explicit missing evidence for Goal 190."
+if (@($ledger.all | Where-Object { $_.goal_id -eq "super-190-campaign-run-report-evidence-ledger" -and $_.classification -in @("present_evidence", "recovered_evidence") }).Count -lt 1) {
+  throw "Expected present or recovered evidence for completed Goal 190."
+}
+if (@($ledger.missing | Where-Object { $_.goal_id -eq "super-191-readonly-operator-dashboard" }).Count -lt 1) {
+  throw "Expected explicit missing evidence for current Goal 191."
 }
 if (@($ledger.recovered | Where-Object { $_.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" }).Count -lt 1) {
   throw "Expected recovered evidence for Goal 189."

@@ -919,6 +919,365 @@ export interface SupervisorNextAction {
   state?: string;
 }
 
+export type CampaignEvidenceClassification =
+  | "present_evidence"
+  | "recovered_evidence"
+  | "missing_evidence"
+  | "skipped_evidence"
+  | "not_applicable_evidence";
+
+export interface CampaignStepSummary {
+  campaign_step_id: string;
+  goal_id: string;
+  order: number;
+  title: string;
+  status: string;
+  is_current: boolean;
+  dependencies: string[];
+  linked_task_ids: string[];
+  linked_pr_urls: string[];
+  linked_task_count: number;
+  linked_pr_count: number;
+  evidence_status: string;
+  recovered: boolean;
+  missing_evidence: boolean;
+  skipped_evidence: boolean;
+  not_applicable_evidence: boolean;
+  operator_action_required: boolean;
+}
+
+export interface CampaignEvidenceEntry {
+  kind: "step" | "task" | "pr" | "ci" | "finalizer" | "gate" | string;
+  campaign_step_id: string;
+  goal_id: string;
+  evidence_id: string;
+  status: string;
+  classification: CampaignEvidenceClassification | string;
+  recovered: boolean;
+  missing: boolean;
+  skipped: boolean;
+  not_applicable: boolean;
+  operator_action_required: boolean;
+  summary: string;
+}
+
+export interface CampaignQueueControlReadiness {
+  can_start_one: boolean;
+  can_start_queue: boolean;
+  can_pause: boolean;
+  can_stop: boolean;
+  can_emergency_stop: boolean;
+  can_resume: boolean;
+  blockers: string[];
+  warnings: string[];
+  required_human_action: string[];
+  next_safe_action: string;
+  worker_required: boolean;
+  worker_status: string;
+  run_budget_required: boolean;
+  reason_required: boolean;
+}
+
+export interface CampaignRunReport {
+  schema: "skybridge.campaign_run_report.v1";
+  generated_at: string;
+  project_id: string;
+  campaign_id: string;
+  campaign_status: string;
+  current_step_id: string;
+  current_goal_id: string;
+  current_goal_status: string;
+  current_goal_unexecuted: boolean;
+  campaign_summary: {
+    campaign_id: string;
+    project_id: string;
+    title: string;
+    status: string;
+    current_step_id: string;
+    step_count: number;
+    source?: string;
+    goal_pack_hash?: string;
+  };
+  current_step_summary: CampaignStepSummary;
+  previous_step_summary?: CampaignStepSummary;
+  step_ledger: CampaignStepSummary[];
+  evidence_ledger: {
+    all: CampaignEvidenceEntry[];
+    present?: CampaignEvidenceEntry[];
+    recovered?: CampaignEvidenceEntry[];
+    missing?: CampaignEvidenceEntry[];
+    skipped?: CampaignEvidenceEntry[];
+    not_applicable?: CampaignEvidenceEntry[];
+  };
+  blockers: string[];
+  warnings: string[];
+  queue_control_readiness: CampaignQueueControlReadiness;
+  token_printed: false;
+}
+
+export interface CampaignEvidenceCounts {
+  total: number;
+  present: number;
+  recovered: number;
+  missing: number;
+  skipped: number;
+  not_applicable: number;
+}
+
+export interface CampaignSafeSummary {
+  schema: "skybridge.campaign_safe_summary.v1";
+  campaign_id: string;
+  current_step: string;
+  current_goal_id: string;
+  current_goal_status: string;
+  queue_readiness: Pick<
+    CampaignQueueControlReadiness,
+    | "can_start_one"
+    | "can_start_queue"
+    | "can_resume"
+    | "can_stop"
+    | "can_emergency_stop"
+    | "next_safe_action"
+    | "worker_required"
+    | "worker_status"
+  >;
+  blockers: string[];
+  warnings: string[];
+  worker_status: string;
+  token_printed: false;
+}
+
+export function summarizeCampaignEvidence(
+  report: Pick<CampaignRunReport, "evidence_ledger">,
+): CampaignEvidenceCounts {
+  const entries = report.evidence_ledger.all ?? [];
+  return {
+    total: entries.length,
+    present: entries.filter((entry) => entry.classification === "present_evidence").length,
+    recovered: entries.filter((entry) => entry.recovered || entry.classification === "recovered_evidence").length,
+    missing: entries.filter((entry) => entry.missing || entry.classification === "missing_evidence").length,
+    skipped: entries.filter((entry) => entry.skipped || entry.classification === "skipped_evidence").length,
+    not_applicable: entries.filter((entry) => entry.not_applicable || entry.classification === "not_applicable_evidence").length,
+  };
+}
+
+export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSafeSummary {
+  const readiness = report.queue_control_readiness;
+  return {
+    schema: "skybridge.campaign_safe_summary.v1",
+    campaign_id: report.campaign_id,
+    current_step: report.current_step_id,
+    current_goal_id: report.current_goal_id,
+    current_goal_status: report.current_goal_status,
+    queue_readiness: {
+      can_start_one: readiness.can_start_one,
+      can_start_queue: readiness.can_start_queue,
+      can_resume: readiness.can_resume,
+      can_stop: readiness.can_stop,
+      can_emergency_stop: readiness.can_emergency_stop,
+      next_safe_action: readiness.next_safe_action,
+      worker_required: readiness.worker_required,
+      worker_status: readiness.worker_status,
+    },
+    blockers: [...readiness.blockers],
+    warnings: [...readiness.warnings],
+    worker_status: readiness.worker_status,
+    token_printed: false,
+  };
+}
+
+export const fixtureCampaignRunReport: CampaignRunReport = {
+  schema: "skybridge.campaign_run_report.v1",
+  generated_at: "2026-06-05T00:00:00.000Z",
+  project_id: "skybridge-agent-hub",
+  campaign_id: "dev-queue-189-200",
+  campaign_status: "paused",
+  current_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+  current_goal_id: "super-191-readonly-operator-dashboard",
+  current_goal_status: "ready",
+  current_goal_unexecuted: true,
+  campaign_summary: {
+    campaign_id: "dev-queue-189-200",
+    project_id: "skybridge-agent-hub",
+    title: "Dev Queue 189-200",
+    status: "paused",
+    current_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+    step_count: 12,
+    source: "fixture",
+  },
+  current_step_summary: {
+    campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+    goal_id: "super-191-readonly-operator-dashboard",
+    order: 3,
+    title: "Read-only Operator Dashboard",
+    status: "ready",
+    is_current: true,
+    dependencies: ["super-190-campaign-run-report-evidence-ledger"],
+    linked_task_ids: [],
+    linked_pr_urls: [],
+    linked_task_count: 0,
+    linked_pr_count: 0,
+    evidence_status: "missing",
+    recovered: false,
+    missing_evidence: true,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
+  previous_step_summary: {
+    campaign_step_id: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
+    goal_id: "super-190-campaign-run-report-evidence-ledger",
+    order: 2,
+    title: "Campaign Run Report and Evidence Ledger",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-189-ci-guardian-pr-finalizer-hardening"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/106"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
+  step_ledger: [],
+  evidence_ledger: {
+    all: [
+      {
+        kind: "step",
+        campaign_step_id: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
+        goal_id: "super-190-campaign-run-report-evidence-ledger",
+        evidence_id: "goal-190-pr",
+        status: "present",
+        classification: "present_evidence",
+        recovered: false,
+        missing: false,
+        skipped: false,
+        not_applicable: false,
+        operator_action_required: false,
+        summary: "Goal 190 report PR evidence is present.",
+      },
+      {
+        kind: "step",
+        campaign_step_id: "dev-queue-189-200:super-189-ci-guardian-pr-finalizer-hardening",
+        goal_id: "super-189-ci-guardian-pr-finalizer-hardening",
+        evidence_id: "goal-189-recovered",
+        status: "recovered",
+        classification: "recovered_evidence",
+        recovered: true,
+        missing: false,
+        skipped: false,
+        not_applicable: false,
+        operator_action_required: false,
+        summary: "Goal 189 recovered evidence is represented.",
+      },
+      {
+        kind: "pr",
+        campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+        goal_id: "super-191-readonly-operator-dashboard",
+        evidence_id: "none",
+        status: "missing",
+        classification: "missing_evidence",
+        recovered: false,
+        missing: true,
+        skipped: false,
+        not_applicable: false,
+        operator_action_required: false,
+        summary: "Goal 191 PR evidence is missing until this read-only dashboard PR exists.",
+      },
+      {
+        kind: "gate",
+        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+        goal_id: "super-192-dashboard-safe-actions",
+        evidence_id: "none",
+        status: "not_applicable",
+        classification: "not_applicable_evidence",
+        recovered: false,
+        missing: false,
+        skipped: false,
+        not_applicable: true,
+        operator_action_required: false,
+        summary: "Future Goal 192 evidence is not applicable.",
+      },
+    ],
+  },
+  blockers: [],
+  warnings: ["approved_unconverted_proposals_present"],
+  queue_control_readiness: {
+    can_start_one: false,
+    can_start_queue: false,
+    can_pause: false,
+    can_stop: true,
+    can_emergency_stop: true,
+    can_resume: false,
+    blockers: ["worker_offline"],
+    warnings: ["approved_unconverted_proposals_present"],
+    required_human_action: ["verify_worker_online_before_execution"],
+    next_safe_action: "Verify or register an online worker before any start-one or start-queue action.",
+    worker_required: true,
+    worker_status: "offline",
+    run_budget_required: true,
+    reason_required: true,
+  },
+  token_printed: false,
+};
+
+fixtureCampaignRunReport.step_ledger = [
+  {
+    campaign_step_id: "dev-queue-189-200:super-189-ci-guardian-pr-finalizer-hardening",
+    goal_id: "super-189-ci-guardian-pr-finalizer-hardening",
+    order: 1,
+    title: "CI Guardian and PR Finalizer Hardening",
+    status: "completed",
+    is_current: false,
+    dependencies: [],
+    linked_task_ids: ["campaign-step-super-189-ci-guardian-pr-finalizer-hardening-20260601102536"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/99"],
+    linked_task_count: 1,
+    linked_pr_count: 1,
+    evidence_status: "recovered",
+    recovered: true,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
+  fixtureCampaignRunReport.previous_step_summary!,
+  fixtureCampaignRunReport.current_step_summary,
+  ...[
+    ["super-192-dashboard-safe-actions", "Dashboard Safe Actions"],
+    ["super-193-notification-attention-loop", "Notification and Attention Loop"],
+    ["super-194-worker-service-mode", "Worker Service Mode"],
+    ["super-195-manual-goal-queue-management", "Manual Goal Queue Management"],
+    ["super-196-campaign-locking-multi-campaign-queue", "Campaign Locking and Multi-campaign Queue"],
+    ["super-197-multi-worker-readiness", "Multi-worker Readiness"],
+    ["super-198-multi-project-support", "Multi-project Support"],
+    ["super-199-hermes-goal-draft-generator", "Hermes Goal Draft Generator"],
+    ["super-200-controlled-goal-draft-review-import", "Controlled Goal Draft Review and Import"],
+  ].map(([goalId, title], index) => ({
+    campaign_step_id: `dev-queue-189-200:${goalId}`,
+    goal_id: goalId,
+    order: index + 4,
+    title,
+    status: "pending",
+    is_current: false,
+    dependencies: [],
+    linked_task_ids: [],
+    linked_pr_urls: [],
+    linked_task_count: 0,
+    linked_pr_count: 0,
+    evidence_status: "not_applicable",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: true,
+    operator_action_required: false,
+  })),
+];
+
 function queryString(query: object): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {

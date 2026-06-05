@@ -31,8 +31,10 @@ Future execution-readiness is separate. It must be added only by a later reviewe
 The desktop app may:
 
 - show read-only SkyBridge status;
+- show the read-only Queue Dashboard from the Goal 190 campaign report contract;
 - call `skybridge-status.ps1 -ActiveOnly -Json`;
 - call `skybridge-campaign.ps1 status -CampaignId dev-queue-189-200 -Json`;
+- call `skybridge-campaign.ps1 runner-report -CampaignId dev-queue-189-200 -Json`;
 - call `skybridge-worker-status.ps1 -Command status -Json`;
 - call `skybridge-worker-status.ps1 -Command register-heartbeat -Json` from Heartbeat Now;
 - write `.agent/desktop-client/status.json`;
@@ -199,10 +201,10 @@ The Goal 188I manual GUI drill found the original dev-command recursion bug. The
 Desktop browser visual QA uses a fixture-only React route:
 
 ```text
-http://127.0.0.1:1420/?fixture=desktop-pre190-pass
+http://127.0.0.1:1420/?fixture=desktop-queue-dashboard
 ```
 
-The fixture renders fixed Pre-190 PASS data and does not call production endpoints, Tauri commands, worker token files or local status bridges. Run:
+The fixture renders fixed queue-dashboard data and does not call production endpoints, Tauri commands, worker token files or local status bridges. Run:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.ps1 -SkipWhenUnavailable
@@ -211,7 +213,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.
 When Playwright is available, the smoke captures:
 
 ```text
-.agent/tmp/desktop-visual-qa/desktop-pre190-pass.png
+.agent/tmp/desktop-visual-qa/desktop-queue-dashboard.png
 .agent/tmp/desktop-visual-qa/manifest.json
 ```
 

@@ -105,6 +105,29 @@ p {
   margin-bottom: 16px;
 }
 
+.queue-panel {
+  border-color: #c7d7df;
+}
+
+.future-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.future-controls span {
+  background: #edf2f4;
+  border: 1px solid #c7d7df;
+  border-radius: 6px;
+  color: #5c6870;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 10px;
+  text-align: center;
+}
+
 .readiness {
   border: 1px solid #d9e0e4;
   border-radius: 8px;
@@ -195,6 +218,10 @@ dd {
   }
 
   .mode-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .future-controls {
     grid-template-columns: 1fr;
   }
 

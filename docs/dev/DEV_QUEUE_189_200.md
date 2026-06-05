@@ -282,3 +282,22 @@ The report distinguishes current blockers from historical warnings, recovered ev
 Desktop and Web queue controls should consume `queue_control_readiness` rather than inferring button state from individual counters. Treat `blockers[]` as disabling, show `warnings[]`, require `required_human_action[]`, and display `next_safe_action` before any future mutating control. Report generation does not complete Goal 190 and must not start Goal 191.
 
 See [CAMPAIGN_REPORT_EVIDENCE_LEDGER.md](CAMPAIGN_REPORT_EVIDENCE_LEDGER.md).
+
+## Goal 191D Unified Queue Dashboard Foundation
+
+Goal 191D adds a shared read-only queue dashboard foundation for Web and SkyBridge Desktop. Both surfaces consume the Goal 190 campaign report contract and show campaign state, current and previous steps, remaining queue steps, evidence counts, `queue_control_readiness`, worker readiness, blockers, warnings and `next_safe_action`.
+
+This goal remains read-only. Web displays disabled placeholders for Start One, Start Queue and Resume, plus Stop/Emergency Stop future-control text. Desktop displays read-only queue status and provides only Refresh, Open report and Copy safe summary actions for the queue dashboard. Future active controls are deferred to Goal 192A/192B.
+
+Run the focused checks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-campaign-report-contract-consumer.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-web-queue-dashboard-readonly.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-queue-dashboard-readonly.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-queue-dashboard-no-mutation-buttons.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-queue-dashboard-safe-summary.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-queue-dashboard-visual-qa.ps1
+```
+
+After this goal merges, review the PR evidence and keep Goal 192 execution separate. Do not start Goal 192 from dashboard rendering or visual QA.

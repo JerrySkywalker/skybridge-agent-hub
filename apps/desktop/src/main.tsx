@@ -1,6 +1,13 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  type CampaignRunReport,
+  type CampaignSafeSummary,
+  createCampaignSafeSummary,
+  fixtureCampaignRunReport,
+  summarizeCampaignEvidence,
+} from "@skybridge-agent-hub/client";
 import "./styles.css";
 
 type DesktopStatus = {
@@ -30,8 +37,11 @@ type DesktopStatus = {
     state: "PASS" | "WARN" | "BLOCK";
     reasons: string[];
   };
+  campaign_report: CampaignRunReport | null;
+  safe_summary: CampaignSafeSummary | null;
   status_file: string;
   log_file: string;
+  report_file: string;
   warnings: string[];
   errors: string[];
 };
@@ -72,8 +82,11 @@ const emptyStatus: DesktopStatus = {
     state: "WARN",
     reasons: ["status=unknown"],
   },
+  campaign_report: null,
+  safe_summary: null,
   status_file: "",
   log_file: "",
+  report_file: "",
   warnings: [],
   errors: [],
 };
@@ -87,12 +100,12 @@ const fixtureStatus: DesktopStatus = {
   campaign_id: "dev-queue-189-200",
   worker_id: "laptop-zenbookduo",
   worker_status: "online",
-  current_step: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
-  current_goal_id: "super-190-campaign-run-report-evidence-ledger",
+  current_step: fixtureCampaignRunReport.current_step_id,
+  current_goal_id: fixtureCampaignRunReport.current_goal_id,
   current_goal_status: "ready",
   current_goal_linked_task_ids: [],
   current_goal_linked_pr_urls: [],
-  previous_goal_id: "super-189-ci-guardian-pr-finalizer-hardening",
+  previous_goal_id: "super-190-campaign-run-report-evidence-ledger",
   previous_goal_status: "completed",
   goal_190_linked_task_ids_count: 0,
   goal_190_linked_pr_urls_count: 0,
@@ -103,10 +116,13 @@ const fixtureStatus: DesktopStatus = {
   status_age_seconds: 0,
   pre190_readiness: {
     state: "PASS",
-    reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "Goal 190 is current/ready and unexecuted"],
+    reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "Goal 191 is current/ready and read-only"],
   },
+  campaign_report: fixtureCampaignRunReport,
+  safe_summary: createCampaignSafeSummary(fixtureCampaignRunReport),
   status_file: ".agent/tmp/desktop-visual-qa/status.fixture.json",
   log_file: ".agent/tmp/desktop-visual-qa/desktop-client.fixture.log",
+  report_file: ".agent/tmp/campaign-reports/dev-queue-189-200-campaign-report.md",
   warnings: [],
   errors: [],
 };
@@ -164,6 +180,38 @@ function App() {
     }
   }, [fixtureOnly]);
 
+  const openReport = React.useCallback(async () => {
+    if (fixtureOnly) {
+      setMessage("Fixture-only: report artifact open skipped");
+      return;
+    }
+    setBusy(true);
+    setMessage("Opening safe campaign report artifact");
+    try {
+      await invoke("open_report");
+      setMessage("Report artifact opened");
+    } catch (error) {
+      setMessage(`Open report failed: ${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [fixtureOnly]);
+
+  const copySafeSummary = React.useCallback(async () => {
+    const summary = status.safe_summary ?? (status.campaign_report ? createCampaignSafeSummary(status.campaign_report) : null);
+    if (!summary) {
+      setMessage("Safe summary unavailable");
+      return;
+    }
+    const text = JSON.stringify(summary, null, 2);
+    if (containsSecretLookingText(text)) {
+      setMessage("Safe summary blocked by secret-pattern guard");
+      return;
+    }
+    await navigator.clipboard?.writeText(text);
+    setMessage("Safe summary copied");
+  }, [status]);
+
   React.useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -176,6 +224,10 @@ function App() {
   const refreshEpoch = parseUnixTimestamp(status.last_refresh_time);
   const statusAge = refreshEpoch === null ? "unknown" : `${Math.max(0, nowSeconds - refreshEpoch)}s`;
   const readinessClass = `readiness readiness-${status.pre190_readiness.state.toLowerCase()}`;
+  const report = status.campaign_report ?? fixtureCampaignRunReport;
+  const readiness = report.queue_control_readiness;
+  const evidence = summarizeCampaignEvidence(report);
+  const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
 
   return (
     <main className="shell">
@@ -195,14 +247,52 @@ function App() {
         <span>{status.execution_disabled ? "EXECUTION DISABLED" : "EXECUTION STATE UNKNOWN"}</span>
       </section>
 
-      <section className="toolbar" aria-label="Status actions">
+      <section className="toolbar" aria-label="Queue dashboard actions">
         <button type="button" onClick={refresh} disabled={busy}>
-          Refresh Status
+          Refresh
         </button>
-        <button type="button" className="heartbeat" onClick={heartbeat} disabled={busy}>
-          Heartbeat Now (heartbeat-only)
+        <button type="button" onClick={openReport} disabled={busy}>
+          Open report
+        </button>
+        <button type="button" onClick={copySafeSummary} disabled={busy}>
+          Copy safe summary
         </button>
         <span>{message}</span>
+      </section>
+
+      <section className="panel queue-panel">
+        <h2>Read-only Queue Dashboard</h2>
+        <dl>
+          <StatusValue label="Campaign id" value={report.campaign_id} />
+          <StatusValue label="Campaign status" value={report.campaign_status} />
+          <StatusValue label="Current step" value={report.current_step_id} />
+          <StatusValue label="Current goal" value={`${report.current_goal_id} (${report.current_goal_status})`} />
+          <StatusValue label="Previous completed step" value={report.previous_step_summary?.goal_id ?? "unknown"} />
+          <StatusValue label="Remaining steps" value={remainingSteps.length} />
+          <StatusValue label="Worker status" value={readiness.worker_status} />
+          <StatusValue label="Next safe action" value={readiness.next_safe_action} />
+        </dl>
+      </section>
+
+      <section className="panel queue-panel">
+        <h2>Queue Control Readiness</h2>
+        <dl>
+          <StatusValue label="can_start_one" value={String(readiness.can_start_one)} />
+          <StatusValue label="can_start_queue" value={String(readiness.can_start_queue)} />
+          <StatusValue label="can_resume" value={String(readiness.can_resume)} />
+          <StatusValue label="can_stop" value={String(readiness.can_stop)} />
+          <StatusValue label="can_emergency_stop" value={String(readiness.can_emergency_stop)} />
+          <StatusValue label="Evidence counts" value={`present=${evidence.present}; recovered=${evidence.recovered}; missing=${evidence.missing}; not_applicable=${evidence.not_applicable}`} />
+          <StatusValue label="Blockers" value={readiness.blockers.join("; ") || "none"} />
+          <StatusValue label="Warnings" value={readiness.warnings.join("; ") || "none"} />
+        </dl>
+      </section>
+
+      <section className="future-controls" aria-label="Future execution controls">
+        <span>Start One disabled by read-only Goal 191D</span>
+        <span>Start Queue disabled by read-only Goal 191D</span>
+        <span>Resume disabled by read-only Goal 191D</span>
+        <span>Stop/Emergency Stop future controls only</span>
       </section>
 
       <section className="panel">
@@ -242,6 +332,7 @@ function App() {
         <dl>
           <StatusValue label="Status file" value={status.status_file || ".agent/desktop-client/status.json"} />
           <StatusValue label="Log file" value={status.log_file || ".agent/desktop-client/logs/desktop-client.log"} />
+          <StatusValue label="Report file" value={status.report_file || ".agent/tmp/campaign-reports/dev-queue-189-200-campaign-report.md"} />
         </dl>
       </section>
 
@@ -275,7 +366,19 @@ function parseUnixTimestamp(value: string) {
 }
 
 function isFixtureMode() {
-  return new URLSearchParams(window.location.search).get("fixture") === "desktop-pre190-pass";
+  const fixture = new URLSearchParams(window.location.search).get("fixture");
+  return fixture === "desktop-pre190-pass" || fixture === "desktop-queue-dashboard";
+}
+
+function containsSecretLookingText(text: string) {
+  const patterns = [
+    "sk-[A-Za-z0-9_-]{20,}",
+    "gh[pousr]_[A-Za-z0-9_]{20,}",
+    "authorization\\s*[:=]\\s*bearer",
+    "bearer\\s+[A-Za-z0-9_.-]{12,}",
+    "-----BEGIN [A-Z ]*" + "PRIVATE " + "KEY-----",
+  ];
+  return new RegExp(patterns.join("|"), "i").test(text);
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);

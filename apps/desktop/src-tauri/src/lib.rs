@@ -41,8 +41,11 @@ struct DesktopStatus {
     last_refresh_time: String,
     status_age_seconds: i64,
     pre190_readiness: Pre190Readiness,
+    campaign_report: Value,
+    safe_summary: Value,
     status_file: String,
     log_file: String,
+    report_file: String,
     warnings: Vec<String>,
     errors: Vec<String>,
 }
@@ -90,13 +93,40 @@ fn heartbeat_now(app: AppHandle) -> Result<HeartbeatResult, String> {
     })
 }
 
+#[tauri::command]
+fn open_report(app: AppHandle) -> Result<(), String> {
+    let status = collect_status(&app)?;
+    let report_file = PathBuf::from(status.report_file);
+    if !report_file.starts_with(repo_root()?.join(".agent").join("tmp").join("campaign-reports")) {
+        return Err("report path is outside the safe campaign report artifact directory".into());
+    }
+    if !report_file.exists() {
+        return Err("campaign report artifact is not available yet".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(&report_file)
+            .spawn()
+            .map_err(|err| err.to_string())?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("xdg-open")
+            .arg(&report_file)
+            .spawn()
+            .map_err(|err| err.to_string())?;
+    }
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             build_tray(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_status, heartbeat_now])
+        .invoke_handler(tauri::generate_handler![get_status, heartbeat_now, open_report])
         .run(tauri::generate_context!())
         .expect("error while running SkyBridge Desktop");
 }
@@ -186,10 +216,18 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
             Value::Null
         }
     };
+    let report_json = match run_campaign_report() {
+        Ok(value) => value,
+        Err(error) => {
+            errors.push(error);
+            Value::Null
+        }
+    };
 
     detect_token_printed("active status", &active_json, &mut warnings);
     detect_token_printed("campaign status", &campaign_json, &mut warnings);
     detect_token_printed("worker status", &worker_json, &mut warnings);
+    detect_token_printed("campaign report", &report_json, &mut warnings);
 
     let current_step_id = get_string(&campaign_json, &["campaign", "current_step_id"]).unwrap_or_else(|| "unknown".into());
     let steps = campaign_json
@@ -214,6 +252,8 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
     let active_tasks = get_i64(&active_json, &["task_summary", "active"]);
     let stale_leases = get_i64(&active_json, &["task_summary", "stale_leases"]);
     let token_printed = warnings.iter().any(|warning| warning.contains("token_printed=true"));
+    let campaign_report = report_json.get("report").cloned().unwrap_or(Value::Null);
+    let safe_summary = build_safe_summary(&campaign_report);
     let pre190_readiness = evaluate_pre190_readiness(
         active_tasks,
         stale_leases,
@@ -252,8 +292,17 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         last_refresh_time: chrono_like_now(),
         status_age_seconds: 0,
         pre190_readiness,
+        campaign_report,
+        safe_summary,
         status_file: status_file(app).display().to_string(),
         log_file: log_file(app).display().to_string(),
+        report_file: repo_root()?
+            .join(".agent")
+            .join("tmp")
+            .join("campaign-reports")
+            .join("dev-queue-189-200-campaign-report.md")
+            .display()
+            .to_string(),
         warnings,
         errors,
     };
@@ -304,6 +353,30 @@ fn run_campaign_status() -> Result<Value, String> {
         "status".into(),
         "-CampaignId".into(),
         CAMPAIGN_ID.into(),
+        "-Json".into(),
+    ];
+    parse_json(&run_powershell(&command_args)?)
+}
+
+fn run_campaign_report() -> Result<Value, String> {
+    let repo = repo_root()?;
+    let script_path = repo.join("scripts").join("powershell").join("skybridge-campaign.ps1");
+    let token_file = home_path(".skybridge\\secrets\\worker-token.txt");
+    let command_args = vec![
+        "-NoProfile".to_string(),
+        "-ExecutionPolicy".into(),
+        "Bypass".into(),
+        "-File".into(),
+        script_path.display().to_string(),
+        "runner-report".into(),
+        "-CampaignId".into(),
+        CAMPAIGN_ID.into(),
+        "-ApiBase".into(),
+        "https://skybridge.jerryskywalker.space".into(),
+        "-ProjectId".into(),
+        PROJECT_ID.into(),
+        "-TokenFile".into(),
+        token_file.display().to_string(),
         "-Json".into(),
     ];
     parse_json(&run_powershell(&command_args)?)
@@ -542,6 +615,31 @@ fn get_string_array(value: &Value, path: &[&str]) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn build_safe_summary(report: &Value) -> Value {
+    let readiness = report.get("queue_control_readiness").cloned().unwrap_or(Value::Null);
+    serde_json::json!({
+        "schema": "skybridge.campaign_safe_summary.v1",
+        "campaign_id": get_string(report, &["campaign_id"]).unwrap_or_else(|| CAMPAIGN_ID.into()),
+        "current_step": get_string(report, &["current_step_id"]).unwrap_or_else(|| "unknown".into()),
+        "current_goal_id": get_string(report, &["current_goal_id"]).unwrap_or_else(|| "unknown".into()),
+        "current_goal_status": get_string(report, &["current_goal_status"]).unwrap_or_else(|| "unknown".into()),
+        "queue_readiness": {
+            "can_start_one": readiness.get("can_start_one").and_then(Value::as_bool).unwrap_or(false),
+            "can_start_queue": readiness.get("can_start_queue").and_then(Value::as_bool).unwrap_or(false),
+            "can_resume": readiness.get("can_resume").and_then(Value::as_bool).unwrap_or(false),
+            "can_stop": readiness.get("can_stop").and_then(Value::as_bool).unwrap_or(false),
+            "can_emergency_stop": readiness.get("can_emergency_stop").and_then(Value::as_bool).unwrap_or(false),
+            "next_safe_action": get_string(&readiness, &["next_safe_action"]).unwrap_or_else(|| "Inspect report before any operator action.".into()),
+            "worker_required": readiness.get("worker_required").and_then(Value::as_bool).unwrap_or(true),
+            "worker_status": get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into())
+        },
+        "blockers": get_string_array(&readiness, &["blockers"]),
+        "warnings": get_string_array(&readiness, &["warnings"]),
+        "worker_status": get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into()),
+        "token_printed": false
+    })
 }
 
 fn home_path(relative: &str) -> PathBuf {
