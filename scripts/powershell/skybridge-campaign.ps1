@@ -1509,21 +1509,49 @@ function New-QueueControlReadiness {
   $goalUnexecuted = ($CurrentStep -and @($CurrentStep.linked_task_ids).Count -eq 0 -and @($CurrentStep.linked_pr_urls).Count -eq 0)
   $blockers = @($CurrentBlockers | Where-Object { $_ } | Select-Object -Unique)
   $requiredHuman = @()
+  $workerRequired = $true
+  $workerStatuses = @()
+  if ($Hygiene -and $Hygiene.raw -and $Hygiene.raw.workers) {
+    $workerStatuses = @($Hygiene.raw.workers | ForEach-Object { [string]$_.status } | Where-Object { $_ })
+  }
+  $workerStatus = if (@($workerStatuses | Where-Object { $_ -in @("online", "ready") }).Count -gt 0) {
+    "online"
+  } elseif (@($workerStatuses | Where-Object { $_ -eq "stale" }).Count -gt 0) {
+    "stale"
+  } elseif (@($workerStatuses | Where-Object { $_ -eq "offline" }).Count -gt 0) {
+    "offline"
+  } elseif ($workerStatuses.Count -eq 0) {
+    "unknown"
+  } else {
+    "unknown"
+  }
+  $workerReady = (-not $workerRequired) -or ($workerStatus -in @("online", "ready"))
+  if (-not $workerReady) {
+    $workerBlocker = switch ($workerStatus) {
+      "offline" { "worker_offline" }
+      "stale" { "worker_stale" }
+      "missing" { "worker_missing" }
+      default { "worker_readiness_unknown" }
+    }
+    $blockers += $workerBlocker
+    $requiredHuman += "verify_worker_online_before_execution"
+  }
   if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
-  $canStart = ($blockers.Count -eq 0 -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $lockStatus -in @("none", "released") -and [string]$CurrentStep.status -eq "ready" -and $goalUnexecuted)
+  $projectStartable = ($projectControl -in @("paused", "ready"))
+  $canStart = ($blockers.Count -eq 0 -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $lockStatus -in @("none", "released") -and $projectStartable -and [string]$CurrentStep.status -eq "ready" -and $goalUnexecuted -and $workerReady)
   [pscustomobject]@{
     can_start_one = $canStart
-    can_start_queue = $false
+    can_start_queue = ($false -and $workerReady)
     can_pause = ($projectControl -ne "paused")
     can_stop = $true
     can_emergency_stop = $true
-    can_resume = ($projectControl -eq "paused" -and $lockStatus -in @("none", "released") -and $activeTasks -eq 0 -and $staleLeases -eq 0)
+    can_resume = ($projectControl -eq "paused" -and $lockStatus -in @("none", "released") -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $workerReady)
     blockers = @($blockers)
     warnings = @($Warnings | Where-Object { $_ } | Select-Object -Unique)
-    required_human_action = @($requiredHuman)
-    next_safe_action = if ($canStart) { "Generate and review this report artifact; after merge, a human may separately approve attaching Goal 190 evidence and completing the step. Do not start Goal 191 from this report." } elseif ($blockers.Count -gt 0) { "Resolve current blockers before any queue control action." } else { "Keep campaign paused and inspect warnings before any execution control." }
-    worker_required = $true
-    worker_status = "unknown"
+    required_human_action = @($requiredHuman | Select-Object -Unique)
+    next_safe_action = if (-not $workerReady) { "Verify or register an online worker before any start-one or start-queue action." } elseif ($canStart) { "Generate and review this report artifact; after merge, a human may separately approve attaching Goal 190 evidence and completing the step. Do not start Goal 191 from this report." } elseif ($blockers.Count -gt 0) { "Resolve current blockers before any queue control action." } else { "Keep campaign paused and inspect warnings before any execution control." }
+    worker_required = $workerRequired
+    worker_status = $workerStatus
     run_budget_required = $true
     reason_required = $true
   }
