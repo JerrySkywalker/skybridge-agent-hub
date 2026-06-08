@@ -381,7 +381,7 @@ Worker service readiness is heartbeat-only:
 - `can_claim_tasks=false`;
 - `can_execute_tasks=false`;
 - Codex worker execution and PR creation remain disabled;
-- queue-control readiness includes `execution_disabled_until_goal_195`.
+- queue-control readiness includes `execution_disabled_until_goal_197`.
 
 Desktop shows a Worker Service Panel. Web shows a Worker Readiness Panel. Web has no direct local process control. Desktop local controls remain bounded status/heartbeat/stop surfaces and do not expose task claim, task execution or arbitrary shell.
 
@@ -421,3 +421,29 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-goal-pack.ps1 
 These commands do not execute the queue. `manifest-update -Apply` writes repository-local manifest hashes only. Live campaign import/update remains out of scope for Goal 195.
 
 See [MANUAL_GOAL_QUEUE_MANAGEMENT.md](MANUAL_GOAL_QUEUE_MANAGEMENT.md).
+
+## Goal 196 Campaign Locking And Multi-campaign Queue
+
+Goal 196 adds campaign locking, repo-exclusive locking and deterministic multi-campaign queue review. It does not execute the queue.
+
+The expected current state remains non-executing: current step `dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue`, current goal `super-196-campaign-locking-multi-campaign-queue`, active tasks `0`, stale leases `0`, no task claim, no campaign-step task creation, `can_start_one=false`, `can_start_queue=false` and `token_printed=false`.
+
+Lock review semantics:
+
+- one active campaign per project in the priority queue model;
+- one repo mutation lock per repo/worktree;
+- active repo locks block start-one/start-queue previews;
+- stale locks require inspection and reason before release;
+- active non-stale locks cannot be force-released;
+- cancel, abort and hold require reasons and write safe audit/fixture evidence only.
+
+Use:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command campaign-lock-status -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command repo-lock-status -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command campaign-priority-queue -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command campaign-select-next-preview -Json
+```
+
+See [CAMPAIGN_LOCKING_MULTI_CAMPAIGN_QUEUE.md](CAMPAIGN_LOCKING_MULTI_CAMPAIGN_QUEUE.md). Goal 197 will add multi-worker readiness on top of this lock foundation without retroactively enabling execution from Goal 196.

@@ -105,4 +105,4 @@ Goal 195 prepares queue authoring and review. It does not run `start-one`, `star
 
 ## Goal 196 Follow-on
 
-Goal 196 can build multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. The locking goal should add explicit ownership and conflict handling before any queue can start across multiple campaigns.
+Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

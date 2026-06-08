@@ -5,8 +5,12 @@ import {
   deriveAttentionEvents,
   SkyBridgeClient,
   fixtureCampaignRunReport,
+  fixtureCampaignLock,
+  fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
+  fixtureRepoExclusiveLock,
+  fixtureStaleCampaignLock,
   fixtureWorkerServiceState,
   notificationRoutingMatrix,
   queueControlActionMatrix,
@@ -29,7 +33,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("SkyBridgeClient", () => {
-  it("classifies queue-control actions for Goal 192", () => {
+  it("classifies queue-control actions and lock previews for Goal 196", () => {
     const byAction = new Map(queueControlActionMatrix.map((entry) => [entry.action, entry]));
 
     expect(byAction.get("refresh_status")).toMatchObject({
@@ -52,7 +56,17 @@ describe("SkyBridgeClient", () => {
       class: "armed_execution",
       apply_allowed: false,
       requires_arm_lease: true,
-      blockers: ["execution_apply_deferred_until_goal_195"],
+      blockers: ["execution_apply_deferred_until_goal_197"],
+    });
+    expect(byAction.get("campaign_lock_preview")).toMatchObject({
+      class: "preview",
+      apply_allowed: false,
+      token_printed: false,
+    });
+    expect(byAction.get("unlock_stale_campaign_lock")).toMatchObject({
+      class: "safe_stop_pause",
+      apply_allowed: true,
+      reason_required: true,
     });
     expect(byAction.get("start_all")).toMatchObject({
       class: "forbidden",
@@ -60,7 +74,7 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-195-manual-goal-queue-management",
+      current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
@@ -69,6 +83,36 @@ describe("SkyBridgeClient", () => {
       can_resume: false,
       token_printed: false,
     });
+  });
+
+  it("models campaign and repo locks with deterministic priority queue selection", () => {
+    expect(fixtureCampaignLock).toMatchObject({
+      schema: "skybridge.campaign_lock.v1",
+      campaign_id: "dev-queue-189-200",
+      project_id: "skybridge-agent-hub",
+      lock_status: "held",
+      token_printed: false,
+    });
+    expect(fixtureRepoExclusiveLock).toMatchObject({
+      schema: "skybridge.repo_exclusive_lock.v1",
+      repo_id: "skybridge-agent-hub",
+      lock_status: "active",
+      blocks_execution_preview: true,
+      force_release_allowed: false,
+      token_printed: false,
+    });
+    expect(fixtureStaleCampaignLock).toMatchObject({
+      lock_status: "stale",
+      stale: true,
+      token_printed: false,
+    });
+    expect(fixtureCampaignPriorityQueue.selection).toMatchObject({
+      selected_campaign_id: "dev-queue-189-200",
+      decision: "blocked",
+      execution_side_effects: false,
+      token_printed: false,
+    });
+    expect(fixtureCampaignPriorityQueue.items.map((item) => item.priority)).toEqual([10, 20]);
   });
 
   it("models Goal 195 manual queue review without execution controls", () => {
@@ -116,13 +160,13 @@ describe("SkyBridgeClient", () => {
       can_execute_tasks: false,
       token_printed: false,
     });
-    expect(readiness.blockers).toEqual(expect.arrayContaining(["worker_service_offline", "execution_disabled_until_goal_195"]));
+    expect(readiness.blockers).toEqual(expect.arrayContaining(["worker_service_offline", "execution_disabled_until_goal_197"]));
     expect(fixtureCampaignRunReport.worker_service_state).toMatchObject({ mode: "offline", token_printed: false });
     expect(fixtureCampaignRunReport.queue_control_readiness).toMatchObject({
       can_start_one: false,
       can_start_queue: false,
       can_resume: false,
-      execution_disabled_until_goal: "super-195-manual-goal-queue-management",
+      execution_disabled_until_goal: "super-197-multi-worker-readiness",
     });
   });
 
@@ -143,13 +187,22 @@ describe("SkyBridgeClient", () => {
         expect.objectContaining({
           event_type: "human_approval_required",
         }),
+        expect.objectContaining({
+          event_type: "active_repo_lock_blocks_queue",
+        }),
+        expect.objectContaining({
+          event_type: "campaign_held",
+        }),
+        expect.objectContaining({
+          event_type: "multi_campaign_conflict",
+        }),
       ]),
     );
 
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-195-manual-goal-queue-management",
+      goal_id: "super-196-campaign-locking-multi-campaign-queue",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(

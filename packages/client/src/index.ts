@@ -978,6 +978,9 @@ export interface CampaignQueueControlReadiness {
   reason_required: boolean;
   worker_service_state?: WorkerServiceState;
   execution_disabled_until_goal?: string;
+  campaign_lock?: CampaignLock;
+  repo_exclusive_lock?: RepoExclusiveLock;
+  priority_queue?: CampaignPriorityQueue;
 }
 
 export type WorkerServiceMode = "offline" | "standby" | "ready" | "paused" | "stopping" | "error";
@@ -1028,6 +1031,110 @@ export interface WorkerServiceReadiness {
   token_printed: false;
 }
 
+export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
+
+export interface LockOwner {
+  owner_id: string;
+  owner_kind: "campaign" | "runner" | "worker" | "operator" | "unknown";
+  display_name: string;
+  process_id?: string | null;
+  host?: string | null;
+  token_printed: false;
+}
+
+export interface CampaignLock {
+  schema: "skybridge.campaign_lock.v1";
+  lock_id: string;
+  campaign_id: string;
+  project_id: string;
+  lock_owner: LockOwner;
+  heartbeat_at: string | null;
+  expires_at: string | null;
+  lock_status: LockStatus;
+  release_reason: string | null;
+  operator_reason: string | null;
+  age_seconds: number;
+  stale: boolean;
+  token_printed: false;
+}
+
+export interface RepoExclusiveLock {
+  schema: "skybridge.repo_exclusive_lock.v1";
+  lock_id: string;
+  campaign_id: string;
+  project_id: string;
+  repo_id: string;
+  worktree_identity: string;
+  lock_owner: LockOwner;
+  heartbeat_at: string | null;
+  expires_at: string | null;
+  lock_status: LockStatus;
+  release_reason: string | null;
+  operator_reason: string | null;
+  age_seconds: number;
+  stale: boolean;
+  blocks_execution_preview: boolean;
+  force_release_allowed: false;
+  token_printed: false;
+}
+
+export type CampaignQueueStatus = "ready" | "paused" | "held" | "completed" | "archived";
+
+export interface CampaignPriorityQueueItem {
+  campaign_id: string;
+  project_id: string;
+  priority: number;
+  status: CampaignQueueStatus;
+  current_goal_id: string;
+  current_step_id: string;
+  blocked_reason: string | null;
+  selected: boolean;
+  token_printed: false;
+}
+
+export interface CampaignPriorityQueue {
+  schema: "skybridge.campaign_priority_queue.v1";
+  project_id: string;
+  active_campaign_id: string | null;
+  current_campaign_id: string | null;
+  one_active_campaign_per_project: true;
+  deterministic_order: true;
+  filter_statuses: CampaignQueueStatus[];
+  items: CampaignPriorityQueueItem[];
+  selection: {
+    selected_campaign_id: string | null;
+    decision: "select" | "blocked" | "none";
+    blocked_campaign_reason: string | null;
+    queue_decision_summary: string;
+    execution_side_effects: false;
+    token_printed: false;
+  };
+  token_printed: false;
+}
+
+export interface LockRecoveryDecision {
+  schema: "skybridge.lock_recovery_decision.v1";
+  action:
+    | "campaign_lock_preview"
+    | "repo_lock_preview"
+    | "unlock_stale_campaign_lock"
+    | "cancel_campaign"
+    | "abort_campaign"
+    | "hold_campaign";
+  mode: "dry-run" | "apply";
+  allowed: boolean;
+  lock_status?: LockStatus;
+  requires_reason: boolean;
+  reason_recorded: boolean;
+  blockers: string[];
+  warnings: string[];
+  audit_event_id: string | null;
+  task_created: false;
+  worker_loop_started: false;
+  queue_execution_enabled: false;
+  token_printed: false;
+}
+
 export type QueueControlAction =
   | "refresh_status"
   | "report"
@@ -1039,6 +1146,15 @@ export type QueueControlAction =
   | "resume_preview"
   | "start_one_preview"
   | "start_queue_preview"
+  | "campaign_lock_status"
+  | "campaign_lock_preview"
+  | "repo_lock_status"
+  | "repo_lock_preview"
+  | "unlock_stale_campaign_lock"
+  | "cancel_campaign_preview"
+  | "abort_campaign_preview"
+  | "campaign_priority_queue"
+  | "campaign_select_next_preview"
   | "start_one_apply"
   | "start_queue_apply"
   | "start_all"
@@ -1169,6 +1285,14 @@ export type AttentionEventType =
   | "pr_created"
   | "ci_failed"
   | "stale_lease"
+  | "active_repo_lock_blocks_queue"
+  | "stale_lock_requires_review"
+  | "campaign_cancelled"
+  | "campaign_aborted"
+  | "campaign_held"
+  | "multi_campaign_conflict"
+  | "repo_lock_owner_unknown"
+  | "unlock_requires_reason"
   | "safe_action_applied"
   | "emergency_stop_requested"
   | "notification_delivery_skipped"
@@ -1306,7 +1430,19 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
-  ...(["resume_preview", "start_one_preview", "start_queue_preview"] as const).map(
+  ...([
+    "resume_preview",
+    "start_one_preview",
+    "start_queue_preview",
+    "campaign_lock_status",
+    "campaign_lock_preview",
+    "repo_lock_status",
+    "repo_lock_preview",
+    "cancel_campaign_preview",
+    "abort_campaign_preview",
+    "campaign_priority_queue",
+    "campaign_select_next_preview",
+  ] as const).map(
     (action) =>
       ({
         action,
@@ -1316,12 +1452,25 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         reason_required: false,
         human_approval_required: false,
         requires_arm_lease: false,
-        blockers: [],
+        blockers: action === "start_one_preview" || action === "start_queue_preview" ? ["active_repo_lock_blocks_execution_preview"] : [],
         warnings: ["preview_only_no_mutation"],
         summary: "Preview only; no campaign mutation or task creation.",
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
+  {
+    action: "unlock_stale_campaign_lock",
+    class: "safe_stop_pause",
+    allowed_modes: ["preview", "apply"],
+    apply_allowed: true,
+    reason_required: true,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: ["stale_only", "audit_required", "does_not_start_worker"],
+    summary: "Release an inspected stale campaign lock only when a reason is supplied.",
+    token_printed: false,
+  },
   ...(["start_one_apply", "start_queue_apply"] as const).map(
     (action) =>
       ({
@@ -1332,9 +1481,9 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         reason_required: true,
         human_approval_required: true,
         requires_arm_lease: true,
-        blockers: ["execution_apply_deferred_until_goal_195"],
+        blockers: ["execution_apply_deferred_until_goal_197"],
         warnings: [],
-        summary: "Armed execution is modeled but forbidden until the Goal 195 Start One gate.",
+        summary: "Armed execution is modeled but forbidden until a later reviewed multi-worker readiness gate.",
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
@@ -1386,9 +1535,107 @@ export const fixtureWorkerServiceState: WorkerServiceState = {
   readiness_blockers: [
     "worker_service_offline",
     "standby_heartbeat_required",
-    "execution_disabled_until_goal_195",
+    "execution_disabled_until_goal_197",
   ],
   token_available: false,
+  token_printed: false,
+};
+
+export const fixtureLockOwner: LockOwner = {
+  owner_id: "runner-dev-queue-189-200",
+  owner_kind: "campaign",
+  display_name: "dev queue campaign runner",
+  process_id: null,
+  host: "laptop-zenbookduo",
+  token_printed: false,
+};
+
+export const fixtureCampaignLock: CampaignLock = {
+  schema: "skybridge.campaign_lock.v1",
+  lock_id: "campaign_lock_dev_queue_189_200",
+  campaign_id: "dev-queue-189-200",
+  project_id: "skybridge-agent-hub",
+  lock_owner: fixtureLockOwner,
+  heartbeat_at: "2026-06-08T00:00:00.000Z",
+  expires_at: "2026-06-08T00:30:00.000Z",
+  lock_status: "held",
+  release_reason: null,
+  operator_reason: "Goal 196 fixture: campaign is held for lock review before execution.",
+  age_seconds: 0,
+  stale: false,
+  token_printed: false,
+};
+
+export const fixtureRepoExclusiveLock: RepoExclusiveLock = {
+  schema: "skybridge.repo_exclusive_lock.v1",
+  lock_id: "repo_lock_skybridge_agent_hub",
+  campaign_id: "dev-queue-189-200",
+  project_id: "skybridge-agent-hub",
+  repo_id: "skybridge-agent-hub",
+  worktree_identity: "V:/src/skybridge-agent-hub",
+  lock_owner: fixtureLockOwner,
+  heartbeat_at: "2026-06-08T00:00:00.000Z",
+  expires_at: "2026-06-08T00:30:00.000Z",
+  lock_status: "active",
+  release_reason: null,
+  operator_reason: null,
+  age_seconds: 0,
+  stale: false,
+  blocks_execution_preview: true,
+  force_release_allowed: false,
+  token_printed: false,
+};
+
+export const fixtureStaleCampaignLock: CampaignLock = {
+  ...fixtureCampaignLock,
+  lock_id: "campaign_lock_dev_queue_189_200_stale",
+  heartbeat_at: "2026-06-07T22:00:00.000Z",
+  expires_at: "2026-06-07T22:30:00.000Z",
+  lock_status: "stale",
+  age_seconds: 7200,
+  stale: true,
+};
+
+export const fixtureCampaignPriorityQueue: CampaignPriorityQueue = {
+  schema: "skybridge.campaign_priority_queue.v1",
+  project_id: "skybridge-agent-hub",
+  active_campaign_id: "dev-queue-189-200",
+  current_campaign_id: "dev-queue-189-200",
+  one_active_campaign_per_project: true,
+  deterministic_order: true,
+  filter_statuses: ["ready", "paused", "held", "completed", "archived"],
+  items: [
+    {
+      campaign_id: "dev-queue-189-200",
+      project_id: "skybridge-agent-hub",
+      priority: 10,
+      status: "ready",
+      current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
+      current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+      blocked_reason: "repo_lock_requires_review_before_execution_preview",
+      selected: true,
+      token_printed: false,
+    },
+    {
+      campaign_id: "bootstrap-mvp",
+      project_id: "skybridge-agent-hub",
+      priority: 20,
+      status: "held",
+      current_goal_id: "super-184b-operator-console-dashboard",
+      current_step_id: "bootstrap-mvp:super-184b-operator-console-dashboard",
+      blocked_reason: "lower_priority_campaign_held_while_dev_queue_is_current",
+      selected: false,
+      token_printed: false,
+    },
+  ],
+  selection: {
+    selected_campaign_id: "dev-queue-189-200",
+    decision: "blocked",
+    blocked_campaign_reason: "active_repo_lock_blocks_execution_preview",
+    queue_decision_summary: "dev-queue-189-200 is highest priority, but repo lock review blocks start previews.",
+    execution_side_effects: false,
+    token_printed: false,
+  },
   token_printed: false,
 };
 
@@ -1424,11 +1671,11 @@ export function createWorkerServiceReadiness(
   if (!workerProfileValid) blockers.add("worker_profile_invalid");
   if (state.mode === "offline") blockers.add("worker_service_offline");
   if (state.mode === "standby") warnings.add("standby_heartbeat_only_no_execution");
-  if (state.mode === "ready") warnings.add("ready_mode_still_execution_disabled_until_goal_195");
+  if (state.mode === "ready") warnings.add("ready_mode_still_execution_disabled_until_goal_197");
   if (state.pause_requested) blockers.add("pause_requested");
   if (state.stop_requested) blockers.add("stop_requested");
   if (state.current_task_id) blockers.add("current_task_present");
-  blockers.add("execution_disabled_until_goal_195");
+  blockers.add("execution_disabled_until_goal_197");
 
   const heartbeatAge = state.heartbeat_at
     ? Math.max(
@@ -1451,8 +1698,8 @@ export function createWorkerServiceReadiness(
     warnings: Array.from(warnings),
     recommended_action:
       state.mode === "offline"
-        ? "Start or refresh a bounded standby heartbeat, then keep Start One disabled until Goal 195."
-        : "Monitor standby heartbeat and keep execution disabled until the Goal 195 Start One gate.",
+        ? "Start or refresh a bounded standby heartbeat, then keep Start One disabled until a later reviewed gate."
+        : "Monitor standby heartbeat and keep execution disabled until a later reviewed multi-worker readiness gate.",
     token_printed: false,
   };
 }
@@ -1671,6 +1918,14 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "emergency_stop_requested",
       "notification_delivery_skipped",
       "notification_delivery_fixture",
+      "active_repo_lock_blocks_queue",
+      "stale_lock_requires_review",
+      "campaign_cancelled",
+      "campaign_aborted",
+      "campaign_held",
+      "multi_campaign_conflict",
+      "repo_lock_owner_unknown",
+      "unlock_requires_reason",
     ],
     real_external_send: false,
     summary: "Render in SkyBridge Desktop only.",
@@ -1680,7 +1935,22 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
     route: "web_banner",
     status: "enabled",
     levels: ["warning", "blocker", "action_required", "critical"],
-    event_types: ["worker_offline", "queue_blocked", "human_approval_required", "ci_failed", "stale_lease", "emergency_stop_requested"],
+    event_types: [
+      "worker_offline",
+      "queue_blocked",
+      "human_approval_required",
+      "ci_failed",
+      "stale_lease",
+      "emergency_stop_requested",
+      "active_repo_lock_blocks_queue",
+      "stale_lock_requires_review",
+      "campaign_cancelled",
+      "campaign_aborted",
+      "campaign_held",
+      "multi_campaign_conflict",
+      "repo_lock_owner_unknown",
+      "unlock_requires_reason",
+    ],
     real_external_send: false,
     summary: "Render in the Web attention banner/feed.",
     token_printed: false,
@@ -1689,7 +1959,22 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
     route: "local_fixture_notification",
     status: "fixture_only",
     levels: ["blocker", "action_required", "critical"],
-    event_types: ["worker_offline", "queue_blocked", "human_approval_required", "ci_failed", "stale_lease", "emergency_stop_requested"],
+    event_types: [
+      "worker_offline",
+      "queue_blocked",
+      "human_approval_required",
+      "ci_failed",
+      "stale_lease",
+      "emergency_stop_requested",
+      "active_repo_lock_blocks_queue",
+      "stale_lock_requires_review",
+      "campaign_cancelled",
+      "campaign_aborted",
+      "campaign_held",
+      "multi_campaign_conflict",
+      "repo_lock_owner_unknown",
+      "unlock_requires_reason",
+    ],
     real_external_send: false,
     fixture_ledger_dir: ".agent/tmp/notifications",
     summary: "Write a local ignored fixture ledger entry when fixture dispatch is explicitly requested.",
@@ -1756,6 +2041,74 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
         "queue_control",
         `Queue blocked by ${[...readiness.blockers, ...report.blockers].join(", ")}.`,
         readiness.next_safe_action,
+      ),
+    );
+  }
+
+  const repoLock = readiness.repo_exclusive_lock;
+  if (repoLock?.blocks_execution_preview) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "active_repo_lock_blocks_queue",
+        repoLock.stale ? "blocker" : "action_required",
+        "queue_control",
+        `Repo lock ${repoLock.lock_id} blocks queue start previews for ${repoLock.repo_id}.`,
+        repoLock.stale ? "Inspect the stale repo lock and release only with an operator reason." : "Inspect the active repo lock owner before any queue start preview.",
+        repoLock.lock_id,
+      ),
+    );
+  }
+  if (repoLock?.lock_owner.owner_kind === "unknown") {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "repo_lock_owner_unknown",
+        "blocker",
+        "queue_control",
+        `Repo lock ${repoLock.lock_id} has an unknown owner.`,
+        "Inspect local lock evidence before releasing or starting any queue preview.",
+        `${repoLock.lock_id}_unknown_owner`,
+      ),
+    );
+  }
+
+  const campaignLock = readiness.campaign_lock;
+  if (campaignLock?.stale || repoLock?.stale) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "stale_lock_requires_review",
+        "blocker",
+        "campaign",
+        "A stale campaign or repo lock requires inspection-first recovery.",
+        "Run lock preview, confirm the owner/heartbeat/expiry, then apply stale unlock only with a reason.",
+      ),
+    );
+  }
+  if (campaignLock?.lock_status === "held") {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "campaign_held",
+        "warning",
+        "campaign",
+        `${campaignLock.campaign_id} is held for operator review.`,
+        "Review lock status and priority queue selection before allowing later execution work.",
+      ),
+    );
+  }
+
+  const priorityQueue = readiness.priority_queue;
+  if ((priorityQueue?.items.filter((item) => item.status === "ready").length ?? 0) > 1 || priorityQueue?.selection.decision === "blocked") {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "multi_campaign_conflict",
+        "warning",
+        "campaign",
+        priorityQueue?.selection.queue_decision_summary ?? "Multiple campaigns require deterministic selection review.",
+        "Use campaign-select-next-preview and keep execution side effects disabled.",
       ),
     );
   }
@@ -1873,8 +2226,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-  current_goal_id: "super-195-manual-goal-queue-management",
+  current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+  current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -1882,16 +2235,16 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+    current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
     step_count: 12,
     source: "fixture",
     goal_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-    goal_id: "super-195-manual-goal-queue-management",
-    order: 7,
-    title: "Manual Goal Queue Management",
+    campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+    goal_id: "super-196-campaign-locking-multi-campaign-queue",
+    order: 8,
+    title: "Campaign Locking and Multi-campaign Queue",
     status: "ready",
     is_current: true,
     dependencies: ["super-194-worker-service-mode"],
@@ -1907,15 +2260,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
-    goal_id: "super-194-worker-service-mode",
-    order: 6,
-    title: "Worker Service Mode",
+    campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+    goal_id: "super-195-manual-goal-queue-management",
+    order: 7,
+    title: "Manual Goal Queue Management",
     status: "completed",
     is_current: false,
-    dependencies: ["super-193-notification-attention-loop"],
+    dependencies: ["super-194-worker-service-mode"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/112"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/113"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -1972,8 +2325,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
       },
       {
         kind: "step",
-        campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-        goal_id: "super-195-manual-goal-queue-management",
+        campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+        goal_id: "super-196-campaign-locking-multi-campaign-queue",
         evidence_id: "none",
         status: "missing",
         classification: "missing_evidence",
@@ -1982,12 +2335,12 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 195 evidence is missing until the authoring foundation is completed.",
+        summary: "Goal 196 evidence is missing until the locking foundation is completed.",
       },
     ],
   },
   blockers: [],
-  warnings: ["approved_unconverted_proposals_present"],
+  warnings: ["approved_unconverted_proposals_present", "multi_campaign_conflict_review_required"],
   queue_control_readiness: {
     can_start_one: false,
     can_start_queue: false,
@@ -1995,16 +2348,19 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     can_stop: true,
     can_emergency_stop: true,
     can_resume: false,
-    blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
-    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat"],
-    required_human_action: ["review_goal_pack_validation_and_hash_drift_before_any_import_update"],
-    next_safe_action: "Review manual goal queue management previews; keep Start One and Start Queue disabled.",
+    blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_197"],
+    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review"],
+    required_human_action: ["review_campaign_and_repo_locks_before_any_start_preview", "unlock_stale_locks_only_after_inspection_with_reason"],
+    next_safe_action: "Review campaign lock, repo lock and priority queue previews; keep Start One and Start Queue disabled.",
     worker_required: true,
     worker_status: "offline",
     run_budget_required: true,
     reason_required: true,
     worker_service_state: fixtureWorkerServiceState,
-    execution_disabled_until_goal: "super-195-manual-goal-queue-management",
+    execution_disabled_until_goal: "super-197-multi-worker-readiness",
+    campaign_lock: fixtureCampaignLock,
+    repo_exclusive_lock: fixtureRepoExclusiveLock,
+    priority_queue: fixtureCampaignPriorityQueue,
   },
   worker_service_state: fixtureWorkerServiceState,
   token_printed: false,
@@ -2014,19 +2370,19 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-  current_goal_id: "super-195-manual-goal-queue-management",
+  current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+  current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-195-manual-queue-review-offline-active0-stale0",
-  revision: "fixture-goal-195-revision",
+  state_hash: "fixture-goal-196-locking-offline-active0-stale0-repolock",
+  revision: "fixture-goal-196-revision",
   action_matrix: queueControlActionMatrix,
-  blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
-  warnings: ["standby_worker_can_only_heartbeat"],
+  blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_197"],
+  warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review"],
   token_printed: false,
 };
 
@@ -2107,10 +2463,47 @@ fixtureCampaignRunReport.step_ledger = [
     not_applicable_evidence: false,
     operator_action_required: false,
   },
+  {
+    campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+    goal_id: "super-193-notification-attention-loop",
+    order: 5,
+    title: "Notification and Attention Loop",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-192-dashboard-safe-actions"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/111"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
+  {
+    campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+    goal_id: "super-194-worker-service-mode",
+    order: 6,
+    title: "Worker Service Mode",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-193-notification-attention-loop"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/112"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-196-campaign-locking-multi-campaign-queue", "Campaign Locking and Multi-campaign Queue"],
     ["super-197-multi-worker-readiness", "Multi-worker Readiness"],
     ["super-198-multi-project-support", "Multi-project Support"],
     ["super-199-hermes-goal-draft-generator", "Hermes Goal Draft Generator"],
@@ -2118,7 +2511,7 @@ fixtureCampaignRunReport.step_ledger = [
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 8,
+    order: index + 9,
     title,
     status: "pending",
     is_current: false,

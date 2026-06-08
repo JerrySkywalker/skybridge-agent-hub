@@ -54,7 +54,7 @@ Goal 193 moves future fixture queue-control audit output to ignored `.agent/tmp/
 
 ## Goal 194 Follow-on
 
-Goal 194 builds on the attention loop with `skybridge.worker_service_state.v1` and worker readiness panels. Worker offline and queue blocked attention remains display-only. Even with standby heartbeat present, real start-one/start-queue execution remains disabled until Goal 195 adds the reviewed Start One gate.
+Goal 194 builds on the attention loop with `skybridge.worker_service_state.v1` and worker readiness panels. Goal 195 adds manual goal queue review, and Goal 196 adds lock review. Worker offline and queue blocked attention remains display-only. Even with standby heartbeat present, real start-one/start-queue execution remains disabled until a later reviewed execution gate.
 
 ## Validation
 

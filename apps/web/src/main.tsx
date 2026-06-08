@@ -20,8 +20,12 @@ import {
   createAttentionModel,
   createWorkerServiceReadiness,
   fixtureCampaignRunReport,
+  fixtureCampaignLock,
+  fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
+  fixtureRepoExclusiveLock,
+  fixtureStaleCampaignLock,
   queueControlActionMatrix,
   routeAttentionEvent,
   summarizeCampaignEvidence,
@@ -323,6 +327,8 @@ function CampaignQueuePage() {
         </div>
         <aside className="dashboard-grid__side">
           <AttentionFeed events={attention.attention_events} />
+          <CampaignLockPanel />
+          <CampaignPriorityQueuePanel />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <QueueReadinessPanel readiness={readiness} />
@@ -355,6 +361,92 @@ function CampaignQueuePage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function CampaignLockPanel() {
+  return (
+    <section className="skybridge-panel campaign-lock-review" aria-label="Campaign and repo lock review">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Lock Review</p>
+          <h2>Campaign / Repo Locks</h2>
+        </div>
+        <span className={badgeClass(fixtureRepoExclusiveLock.blocks_execution_preview ? "bad" : "ok")}>
+          {fixtureRepoExclusiveLock.lock_status}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Campaign lock</dt>
+          <dd>{fixtureCampaignLock.lock_status}</dd>
+        </div>
+        <div>
+          <dt>Repo exclusive lock</dt>
+          <dd>{fixtureRepoExclusiveLock.repo_id}</dd>
+        </div>
+        <div>
+          <dt>Lock owner</dt>
+          <dd>{fixtureRepoExclusiveLock.lock_owner.display_name}</dd>
+        </div>
+        <div>
+          <dt>Heartbeat age</dt>
+          <dd>{fixtureRepoExclusiveLock.age_seconds}s</dd>
+        </div>
+        <div>
+          <dt>Expires at</dt>
+          <dd>{fixtureRepoExclusiveLock.expires_at}</dd>
+        </div>
+        <div>
+          <dt>Stale recovery preview</dt>
+          <dd>{fixtureStaleCampaignLock.lock_status}; reason required=true</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Recovery guidance"
+        items={[
+          "active repo locks block start previews",
+          "stale unlock apply requires operator reason",
+          "active non-stale lock force release is refused",
+          "token_printed=false",
+        ]}
+        fallback="No lock guidance."
+      />
+      <p className="skybridge-state-note">No execution controls are exposed on Web lock review.</p>
+    </section>
+  );
+}
+
+function CampaignPriorityQueuePanel() {
+  return (
+    <section className="skybridge-panel campaign-priority-queue" aria-label="Campaign priority queue">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Multi-campaign Queue</p>
+          <h2>Priority Selection</h2>
+        </div>
+        <span className={badgeClass(fixtureCampaignPriorityQueue.selection.decision === "select" ? "ok" : "bad")}>
+          {fixtureCampaignPriorityQueue.selection.decision}
+        </span>
+      </div>
+      <QueueList
+        title="Campaign order"
+        items={fixtureCampaignPriorityQueue.items.map(
+          (item) => `${item.priority}: ${item.campaign_id} ${item.status} selected=${item.selected} blocked=${item.blocked_reason ?? "none"}`,
+        )}
+        fallback="No campaigns."
+      />
+      <QueueList
+        title="Selection preview"
+        items={[
+          `selected=${fixtureCampaignPriorityQueue.selection.selected_campaign_id}`,
+          `blocked=${fixtureCampaignPriorityQueue.selection.blocked_campaign_reason}`,
+          fixtureCampaignPriorityQueue.selection.queue_decision_summary,
+          `execution_side_effects=${fixtureCampaignPriorityQueue.selection.execution_side_effects}`,
+        ]}
+        fallback="No selection preview."
+      />
+    </section>
   );
 }
 
@@ -543,7 +635,7 @@ function WorkerReadinessPanel({
         fallback="No capability data."
       />
       <QueueList title="Readiness blockers" items={readiness.blockers} fallback="No worker service blockers." />
-      <p className="skybridge-state-note">Web has no direct local process control; Start One remains disabled until Goal 195.</p>
+      <p className="skybridge-state-note">Web has no direct local process control; Start One remains disabled until a later reviewed execution gate.</p>
       <span>token_printed=false</span>
     </section>
   );
