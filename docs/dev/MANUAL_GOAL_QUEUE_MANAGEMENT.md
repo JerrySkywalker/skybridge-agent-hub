@@ -106,3 +106,9 @@ Goal 195 prepares queue authoring and review. It does not run `start-one`, `star
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.
+
+## Goal 198 Project Profile Defaults
+
+Goal 198 adds project profile `goal_pack` defaults. A profile names the default goal pack directory and allowed goal pack directories, but `goal_pack.import_apply_enabled=false` remains mandatory. Invalid or out-of-repo goal pack paths are rejected by profile validation.
+
+This keeps Goal 195 authoring/review separate from multi-project selection. Project selection can preview which goal pack would apply, but it does not import, update, archive, execute, claim or start any queue step.

@@ -1,0 +1,61 @@
+{
+  "schema": "skybridge.project_profile.v1",
+  "project_id": "generic-node-app-fixture",
+  "display_name": "Generic Node App Fixture",
+  "repo_path": "fixtures/projects/generic-node-app",
+  "repo_identity": "fixture/generic-node-app",
+  "default_branch": "main",
+  "allowed_paths": [
+    ".",
+    "src",
+    "docs"
+  ],
+  "blocked_paths": [
+    ".env",
+    ".data",
+    ".agent/runs"
+  ],
+  "validation_commands": [
+    {
+      "id": "fixture-schema",
+      "command": "fixture:project-profile-schema",
+      "known_fixture": true
+    }
+  ],
+  "worker_profile": {
+    "default_worker_profile": "fixture-preview-worker",
+    "allowed_worker_profiles": [
+      "fixture-preview-worker"
+    ],
+    "can_claim_tasks": false,
+    "can_execute_tasks": false
+  },
+  "goal_pack": {
+    "default_goal_pack_dir": "goals/templates",
+    "allowed_goal_pack_dirs": [
+      "goals/templates"
+    ],
+    "import_apply_enabled": false
+  },
+  "ci_policy": {
+    "required_checks": [
+      "Fixture check"
+    ],
+    "auto_merge_enabled": false,
+    "dry_run_default": true
+  },
+  "project_policy": {
+    "fixture_only": true,
+    "dry_run_default": true,
+    "selection_preview_only": true,
+    "allow_absolute_repo_path": false,
+    "approved_repo_roots": [
+      "fixtures/projects/generic-node-app"
+    ],
+    "forbid_arbitrary_shell": true,
+    "forbid_secret_fields": true,
+    "forbid_production_paths": true
+  },
+  "profile_hash": "computed-by-loader",
+  "token_printed": false
+}

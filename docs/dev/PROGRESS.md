@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-06-08 Goal 198 Multi-project Support
+
+- Added safe `skybridge.project_profile.v1` sample profiles for SkyBridge and a repository-local fixture project.
+- Added `skybridge-project-profile.ps1` for read-only profile list, validate, preview, hash and project selection preview flows.
+- Added conservative project policy validation for secret-looking fields, token values, Authorization/private-key markers, unapproved repo roots, out-of-repo paths, production/server-root/DNS/OpenResty/Hermes paths, arbitrary shell command shapes, invalid goal pack paths and execution-enabled worker/goal-pack defaults.
+- Integrated project selection preview into queue-control and worker routing preview metadata while keeping `task_created=false`, `task_claimed=false`, `task_executed=false`, `worker_loop_started=false`, `queue_execution_enabled=false` and `validation_commands_executed=false`.
+- Added Desktop/Web read-only Project Profile Review panels and project-profile attention event types.
+- Added focused Goal 198 project profile smokes. Goal 198 does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation, Codex worker execution, live queue execution, other-repo mutation or real external notification sending.
+
 ## 2026-06-08 Goal 196 Campaign Locking and Multi-campaign Queue
 
 - Added shared campaign lock, repo-exclusive lock, lock owner, stale recovery decision and deterministic multi-campaign priority queue contracts with `token_printed=false`.

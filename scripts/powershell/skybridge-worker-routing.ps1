@@ -186,10 +186,13 @@ function New-TaskPreview {
     $script:RepoId = "restricted-repo"
   }
   [pscustomobject]@{
-    task_id = "preview-super-197-$Scenario"
+    task_id = "preview-super-198-$Scenario"
     task_type = $TaskType
     project_id = $script:ProjectId
     repo_id = $script:RepoId
+    project_profile_required = $true
+    project_profile_hash = "258fbacefb78c8d8bd42900c90fbc04ff6d7dd020204cb4bdd9c67d1a2e24d7a"
+    project_selection_preview_only = $true
     required_os = $effectiveOs
     required_tools = @($effectiveTools)
     required_capabilities = @($effectiveCapabilities)

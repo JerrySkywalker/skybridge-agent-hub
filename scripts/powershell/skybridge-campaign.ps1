@@ -1554,7 +1554,7 @@ function New-QueueControlReadiness {
       token_printed = $false
     }
   }
-  $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_197") })
+  $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_199") })
   if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -eq 0) { $blockers += "no_ready_worker" }
   if ($routingReadiness -and $routingReadiness.route_preview -and [bool]$routingReadiness.route_preview.repo_parallelism_guard.blocked) { $blockers += "repo_parallelism_blocked" }
   if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -gt 0) { $Warnings += "worker_ready_for_preview_only_execution_gate_disabled" }
@@ -1579,7 +1579,7 @@ function New-QueueControlReadiness {
     run_budget_required = $true
     reason_required = $true
     worker_service_state = $workerServiceState
-    execution_disabled_until_goal = "super-197-multi-worker-readiness"
+    execution_disabled_until_goal = "super-199-hermes-goal-draft-generator"
     campaign_lock = [pscustomobject]@{
       schema = "skybridge.campaign_lock.v1"
       lock_id = "campaign_lock_dev_queue_189_200"
@@ -1625,7 +1625,7 @@ function New-WorkerServiceReportState {
   if ($mode -eq "offline") { $blockers.Add("worker_service_offline") | Out-Null }
   if ($mode -eq "error") { $blockers.Add("worker_service_error") | Out-Null }
   if ($mode -eq "standby") { $blockers.Add("standby_worker_can_only_heartbeat") | Out-Null }
-  $blockers.Add("execution_disabled_until_goal_197") | Out-Null
+  $blockers.Add("execution_disabled_until_goal_199") | Out-Null
   [pscustomobject]@{
     schema = "skybridge.worker_service_state.v1"
     worker_service_state = $true

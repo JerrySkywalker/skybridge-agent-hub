@@ -72,3 +72,9 @@ Desktop and Web render these as read-only attention and routing panels. They do 
 ## Remaining Before Start-One Trial
 
 Before any controlled start-one trial, SkyBridge still needs an explicit execution gate, reviewed repo-lock recovery path, operator-approved task claim transition, audit evidence for the selected worker, and a bounded execution launch goal. Goal 197 intentionally stops before those actions.
+
+## Goal 198 Project Policy Layer
+
+Goal 198 layers project profile selection on top of worker route preview. A selected worker is not enough to execute work; route preview now carries the selected project profile hash and `project_selection_preview_only=true`.
+
+The project policy layer validates repo roots, allowed and blocked paths, default branch, validation command shape, worker profile defaults and goal pack defaults before any future controlled start-one trial. `can_claim_tasks=false`, `can_execute_tasks=false`, `can_start_one=false` and `can_start_queue=false` remain unchanged.

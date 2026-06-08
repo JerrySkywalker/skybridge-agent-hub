@@ -5,8 +5,8 @@ param(
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$WorkerProfile = "laptop-zenbookduo-standby",
   [string]$CampaignId = "dev-queue-189-200",
-  [string]$CurrentStepId = "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-  [string]$CurrentGoalId = "super-196-campaign-locking-multi-campaign-queue",
+  [string]$CurrentStepId = "dev-queue-189-200:super-198-multi-project-support",
+  [string]$CurrentGoalId = "super-198-multi-project-support",
   [int]$MaxHeartbeats = 1,
   [int]$IntervalSeconds = 0,
   [switch]$Apply,
@@ -65,7 +65,7 @@ function New-WorkerServiceState {
   if ($StopRequested) { $blockers.Add("stop_requested") | Out-Null }
   if ($PauseRequested) { $blockers.Add("pause_requested") | Out-Null }
   if (-not $TokenAvailable) { $blockers.Add("worker_token_unavailable") | Out-Null }
-  $blockers.Add("execution_disabled_until_goal_197") | Out-Null
+  $blockers.Add("execution_disabled_until_goal_199") | Out-Null
 
   [pscustomobject]@{
     schema = "skybridge.worker_service_state.v1"
@@ -89,10 +89,21 @@ function New-WorkerServiceState {
 
 function Read-WorkerServiceState {
   $path = Get-StatePath
+  $state = $null
   if (Test-Path -LiteralPath $path -PathType Leaf) {
-    try { return Get-Content -Raw -LiteralPath $path | ConvertFrom-Json -ErrorAction Stop } catch {}
+    try { $state = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json -ErrorAction Stop } catch {}
   }
-  New-WorkerServiceState
+  if (-not $state) { $state = New-WorkerServiceState }
+  $normalizedBlockers = @(
+    @($state.readiness_blockers) |
+      Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and [string]$_ -ne "execution_disabled_until_goal_197" } |
+      Select-Object -Unique
+  )
+  if ($normalizedBlockers -notcontains "execution_disabled_until_goal_199") {
+    $normalizedBlockers += "execution_disabled_until_goal_199"
+  }
+  $state | Add-Member -NotePropertyName readiness_blockers -NotePropertyValue @($normalizedBlockers) -Force
+  return $state
 }
 
 function Write-WorkerServiceState {
@@ -154,7 +165,7 @@ function Get-WorkerReadiness {
   if (-not $clean) { $blockers.Add("worktree_dirty") | Out-Null }
   if ($runnerLock -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
   if (-not [bool]$State.token_available -and -not $blockers.Contains("worker_token_unavailable")) { $blockers.Add("worker_token_unavailable") | Out-Null }
-  if (-not $blockers.Contains("execution_disabled_until_goal_197")) { $blockers.Add("execution_disabled_until_goal_197") | Out-Null }
+  if (-not $blockers.Contains("execution_disabled_until_goal_199")) { $blockers.Add("execution_disabled_until_goal_199") | Out-Null }
 
   $age = $null
   if (-not [string]::IsNullOrWhiteSpace([string]$State.heartbeat_at)) {
@@ -167,7 +178,7 @@ function Get-WorkerReadiness {
     heartbeat_age_seconds = $age
     ready_for_start_one_gate = $false
     clean_worktree = $clean
-    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-196-campaign-locking-multi-campaign-queue")
+    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-198-multi-project-support")
     active_tasks = 0
     stale_leases = 0
     runner_lock_status = $runnerLock

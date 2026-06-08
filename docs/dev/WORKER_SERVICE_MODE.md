@@ -47,7 +47,7 @@ Worker service readiness checks:
 - valid worker profile name;
 - service mode `standby` or `ready`.
 
-Even if standby heartbeat is present, `ready_for_start_one_gate=false`, `can_claim_tasks=false` and `can_execute_tasks=false`. Goal 195 keeps queue start controls disabled while manual goal pack review, hash drift checks and archive/re-import previews are added.
+Even if standby heartbeat is present, `ready_for_start_one_gate=false`, `can_claim_tasks=false` and `can_execute_tasks=false`. Goal 198 keeps queue start controls disabled while project profile review and project selection previews are added.
 
 ## Desktop And Web
 

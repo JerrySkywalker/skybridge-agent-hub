@@ -1,0 +1,75 @@
+{
+  "schema": "skybridge.project_profile.v1",
+  "project_id": "skybridge-agent-hub",
+  "display_name": "SkyBridge Agent Hub",
+  "repo_path": "V:/src/skybridge-agent-hub",
+  "repo_identity": "JerrySkywalker/skybridge-agent-hub",
+  "default_branch": "main",
+  "allowed_paths": [
+    ".",
+    "apps/desktop",
+    "apps/web",
+    "config/project-profiles",
+    "docs/dev",
+    "goals/dev-queue-189-200",
+    "packages/client",
+    "scripts/powershell"
+  ],
+  "blocked_paths": [
+    ".env",
+    ".env.local",
+    ".agent/runs",
+    ".data",
+    "deploy/production",
+    "docs/operations/openresty-hermes-api.example.conf"
+  ],
+  "validation_commands": [
+    {
+      "id": "pnpm-check",
+      "command": "corepack pnpm check",
+      "known_fixture": false
+    },
+    {
+      "id": "powershell-parse",
+      "command": "pwsh -ExecutionPolicy Bypass -File scripts/powershell/validate-powershell.ps1",
+      "known_fixture": false
+    }
+  ],
+  "worker_profile": {
+    "default_worker_profile": "laptop-zenbookduo-standby",
+    "allowed_worker_profiles": [
+      "laptop-zenbookduo-standby",
+      "linux-ci-preview"
+    ],
+    "can_claim_tasks": false,
+    "can_execute_tasks": false
+  },
+  "goal_pack": {
+    "default_goal_pack_dir": "goals/dev-queue-189-200",
+    "allowed_goal_pack_dirs": [
+      "goals/dev-queue-189-200"
+    ],
+    "import_apply_enabled": false
+  },
+  "ci_policy": {
+    "required_checks": [
+      "Project check"
+    ],
+    "auto_merge_enabled": false,
+    "dry_run_default": true
+  },
+  "project_policy": {
+    "fixture_only": false,
+    "dry_run_default": true,
+    "selection_preview_only": true,
+    "allow_absolute_repo_path": true,
+    "approved_repo_roots": [
+      "V:/src/skybridge-agent-hub"
+    ],
+    "forbid_arbitrary_shell": true,
+    "forbid_secret_fields": true,
+    "forbid_production_paths": true
+  },
+  "profile_hash": "computed-by-loader",
+  "token_printed": false
+}

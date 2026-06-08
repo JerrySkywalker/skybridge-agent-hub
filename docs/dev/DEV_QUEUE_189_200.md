@@ -458,3 +458,16 @@ Goal 197 adds the multi-worker readiness foundation for `dev-queue-189-200:super
 - Goal 197 does not enable Start One, Start Queue, task claim, task execution, or campaign-step-derived execution tasks.
 
 See `docs/dev/MULTI_WORKER_READINESS.md`.
+
+## Goal 198 Multi-project Support
+
+Goal 198 adds safe project profiles and project policy validation for `dev-queue-189-200:super-198-multi-project-support`.
+
+- Project selection is read-only and preview-only.
+- Profiles validate repo path, repo identity, default branch, allowed/blocked paths, validation command shape, worker profile defaults, goal pack defaults, CI policy and project policy.
+- Desktop and Web render Project Profile Review panels with profile hash, validation status, allowed/blocked paths, worker profile and goal pack summaries.
+- `queue_control_readiness` includes project profile and project selection preview metadata.
+- Worker route preview includes project profile hash and `project_selection_preview_only=true`.
+- Goal 198 does not enable Start One, Start Queue, task claim, task execution, worker loops, campaign-step-derived execution tasks or other-repo mutation.
+
+See `docs/dev/MULTI_PROJECT_SUPPORT.md`.

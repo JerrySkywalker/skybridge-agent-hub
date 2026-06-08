@@ -87,3 +87,7 @@ Goal 197 can build multi-worker readiness on top of these locks. Goal 196 only a
 ## Goal 197 Routing Guard Note
 
 The Goal 196 repo-exclusive-lock model is now consumed by the Goal 197 route preview. `max_parallel_per_repo=1` is explicit. Active locks block routing preview, stale locks require recovery first, and unknown or foreign lock ownership blocks selection. This does not weaken repo serialization.
+
+## Goal 198 Project Policy Guard Note
+
+Goal 198 consumes the same repo-exclusive-lock model while adding project profile validation. Project selection remains preview-only and does not release locks, claim tasks, execute validation commands, import goals or mutate repositories. Active or stale repo locks still block future start previews until reviewed through the existing lock recovery path.

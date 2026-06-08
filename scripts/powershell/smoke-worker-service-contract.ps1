@@ -17,7 +17,7 @@ foreach ($needle in @(
   "can_execute_tasks: false",
   "capability_matrix",
   "readiness_blockers",
-  "execution_disabled_until_goal_197",
+  "execution_disabled_until_goal_199",
   "token_printed: false"
 )) {
   if ($source -notmatch [regex]::Escape($needle)) { throw "Missing worker service contract field: $needle" }
