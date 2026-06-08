@@ -7,7 +7,7 @@ $result = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $re
 foreach ($field in @("clean_worktree", "known_campaign", "active_tasks", "stale_leases", "runner_lock_status", "token_available", "worker_profile_valid")) {
   if (-not $result.readiness.PSObject.Properties[$field]) { throw "Missing readiness gate field: $field" }
 }
-if ([bool]$result.readiness.ready_for_start_one_gate) { throw "Goal 194 must not mark Start One gate ready." }
+if ([bool]$result.readiness.ready_for_start_one_gate) { throw "Goal 195 must not mark Start One gate ready." }
 if (@($result.readiness.blockers) -notcontains "execution_disabled_until_goal_195") { throw "Missing Goal 195 execution blocker." }
 
 [pscustomobject]@{

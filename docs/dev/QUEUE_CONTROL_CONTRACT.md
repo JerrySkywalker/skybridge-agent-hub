@@ -44,7 +44,9 @@ Desktop and Web show the same Safe Actions / Queue Controls section:
 - reason-gated safe actions: Safe Pause, Stop Queue, Emergency Stop;
 - disabled/forbidden: Start One Apply, Start Queue Apply, Start All, Run Forever, Worker Loop.
 
-Worker offline remains a blocker. Goal 194 adds standby worker service readiness, but standby only reduces operator uncertainty; it does not enable start apply. For the current campaign state, start actions stay disabled because active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, `execution_disabled_until_goal_195` is present, and `token_printed=false`.
+Worker offline remains a blocker. Goal 194 adds standby worker service readiness, but standby only reduces operator uncertainty; it does not enable start apply. Goal 195 adds manual goal pack review, hash drift and re-import/archive previews while start actions stay disabled because active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, execution apply is disabled during Goal 195, and `token_printed=false`.
+
+The shared safe summary also carries `goal_pack_id`, `validation_result`, `hash_drift_count`, `dependency_order_status` and `proposed_import_update_action`. These fields are safe to paste when `token_printed=false`.
 
 ## CLI
 
@@ -56,7 +58,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command safe-pause -Reason "operator reason" -Json
 ```
 
-The CLI defaults to preview/dry-run behavior unless `-Apply` is supplied. In Goal 193, `start-one -Apply`, `start-all -Apply`, `resume -Apply`, `start_one_apply` and `start_queue_apply` are rejected before runner commands can execute.
+The CLI defaults to preview/dry-run behavior unless `-Apply` is supplied. In Goal 195, `start-one -Apply`, `start-all -Apply`, `resume -Apply`, `start_one_apply` and `start_queue_apply` are rejected before runner commands can execute.
 
 Fixture queue-control audit output is local-only and ignored:
 
@@ -66,4 +68,4 @@ Fixture queue-control audit output is local-only and ignored:
 
 ## Deferred Work
 
-Actual start-one/start-queue apply enablement remains deferred until Goal 195 or later adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.
+Actual start-one/start-queue apply enablement remains deferred until a later reviewed goal adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.

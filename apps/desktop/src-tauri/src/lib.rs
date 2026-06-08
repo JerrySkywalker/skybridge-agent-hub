@@ -856,6 +856,11 @@ fn build_safe_summary(report: &Value) -> Value {
         "current_step": get_string(report, &["current_step_id"]).unwrap_or_else(|| "unknown".into()),
         "current_goal_id": get_string(report, &["current_goal_id"]).unwrap_or_else(|| "unknown".into()),
         "current_goal_status": get_string(report, &["current_goal_status"]).unwrap_or_else(|| "unknown".into()),
+        "goal_pack_id": get_string(report, &["campaign_id"]).unwrap_or_else(|| CAMPAIGN_ID.into()),
+        "validation_result": "unknown",
+        "hash_drift_count": 0,
+        "dependency_order_status": "unknown",
+        "proposed_import_update_action": "review_goal_pack_offline",
         "queue_readiness": {
             "can_start_one": readiness.get("can_start_one").and_then(Value::as_bool).unwrap_or(false),
             "can_start_queue": readiness.get("can_start_queue").and_then(Value::as_bool).unwrap_or(false),

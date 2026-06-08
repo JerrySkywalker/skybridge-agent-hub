@@ -5,8 +5,8 @@ param(
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$WorkerProfile = "laptop-zenbookduo-standby",
   [string]$CampaignId = "dev-queue-189-200",
-  [string]$CurrentStepId = "dev-queue-189-200:super-194-worker-service-mode",
-  [string]$CurrentGoalId = "super-194-worker-service-mode",
+  [string]$CurrentStepId = "dev-queue-189-200:super-195-manual-goal-queue-management",
+  [string]$CurrentGoalId = "super-195-manual-goal-queue-management",
   [int]$MaxHeartbeats = 1,
   [int]$IntervalSeconds = 0,
   [switch]$Apply,
@@ -167,7 +167,7 @@ function Get-WorkerReadiness {
     heartbeat_age_seconds = $age
     ready_for_start_one_gate = $false
     clean_worktree = $clean
-    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-194-worker-service-mode")
+    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-195-manual-goal-queue-management")
     active_tasks = 0
     stale_leases = 0
     runner_lock_status = $runnerLock

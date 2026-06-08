@@ -5,6 +5,7 @@ import {
   deriveAttentionEvents,
   SkyBridgeClient,
   fixtureCampaignRunReport,
+  fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
   fixtureWorkerServiceState,
   notificationRoutingMatrix,
@@ -59,13 +60,28 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-194-worker-service-mode",
+      current_goal_id: "super-195-manual-goal-queue-management",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
       can_start_one: false,
       can_start_queue: false,
       can_resume: false,
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 195 manual queue review without execution controls", () => {
+    expect(fixtureGoalQueueReviewSummary).toMatchObject({
+      schema: "skybridge.goal_queue_review_summary.v1",
+      goal_pack_id: "dev-queue-189-200",
+      validation_result: "pass",
+      hash_drift_count: 0,
+      dependency_order_status: "valid",
+      no_execution_controls: true,
+      task_created: false,
+      worker_loop_started: false,
+      queue_execution_enabled: false,
       token_printed: false,
     });
   });
@@ -133,7 +149,7 @@ describe("SkyBridgeClient", () => {
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-194-worker-service-mode",
+      goal_id: "super-195-manual-goal-queue-management",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(
