@@ -18,6 +18,8 @@ import {
   type CampaignRunReport,
   createCampaignSafeSummary,
   fixtureCampaignRunReport,
+  fixtureQueueControlState,
+  queueControlActionMatrix,
   summarizeCampaignEvidence,
   type HermesSummary,
   type IterationsSummary,
@@ -311,7 +313,7 @@ function CampaignQueuePage() {
         </div>
         <aside className="dashboard-grid__side">
           <QueueReadinessPanel readiness={readiness} />
-          <QueuePlaceholderControls readiness={readiness} />
+          <QueueSafeActionsPanel readiness={readiness} />
           <SummaryCard
             title="Evidence ledger"
             state={`${evidence.total} entries`}
@@ -457,30 +459,78 @@ function QueueReadinessPanel({
   );
 }
 
-function QueuePlaceholderControls({
+function QueueSafeActionsPanel({
   readiness,
 }: {
   readiness: CampaignRunReport["queue_control_readiness"];
 }) {
+  const previewActions = queueControlActionMatrix.filter((entry) =>
+    entry.class === "preview"
+  );
+  const forbiddenActions = queueControlActionMatrix.filter((entry) =>
+    entry.class === "armed_execution" || entry.class === "forbidden"
+  );
   return (
-    <section className="skybridge-panel queue-placeholder-controls" aria-label="Future queue controls">
+    <section className="skybridge-panel queue-placeholder-controls" aria-label="Safe Actions / Queue Controls">
       <div className="skybridge-card__header">
         <div>
-          <p className="skybridge-kicker">Future Controls</p>
-          <h2>Disabled Placeholders</h2>
+          <p className="skybridge-kicker">Safe Actions / Queue Controls</p>
+          <h2>Contract Preview</h2>
         </div>
       </div>
+      <label className="reason-field">
+        <span>Reason required for mutations</span>
+        <input type="text" value="operator reason required before apply" readOnly />
+      </label>
+      <button type="button">
+        Refresh
+      </button>
+      <button type="button">
+        Report
+      </button>
+      <button type="button">
+        Copy Safe Summary
+      </button>
+      <button type="button" disabled aria-disabled="true" title="Requires reason and confirmation on apply path">
+        Safe Pause
+      </button>
+      <button type="button" disabled aria-disabled="true" title="Requires reason and confirmation on apply path">
+        Stop Queue
+      </button>
+      <button type="button" disabled aria-disabled="true" title="Requires reason and confirmation on apply path">
+        Emergency Stop
+      </button>
+      {previewActions.map((entry) => (
+        <button type="button" key={entry.action}>
+          {entry.action.replace(/_/g, " ")}
+        </button>
+      ))}
       <button type="button" disabled aria-disabled="true">
-        Start One disabled
+        Start One Apply disabled
+      </button>
+      <span>Start One disabled</span>
+      <button type="button" disabled aria-disabled="true">
+        Start Queue Apply disabled
+      </button>
+      <span>Start Queue disabled</span>
+      <span>Resume disabled</span>
+      <button type="button" disabled aria-disabled="true">
+        Start All disabled
       </button>
       <button type="button" disabled aria-disabled="true">
-        Start Queue disabled
+        Worker Loop disabled
       </button>
-      <button type="button" disabled aria-disabled="true">
-        Resume disabled
-      </button>
-      <span>Stop future control only: {String(readiness.can_stop)}</span>
-      <span>Emergency Stop future control only: {String(readiness.can_emergency_stop)}</span>
+      <span>worker_offline blocker: {String(readiness.blockers.includes("worker_offline"))}</span>
+      <span>state_hash: {fixtureQueueControlState.state_hash}</span>
+      <span>token_printed=false</span>
+      <span>start_one_preview start_queue_preview resume_preview</span>
+      <span>Audit result appears after safe action apply.</span>
+      <span>Start actions disabled because worker is {readiness.worker_status} and Goal 192 defers execution apply.</span>
+      <QueueList
+        title="Forbidden"
+        items={forbiddenActions.map((entry) => `${entry.action}: ${entry.blockers.join(",")}`)}
+        fallback="No forbidden actions."
+      />
     </section>
   );
 }

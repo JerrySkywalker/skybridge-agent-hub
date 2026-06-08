@@ -327,3 +327,26 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.
 ```
 
 Final campaign state must remain current step `dev-queue-189-200:super-191-readonly-operator-dashboard`, current goal `super-191-readonly-operator-dashboard`, active tasks `0`, stale leases `0`, worker offline, `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `token_printed=false`.
+
+## Goal 192 Queue Control Contract
+
+Goal 192 adds the safe action and queue-control contract foundation. It does not start execution.
+
+The shared action matrix is documented in [QUEUE_CONTROL_CONTRACT.md](QUEUE_CONTROL_CONTRACT.md). Desktop, Web, CLI and Server now distinguish read-only actions, preview actions, safe stop/pause actions, future armed execution actions and forbidden actions.
+
+Allowed in this goal:
+
+- read-only `refresh_status`, `report` and `preflight`;
+- heartbeat-only `heartbeat`;
+- preview-only `resume_preview`, `start_one_preview` and `start_queue_preview`;
+- reason-gated/audited `safe_pause`, `stop_queue` and `emergency_stop`.
+
+Forbidden in this goal:
+
+- `start_one_apply`;
+- `start_queue_apply`;
+- `start_all`;
+- `arbitrary_shell`;
+- worker loops, task claims and campaign-step task creation.
+
+Expected current state after Goal 192 remains: current step `dev-queue-189-200:super-192-dashboard-safe-actions`, current goal `super-192-dashboard-safe-actions`, active tasks `0`, stale leases `0`, worker offline, `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `token_printed=false`.

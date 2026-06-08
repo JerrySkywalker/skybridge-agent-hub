@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SkyBridgeClient } from "./index.js";
+import {
+  SkyBridgeClient,
+  fixtureQueueControlState,
+  queueControlActionMatrix,
+} from "./index.js";
 
 const fetchMock = vi.fn();
 
@@ -17,6 +21,48 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("SkyBridgeClient", () => {
+  it("classifies queue-control actions for Goal 192", () => {
+    const byAction = new Map(queueControlActionMatrix.map((entry) => [entry.action, entry]));
+
+    expect(byAction.get("refresh_status")).toMatchObject({
+      class: "read_only",
+      allowed_modes: ["read"],
+      token_printed: false,
+    });
+    expect(byAction.get("safe_pause")).toMatchObject({
+      class: "safe_stop_pause",
+      apply_allowed: true,
+      reason_required: true,
+      token_printed: false,
+    });
+    expect(byAction.get("start_one_preview")).toMatchObject({
+      class: "preview",
+      allowed_modes: ["preview"],
+      apply_allowed: false,
+    });
+    expect(byAction.get("start_one_apply")).toMatchObject({
+      class: "armed_execution",
+      apply_allowed: false,
+      requires_arm_lease: true,
+      blockers: ["execution_apply_deferred_after_goal_192"],
+    });
+    expect(byAction.get("start_all")).toMatchObject({
+      class: "forbidden",
+      apply_allowed: false,
+      blockers: ["forbidden_action"],
+    });
+    expect(fixtureQueueControlState).toMatchObject({
+      current_goal_id: "super-192-dashboard-safe-actions",
+      active_tasks: 0,
+      stale_leases: 0,
+      worker_status: "offline",
+      can_start_one: false,
+      can_start_queue: false,
+      can_resume: false,
+      token_printed: false,
+    });
+  });
+
   it("builds filtered event URLs", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ events: [] }));

@@ -620,6 +620,31 @@ h2 {
   text-align: left;
 }
 
+.queue-placeholder-controls button:not(:disabled) {
+  background: #ffffff;
+  color: #213047;
+  cursor: default;
+}
+
+.reason-field {
+  display: grid;
+  gap: 6px;
+}
+
+.reason-field span {
+  color: #52627a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.reason-field input {
+  border: 1px solid #cbd7e6;
+  border-radius: 6px;
+  color: #213047;
+  font: inherit;
+  padding: 9px 10px;
+}
+
 .queue-placeholder-controls span {
   color: #52627a;
   font-size: 13px;

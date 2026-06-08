@@ -657,6 +657,77 @@ describe("server api", () => {
     });
   });
 
+  it("guards queue control preview and safe action apply", async () => {
+    await withWorkerToken("queue-control-token", async () => {
+      const server = await testServer();
+      await server.inject({
+        method: "POST",
+        url: "/v1/projects",
+        payload: { project_id: "skybridge-agent-hub", name: "SkyBridge Agent Hub" },
+      });
+      const createCampaign = await server.inject({
+        method: "POST",
+        url: "/v1/campaigns",
+        headers: { authorization: "Bearer queue-control-token" },
+        payload: {
+          campaign_id: "dev-queue-189-200",
+          project_id: "skybridge-agent-hub",
+          title: "Dev Queue 189-200",
+          goals: [
+            { goal_id: "super-192-dashboard-safe-actions", title: "Dashboard Safe Actions", order: 1 },
+          ],
+        },
+      });
+      expect(createCampaign.statusCode).toBe(201);
+
+      const matrix = await server.inject({
+        method: "GET",
+        url: "/v1/campaigns/dev-queue-189-200/control/matrix",
+      });
+      expect(matrix.statusCode).toBe(200);
+      expect(matrix.json<{ action_matrix: Array<{ action: string; apply_allowed: boolean }> }>().action_matrix)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ action: "start_one_apply", apply_allowed: false })]));
+
+      const initialPreview = await server.inject({
+        method: "POST",
+        url: "/v1/campaigns/dev-queue-189-200/control/preview",
+        payload: { action: "start_one_preview", source: "web" },
+      });
+      const initialBody = initialPreview.json<{ state_hash: string; blockers: string[] }>();
+      expect(initialPreview.statusCode).toBe(409);
+      expect(initialBody.blockers).toContain("target_revision_required");
+
+      const preview = await server.inject({
+        method: "POST",
+        url: "/v1/campaigns/dev-queue-189-200/control/preview",
+        payload: { action: "start_one_preview", source: "web", target_revision: initialBody.state_hash },
+      });
+      expect(preview.statusCode).toBe(200);
+      expect(preview.json<{ ok: boolean; token_printed: boolean }>()).toMatchObject({ ok: true, token_printed: false });
+
+      const forbiddenApply = await server.inject({
+        method: "POST",
+        url: "/v1/campaigns/dev-queue-189-200/control/apply",
+        headers: { authorization: "Bearer queue-control-token" },
+        payload: { action: "start_one_apply", source: "web", target_revision: initialBody.state_hash, reason: "must fail" },
+      });
+      expect(forbiddenApply.statusCode).toBe(403);
+      expect(forbiddenApply.json<{ blockers: string[] }>().blockers).toEqual(expect.arrayContaining(["apply_forbidden_in_goal_192"]));
+
+      const safeApply = await server.inject({
+        method: "POST",
+        url: "/v1/campaigns/dev-queue-189-200/control/apply",
+        headers: { authorization: "Bearer queue-control-token" },
+        payload: { action: "safe_pause", source: "web", target_revision: initialBody.state_hash, reason: "operator smoke reason" },
+      });
+      const safeBody = safeApply.json<{ ok: boolean; audit_event_id: string; token_printed: boolean }>();
+      expect(safeApply.statusCode).toBe(200);
+      expect(safeBody.ok).toBe(true);
+      expect(safeBody.audit_event_id).toMatch(/^audit_queue_control_/);
+      expect(safeBody.token_printed).toBe(false);
+    });
+  });
+
   it("isolates local no-auth worker tests from developer worker env vars", async () => {
     const previousToken = process.env.SKYBRIDGE_WORKER_TOKEN;
     const previousTokensFile = process.env.SKYBRIDGE_WORKER_TOKENS_FILE;
