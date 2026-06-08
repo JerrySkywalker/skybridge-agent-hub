@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets")]
   [string]$Scenario,
   [switch]$Json
 )
@@ -58,11 +58,82 @@ $result = switch ($Scenario) {
   }
   "start-one-gates" {
     $gate = Invoke-Trial -Command start-one-gates -Extra @("-Reason", "smoke gate reason")
-    foreach ($required in @("worker_claim_disabled", "worker_execution_disabled")) {
+    foreach ($required in @("codex_executor_persists_prompt_or_logs")) {
       if (@($gate.blockers) -notcontains $required) { throw "Expected blocker $required." }
     }
     if ($gate.operator_reason_recorded -ne $true) { throw "Operator reason was not recorded." }
     $gate
+  }
+  "one-shot-claim-gate" {
+    $claim = Invoke-Trial -Command one-shot-claim-gate
+    if (-not $claim.ok) { throw "Claim gate should pass in preview: $(@($claim.blockers) -join '; ')" }
+    if ($claim.campaign_id -ne "bootstrap-trial-201" -or $claim.goal_id -ne "goal-201-controlled-start-one-bootstrap-trial") { throw "Claim gate selected wrong trial." }
+    if ($claim.task_type -ne "docs/local-smoke") { throw "Claim gate selected wrong task type." }
+    if ($claim.worker_id -ne "laptop-zenbookduo") { throw "Claim gate selected unexpected worker." }
+    if ($claim.run_budget.max_tasks -ne 1 -or $claim.run_budget.max_prs -ne 1) { throw "Claim gate budget must be one-shot." }
+    foreach ($flag in @("task_created", "task_claimed", "lease_created", "start_all_allowed", "start_queue_allowed", "second_task_allowed")) { Assert-FalseFlag $claim $flag }
+    $claim
+  }
+  "one-shot-executor-gate" {
+    $executor = Invoke-Trial -Command one-shot-executor-gate
+    if ($executor.ok) { throw "Executor gate should fail closed while shared Codex executor persists prompt/log artifacts." }
+    if (@($executor.blockers) -notcontains "codex_executor_persists_prompt_or_logs") { throw "Executor artifact blocker missing." }
+    foreach ($flag in @("task_claimed", "task_executed", "codex_worker_execution_started", "pr_created", "auto_merge_enabled", "raw_transcript_included", "raw_logs_included", "external_notification_sent")) { Assert-FalseFlag $executor $flag }
+    $executor
+  }
+  "claim-refuses-second-task" {
+    $stateDir = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-goal201b-" + [Guid]::NewGuid().ToString("n"))
+    $first = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+    if (-not $first.ok -or -not $first.task_claimed -or -not $first.lease_created) { throw "First one-shot claim apply did not create safe claim evidence." }
+    $second = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
+    if (@($second.blockers) -notcontains "second_claim_refused") { throw "Second claim was not refused." }
+    Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    $second
+  }
+  "claim-refuses-wrong-campaign" {
+    $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-CampaignId", "wrong-campaign")
+    if (@($claim.blockers) -notcontains "wrong_campaign_refused") { throw "Wrong campaign was not refused." }
+    $claim
+  }
+  "claim-refuses-wrong-task-type" {
+    $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-TaskType", "backend")
+    if (@($claim.blockers) -notcontains "wrong_task_type_refused") { throw "Wrong task type was not refused." }
+    $claim
+  }
+  "executor-path-allowlist" {
+    $executor = Invoke-Trial -Command one-shot-executor-gate -Extra @("-AllowedPaths", "apps/server/src/index.ts")
+    if (-not (@($executor.blockers) -match "^path_allowlist_violation:")) { throw "Path allowlist violation was not reported." }
+    $executor
+  }
+  "pr-limit" {
+    $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-MaxPrs", "2")
+    if (@($claim.blockers) -notcontains "max_prs_must_be_1") { throw "PR limit was not enforced." }
+    $claim
+  }
+  "no-auto-merge" {
+    $pr = Invoke-Trial -Command pr-safety
+    if ($pr.auto_merge_enabled -ne $false) { throw "Auto-merge must be disabled." }
+    $pr
+  }
+  "lease-release" {
+    $stateDir = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-goal201b-" + [Guid]::NewGuid().ToString("n"))
+    $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+    if ($claim.lease_created -ne $true) { throw "Expected lease evidence for first claim." }
+    Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    $after = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
+    if (-not $after.ok) { throw "Lease evidence cleanup should leave gate available again." }
+    $after | Add-Member -NotePropertyName lease_outcome -NotePropertyValue "released_by_cleanup" -Force
+    $after
+  }
+  "no-raw-transcript" {
+    $executor = Invoke-Trial -Command one-shot-executor-gate
+    if ($executor.raw_transcript_included -ne $false -or $executor.raw_logs_included -ne $false) { throw "Raw transcript/log flags must be false." }
+    $executor
+  }
+  "no-secrets" {
+    $claim = Invoke-Trial -Command one-shot-claim-gate
+    Assert-SafeJson $claim
+    $claim
   }
   "single-task-limit" {
     $contract = Invoke-Trial -Command contract
