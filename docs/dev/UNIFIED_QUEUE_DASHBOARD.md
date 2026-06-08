@@ -1,14 +1,16 @@
 # Unified Queue Dashboard
 
-Goal 191D adds the shared read-only foundation for the Desktop and Web queue dashboards. Goal 191E hardens the Desktop refresh path so slow local bridge commands cannot freeze the resident UI. Both surfaces consume the `skybridge.campaign_run_report.v1` report contract through the shared `@skybridge-agent-hub/client` model.
+Goal 191D adds the shared read-only foundation for the Desktop and Web queue dashboards. Goal 191E hardens the Desktop refresh path so slow local bridge commands cannot freeze the resident UI. Goal 192 adds the shared Safe Actions / Queue Controls contract without enabling execution apply. Both surfaces consume shared `@skybridge-agent-hub/client` models.
 
 ## Scope
 
-This goal is read-only. It does not add working start, queue, resume, pause, stop, emergency stop, task claim or worker-loop controls. Future execution controls are deferred to Goal 192A/192B.
+Goal 192 keeps start-one/start-queue execution disabled. It adds read-only, preview-only and reason-gated safe stop/pause controls. Future execution controls are deferred until a later reviewed goal.
 
 ## Shared Contract
 
 The shared consumer models `campaign_summary`, `current_step_summary`, `previous_step_summary`, `step_ledger`, evidence ledger summary counts, `blockers[]`, `warnings[]`, `queue_control_readiness`, `worker_status`, `next_safe_action` and `token_printed=false`.
+
+Goal 192 also adds `skybridge.queue_control_intent.v1`, `skybridge.queue_control_state.v1`, `skybridge.queue_control_action_response.v1`, `skybridge.queue_control_audit_event.v1`, `run_budget`, `arm_lease`, `revision` and `target_revision`. See [QUEUE_CONTROL_CONTRACT.md](QUEUE_CONTROL_CONTRACT.md).
 
 Web uses fixture report data for the new `#/campaign-queue` route. Desktop uses the same fixture for visual QA and reads the local `runner-report` output through its Tauri bridge during normal refresh.
 
@@ -24,7 +26,7 @@ Desktop refresh behavior:
 
 Desktop and Web must treat `queue_control_readiness` as the source of truth. `can_start_one`, `can_start_queue` and apply-mode `can_resume` stay disabled when `worker_status` is `unknown`, `offline`, `stale` or `missing`.
 
-Goal 191D shows only disabled Web placeholders: Start One disabled, Start Queue disabled and Resume disabled. Desktop shows future-control status text only, not execution buttons.
+Goal 192 shows Safe Actions / Queue Controls on Web and Desktop. Refresh, Report and Copy Safe Summary are read-only. Resume Preview, Start One Preview and Start Queue Preview are preview-only. Safe Pause, Stop Queue and Emergency Stop require reason and audit for apply. Start One Apply, Start Queue Apply, Start All, Run Forever and Worker Loop remain disabled.
 
 For current Goal 191 state, Desktop uses `Queue Readiness` / `Operator Readiness` as the primary status wording. Pre-190 wording is legacy and must not be the main banner after Goal 190 is complete.
 

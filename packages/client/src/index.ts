@@ -978,6 +978,247 @@ export interface CampaignQueueControlReadiness {
   reason_required: boolean;
 }
 
+export type QueueControlAction =
+  | "refresh_status"
+  | "report"
+  | "preflight"
+  | "heartbeat"
+  | "safe_pause"
+  | "stop_queue"
+  | "emergency_stop"
+  | "resume_preview"
+  | "start_one_preview"
+  | "start_queue_preview"
+  | "start_one_apply"
+  | "start_queue_apply"
+  | "start_all"
+  | "arbitrary_shell";
+
+export type QueueControlMode = "read" | "preview" | "apply";
+export type QueueControlActionClass =
+  | "read_only"
+  | "preview"
+  | "heartbeat_only"
+  | "safe_stop_pause"
+  | "armed_execution"
+  | "forbidden";
+
+export interface QueueControlActionMatrixEntry {
+  action: QueueControlAction;
+  class: QueueControlActionClass;
+  allowed_modes: QueueControlMode[];
+  apply_allowed: boolean;
+  reason_required: boolean;
+  human_approval_required: boolean;
+  requires_arm_lease: boolean;
+  blockers: string[];
+  warnings: string[];
+  summary: string;
+  token_printed: false;
+}
+
+export interface QueueControlState {
+  schema: "skybridge.queue_control_state.v1";
+  project_id: string;
+  campaign_id: string;
+  current_step_id: string;
+  current_goal_id: string;
+  worker_status: string;
+  active_tasks: number;
+  stale_leases: number;
+  can_start_one: boolean;
+  can_start_queue: boolean;
+  can_resume: boolean;
+  state_hash: string;
+  revision: string;
+  action_matrix: QueueControlActionMatrixEntry[];
+  blockers: string[];
+  warnings: string[];
+  token_printed: false;
+}
+
+export interface QueueControlIntent {
+  schema: "skybridge.queue_control_intent.v1";
+  action: QueueControlAction;
+  mode: QueueControlMode;
+  source: "cli" | "web" | "desktop" | "server";
+  actor?: string;
+  campaign_id: string;
+  current_step_id?: string;
+  target_revision: string;
+  reason?: string;
+  run_budget?: QueueControlRunBudget;
+  arm_lease?: QueueControlArmLease;
+  token_printed: false;
+}
+
+export interface QueueControlRunBudget {
+  max_steps?: number;
+  max_tasks?: number;
+  max_runtime_minutes?: number;
+  token_printed: false;
+}
+
+export interface QueueControlArmLease {
+  lease_id: string;
+  campaign_id: string;
+  allowed_actions: QueueControlAction[];
+  expires_at: string;
+  created_by: string;
+  reason: string;
+  consumed_at?: string | null;
+  token_printed: false;
+}
+
+export interface QueueControlAuditEvent {
+  schema: "skybridge.queue_control_audit_event.v1";
+  audit_event_id: string;
+  action: QueueControlAction;
+  source: QueueControlIntent["source"];
+  mode: QueueControlMode;
+  actor?: string;
+  campaign_id: string;
+  current_step_id: string;
+  target_revision: string;
+  reason: string;
+  blockers: string[];
+  warnings: string[];
+  created_at: string;
+  token_printed: false;
+}
+
+export interface QueueControlActionResponse {
+  schema: "skybridge.queue_control_action_response.v1";
+  ok: boolean;
+  mode: QueueControlMode;
+  action: QueueControlAction;
+  allowed: boolean;
+  blockers: string[];
+  warnings: string[];
+  audit_event_id?: string;
+  state_hash: string;
+  token_printed: false;
+}
+
+export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
+  {
+    action: "refresh_status",
+    class: "read_only",
+    allowed_modes: ["read"],
+    apply_allowed: false,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: [],
+    summary: "Read current queue status.",
+    token_printed: false,
+  },
+  {
+    action: "report",
+    class: "read_only",
+    allowed_modes: ["read"],
+    apply_allowed: false,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: [],
+    summary: "Read the safe campaign report.",
+    token_printed: false,
+  },
+  {
+    action: "preflight",
+    class: "read_only",
+    allowed_modes: ["read"],
+    apply_allowed: false,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: [],
+    summary: "Read preflight readiness.",
+    token_printed: false,
+  },
+  {
+    action: "heartbeat",
+    class: "heartbeat_only",
+    allowed_modes: ["apply"],
+    apply_allowed: true,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: ["heartbeat_only_no_task_claim"],
+    summary: "Refresh worker heartbeat only.",
+    token_printed: false,
+  },
+  ...(["safe_pause", "stop_queue", "emergency_stop"] as const).map(
+    (action) =>
+      ({
+        action,
+        class: "safe_stop_pause",
+        allowed_modes: ["preview", "apply"],
+        apply_allowed: true,
+        reason_required: true,
+        human_approval_required: false,
+        requires_arm_lease: false,
+        blockers: [],
+        warnings: ["audit_required", "does_not_start_worker"],
+        summary: "Low-risk queue stop or pause action.",
+        token_printed: false,
+      }) satisfies QueueControlActionMatrixEntry,
+  ),
+  ...(["resume_preview", "start_one_preview", "start_queue_preview"] as const).map(
+    (action) =>
+      ({
+        action,
+        class: "preview",
+        allowed_modes: ["preview"],
+        apply_allowed: false,
+        reason_required: false,
+        human_approval_required: false,
+        requires_arm_lease: false,
+        blockers: [],
+        warnings: ["preview_only_no_mutation"],
+        summary: "Preview only; no campaign mutation or task creation.",
+        token_printed: false,
+      }) satisfies QueueControlActionMatrixEntry,
+  ),
+  ...(["start_one_apply", "start_queue_apply"] as const).map(
+    (action) =>
+      ({
+        action,
+        class: "armed_execution",
+        allowed_modes: [],
+        apply_allowed: false,
+        reason_required: true,
+        human_approval_required: true,
+        requires_arm_lease: true,
+        blockers: ["execution_apply_deferred_after_goal_192"],
+        warnings: [],
+        summary: "Armed execution is modeled but forbidden in Goal 192.",
+        token_printed: false,
+      }) satisfies QueueControlActionMatrixEntry,
+  ),
+  ...(["start_all", "arbitrary_shell"] as const).map(
+    (action) =>
+      ({
+        action,
+        class: "forbidden",
+        allowed_modes: [],
+        apply_allowed: false,
+        reason_required: true,
+        human_approval_required: true,
+        requires_arm_lease: false,
+        blockers: ["forbidden_action"],
+        warnings: [],
+        summary: "Forbidden queue-control action.",
+        token_printed: false,
+      }) satisfies QueueControlActionMatrixEntry,
+  ),
+];
+
 export interface CampaignRunReport {
   schema: "skybridge.campaign_run_report.v1";
   generated_at: string;
@@ -1092,8 +1333,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
-  current_goal_id: "super-191-readonly-operator-dashboard",
+  current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+  current_goal_id: "super-192-dashboard-safe-actions",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -1101,18 +1342,18 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+    current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
     step_count: 12,
     source: "fixture",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
-    goal_id: "super-191-readonly-operator-dashboard",
-    order: 3,
-    title: "Read-only Operator Dashboard",
+    campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+    goal_id: "super-192-dashboard-safe-actions",
+    order: 4,
+    title: "Dashboard Safe Actions",
     status: "ready",
     is_current: true,
-    dependencies: ["super-190-campaign-run-report-evidence-ledger"],
+    dependencies: ["super-191-readonly-operator-dashboard"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -1125,15 +1366,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
-    goal_id: "super-190-campaign-run-report-evidence-ledger",
-    order: 2,
-    title: "Campaign Run Report and Evidence Ledger",
+    campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+    goal_id: "super-191-readonly-operator-dashboard",
+    order: 3,
+    title: "Read-only Operator Dashboard",
     status: "completed",
     is_current: false,
-    dependencies: ["super-189-ci-guardian-pr-finalizer-hardening"],
+    dependencies: ["super-190-campaign-run-report-evidence-ledger"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/106"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/107"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -1148,9 +1389,9 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     all: [
       {
         kind: "step",
-        campaign_step_id: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
-        goal_id: "super-190-campaign-run-report-evidence-ledger",
-        evidence_id: "goal-190-pr",
+        campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+        goal_id: "super-191-readonly-operator-dashboard",
+        evidence_id: "goal-191-pr",
         status: "present",
         classification: "present_evidence",
         recovered: false,
@@ -1158,7 +1399,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 190 report PR evidence is present.",
+        summary: "Goal 191 dashboard PR evidence is present.",
       },
       {
         kind: "step",
@@ -1176,8 +1417,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
       },
       {
         kind: "pr",
-        campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
-        goal_id: "super-191-readonly-operator-dashboard",
+        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+        goal_id: "super-192-dashboard-safe-actions",
         evidence_id: "none",
         status: "missing",
         classification: "missing_evidence",
@@ -1186,12 +1427,12 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 191 PR evidence is missing until this read-only dashboard PR exists.",
+        summary: "Goal 192 PR evidence is missing until this safe-actions PR exists.",
       },
       {
         kind: "gate",
-        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-        goal_id: "super-192-dashboard-safe-actions",
+        campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+        goal_id: "super-193-notification-attention-loop",
         evidence_id: "none",
         status: "not_applicable",
         classification: "not_applicable_evidence",
@@ -1200,7 +1441,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: true,
         operator_action_required: false,
-        summary: "Future Goal 192 evidence is not applicable.",
+        summary: "Future Goal 193 evidence is not applicable.",
       },
     ],
   },
@@ -1222,6 +1463,26 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     run_budget_required: true,
     reason_required: true,
   },
+  token_printed: false,
+};
+
+export const fixtureQueueControlState: QueueControlState = {
+  schema: "skybridge.queue_control_state.v1",
+  project_id: fixtureCampaignRunReport.project_id,
+  campaign_id: fixtureCampaignRunReport.campaign_id,
+  current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+  current_goal_id: "super-192-dashboard-safe-actions",
+  worker_status: "offline",
+  active_tasks: 0,
+  stale_leases: 0,
+  can_start_one: false,
+  can_start_queue: false,
+  can_resume: false,
+  state_hash: "fixture-goal-192-worker-offline-active0-stale0",
+  revision: "fixture-goal-192-revision",
+  action_matrix: queueControlActionMatrix,
+  blockers: ["worker_offline"],
+  warnings: ["start_apply_deferred_after_goal_192"],
   token_printed: false,
 };
 
@@ -1248,7 +1509,6 @@ fixtureCampaignRunReport.step_ledger = [
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-192-dashboard-safe-actions", "Dashboard Safe Actions"],
     ["super-193-notification-attention-loop", "Notification and Attention Loop"],
     ["super-194-worker-service-mode", "Worker Service Mode"],
     ["super-195-manual-goal-queue-management", "Manual Goal Queue Management"],

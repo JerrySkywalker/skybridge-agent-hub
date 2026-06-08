@@ -896,6 +896,46 @@ export async function createServer(
     return { campaign, steps: store.listCampaignSteps({ campaignId: campaign.campaign_id }) };
   });
 
+  app.get<{ Params: { campaignId: string } }>("/v1/campaigns/:campaignId/control/matrix", async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    return {
+      ok: true,
+      schema: "skybridge.queue_control_action_matrix.v1",
+      campaign_id: campaign.campaign_id,
+      action_matrix: queueControlActionMatrix(),
+      token_printed: false,
+    };
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/control/preview", async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    const response = evaluateQueueControlIntent(campaign, request.body, "preview");
+    return reply.code(response.ok ? 200 : 409).send(response);
+  });
+
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/control/apply", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
+    if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });
+    const response = evaluateQueueControlIntent(campaign, request.body, "apply");
+    if (!response.ok) return reply.code(response.allowed ? 400 : 403).send(response);
+    const action = safeString(request.body.action);
+    const reason = safeString(request.body.reason) ?? "";
+    const now = new Date().toISOString();
+    const nextStatus: CampaignStatus = action === "safe_pause" ? "paused" : "held";
+    const updatedCampaign: StoredCampaign = { ...campaign, status: nextStatus, updated_at: now };
+    await store.upsertCampaign(updatedCampaign);
+    const auditRecord = queueControlAuditRecord(updatedCampaign, request.body, response, reason, now);
+    await store.addAuditRecord(auditRecord);
+    return {
+      ...response,
+      audit_event_id: auditRecord.audit_id,
+      campaign: updatedCampaign,
+      token_printed: false,
+    };
+  });
+
   app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/import-goal-pack", { preHandler: requireWorkerAuth }, async (request, reply) => {
     const campaignId = decodeURIComponent(request.params.campaignId);
     const parsed = parseCampaignImportInput({ ...request.body, campaign_id: campaignId }, store);
@@ -2761,6 +2801,181 @@ function auditRecordForEvent(
     redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
     raw_payload_included: false,
   };
+}
+
+type QueueControlMode = "read" | "preview" | "apply";
+type QueueControlActionClass =
+  | "read_only"
+  | "preview"
+  | "heartbeat_only"
+  | "safe_stop_pause"
+  | "armed_execution"
+  | "forbidden";
+
+interface QueueControlMatrixEntry {
+  action: string;
+  class: QueueControlActionClass;
+  allowed_modes: QueueControlMode[];
+  apply_allowed: boolean;
+  reason_required: boolean;
+  human_approval_required: boolean;
+  requires_arm_lease: boolean;
+  blockers: string[];
+  warnings: string[];
+  summary: string;
+  token_printed: false;
+}
+
+function queueControlActionMatrix(): QueueControlMatrixEntry[] {
+  const readOnly = ["refresh_status", "report", "preflight"].map((action) => ({
+    action,
+    class: "read_only" as const,
+    allowed_modes: ["read" as const],
+    apply_allowed: false,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: [],
+    summary: "Read-only queue-control action.",
+    token_printed: false as const,
+  }));
+  const safe = ["safe_pause", "stop_queue", "emergency_stop"].map((action) => ({
+    action,
+    class: "safe_stop_pause" as const,
+    allowed_modes: ["preview" as const, "apply" as const],
+    apply_allowed: true,
+    reason_required: true,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: ["audit_required", "does_not_start_worker"],
+    summary: "Low-risk queue stop or pause action.",
+    token_printed: false as const,
+  }));
+  const preview = ["resume_preview", "start_one_preview", "start_queue_preview"].map((action) => ({
+    action,
+    class: "preview" as const,
+    allowed_modes: ["preview" as const],
+    apply_allowed: false,
+    reason_required: false,
+    human_approval_required: false,
+    requires_arm_lease: false,
+    blockers: [],
+    warnings: ["preview_only_no_mutation"],
+    summary: "Preview only; no campaign mutation or task creation.",
+    token_printed: false as const,
+  }));
+  const armed = ["start_one_apply", "start_queue_apply"].map((action) => ({
+    action,
+    class: "armed_execution" as const,
+    allowed_modes: [],
+    apply_allowed: false,
+    reason_required: true,
+    human_approval_required: true,
+    requires_arm_lease: true,
+    blockers: ["execution_apply_deferred_after_goal_192"],
+    warnings: [],
+    summary: "Armed execution is modeled but forbidden in Goal 192.",
+    token_printed: false as const,
+  }));
+  const forbidden = ["start_all", "arbitrary_shell"].map((action) => ({
+    action,
+    class: "forbidden" as const,
+    allowed_modes: [],
+    apply_allowed: false,
+    reason_required: true,
+    human_approval_required: true,
+    requires_arm_lease: false,
+    blockers: ["forbidden_action"],
+    warnings: [],
+    summary: "Forbidden queue-control action.",
+    token_printed: false as const,
+  }));
+  return [...readOnly, ...safe, ...preview, ...armed, ...forbidden];
+}
+
+function queueControlStateHash(campaign: StoredCampaign): string {
+  return createHash("sha256")
+    .update([
+      campaign.campaign_id,
+      campaign.current_step_id ?? "",
+      campaign.status,
+      campaign.updated_at,
+    ].join("|"))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function evaluateQueueControlIntent(
+  campaign: StoredCampaign,
+  body: Record<string, unknown>,
+  mode: QueueControlMode,
+) {
+  const action = safeString(body.action) ?? "";
+  const matrixEntry = queueControlActionMatrix().find((entry) => entry.action === action);
+  const blockers = [...(matrixEntry?.blockers ?? [])];
+  const warnings = [...(matrixEntry?.warnings ?? [])];
+  const stateHash = queueControlStateHash(campaign);
+  const targetRevision = safeString(body.target_revision);
+  if (!matrixEntry) blockers.push("unknown_action");
+  if (!targetRevision) blockers.push("target_revision_required");
+  else if (targetRevision !== stateHash) blockers.push("target_revision_mismatch");
+  if (matrixEntry && !matrixEntry.allowed_modes.includes(mode)) blockers.push("mode_not_allowed");
+  if (mode === "apply" && matrixEntry && !matrixEntry.apply_allowed) blockers.push("apply_forbidden_in_goal_192");
+  if (mode === "apply" && matrixEntry?.reason_required && !safeString(body.reason)) blockers.push("reason_required");
+  if (["start_one_apply", "start_queue_apply", "start_all", "arbitrary_shell"].includes(action)) {
+    blockers.push("no_execution_enablement_in_goal_192");
+  }
+  const allowed = Boolean(matrixEntry) && blockers.length === 0;
+  return {
+    schema: "skybridge.queue_control_action_response.v1",
+    ok: allowed,
+    mode,
+    action: action || "unknown",
+    allowed,
+    blockers,
+    warnings,
+    state_hash: stateHash,
+    token_printed: false as const,
+  };
+}
+
+function queueControlAuditRecord(
+  campaign: StoredCampaign,
+  body: Record<string, unknown>,
+  response: ReturnType<typeof evaluateQueueControlIntent>,
+  reason: string,
+  now: string,
+): StoredAuditRecord {
+  const auditId = `audit_queue_control_${nanoid(12)}`;
+  return {
+    audit_id: auditId,
+    time: now,
+    action: `queue_control.${response.action}`,
+    actor: safeString(body.actor) ?? "operator",
+    source_adapter: `skybridge/${safeString(body.source) ?? "server"}`,
+    safety_decision: response.allowed ? "queue_control_safe_action_applied" : "queue_control_blocked",
+    immutable_event_id: auditId,
+    redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+    raw_payload_included: false,
+    queue_control: {
+      schema: "skybridge.queue_control_audit_event.v1",
+      audit_event_id: auditId,
+      action: response.action,
+      source: safeString(body.source) ?? "server",
+      mode: response.mode,
+      actor: safeString(body.actor) ?? "operator",
+      campaign_id: campaign.campaign_id,
+      current_step_id: campaign.current_step_id ?? "",
+      target_revision: safeString(body.target_revision) ?? "",
+      reason,
+      blockers: response.blockers,
+      warnings: response.warnings,
+      created_at: now,
+      token_printed: false,
+    },
+  } as StoredAuditRecord;
 }
 
 function summarizeApprovals(events: StoredEvent[]) {

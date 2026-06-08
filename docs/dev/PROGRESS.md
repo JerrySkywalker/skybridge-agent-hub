@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-06-08 Goal 192 Dashboard Safe Actions and Queue Control Contract
+
+- Added the shared queue-control contract foundation for Desktop, Web, CLI and Server: control intents, queue-control state, action matrix, audit events, run budget, arm lease fixture, revision/state hash guard and `token_printed=false`.
+- Added Goal 192 action classification: read-only status/report/preflight, heartbeat-only heartbeat, reason-gated safe pause/stop/emergency stop, preview-only resume/start-one/start-queue, and forbidden start apply/start queue apply/start-all/arbitrary shell.
+- Added server `control/matrix`, `control/preview` and narrow `control/apply` endpoints; apply only accepts reason-gated safe stop/pause actions and records audit. Start-one/start-queue apply remain rejected.
+- Hardened `skybridge-dev-queue-control.ps1` with `control-matrix`, `control-preview`, `safe-pause`, `stop-queue`, `emergency-stop`, `resume-preview`, `start-one-preview` and `start-queue-preview`; legacy `start-one -Apply`, `start-all -Apply` and `resume -Apply` are blocked for Goal 192.
+- Updated Web and Desktop with Safe Actions / Queue Controls sections that show disabled execution controls, preview controls, reason requirements, worker-offline blocker, audit result location and no token contents.
+- Added focused queue-control, Desktop and Web smokes. Goal 192 implementation does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim or campaign-step task creation.
+
 ## 2026-06-05 Goal 191E Desktop Async Refresh and Nonblocking Bridge Hardening
 
 - Moved Desktop status refresh into an async Tauri command and made tray refresh fire the bridge work on a background task.

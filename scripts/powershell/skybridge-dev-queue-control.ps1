@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "emergency-stop", "resume", "report", "unlock-stale-runner")]
+  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview")]
   [string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -17,6 +17,10 @@ param(
   [switch]$Json,
   [string]$OutputFile,
   [string]$Reason,
+  [string]$ControlAction,
+  [string]$Actor = "operator",
+  [string]$TargetRevision,
+  [switch]$Fixture,
   [ValidateSet("Auto", "Always", "Never")]
   [string]$ColorMode = "Auto",
   [int]$PollIntervalSeconds = 5,
@@ -139,6 +143,224 @@ function Get-TokenArgs {
   return $args
 }
 
+function Get-QueueControlActionMatrix {
+  $readOnly = @("refresh_status", "report", "preflight") | ForEach-Object {
+    [pscustomobject]@{
+      action = $_
+      class = "read_only"
+      allowed_modes = @("read")
+      apply_allowed = $false
+      reason_required = $false
+      human_approval_required = $false
+      requires_arm_lease = $false
+      blockers = @()
+      warnings = @()
+      summary = "Read-only queue-control action."
+      token_printed = $false
+    }
+  }
+  $heartbeat = [pscustomobject]@{
+    action = "heartbeat"
+    class = "heartbeat_only"
+    allowed_modes = @("apply")
+    apply_allowed = $true
+    reason_required = $false
+    human_approval_required = $false
+    requires_arm_lease = $false
+    blockers = @()
+    warnings = @("heartbeat_only_no_task_claim")
+    summary = "Refresh worker heartbeat only."
+    token_printed = $false
+  }
+  $safe = @("safe_pause", "stop_queue", "emergency_stop") | ForEach-Object {
+    [pscustomobject]@{
+      action = $_
+      class = "safe_stop_pause"
+      allowed_modes = @("preview", "apply")
+      apply_allowed = $true
+      reason_required = $true
+      human_approval_required = $false
+      requires_arm_lease = $false
+      blockers = @()
+      warnings = @("audit_required", "does_not_start_worker")
+      summary = "Low-risk queue stop or pause action."
+      token_printed = $false
+    }
+  }
+  $preview = @("resume_preview", "start_one_preview", "start_queue_preview") | ForEach-Object {
+    [pscustomobject]@{
+      action = $_
+      class = "preview"
+      allowed_modes = @("preview")
+      apply_allowed = $false
+      reason_required = $false
+      human_approval_required = $false
+      requires_arm_lease = $false
+      blockers = @()
+      warnings = @("preview_only_no_mutation")
+      summary = "Preview only; no campaign mutation or task creation."
+      token_printed = $false
+    }
+  }
+  $armed = @("start_one_apply", "start_queue_apply") | ForEach-Object {
+    [pscustomobject]@{
+      action = $_
+      class = "armed_execution"
+      allowed_modes = @()
+      apply_allowed = $false
+      reason_required = $true
+      human_approval_required = $true
+      requires_arm_lease = $true
+      blockers = @("execution_apply_deferred_after_goal_192")
+      warnings = @()
+      summary = "Armed execution is modeled but forbidden in Goal 192."
+      token_printed = $false
+    }
+  }
+  $forbidden = @("start_all", "arbitrary_shell") | ForEach-Object {
+    [pscustomobject]@{
+      action = $_
+      class = "forbidden"
+      allowed_modes = @()
+      apply_allowed = $false
+      reason_required = $true
+      human_approval_required = $true
+      requires_arm_lease = $false
+      blockers = @("forbidden_action")
+      warnings = @()
+      summary = "Forbidden queue-control action."
+      token_printed = $false
+    }
+  }
+  @($readOnly) + @($heartbeat) + @($safe) + @($preview) + @($armed) + @($forbidden)
+}
+
+function Get-QueueControlState {
+  $matrix = Get-QueueControlActionMatrix
+  [pscustomobject]@{
+    schema = "skybridge.queue_control_state.v1"
+    project_id = $ProjectId
+    campaign_id = $CampaignId
+    current_step_id = "$CampaignId`:super-192-dashboard-safe-actions"
+    current_goal_id = "super-192-dashboard-safe-actions"
+    worker_status = "offline"
+    active_tasks = 0
+    stale_leases = 0
+    can_start_one = $false
+    can_start_queue = $false
+    can_resume = $false
+    state_hash = "fixture-goal-192-worker-offline-active0-stale0"
+    revision = "fixture-goal-192-revision"
+    action_matrix = @($matrix)
+    blockers = @("worker_offline")
+    warnings = @("start_apply_deferred_after_goal_192")
+    arm_lease = [pscustomobject]@{
+      lease_id = "lease_fixture_goal_192_preview_only"
+      campaign_id = $CampaignId
+      allowed_actions = @("resume_preview", "start_one_preview", "start_queue_preview")
+      expires_at = "2026-06-08T00:30:00.000Z"
+      created_by = "fixture"
+      reason = "schema fixture only; not valid for apply execution"
+      consumed_at = $null
+      token_printed = $false
+    }
+    token_printed = $false
+  }
+}
+
+function New-QueueControlAuditEvent {
+  param([string]$Action, [string]$Mode, [string]$ReasonText, [string[]]$Blockers, [string[]]$Warnings, [string]$Revision)
+  [pscustomobject]@{
+    schema = "skybridge.queue_control_audit_event.v1"
+    audit_event_id = "audit_queue_control_$([Guid]::NewGuid().ToString("n").Substring(0, 12))"
+    action = $Action
+    source = "cli"
+    mode = $Mode
+    actor = $Actor
+    campaign_id = $CampaignId
+    current_step_id = "$CampaignId`:super-192-dashboard-safe-actions"
+    target_revision = $Revision
+    reason = $ReasonText
+    blockers = @($Blockers)
+    warnings = @($Warnings)
+    created_at = (Get-Date).ToUniversalTime().ToString("o")
+    token_printed = $false
+  }
+}
+
+function Write-QueueControlAuditEvent {
+  param($AuditEvent)
+  $auditDir = Join-Path ".agent" "queue-control-audit"
+  New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
+  $auditPath = Join-Path $auditDir "$CampaignId.jsonl"
+  ($AuditEvent | ConvertTo-Json -Depth 30 -Compress) | Add-Content -LiteralPath $auditPath -Encoding UTF8
+  return $auditPath
+}
+
+function Invoke-QueueControlContract {
+  param(
+    [string]$Action,
+    [ValidateSet("read", "preview", "apply")]
+    [string]$ControlMode,
+    [switch]$CreateAudit
+  )
+  $state = Get-QueueControlState
+  $entry = @($state.action_matrix | Where-Object { $_.action -eq $Action } | Select-Object -First 1)
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $warnings = New-Object System.Collections.Generic.List[string]
+  if ($entry) {
+    foreach ($item in @($entry.blockers)) {
+      if (-not [string]::IsNullOrWhiteSpace([string]$item)) { $blockers.Add([string]$item) | Out-Null }
+    }
+    foreach ($item in @($entry.warnings)) {
+      if (-not [string]::IsNullOrWhiteSpace([string]$item)) { $warnings.Add([string]$item) | Out-Null }
+    }
+  } else {
+    $blockers.Add("unknown_action") | Out-Null
+  }
+  $revision = if ([string]::IsNullOrWhiteSpace($TargetRevision)) { $state.state_hash } else { $TargetRevision }
+  if ([string]::IsNullOrWhiteSpace($TargetRevision) -and $Command -eq "control-preview") {
+    $blockers.Add("target_revision_required") | Out-Null
+  } elseif ($revision -ne $state.state_hash) {
+    $blockers.Add("target_revision_mismatch") | Out-Null
+  }
+  if ($entry -and @($entry.allowed_modes) -notcontains $ControlMode) { $blockers.Add("mode_not_allowed") | Out-Null }
+  if ($ControlMode -eq "apply" -and $entry -and -not [bool]$entry.apply_allowed) { $blockers.Add("apply_forbidden_in_goal_192") | Out-Null }
+  if ($ControlMode -eq "apply" -and $entry -and [bool]$entry.reason_required -and [string]::IsNullOrWhiteSpace($Reason)) { $blockers.Add("reason_required") | Out-Null }
+  if ($Action -in @("start_one_apply", "start_queue_apply", "start_all", "arbitrary_shell")) {
+    $blockers.Add("no_execution_enablement_in_goal_192") | Out-Null
+  }
+  $allowed = ($blockers.Count -eq 0)
+  $audit = $null
+  $auditPath = $null
+  if ($CreateAudit -and $allowed) {
+    $audit = New-QueueControlAuditEvent -Action $Action -Mode $ControlMode -ReasonText $Reason -Blockers @($blockers) -Warnings @($warnings) -Revision $revision
+    $auditPath = Write-QueueControlAuditEvent -AuditEvent $audit
+  }
+  [pscustomobject]@{
+    schema = "skybridge.queue_control_action_response.v1"
+    ok = $allowed
+    command = $Command
+    mode = $ControlMode
+    action = $Action
+    allowed = $allowed
+    blockers = @($blockers)
+    warnings = @($warnings)
+    audit_event_id = if ($audit) { $audit.audit_event_id } else { $null }
+    audit_path = $auditPath
+    state = $state
+    state_hash = $state.state_hash
+    target_revision = $revision
+    reason_required = if ($entry) { [bool]$entry.reason_required } else { $true }
+    human_approval_required = if ($entry) { [bool]$entry.human_approval_required } else { $true }
+    mutates = ($ControlMode -eq "apply" -and $allowed)
+    task_created = $false
+    worker_loop_started = $false
+    token_printed = $false
+    summary = "queue control $Action $ControlMode allowed=$allowed"
+  }
+}
+
 function Test-GitPreflight {
   $branch = (git branch --show-current).Trim()
   $dirty = -not [string]::IsNullOrWhiteSpace((git status --short | Out-String).Trim())
@@ -182,6 +404,8 @@ function Invoke-Preflight {
   }
   $goal189 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-189-ci-guardian-pr-finalizer-hardening" })[0]
   $goal190 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-190-campaign-run-report-evidence-ledger" })[0]
+  $goal191 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-191-readonly-operator-dashboard" })[0]
+  $goal192 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-192-dashboard-safe-actions" })[0]
   $goal189Recovered = $false
   if ($goal189 -and $goal189.evidence_summary) {
     $goal189Recovered = [bool]$goal189.evidence_summary.recovered -or [string]$goal189.evidence_summary.recovery_status -in @("recovered", "completed")
@@ -189,6 +413,7 @@ function Invoke-Preflight {
   $goal190LinkedTaskCount = if ($goal190) { @($goal190.linked_task_ids).Count } else { 0 }
   $goal190LinkedPrCount = if ($goal190) { @($goal190.linked_pr_urls).Count } else { 0 }
   $goal190Unexecuted = ($goal190 -and $goal190LinkedTaskCount -eq 0 -and $goal190LinkedPrCount -eq 0)
+  $goal192Unexecuted = ($goal192 -and @($goal192.linked_task_ids).Count -eq 0 -and @($goal192.linked_pr_urls).Count -eq 0)
   $checks = [ordered]@{
     git_clean = -not [bool]$git.dirty
     active_tasks_zero = ([int]$active.task_summary.active -eq 0)
@@ -197,8 +422,11 @@ function Invoke-Preflight {
     campaign_exists = ($null -ne $campaign.campaign)
     goal_189_completed = ($goal189 -and [string]$goal189.status -eq "completed")
     goal_189_recovered_or_evidence_complete = ($goal189 -and $goal189Recovered)
-    goal_190_current = ($goal190 -and [string]$campaign.campaign.current_step_id -eq [string]$goal190.campaign_step_id)
-    goal_190_ready = ($goal190 -and [string]$goal190.status -eq "ready")
+    goal_190_completed = ($goal190 -and [string]$goal190.status -eq "completed")
+    goal_191_completed = ($goal191 -and [string]$goal191.status -eq "completed")
+    goal_192_current = ($goal192 -and [string]$campaign.campaign.current_step_id -eq [string]$goal192.campaign_step_id)
+    goal_192_ready = ($goal192 -and [string]$goal192.status -eq "ready")
+    goal_192_unexecuted = $goal192Unexecuted
     goal_190_unexecuted = $goal190Unexecuted
     project_paused = ([string]$active.control.state -eq "paused")
   }
@@ -215,11 +443,12 @@ function Invoke-Preflight {
     campaign_status = [string]$campaign.campaign.status
     current_step = [string]$campaign.campaign.current_step_id
     previous_step = if ($goal189) { [pscustomobject]@{ goal_id = [string]$goal189.goal_id; status = [string]$goal189.status; linked_task_ids = @($goal189.linked_task_ids); linked_pr_urls = @($goal189.linked_pr_urls); recovered = $goal189Recovered } } else { $null }
-    current_step_detail = if ($goal190) { [pscustomobject]@{ goal_id = [string]$goal190.goal_id; status = [string]$goal190.status; linked_task_ids = @($goal190.linked_task_ids); linked_pr_urls = @($goal190.linked_pr_urls); unexecuted = $goal190Unexecuted } } else { $null }
+    goal_190_detail = if ($goal190) { [pscustomobject]@{ goal_id = [string]$goal190.goal_id; status = [string]$goal190.status; linked_task_ids = @($goal190.linked_task_ids); linked_pr_urls = @($goal190.linked_pr_urls); unexecuted = $goal190Unexecuted } } else { $null }
+    current_step_detail = if ($goal192) { [pscustomobject]@{ goal_id = [string]$goal192.goal_id; status = [string]$goal192.status; linked_task_ids = @($goal192.linked_task_ids); linked_pr_urls = @($goal192.linked_pr_urls); unexecuted = $goal192Unexecuted } } else { $null }
     worker_status = if ($worker) { [string]$worker.remote_status } else { "unknown" }
     worker_current_task_id = if ($worker) { $worker.current_task_id } else { $null }
-    next_safe_action = "Run the Pre-190 Acceptance Gate before any start-one/start-all/resume -Apply. Goal 190 must remain unexecuted until that gate passes."
-    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal190_unexecuted=$goal190Unexecuted"
+    next_safe_action = "Goal 192 control contract only: use preview controls or reason-gated safe pause/stop; start-one/start-queue apply remain disabled."
+    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal192_unexecuted=$goal192Unexecuted"
   }
 }
 
@@ -229,8 +458,35 @@ $tokenArgs = Get-TokenArgs
 $result = $null
 
 switch ($Command) {
+  "control-matrix" {
+    $state = Get-QueueControlState
+    $result = [pscustomobject]@{
+      ok = $true
+      command = $Command
+      mode = "read"
+      schema = "skybridge.queue_control_action_matrix.v1"
+      campaign_id = $CampaignId
+      action_matrix = @($state.action_matrix)
+      state_hash = $state.state_hash
+      token_printed = $false
+    }
+  }
+  "control-preview" {
+    $action = if ([string]::IsNullOrWhiteSpace($ControlAction)) { "start_one_preview" } else { $ControlAction }
+    $result = Invoke-QueueControlContract -Action $action -ControlMode "preview"
+  }
+  "resume-preview" {
+    $result = Invoke-QueueControlContract -Action "resume_preview" -ControlMode "preview"
+  }
+  "start-one-preview" {
+    $result = Invoke-QueueControlContract -Action "start_one_preview" -ControlMode "preview"
+  }
+  "start-queue-preview" {
+    $result = Invoke-QueueControlContract -Action "start_queue_preview" -ControlMode "preview"
+  }
   "preflight" {
-    $result = Invoke-Preflight
+    if ($Fixture) { $result = Invoke-QueueControlContract -Action "preflight" -ControlMode "read" }
+    else { $result = Invoke-Preflight }
   }
   "watch" {
     $watchArgs = @("-File", ".\scripts\powershell\skybridge-campaign-watch.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-CampaignId", $CampaignId, "-ColorMode", $ColorMode) + $tokenArgs
@@ -246,6 +502,14 @@ switch ($Command) {
     if ($Json) { $result = Invoke-JsonScript $watchArgs } else { Invoke-TextScript $watchArgs; return }
   }
   "start-one" {
+    if ($Apply) {
+      $result = Invoke-QueueControlContract -Action "start_one_apply" -ControlMode "apply"
+      break
+    }
+    if ($DryRun -or $Fixture -or -not $Apply) {
+      $result = Invoke-QueueControlContract -Action "start_one_preview" -ControlMode "preview"
+      break
+    }
     $args = @("-File", ".\scripts\powershell\start-dev-queue-189-200.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalPackDir", $GoalPackDir, "-CampaignId", $CampaignId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxSteps", "1", "-MaxTasks", "1", "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-Json") + $tokenArgs
     if ($Apply) { $args += "-Apply" } else { $args += "-DryRun" }
     if ($OutputFile) { $args += @("-OutputFile", $OutputFile) }
@@ -270,6 +534,8 @@ switch ($Command) {
     }
   }
   "start-all" {
+    $result = Invoke-QueueControlContract -Action "start_all" -ControlMode $(if ($Apply) { "apply" } else { "preview" })
+    break
     $args = @("-File", ".\scripts\powershell\start-dev-queue-189-200.ps1", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId, "-GoalPackDir", $GoalPackDir, "-CampaignId", $CampaignId, "-WorkerProfile", $WorkerProfile, "-HermesEnvFile", $HermesEnvFile, "-MaxSteps", "12", "-MaxTasks", "12", "-MaxRuntimeMinutes", [string]$MaxRuntimeMinutes, "-Json") + $tokenArgs
     if ($Apply) { $args += "-Apply" } else { $args += "-DryRun" }
     if ($OutputFile) { $args += @("-OutputFile", $OutputFile) }
@@ -290,24 +556,39 @@ switch ($Command) {
   }
   "safe-pause" {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "safe-pause requires -Reason." }
-    if (-not $Apply) {
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_pause_project = $true; would_hold_runner = $true; would_set_stop_requested = $false; mutates = $false; reason = $Reason; summary = "safe-pause dry-run: no mutation; would pause project and hold runner with stop_requested=false." }
+    if ($Fixture -or -not $Apply) {
+      $result = Invoke-QueueControlContract -Action "safe_pause" -ControlMode $(if ($Apply) { "apply" } else { "preview" }) -CreateAudit:$Apply
     } else {
       $control = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "pause", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
       $hold = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-campaign.ps1", "runner-hold", "-CampaignId", $CampaignId, "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Reason", $Reason, "-Apply", "-Json"))
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; runner = $hold; stop_requested = [bool]$control.control.stop_requested; reason = $Reason; summary = "safe-pause applied: project paused and stop_requested=false." }
+      $contract = Invoke-QueueControlContract -Action "safe_pause" -ControlMode "apply" -CreateAudit
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; runner = $hold; stop_requested = [bool]$control.control.stop_requested; reason = $Reason; audit_event_id = $contract.audit_event_id; summary = "safe-pause applied: project paused and stop_requested=false." }
     }
+  }
+  "stop-queue" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "stop-queue requires -Reason." }
+    $result = Invoke-QueueControlContract -Action "stop_queue" -ControlMode $(if ($Apply) { "apply" } else { "preview" }) -CreateAudit:$Apply
   }
   "emergency-stop" {
     if ([string]::IsNullOrWhiteSpace($Reason)) { throw "emergency-stop requires -Reason." }
-    if (-not $Apply) {
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "dry-run"; token_printed = $false; would_stop_project = $true; would_set_stop_requested = $true; mutates = $false; reason = $Reason; instructions = "Dry-run only. With -Apply, press Ctrl+C in the runner window if it is still running."; summary = "emergency-stop dry-run: no mutation; would set stop_requested=true and require operator Ctrl+C for any live runner." }
+    if ($Fixture -or -not $Apply) {
+      $result = Invoke-QueueControlContract -Action "emergency_stop" -ControlMode $(if ($Apply) { "apply" } else { "preview" }) -CreateAudit:$Apply
+      $result | Add-Member -NotePropertyName instructions -NotePropertyValue "Dry-run/fixture path. With real -Apply, press Ctrl+C in any runner window if it is still running." -Force
     } else {
       $control = Invoke-JsonScript (@("-File", ".\scripts\powershell\skybridge-control.ps1", "-Command", "stop", "-ApiBase", $ApiBase, "-ProjectId", $ProjectId) + $tokenArgs + @("-Json"))
-      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; stop_requested = [bool]$control.control.stop_requested; task_created = $false; reason = $Reason; instructions = "Press Ctrl+C in the runner window if it is still running."; summary = "emergency-stop applied: stop_requested=true; no task was created." }
+      $contract = Invoke-QueueControlContract -Action "emergency_stop" -ControlMode "apply" -CreateAudit
+      $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "apply"; token_printed = $false; control = $control; stop_requested = [bool]$control.control.stop_requested; task_created = $false; worker_loop_started = $false; reason = $Reason; audit_event_id = $contract.audit_event_id; instructions = "Press Ctrl+C in the runner window if it is still running."; summary = "emergency-stop applied: stop_requested=true; no task was created." }
     }
   }
   "resume" {
+    if ($Apply) {
+      $result = Invoke-QueueControlContract -Action "resume_preview" -ControlMode "apply"
+      break
+    }
+    if ($Fixture) {
+      $result = Invoke-QueueControlContract -Action "resume_preview" -ControlMode "preview"
+      break
+    }
     $preflight = Invoke-Preflight
     if (-not $Apply) {
       $stopRequested = $false

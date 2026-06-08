@@ -6,6 +6,8 @@ import {
   type CampaignSafeSummary,
   createCampaignSafeSummary,
   fixtureCampaignRunReport,
+  fixtureQueueControlState,
+  queueControlActionMatrix,
   summarizeCampaignEvidence,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
@@ -253,6 +255,8 @@ function App() {
   const evidence = summarizeCampaignEvidence(report);
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
+  const previewActions = queueControlActionMatrix.filter((entry) => entry.class === "preview");
+  const forbiddenActions = queueControlActionMatrix.filter((entry) => entry.class === "armed_execution" || entry.class === "forbidden");
 
   return (
     <main className="shell">
@@ -314,10 +318,53 @@ function App() {
       </section>
 
       <section className="future-controls" aria-label="Future execution controls">
-        <span>Start One disabled by read-only Goal 191D</span>
-        <span>Start Queue disabled by read-only Goal 191D</span>
-        <span>Resume disabled by read-only Goal 191D</span>
-        <span>Stop/Emergency Stop future controls only</span>
+        <span>Start One Apply disabled by Goal 192 contract</span>
+        <span>Start Queue Apply disabled by Goal 192 contract</span>
+        <span>Start All disabled</span>
+        <span>Run Forever disabled</span>
+        <span>Worker Loop disabled</span>
+      </section>
+
+      <section className="panel queue-actions" aria-label="Safe Actions / Queue Controls">
+        <h2>Safe Actions / Queue Controls</h2>
+        <dl>
+          <StatusValue label="Reason required" value={String(readiness.reason_required)} />
+          <StatusValue label="worker_offline blocker" value={String(readiness.blockers.includes("worker_offline"))} />
+          <StatusValue label="State hash" value={fixtureQueueControlState.state_hash} />
+          <StatusValue label="Audit result" value="shown after safe action apply" />
+          <StatusValue label="Start disabled reason" value={`worker=${readiness.worker_status}; execution apply deferred after Goal 192`} />
+          <StatusValue label="Preview action ids" value="start_one_preview; start_queue_preview; resume_preview" />
+        </dl>
+        <div className="queue-action-grid">
+          <button type="button" onClick={refresh} disabled={refreshing}>
+            Refresh
+          </button>
+          <button type="button" onClick={openReport}>
+            Report
+          </button>
+          <button type="button" onClick={copySafeSummary}>
+            Copy Safe Summary
+          </button>
+          <button type="button" disabled aria-disabled="true">
+            Safe Pause
+          </button>
+          <button type="button" disabled aria-disabled="true">
+            Stop Queue
+          </button>
+          <button type="button" disabled aria-disabled="true">
+            Emergency Stop
+          </button>
+          {previewActions.map((entry) => (
+            <button type="button" key={entry.action}>
+              {entry.action.replace(/_/g, " ")}
+            </button>
+          ))}
+          {forbiddenActions.map((entry) => (
+            <button type="button" key={entry.action} disabled aria-disabled="true">
+              {entry.action.replace(/_/g, " ")} disabled
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="panel">

@@ -2,6 +2,20 @@
 
 SkyBridge Desktop is a standby operator tool. It is not an execution surface.
 
+## Goal 192 Safe Actions
+
+Goal 192 adds a Safe Actions / Queue Controls section backed by the shared queue-control contract. Desktop remains non-executing: start-one apply, start-queue apply, start-all, run forever and worker loop controls are disabled.
+
+Desktop may show:
+
+- Refresh;
+- Report;
+- Copy Safe Summary;
+- reason-required Safe Pause / Stop Queue / Emergency Stop controls only when an apply path is explicitly wired and confirmed;
+- Resume Preview, Start One Preview and Start Queue Preview.
+
+Desktop must show why start actions are disabled, including `worker_offline`, required reason state, audit result after safe actions and `token_printed=false`. It must not display tokens, Authorization headers, raw prompts, raw stdout/stderr, raw worker logs, private keys, cookies or secret-bearing local paths.
+
 ## Goal 191E Async Refresh
 
 Goal 191E changes the resident queue dashboard from a blocking refresh flow to an async snapshot flow.
@@ -51,6 +65,8 @@ The desktop app may:
 - call `skybridge-campaign.ps1 runner-report -CampaignId dev-queue-189-200 -Json`;
 - call `skybridge-worker-status.ps1 -Command status -Json`;
 - call `skybridge-worker-status.ps1 -Command register-heartbeat -Json` from Heartbeat Now;
+- render the shared Goal 192 Safe Actions / Queue Controls contract;
+- call queue-control preview commands that do not mutate campaign state;
 - write `.agent/desktop-client/status.json`;
 - append concise local logs under `.agent/desktop-client/logs/`.
 
@@ -66,6 +82,8 @@ The desktop app must not:
 - create campaign-step-derived tasks;
 - create PRs;
 - execute Goal 190;
+- execute Goal 192;
+- run arbitrary shell commands from the UI;
 - print, display or persist tokens, raw Authorization headers, raw prompts, raw stdout/stderr or raw worker logs.
 
 ## Start The App
