@@ -23,6 +23,7 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
@@ -42,6 +43,7 @@ import {
   type TaskSummary,
   type WorkerRecord,
   type WorkerSummary,
+  type ProposedGoalReviewSummary,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -332,6 +334,7 @@ function CampaignQueuePage() {
           <CampaignPriorityQueuePanel />
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
+          <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <WorkerRoutingPanel report={report} />
           <QueueReadinessPanel readiness={readiness} />
@@ -516,6 +519,58 @@ function GoalQueueReviewPanel({
         fallback="No archive preview."
       />
       <p className="skybridge-state-note">No execution controls are available on this review surface.</p>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function ProposedGoalReviewPanel({
+  review,
+}: {
+  review: ProposedGoalReviewSummary;
+}) {
+  return (
+    <section className="skybridge-panel proposed-goal-review" aria-label="Proposed goal review">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Proposed Goals</p>
+          <h2>Review-Only Intake</h2>
+        </div>
+        <span className={badgeClass(review.blocked_draft_count > 0 ? "bad" : "ok")}>
+          {review.pending_review_count} review
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Proposed goals</dt>
+          <dd>{review.proposed_goal_count}</dd>
+        </div>
+        <div>
+          <dt>Pending review</dt>
+          <dd>{review.pending_review_count}</dd>
+        </div>
+        <div>
+          <dt>Blocked drafts</dt>
+          <dd>{review.blocked_draft_count}</dd>
+        </div>
+        <div>
+          <dt>Next action</dt>
+          <dd>{review.next_action}</dd>
+        </div>
+        <div>
+          <dt>Import requires Goal 200</dt>
+          <dd>{String(review.import_requires_goal_200)}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Drafts"
+        items={review.proposed_goals.map(
+          (goal) =>
+            `${goal.proposed_goal_id}: ${goal.safety_classification}; ${goal.review_status}; ${goal.proposed_markdown_path}; hash=${goal.content_hash.slice(0, 12)}; deps=${goal.suggested_dependencies.join(", ") || "none"}; blocked=${goal.blocked_reasons.join(", ") || "none"}`,
+        )}
+        fallback="No proposed goals."
+      />
+      <p className="skybridge-state-note">No import or execute controls are exposed on proposed-goal review.</p>
       <span>token_printed=false</span>
     </section>
   );

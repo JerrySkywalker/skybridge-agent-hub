@@ -2,6 +2,12 @@
 
 Goal 195 adds the reviewable authoring layer for manual campaign queues. It is local/offline by default and does not execute campaign steps.
 
+## Proposed Goals
+
+Proposed goals are not campaign goals. They live under `goals/proposed/` with review metadata, content hash, safety classification and `token_printed=false`.
+
+Goal 199 can generate fixture drafts for human review. Import remains a separate Goal 200 workflow so a generated goal cannot approve or execute itself.
+
 ## Author A Goal Pack
 
 A goal pack is a directory with `campaign.skybridge.json` and one markdown file per goal. Use the templates in `goals/templates/`:

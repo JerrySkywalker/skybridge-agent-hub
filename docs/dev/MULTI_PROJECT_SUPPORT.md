@@ -2,6 +2,8 @@
 
 Goal 198 adds safe project profiles and project policy validation. It prepares SkyBridge to review multiple repositories, but it does not enable queue execution, task claims, worker execution, project import apply, or external repository mutation.
 
+Goal 199 keeps proposed-goal generation scoped to the selected SkyBridge repository. Draft output is path-confined to `goals/proposed/`; project selection remains preview-only and does not authorize mutation of other repositories.
+
 ## Project Profile Fields
 
 Profiles use `skybridge.project_profile.v1` and live under `config/project-profiles/`.

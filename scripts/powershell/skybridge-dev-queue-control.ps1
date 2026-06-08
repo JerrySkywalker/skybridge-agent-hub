@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview", "campaign-lock-status", "campaign-lock-preview", "repo-lock-status", "repo-lock-preview", "unlock-stale-campaign-lock", "cancel-campaign-preview", "abort-campaign-preview", "hold-campaign-preview", "campaign-priority-queue", "campaign-select-next-preview", "worker-capability-matrix", "worker-readiness", "worker-route-preview", "worker-route-fixture", "worker-routing-policy", "worker-readiness-summary", "project-profile-validate", "project-profile-preview", "project-profile-list", "project-profile-hash", "project-select-preview")]
+  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview", "campaign-lock-status", "campaign-lock-preview", "repo-lock-status", "repo-lock-preview", "unlock-stale-campaign-lock", "cancel-campaign-preview", "abort-campaign-preview", "hold-campaign-preview", "campaign-priority-queue", "campaign-select-next-preview", "worker-capability-matrix", "worker-readiness", "worker-route-preview", "worker-route-fixture", "worker-routing-policy", "worker-readiness-summary", "project-profile-validate", "project-profile-preview", "project-profile-list", "project-profile-hash", "project-select-preview", "goal-draft-generate-preview", "goal-draft-generate-fixture", "goal-draft-validate", "goal-draft-list", "goal-draft-safe-summary", "goal-draft-reject-preview", "goal-draft-approve-for-import-preview")]
   [string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -18,6 +18,7 @@ param(
   [string]$OutputFile,
   [string]$Reason,
   [string]$ControlAction,
+  [string]$DraftPath,
   [string]$Actor = "operator",
   [string]$TargetRevision,
   [switch]$Fixture,
@@ -393,27 +394,29 @@ function Invoke-LockDecision {
 function Get-QueueControlState {
   $matrix = Get-QueueControlActionMatrix
   $projectSelection = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-project-profile.ps1", "-Command", "project-select-preview", "-ProjectId", $ProjectId, "-Json")
+  $proposedGoalSummary = Invoke-JsonScript @("-File", ".\scripts\powershell\skybridge-goal-draft.ps1", "-Command", "goal-draft-safe-summary", "-Json")
   [pscustomobject]@{
     schema = "skybridge.queue_control_state.v1"
     project_id = $ProjectId
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-198-multi-project-support"
-    current_goal_id = "super-198-multi-project-support"
+    current_step_id = "$CampaignId`:super-199-hermes-goal-draft-generator"
+    current_goal_id = "super-199-hermes-goal-draft-generator"
     worker_status = "offline"
     active_tasks = 0
     stale_leases = 0
     can_start_one = $false
     can_start_queue = $false
     can_resume = $false
-    state_hash = "fixture-goal-198-project-profile-preview-active0-stale0"
-    revision = "fixture-goal-198-revision"
+    state_hash = "fixture-goal-199-proposed-goals-active0-stale0"
+    revision = "fixture-goal-199-revision"
     action_matrix = @($matrix)
-    blockers = @("worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_apply_disabled_until_goal_199")
-    warnings = @("manual_goal_pack_review_required", "multiple_campaigns_require_selection_review", "project_selection_preview_only")
+    blockers = @("worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_apply_disabled_until_goal_200")
+    warnings = @("manual_goal_pack_review_required", "multiple_campaigns_require_selection_review", "project_selection_preview_only", "proposed_goals_need_review")
     campaign_lock = Get-CampaignLockFixture
     repo_exclusive_lock = Get-RepoLockFixture
     priority_queue = Get-CampaignPriorityQueueFixture
     project_selection = $projectSelection
+    proposed_goal_summary = $proposedGoalSummary
     arm_lease = [pscustomobject]@{
       lease_id = "lease_fixture_goal_194_preview_only"
       campaign_id = $CampaignId
@@ -438,7 +441,7 @@ function New-QueueControlAuditEvent {
     mode = $Mode
     actor = $Actor
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-198-multi-project-support"
+    current_step_id = "$CampaignId`:super-199-hermes-goal-draft-generator"
     target_revision = $Revision
     reason = $ReasonText
     blockers = @($Blockers)
@@ -722,6 +725,17 @@ switch ($Command) {
   { $_ -in @("project-profile-validate", "project-profile-preview", "project-profile-list", "project-profile-hash", "project-select-preview") } {
     $projectArgs = @("-File", ".\scripts\powershell\skybridge-project-profile.ps1", "-Command", $Command, "-ProjectId", $ProjectId, "-Json")
     $result = Invoke-JsonScript $projectArgs
+  }
+  { $_ -in @("goal-draft-generate-preview", "goal-draft-generate-fixture", "goal-draft-validate", "goal-draft-list", "goal-draft-safe-summary", "goal-draft-reject-preview", "goal-draft-approve-for-import-preview") } {
+    $draftArgs = @("-File", ".\scripts\powershell\skybridge-goal-draft.ps1", "-Command", $Command, "-Json")
+    if (-not [string]::IsNullOrWhiteSpace($DraftPath)) { $draftArgs += @("-DraftPath", $DraftPath) }
+    if ($Apply -and $Command -eq "goal-draft-generate-fixture") { $draftArgs += "-Apply" }
+    if (-not [string]::IsNullOrWhiteSpace($Reason)) { $draftArgs += @("-Reason", $Reason) }
+    $result = Invoke-JsonScript $draftArgs
+    if (-not $result.PSObject.Properties["imported"]) { $result | Add-Member -NotePropertyName imported -NotePropertyValue $false -Force }
+    if (-not $result.PSObject.Properties["executed"]) { $result | Add-Member -NotePropertyName executed -NotePropertyValue $false -Force }
+    if (-not $result.PSObject.Properties["task_created"]) { $result | Add-Member -NotePropertyName task_created -NotePropertyValue $false -Force }
+    if (-not $result.PSObject.Properties["worker_loop_started"]) { $result | Add-Member -NotePropertyName worker_loop_started -NotePropertyValue $false -Force }
   }
   "preflight" {
     if ($Fixture) { $result = Invoke-QueueControlContract -Action "preflight" -ControlMode "read" }

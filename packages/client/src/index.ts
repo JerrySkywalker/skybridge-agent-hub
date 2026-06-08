@@ -984,6 +984,7 @@ export interface CampaignQueueControlReadiness {
   routing_readiness?: WorkerRoutingReadinessDetail;
   project_profile?: ProjectProfileReviewSummary;
   project_selection?: ProjectSelectionPreview;
+  proposed_goal_summary?: ProposedGoalSafeSummary | ProposedGoalReviewSummary;
 }
 
 export interface ProjectValidationCommandSummary {
@@ -1519,7 +1520,13 @@ export type AttentionEventType =
   | "project_repo_path_invalid"
   | "project_default_branch_mismatch"
   | "project_policy_blocked_path"
-  | "project_selection_preview_only";
+  | "project_selection_preview_only"
+  | "proposed_goal_created"
+  | "proposed_goal_needs_review"
+  | "proposed_goal_blocked"
+  | "proposed_goal_rejected"
+  | "unsafe_goal_draft_detected"
+  | "import_requires_goal_200";
 
 export interface AttentionEvent {
   schema: "skybridge.attention_event.v1";
@@ -2350,6 +2357,10 @@ export interface CampaignSafeSummary {
   project_profile_hash?: string;
   project_validation_status?: "valid" | "invalid" | "missing";
   project_selection_preview_only?: boolean;
+  proposed_goal_count?: number;
+  pending_proposed_goal_review_count?: number;
+  blocked_proposed_goal_count?: number;
+  proposed_goal_next_action?: string;
   queue_readiness: Pick<
     CampaignQueueControlReadiness,
     | "can_start_one"
@@ -2404,6 +2415,61 @@ export interface GoalQueueReviewSummary {
   token_printed: false;
 }
 
+export type ProposedGoalSource = "fixture" | "hermes" | "manual";
+export type ProposedGoalSafetyClassification = "low" | "medium" | "high" | "blocked";
+export type ProposedGoalReviewStatus = "proposed" | "needs_review" | "rejected" | "approved_for_import";
+
+export interface ProposedGoalDraft {
+  proposed_goal_id: string;
+  title: string;
+  source: ProposedGoalSource;
+  proposed_markdown_path: string;
+  content_hash: string;
+  safety_classification: ProposedGoalSafetyClassification;
+  review_status: ProposedGoalReviewStatus;
+  suggested_order: number;
+  suggested_dependencies: string[];
+  allowed_task_types: string[];
+  blocked_task_types: string[];
+  expected_outputs: string[];
+  review_notes: string[];
+  blocked_reasons: string[];
+  generated_at: string;
+  token_printed: false;
+}
+
+export interface ProposedGoalSafeSummary {
+  schema: "skybridge.proposed_goal_safe_summary.v1";
+  proposed_goal_count: number;
+  pending_review_count: number;
+  blocked_draft_count: number;
+  next_action: "review proposed goals in Goal 200";
+  import_requires_goal_200: true;
+  imported: false;
+  executed: false;
+  task_created: false;
+  worker_loop_started: false;
+  token_printed: false;
+}
+
+export interface ProposedGoalReviewSummary {
+  schema: "skybridge.proposed_goal_review_summary.v1";
+  proposed_goal_count: number;
+  pending_review_count: number;
+  blocked_draft_count: number;
+  next_action: "review proposed goals in Goal 200";
+  import_requires_goal_200: true;
+  imported: false;
+  executed: false;
+  task_created: false;
+  worker_loop_started: false;
+  proposed_goals: ProposedGoalDraft[];
+  no_import_button: true;
+  no_execute_button: true;
+  no_execution_controls: true;
+  token_printed: false;
+}
+
 export function summarizeCampaignEvidence(
   report: Pick<CampaignRunReport, "evidence_ledger">,
 ): CampaignEvidenceCounts {
@@ -2437,6 +2503,10 @@ export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSa
     project_profile_hash: readiness.project_selection?.profile_hash ?? readiness.project_profile?.profile_hash,
     project_validation_status: readiness.project_profile?.validation_status,
     project_selection_preview_only: readiness.project_selection?.project_selection_preview_only ?? false,
+    proposed_goal_count: readiness.proposed_goal_summary?.proposed_goal_count ?? 0,
+    pending_proposed_goal_review_count: readiness.proposed_goal_summary?.pending_review_count ?? 0,
+    blocked_proposed_goal_count: readiness.proposed_goal_summary?.blocked_draft_count ?? 0,
+    proposed_goal_next_action: readiness.proposed_goal_summary?.next_action,
     queue_readiness: {
       can_start_one: readiness.can_start_one,
       can_start_queue: readiness.can_start_queue,
@@ -2561,6 +2631,12 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "worker_disabled",
       "capability_mismatch",
       "repo_parallelism_blocked",
+      "proposed_goal_created",
+      "proposed_goal_needs_review",
+      "proposed_goal_blocked",
+      "proposed_goal_rejected",
+      "unsafe_goal_draft_detected",
+      "import_requires_goal_200",
     ],
     real_external_send: false,
     summary: "Render in the Web attention banner/feed.",
@@ -2588,6 +2664,8 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "no_ready_worker",
       "all_workers_offline",
       "repo_parallelism_blocked",
+      "proposed_goal_blocked",
+      "unsafe_goal_draft_detected",
     ],
     real_external_send: false,
     fixture_ledger_dir: ".agent/tmp/notifications",
@@ -2598,7 +2676,7 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
     route: "ntfy_placeholder",
     status: "not_configured",
     levels: ["critical"],
-    event_types: ["ci_failed", "emergency_stop_requested"],
+    event_types: ["ci_failed", "emergency_stop_requested", "unsafe_goal_draft_detected"],
     real_external_send: false,
     summary: "Real ntfy delivery is disabled by default and represented as not configured.",
     token_printed: false,
@@ -2607,7 +2685,7 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
     route: "disabled",
     status: "disabled",
     levels: ["info"],
-    event_types: ["goal_ready", "goal_completed", "pr_created", "safe_action_applied", "notification_delivery_skipped", "notification_delivery_fixture"],
+    event_types: ["goal_ready", "goal_completed", "pr_created", "safe_action_applied", "notification_delivery_skipped", "notification_delivery_fixture", "proposed_goal_created", "proposed_goal_needs_review", "proposed_goal_rejected", "import_requires_goal_200"],
     real_external_send: false,
     summary: "Low-noise events are not sent externally by default.",
     token_printed: false,
@@ -2790,6 +2868,73 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
         "project_selection",
       ),
     );
+  }
+
+  const proposedSummary = readiness.proposed_goal_summary;
+  if (proposedSummary) {
+    if (proposedSummary.proposed_goal_count > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_created",
+          "info",
+          "campaign",
+          `${proposedSummary.proposed_goal_count} proposed goal draft(s) are available for human review.`,
+          proposedSummary.next_action,
+          "proposed_goals",
+        ),
+      );
+    }
+    if (proposedSummary.pending_review_count > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_needs_review",
+          "action_required",
+          "campaign",
+          `${proposedSummary.pending_review_count} proposed goal draft(s) need review.`,
+          proposedSummary.next_action,
+          "proposed_goals_pending_review",
+        ),
+      );
+    }
+    if (proposedSummary.blocked_draft_count > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_blocked",
+          "blocker",
+          "campaign",
+          `${proposedSummary.blocked_draft_count} proposed goal draft(s) are blocked by the safety filter.`,
+          "Reject or rewrite blocked proposed drafts during Goal 200 review.",
+          "proposed_goals_blocked",
+        ),
+      );
+      events.push(
+        makeAttentionEvent(
+          report,
+          "unsafe_goal_draft_detected",
+          "critical",
+          "campaign",
+          "Unsafe proposed goal draft content was detected by the fixture safety filter.",
+          "Do not import or execute blocked drafts; review them in Goal 200.",
+          "unsafe_goal_draft",
+        ),
+      );
+    }
+    if (proposedSummary.import_requires_goal_200) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "import_requires_goal_200",
+          "info",
+          "campaign",
+          "Proposed goal import is deferred to Goal 200.",
+          proposedSummary.next_action,
+          "goal_200_import_gate",
+        ),
+      );
+    }
   }
 
   if (readiness.blockers.length > 0 || report.blockers.length > 0) {
@@ -2980,14 +3125,69 @@ export function createAttentionModel(report: CampaignRunReport, auditEvents: Que
   };
 }
 
+export const fixtureProposedGoalReviewSummary: ProposedGoalReviewSummary = {
+  schema: "skybridge.proposed_goal_review_summary.v1",
+  proposed_goal_count: 2,
+  pending_review_count: 1,
+  blocked_draft_count: 1,
+  next_action: "review proposed goals in Goal 200",
+  import_requires_goal_200: true,
+  imported: false,
+  executed: false,
+  task_created: false,
+  worker_loop_started: false,
+  proposed_goals: [
+    {
+      proposed_goal_id: "proposed-goal-201-local-readme-refresh",
+      title: "Goal 201 Local README Refresh",
+      source: "fixture",
+      proposed_markdown_path: "goals/proposed/proposed-goal-201-local-readme-refresh.md",
+      content_hash: "a80296ad3f06fd009c1c82a8caa68e337821bc538040fb01141eff47ae6785fb",
+      safety_classification: "low",
+      review_status: "proposed",
+      suggested_order: 201,
+      suggested_dependencies: ["super-200-controlled-goal-draft-review-import"],
+      allowed_task_types: ["docs", "local-smoke"],
+      blocked_task_types: ["production_deploy", "secret_rotation", "server_root_config", "github_settings", "branch_protection", "auto_execution"],
+      expected_outputs: ["reviewed_docs", "fixture_smoke"],
+      review_notes: ["Fixture-generated proposed goal for human review only."],
+      blocked_reasons: [],
+      generated_at: "2026-06-08T00:00:00.000Z",
+      token_printed: false,
+    },
+    {
+      proposed_goal_id: "proposed-unsafe-production-deploy",
+      title: "Unsafe Production Deployment",
+      source: "fixture",
+      proposed_markdown_path: "goals/proposed/proposed-unsafe-production-deploy.md",
+      content_hash: "5314ffd66b9f4013ff44822c2fced00ddfc4784b98210903c65efd60d4a09111",
+      safety_classification: "blocked",
+      review_status: "needs_review",
+      suggested_order: 201,
+      suggested_dependencies: ["super-200-controlled-goal-draft-review-import"],
+      allowed_task_types: ["docs"],
+      blocked_task_types: ["production_deploy", "secret_rotation", "server_root_config", "github_settings", "branch_protection", "auto_execution"],
+      expected_outputs: ["blocked_draft_record"],
+      review_notes: ["Safety fixture: blocked and review-only."],
+      blocked_reasons: ["production_deploy", "secret_rotation", "github_settings", "branch_protection", "auto_import", "auto_execution", "self_approval"],
+      generated_at: "2026-06-08T00:00:00.000Z",
+      token_printed: false,
+    },
+  ],
+  no_import_button: true,
+  no_execute_button: true,
+  no_execution_controls: true,
+  token_printed: false,
+};
+
 export const fixtureCampaignRunReport: CampaignRunReport = {
   schema: "skybridge.campaign_run_report.v1",
   generated_at: "2026-06-08T00:00:00.000Z",
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-198-multi-project-support",
-  current_goal_id: "super-198-multi-project-support",
+  current_step_id: "dev-queue-189-200:super-199-hermes-goal-draft-generator",
+  current_goal_id: "super-199-hermes-goal-draft-generator",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -2995,19 +3195,19 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-198-multi-project-support",
+    current_step_id: "dev-queue-189-200:super-199-hermes-goal-draft-generator",
     step_count: 12,
     source: "fixture",
     goal_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-198-multi-project-support",
-    goal_id: "super-198-multi-project-support",
-    order: 10,
-    title: "Multi-project Support",
+    campaign_step_id: "dev-queue-189-200:super-199-hermes-goal-draft-generator",
+    goal_id: "super-199-hermes-goal-draft-generator",
+    order: 11,
+    title: "Hermes Goal Draft Generator",
     status: "ready",
     is_current: true,
-    dependencies: ["super-197-multi-worker-readiness"],
+    dependencies: ["super-198-multi-project-support"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -3020,13 +3220,13 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
-    goal_id: "super-197-multi-worker-readiness",
-    order: 9,
-    title: "Multi-worker Readiness",
+    campaign_step_id: "dev-queue-189-200:super-198-multi-project-support",
+    goal_id: "super-198-multi-project-support",
+    order: 10,
+    title: "Multi-project Support",
     status: "completed",
     is_current: false,
-    dependencies: ["super-196-campaign-locking-multi-campaign-queue"],
+    dependencies: ["super-197-multi-worker-readiness"],
     linked_task_ids: [],
     linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/115"],
     linked_task_count: 0,
@@ -3100,7 +3300,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     ],
   },
   blockers: [],
-  warnings: ["approved_unconverted_proposals_present", "multi_campaign_conflict_review_required"],
+  warnings: ["proposed_goals_need_review", "multi_campaign_conflict_review_required"],
   queue_control_readiness: {
     can_start_one: false,
     can_start_queue: false,
@@ -3108,22 +3308,23 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     can_stop: true,
     can_emergency_stop: true,
     can_resume: false,
-    blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_199"],
-    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only"],
-    required_human_action: ["review_project_profile_before_any_future_start_preview", "unlock_stale_locks_only_after_inspection_with_reason"],
-    next_safe_action: "Review project profile and selection preview; keep Start One and Start Queue disabled.",
+    blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_200"],
+    warnings: ["proposed_goals_need_review", "standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only"],
+    required_human_action: ["review_proposed_goals_in_goal_200", "unlock_stale_locks_only_after_inspection_with_reason"],
+    next_safe_action: "Review proposed goals in Goal 200; keep import and execution disabled.",
     worker_required: true,
     worker_status: "offline",
     run_budget_required: true,
     reason_required: true,
     worker_service_state: fixtureWorkerServiceState,
-    execution_disabled_until_goal: "super-199-hermes-goal-draft-generator",
+    execution_disabled_until_goal: "super-200-controlled-goal-draft-review-import",
     campaign_lock: fixtureCampaignLock,
     repo_exclusive_lock: fixtureRepoExclusiveLock,
     priority_queue: fixtureCampaignPriorityQueue,
     routing_readiness: fixtureWorkerRoutingReadiness,
     project_profile: fixtureProjectProfileReviewSummary,
     project_selection: fixtureProjectSelectionPreview,
+    proposed_goal_summary: fixtureProposedGoalReviewSummary,
   },
   worker_service_state: fixtureWorkerServiceState,
   token_printed: false,
@@ -3133,19 +3334,19 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-198-multi-project-support",
-  current_goal_id: "super-198-multi-project-support",
+  current_step_id: "dev-queue-189-200:super-199-hermes-goal-draft-generator",
+  current_goal_id: "super-199-hermes-goal-draft-generator",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-198-project-profile-preview-active0-stale0",
-  revision: "fixture-goal-198-revision",
+  state_hash: "fixture-goal-199-proposed-goals-active0-stale0",
+  revision: "fixture-goal-199-revision",
   action_matrix: queueControlActionMatrix,
-  blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_199"],
-  warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only"],
+  blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_200"],
+  warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only", "proposed_goals_need_review"],
   project_selection: fixtureProjectSelectionPreview,
   token_printed: false,
 };
@@ -3268,12 +3469,11 @@ fixtureCampaignRunReport.step_ledger = [
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-199-hermes-goal-draft-generator", "Hermes Goal Draft Generator"],
     ["super-200-controlled-goal-draft-review-import", "Controlled Goal Draft Review and Import"],
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 11,
+    order: index + 12,
     title,
     status: "pending",
     is_current: false,
