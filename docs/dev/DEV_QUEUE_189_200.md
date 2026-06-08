@@ -301,3 +301,29 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-queue-dashboard-vi
 ```
 
 After this goal merges, review the PR evidence and keep Goal 192 execution separate. Do not start Goal 192 from dashboard rendering or visual QA.
+
+## Goal 191E Desktop Async Refresh
+
+Goal 191E hardens the Desktop queue dashboard refresh path. Desktop keeps rendering the last known good campaign report while a new refresh is pending, splits status/report/worker bridge outcomes into structured warnings, and treats slow status bridges as nonfatal when report data is available.
+
+Current Desktop behavior:
+
+- primary banner uses `Queue Readiness` and the details panel uses `Operator Readiness`;
+- legacy Pre-190 readiness is demoted and Goal 190 link counters are hidden once Goal 190 is no longer current;
+- Open report is restricted to ignored `.agent/tmp/campaign-reports/dev-queue-189-200-campaign-report.md`;
+- Copy safe summary uses the cached report snapshot and must preserve `token_printed=false`;
+- Refresh, Open report and Copy safe summary remain read-only dashboard actions.
+
+Run the focused checks:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-refresh-nonblocking.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-async-bridge-contract.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-status-timeout-nonfatal.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-no-pre190-after-goal191.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-open-report-safe-path.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-safe-summary-cached.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-desktop-visual-qa.ps1 -SkipWhenUnavailable
+```
+
+Final campaign state must remain current step `dev-queue-189-200:super-191-readonly-operator-dashboard`, current goal `super-191-readonly-operator-dashboard`, active tasks `0`, stale leases `0`, worker offline, `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `token_printed=false`.

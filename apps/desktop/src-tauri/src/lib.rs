@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem};
@@ -15,6 +16,7 @@ const WORKER_ID: &str = "laptop-zenbookduo";
 const GOAL_190_ID: &str = "super-190-campaign-run-report-evidence-ledger";
 const GOAL_189_ID: &str = "super-189-ci-guardian-pr-finalizer-hardening";
 const COMMAND_TIMEOUT_SECONDS: u64 = 30;
+const BRIDGE_RESULT_TIMEOUT_SECONDS: u64 = COMMAND_TIMEOUT_SECONDS + 5;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct DesktopStatus {
@@ -41,8 +43,12 @@ struct DesktopStatus {
     last_refresh_time: String,
     status_age_seconds: i64,
     pre190_readiness: Pre190Readiness,
+    operator_readiness: Pre190Readiness,
     campaign_report: Value,
     safe_summary: Value,
+    bridge_outcomes: Vec<BridgeOutcome>,
+    report_cached: bool,
+    report_age_seconds: i64,
     status_file: String,
     log_file: String,
     report_file: String,
@@ -56,6 +62,20 @@ struct Pre190Readiness {
     reasons: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct BridgeOutcome {
+    name: String,
+    ok: bool,
+    warning: Option<String>,
+}
+
+struct BridgeResults {
+    active: Result<Value, String>,
+    campaign: Result<Value, String>,
+    worker: Result<Value, String>,
+    report: Result<Value, String>,
+}
+
 #[derive(Debug, Serialize)]
 struct HeartbeatResult {
     ok: bool,
@@ -67,8 +87,18 @@ struct HeartbeatResult {
 }
 
 #[tauri::command]
-fn get_status(app: AppHandle) -> Result<DesktopStatus, String> {
-    collect_status(&app)
+async fn get_status(app: AppHandle, request_id: Option<String>) -> Result<DesktopStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut status = collect_status(&app)?;
+        if let Some(id) = request_id {
+            status
+                .warnings
+                .push(format!("refresh_request_id={id}"));
+        }
+        Ok(status)
+    })
+    .await
+    .map_err(|err| format!("desktop refresh task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -94,14 +124,14 @@ fn heartbeat_now(app: AppHandle) -> Result<HeartbeatResult, String> {
 }
 
 #[tauri::command]
-fn open_report(app: AppHandle) -> Result<(), String> {
-    let status = collect_status(&app)?;
-    let report_file = PathBuf::from(status.report_file);
-    if !report_file.starts_with(repo_root()?.join(".agent").join("tmp").join("campaign-reports")) {
+fn open_report(_app: AppHandle) -> Result<(), String> {
+    let report_file = report_file_path()?;
+    let safe_root = campaign_reports_dir()?;
+    if !report_file.starts_with(&safe_root) {
         return Err("report path is outside the safe campaign report artifact directory".into());
     }
     if !report_file.exists() {
-        return Err("campaign report artifact is not available yet".into());
+        return Err("campaign report artifact is missing; use Refresh to generate it in the background".into());
     }
     #[cfg(target_os = "windows")]
     {
@@ -147,8 +177,11 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 show_main_window(app);
             }
             "refresh" => {
-                let _ = collect_status(app);
-                show_main_window(app);
+                let refresh_app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let _ = collect_status(&refresh_app);
+                });
+                show_main_window(&app);
             }
             "logs" => {
                 let _ = open_logs_dir(app);
@@ -192,37 +225,15 @@ fn open_logs_dir(app: &AppHandle) -> Result<(), String> {
 
 fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
     append_log(app, "status refresh requested")?;
-    let mut errors = Vec::new();
+    let errors = Vec::new();
     let mut warnings = Vec::new();
+    let bridge = collect_bridge_results();
+    let mut bridge_outcomes = Vec::new();
 
-    let active_json = match run_active_status() {
-        Ok(value) => value,
-        Err(error) => {
-            errors.push(error);
-            Value::Null
-        }
-    };
-    let campaign_json = match run_campaign_status() {
-        Ok(value) => value,
-        Err(error) => {
-            errors.push(error);
-            Value::Null
-        }
-    };
-    let worker_json = match run_worker_status(&["-Command", "status", "-Json"]).and_then(|output| parse_json(&output)) {
-        Ok(value) => value,
-        Err(error) => {
-            errors.push(error);
-            Value::Null
-        }
-    };
-    let report_json = match run_campaign_report() {
-        Ok(value) => value,
-        Err(error) => {
-            errors.push(error);
-            Value::Null
-        }
-    };
+    let active_json = bridge_value("status", bridge.active, &mut bridge_outcomes, &mut warnings);
+    let campaign_json = bridge_value("campaign_status", bridge.campaign, &mut bridge_outcomes, &mut warnings);
+    let worker_json = bridge_value("worker_status", bridge.worker, &mut bridge_outcomes, &mut warnings);
+    let report_json = bridge_value("campaign_report", bridge.report, &mut bridge_outcomes, &mut warnings);
 
     detect_token_printed("active status", &active_json, &mut warnings);
     detect_token_printed("campaign status", &campaign_json, &mut warnings);
@@ -252,7 +263,18 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
     let active_tasks = get_i64(&active_json, &["task_summary", "active"]);
     let stale_leases = get_i64(&active_json, &["task_summary", "stale_leases"]);
     let token_printed = warnings.iter().any(|warning| warning.contains("token_printed=true"));
-    let campaign_report = report_json.get("report").cloned().unwrap_or(Value::Null);
+    let mut report_cached = false;
+    let campaign_report = match report_json.get("report").cloned() {
+        Some(value) => value,
+        None => match read_cached_campaign_report(app) {
+            Some(value) => {
+                report_cached = true;
+                warnings.push("campaign_report_cached_after_refresh_failure".into());
+                value
+            }
+            None => Value::Null,
+        },
+    };
     let safe_summary = build_safe_summary(&campaign_report);
     let pre190_readiness = evaluate_pre190_readiness(
         active_tasks,
@@ -264,8 +286,9 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         linked_pr_urls.len(),
     );
 
+    let operator_readiness = evaluate_operator_readiness(active_tasks, stale_leases, token_printed, &campaign_report);
     let status = DesktopStatus {
-        ok: errors.is_empty() && pre190_readiness.state != "BLOCK",
+        ok: !token_printed && !campaign_report.is_null(),
         mode_banner: "STANDBY / READ ONLY".into(),
         mutation_scope: "HEARTBEAT ONLY MUTATION".into(),
         execution_disabled: true,
@@ -292,17 +315,15 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         last_refresh_time: chrono_like_now(),
         status_age_seconds: 0,
         pre190_readiness,
+        operator_readiness,
         campaign_report,
         safe_summary,
+        bridge_outcomes,
+        report_cached,
+        report_age_seconds: cached_report_age_seconds(),
         status_file: status_file(app).display().to_string(),
         log_file: log_file(app).display().to_string(),
-        report_file: repo_root()?
-            .join(".agent")
-            .join("tmp")
-            .join("campaign-reports")
-            .join("dev-queue-189-200-campaign-report.md")
-            .display()
-            .to_string(),
+        report_file: report_file_path()?.display().to_string(),
         warnings,
         errors,
     };
@@ -399,6 +420,81 @@ fn run_worker_status(args: &[&str]) -> Result<String, String> {
     run_powershell(&command_args)
 }
 
+fn collect_bridge_results() -> BridgeResults {
+    let (sender, receiver) = mpsc::channel::<(&'static str, Result<Value, String>)>();
+    for (name, task) in [
+        ("active", run_active_status as fn() -> Result<Value, String>),
+        ("campaign", run_campaign_status as fn() -> Result<Value, String>),
+        ("report", run_campaign_report as fn() -> Result<Value, String>),
+    ] {
+        let sender = sender.clone();
+        thread::spawn(move || {
+            let _ = sender.send((name, task()));
+        });
+    }
+    {
+        let sender = sender.clone();
+        thread::spawn(move || {
+            let value = run_worker_status(&["-Command", "status", "-Json"]).and_then(|output| parse_json(&output));
+            let _ = sender.send(("worker", value));
+        });
+    }
+    drop(sender);
+
+    let mut active = None;
+    let mut campaign = None;
+    let mut worker = None;
+    let mut report = None;
+    let deadline = Instant::now() + Duration::from_secs(BRIDGE_RESULT_TIMEOUT_SECONDS);
+    while Instant::now() < deadline && (active.is_none() || campaign.is_none() || worker.is_none() || report.is_none()) {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match receiver.recv_timeout(remaining.min(Duration::from_millis(250))) {
+            Ok(("active", value)) => active = Some(value),
+            Ok(("campaign", value)) => campaign = Some(value),
+            Ok(("worker", value)) => worker = Some(value),
+            Ok(("report", value)) => report = Some(value),
+            Ok((_, _)) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    BridgeResults {
+        active: active.unwrap_or_else(|| Err("active status bridge did not return before desktop refresh deadline".into())),
+        campaign: campaign.unwrap_or_else(|| Err("campaign status bridge did not return before desktop refresh deadline".into())),
+        worker: worker.unwrap_or_else(|| Err("worker status bridge did not return before desktop refresh deadline".into())),
+        report: report.unwrap_or_else(|| Err("campaign report bridge did not return before desktop refresh deadline".into())),
+    }
+}
+
+fn bridge_value(
+    name: &str,
+    result: Result<Value, String>,
+    outcomes: &mut Vec<BridgeOutcome>,
+    warnings: &mut Vec<String>,
+) -> Value {
+    match result {
+        Ok(value) => {
+            outcomes.push(BridgeOutcome {
+                name: name.into(),
+                ok: true,
+                warning: None,
+            });
+            value
+        }
+        Err(error) => {
+            let warning = format!("{name}: {}", redact_summary(&error));
+            warnings.push(warning.clone());
+            outcomes.push(BridgeOutcome {
+                name: name.into(),
+                ok: false,
+                warning: Some(warning),
+            });
+            Value::Null
+        }
+    }
+}
+
 fn run_powershell(args: &[String]) -> Result<String, String> {
     let mut child = Command::new("pwsh")
         .args(args)
@@ -485,6 +581,41 @@ fn write_status(app: &AppHandle, status: &DesktopStatus) -> Result<(), String> {
     fs::write(path, text).map_err(|err| err.to_string())
 }
 
+fn campaign_reports_dir() -> Result<PathBuf, String> {
+    Ok(repo_root()?.join(".agent").join("tmp").join("campaign-reports"))
+}
+
+fn report_file_path() -> Result<PathBuf, String> {
+    Ok(campaign_reports_dir()?.join("dev-queue-189-200-campaign-report.md"))
+}
+
+fn report_json_path() -> Result<PathBuf, String> {
+    Ok(campaign_reports_dir()?.join("dev-queue-189-200-campaign-report.json"))
+}
+
+fn read_cached_campaign_report(_app: &AppHandle) -> Option<Value> {
+    let path = report_json_path().ok()?;
+    let text = fs::read_to_string(path).ok()?;
+    let value = serde_json::from_str::<Value>(&text).ok()?;
+    value.get("report").cloned().or(Some(value))
+}
+
+fn cached_report_age_seconds() -> i64 {
+    let Ok(path) = report_json_path() else {
+        return -1;
+    };
+    let Ok(metadata) = fs::metadata(path) else {
+        return -1;
+    };
+    let Ok(modified) = metadata.modified() else {
+        return -1;
+    };
+    std::time::SystemTime::now()
+        .duration_since(modified)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(-1)
+}
+
 fn append_log(app: &AppHandle, message: &str) -> Result<(), String> {
     let path = log_file(app);
     if let Some(parent) = path.parent() {
@@ -557,6 +688,72 @@ fn evaluate_pre190_readiness(
 
     if reasons.is_empty() {
         reasons.push("Goal 190 is current/ready and unexecuted; active_tasks=0; stale_leases=0; token_printed=false".into());
+    }
+
+    Pre190Readiness {
+        state: if blocked {
+            "BLOCK".into()
+        } else if unknown {
+            "WARN".into()
+        } else {
+            "PASS".into()
+        },
+        reasons,
+    }
+}
+
+fn evaluate_operator_readiness(
+    active_tasks: Option<i64>,
+    stale_leases: Option<i64>,
+    token_printed: bool,
+    report: &Value,
+) -> Pre190Readiness {
+    let readiness = report.get("queue_control_readiness").unwrap_or(&Value::Null);
+    let mut reasons = Vec::new();
+    let mut blocked = false;
+    let mut unknown = report.is_null();
+
+    match active_tasks {
+        Some(0) => reasons.push("active_tasks=0".into()),
+        Some(value) => {
+            blocked = true;
+            reasons.push(format!("active_tasks={value}"));
+        }
+        None => {
+            unknown = true;
+            reasons.push("active_tasks=unknown".into());
+        }
+    }
+    match stale_leases {
+        Some(0) => reasons.push("stale_leases=0".into()),
+        Some(value) => {
+            blocked = true;
+            reasons.push(format!("stale_leases={value}"));
+        }
+        None => {
+            unknown = true;
+            reasons.push("stale_leases=unknown".into());
+        }
+    }
+    if token_printed {
+        blocked = true;
+        reasons.push("token_printed=true".into());
+    } else {
+        reasons.push("token_printed=false".into());
+    }
+    for key in ["can_start_one", "can_start_queue", "can_resume"] {
+        if readiness.get(key).and_then(Value::as_bool).unwrap_or(false) {
+            blocked = true;
+            reasons.push(format!("{key}=true"));
+        } else {
+            reasons.push(format!("{key}=false"));
+        }
+    }
+    if let Some(worker_status) = get_string(readiness, &["worker_status"]) {
+        reasons.push(format!("worker_status={worker_status}"));
+    }
+    if reasons.is_empty() {
+        reasons.push("queue readiness unavailable".into());
     }
 
     Pre190Readiness {

@@ -37,8 +37,19 @@ type DesktopStatus = {
     state: "PASS" | "WARN" | "BLOCK";
     reasons: string[];
   };
+  operator_readiness: {
+    state: "PASS" | "WARN" | "BLOCK";
+    reasons: string[];
+  };
   campaign_report: CampaignRunReport | null;
   safe_summary: CampaignSafeSummary | null;
+  bridge_outcomes: Array<{
+    name: string;
+    ok: boolean;
+    warning: string | null;
+  }>;
+  report_cached: boolean;
+  report_age_seconds: number;
   status_file: string;
   log_file: string;
   report_file: string;
@@ -82,8 +93,15 @@ const emptyStatus: DesktopStatus = {
     state: "WARN",
     reasons: ["status=unknown"],
   },
+  operator_readiness: {
+    state: "WARN",
+    reasons: ["status=unknown"],
+  },
   campaign_report: null,
   safe_summary: null,
+  bridge_outcomes: [],
+  report_cached: false,
+  report_age_seconds: -1,
   status_file: "",
   log_file: "",
   report_file: "",
@@ -118,8 +136,18 @@ const fixtureStatus: DesktopStatus = {
     state: "PASS",
     reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "Goal 191 is current/ready and read-only"],
   },
+  operator_readiness: {
+    state: "PASS",
+    reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "can_start_one=false", "can_start_queue=false", "can_resume=false", "worker_status=offline"],
+  },
   campaign_report: fixtureCampaignRunReport,
   safe_summary: createCampaignSafeSummary(fixtureCampaignRunReport),
+  bridge_outcomes: [
+    { name: "campaign_report", ok: true, warning: null },
+    { name: "worker_status", ok: false, warning: "worker_status: status bridge command timed out after 30s" },
+  ],
+  report_cached: true,
+  report_age_seconds: 42,
   status_file: ".agent/tmp/desktop-visual-qa/status.fixture.json",
   log_file: ".agent/tmp/desktop-visual-qa/desktop-client.fixture.log",
   report_file: ".agent/tmp/campaign-reports/dev-queue-189-200-campaign-report.md",
@@ -139,7 +167,8 @@ function StatusValue({ label, value }: { label: string; value: React.ReactNode }
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
-  const [busy, setBusy] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const refreshGeneration = React.useRef(0);
   const [message, setMessage] = React.useState(fixtureOnly ? "Fixture-only visual QA" : "Standby");
   const [nowSeconds, setNowSeconds] = React.useState(() => Math.floor(Date.now() / 1000));
 
@@ -149,53 +178,47 @@ function App() {
       setMessage("Fixture-only status rendered");
       return;
     }
-    setBusy(true);
-    setMessage("Refreshing read-only status");
+    const generation = refreshGeneration.current + 1;
+    refreshGeneration.current = generation;
+    setRefreshing(true);
+    setMessage(status.campaign_report ? "Refreshing in background; cached report remains visible" : "Refreshing read-only status");
     try {
-      const next = await invoke<DesktopStatus>("get_status");
+      const next = await invoke<DesktopStatus>("get_status", { requestId: `desktop-refresh-${generation}` });
+      if (generation !== refreshGeneration.current) {
+        setMessage("Older refresh result ignored");
+        return;
+      }
       setStatus(next);
-      setMessage("Status refreshed");
+      setMessage(next.report_cached ? "Status refreshed with cached report" : "Status refreshed");
     } catch (error) {
+      if (generation !== refreshGeneration.current) {
+        return;
+      }
       setMessage(`Refresh failed: ${String(error)}`);
     } finally {
-      setBusy(false);
+      if (generation === refreshGeneration.current) {
+        setRefreshing(false);
+      }
     }
-  }, [fixtureOnly]);
-
-  const heartbeat = React.useCallback(async () => {
-    if (fixtureOnly) {
-      setMessage("Fixture-only: heartbeat command disabled");
-      return;
-    }
-    setBusy(true);
-    setMessage("Sending heartbeat mutation only");
-    try {
-      const result = await invoke<HeartbeatResult>("heartbeat_now");
-      setStatus(result.status);
-      setMessage(`Heartbeat sent; worker is ${result.worker_status}`);
-    } catch (error) {
-      setMessage(`Heartbeat failed: ${String(error)}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [fixtureOnly]);
+  }, [fixtureOnly, status.campaign_report]);
 
   const openReport = React.useCallback(async () => {
     if (fixtureOnly) {
       setMessage("Fixture-only: report artifact open skipped");
       return;
     }
-    setBusy(true);
     setMessage("Opening safe campaign report artifact");
     try {
       await invoke("open_report");
       setMessage("Report artifact opened");
     } catch (error) {
       setMessage(`Open report failed: ${String(error)}`);
+      window.setTimeout(() => {
+        void refresh();
+      }, 0);
     } finally {
-      setBusy(false);
     }
-  }, [fixtureOnly]);
+  }, [fixtureOnly, refresh]);
 
   const copySafeSummary = React.useCallback(async () => {
     const summary = status.safe_summary ?? (status.campaign_report ? createCampaignSafeSummary(status.campaign_report) : null);
@@ -223,11 +246,13 @@ function App() {
 
   const refreshEpoch = parseUnixTimestamp(status.last_refresh_time);
   const statusAge = refreshEpoch === null ? "unknown" : `${Math.max(0, nowSeconds - refreshEpoch)}s`;
-  const readinessClass = `readiness readiness-${status.pre190_readiness.state.toLowerCase()}`;
+  const readinessState = status.operator_readiness?.state ?? status.pre190_readiness.state;
+  const readinessClass = `readiness readiness-${readinessState.toLowerCase()}`;
   const report = status.campaign_report ?? fixtureCampaignRunReport;
   const readiness = report.queue_control_readiness;
   const evidence = summarizeCampaignEvidence(report);
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
+  const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
 
   return (
     <main className="shell">
@@ -237,7 +262,7 @@ function App() {
           <p>Local resident standby status and heartbeat tool</p>
         </div>
         <div className={readinessClass}>
-          Pre-190 {status.pre190_readiness.state}
+          Queue Readiness {readinessState}
         </div>
       </header>
 
@@ -248,13 +273,13 @@ function App() {
       </section>
 
       <section className="toolbar" aria-label="Queue dashboard actions">
-        <button type="button" onClick={refresh} disabled={busy}>
-          Refresh
+        <button type="button" onClick={refresh} disabled={refreshing}>
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
-        <button type="button" onClick={openReport} disabled={busy}>
+        <button type="button" onClick={openReport}>
           Open report
         </button>
-        <button type="button" onClick={copySafeSummary} disabled={busy}>
+        <button type="button" onClick={copySafeSummary}>
           Copy safe summary
         </button>
         <span>{message}</span>
@@ -300,11 +325,15 @@ function App() {
         <dl>
           <StatusValue label="Project id" value={status.project_id} />
           <StatusValue label="Campaign id" value={status.campaign_id} />
-          <StatusValue label="Current step id" value={status.current_step} />
-          <StatusValue label="Current goal" value={`${status.current_goal_id} (${status.current_goal_status})`} />
-          <StatusValue label="Previous goal" value={`${status.previous_goal_id} (${status.previous_goal_status})`} />
-          <StatusValue label="Goal 190 task links" value={status.goal_190_linked_task_ids_count} />
-          <StatusValue label="Goal 190 PR links" value={status.goal_190_linked_pr_urls_count} />
+          <StatusValue label="Current step id" value={report.current_step_id} />
+          <StatusValue label="Current goal" value={`${report.current_goal_id} (${report.current_goal_status})`} />
+          <StatusValue label="Previous goal" value={`${report.previous_step_summary?.goal_id ?? status.previous_goal_id} (${report.previous_step_summary?.status ?? status.previous_goal_status})`} />
+          {goal190IsCurrent ? (
+            <>
+              <StatusValue label="Goal 190 task links" value={status.goal_190_linked_task_ids_count} />
+              <StatusValue label="Goal 190 PR links" value={status.goal_190_linked_pr_urls_count} />
+            </>
+          ) : null}
         </dl>
       </section>
 
@@ -318,13 +347,14 @@ function App() {
           <StatusValue label="Token printed" value={String(status.token_printed)} />
           <StatusValue label="Last refresh" value={status.last_refresh_time || "not refreshed"} />
           <StatusValue label="Status age" value={statusAge} />
+          <StatusValue label="Report cache" value={status.report_cached ? `cached; age=${formatAge(status.report_age_seconds)}` : `fresh; file_age=${formatAge(status.report_age_seconds)}`} />
           <StatusValue label="Bridge warnings" value={status.warnings.length + status.errors.length} />
         </dl>
       </section>
 
       <section className={readinessClass}>
-        <h2>Pre-190 Readiness</h2>
-        <p>{status.pre190_readiness.reasons.join("; ")}</p>
+        <h2>Operator Readiness</h2>
+        <p>{status.operator_readiness.reasons.join("; ")}</p>
       </section>
 
       <section className="panel">
@@ -339,6 +369,17 @@ function App() {
       {status.warnings.length > 0 || status.errors.length > 0 ? (
         <section className="panel errors">
           <h2>Bridge Warnings</h2>
+          {status.bridge_outcomes.length > 0 ? (
+            <dl>
+              {status.bridge_outcomes.map((outcome) => (
+                <StatusValue
+                  key={outcome.name}
+                  label={outcome.name}
+                  value={outcome.ok ? "ok" : outcome.warning ?? "warning"}
+                />
+              ))}
+            </dl>
+          ) : null}
           <ul>
             {status.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
@@ -357,6 +398,10 @@ function formatKnownNumber(value: number | null) {
   return value === null ? "unknown" : value;
 }
 
+function formatAge(value: number) {
+  return value < 0 ? "unknown" : `${value}s`;
+}
+
 function parseUnixTimestamp(value: string) {
   if (!value.startsWith("unix:")) {
     return null;
@@ -367,7 +412,7 @@ function parseUnixTimestamp(value: string) {
 
 function isFixtureMode() {
   const fixture = new URLSearchParams(window.location.search).get("fixture");
-  return fixture === "desktop-pre190-pass" || fixture === "desktop-queue-dashboard";
+  return fixture === "desktop-pre190-pass" || fixture === "desktop-queue-dashboard" || fixture === "desktop-async-timeout-warning";
 }
 
 function containsSecretLookingText(text: string) {
