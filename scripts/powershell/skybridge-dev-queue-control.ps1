@@ -241,19 +241,19 @@ function Get-QueueControlState {
     schema = "skybridge.queue_control_state.v1"
     project_id = $ProjectId
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-194-worker-service-mode"
-    current_goal_id = "super-194-worker-service-mode"
+    current_step_id = "$CampaignId`:super-195-manual-goal-queue-management"
+    current_goal_id = "super-195-manual-goal-queue-management"
     worker_status = "offline"
     active_tasks = 0
     stale_leases = 0
     can_start_one = $false
     can_start_queue = $false
     can_resume = $false
-    state_hash = "fixture-goal-194-worker-service-offline-active0-stale0"
-    revision = "fixture-goal-194-revision"
+    state_hash = "fixture-goal-195-manual-queue-review-offline-active0-stale0"
+    revision = "fixture-goal-195-revision"
     action_matrix = @($matrix)
-    blockers = @("worker_service_offline", "execution_disabled_until_goal_195")
-    warnings = @("standby_worker_can_only_heartbeat")
+    blockers = @("worker_service_offline", "execution_apply_disabled_during_goal_195")
+    warnings = @("manual_goal_pack_review_required")
     arm_lease = [pscustomobject]@{
       lease_id = "lease_fixture_goal_194_preview_only"
       campaign_id = $CampaignId
@@ -278,7 +278,7 @@ function New-QueueControlAuditEvent {
     mode = $Mode
     actor = $Actor
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-194-worker-service-mode"
+    current_step_id = "$CampaignId`:super-195-manual-goal-queue-management"
     target_revision = $Revision
     reason = $ReasonText
     blockers = @($Blockers)
@@ -325,10 +325,10 @@ function Invoke-QueueControlContract {
     $blockers.Add("target_revision_mismatch") | Out-Null
   }
   if ($entry -and @($entry.allowed_modes) -notcontains $ControlMode) { $blockers.Add("mode_not_allowed") | Out-Null }
-  if ($ControlMode -eq "apply" -and $entry -and -not [bool]$entry.apply_allowed) { $blockers.Add("apply_forbidden_in_goal_194") | Out-Null }
+  if ($ControlMode -eq "apply" -and $entry -and -not [bool]$entry.apply_allowed) { $blockers.Add("apply_forbidden_in_goal_195") | Out-Null }
   if ($ControlMode -eq "apply" -and $entry -and [bool]$entry.reason_required -and [string]::IsNullOrWhiteSpace($Reason)) { $blockers.Add("reason_required") | Out-Null }
   if ($Action -in @("start_one_apply", "start_queue_apply", "start_all", "arbitrary_shell")) {
-    $blockers.Add("no_execution_enablement_in_goal_194") | Out-Null
+    $blockers.Add("no_execution_enablement_in_goal_195") | Out-Null
   }
   $allowed = ($blockers.Count -eq 0)
   $audit = $null

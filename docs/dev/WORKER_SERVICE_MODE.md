@@ -39,7 +39,7 @@ The apply commands write only safe local metadata under ignored `.agent/tmp/work
 Worker service readiness checks:
 
 - clean worktree;
-- known campaign and current Goal 194;
+- known campaign and current Goal 195;
 - active tasks `0`;
 - stale leases `0`;
 - runner lock `none` or `released`;
@@ -47,7 +47,7 @@ Worker service readiness checks:
 - valid worker profile name;
 - service mode `standby` or `ready`.
 
-Even if standby heartbeat is present, `ready_for_start_one_gate=false`, `can_claim_tasks=false` and `can_execute_tasks=false` in Goal 194. Queue start controls remain disabled with `execution_disabled_until_goal_195`.
+Even if standby heartbeat is present, `ready_for_start_one_gate=false`, `can_claim_tasks=false` and `can_execute_tasks=false`. Goal 195 keeps queue start controls disabled while manual goal pack review, hash drift checks and archive/re-import previews are added.
 
 ## Desktop And Web
 
@@ -59,7 +59,7 @@ Both surfaces keep Start One, Start Queue, task claim and execution disabled.
 
 ## Goal 195 Preparation
 
-This goal establishes the standby/readiness vocabulary needed for Goal 195. Goal 195 can add a reviewed Start One gate on top of this contract, but it must still add explicit approval, arm leases, audit and conflict handling before any real task claim or execution is allowed.
+This goal establishes the standby/readiness vocabulary used by Goal 195. Goal 195 adds manual queue review and hash/update/archive previews, not a Start One apply gate. A later reviewed goal must still add explicit approval, arm leases, audit and conflict handling before any real task claim or execution is allowed.
 
 ## Validation
 

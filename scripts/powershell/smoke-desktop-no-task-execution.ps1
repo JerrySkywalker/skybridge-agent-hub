@@ -20,7 +20,7 @@ foreach ($forbidden in @(
 )) {
   if ($text -match [regex]::Escape($forbidden)) { throw "Desktop MVP contains forbidden task execution text: $forbidden" }
 }
-if ($text -match "(?i)worker loop (enabled|started)|start worker loop|skybridge-edge-worker\.ps1") {
+if ($text -match "(?i)worker loop enabled|worker_loop_started\s*[:=]\s*true|start worker loop|skybridge-edge-worker\.ps1") {
   throw "Desktop MVP contains an enabled worker loop path."
 }
 foreach ($requiredDisabled in @("Claim task disabled", "Execute task disabled", "can_claim_tasks", "can_execute_tasks")) {

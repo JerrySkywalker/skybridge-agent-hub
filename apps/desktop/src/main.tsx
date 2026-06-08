@@ -8,6 +8,7 @@ import {
   createAttentionModel,
   createWorkerServiceReadiness,
   fixtureCampaignRunReport,
+  fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
   fixtureWorkerServiceState,
   queueControlActionMatrix,
@@ -316,6 +317,7 @@ function App() {
       </section>
 
       <AttentionPanel events={attention.attention_events} />
+      <GoalQueueReviewPanel />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
 
       <section className="panel queue-panel">
@@ -456,6 +458,30 @@ function App() {
   );
 }
 
+function GoalQueueReviewPanel() {
+  const review = fixtureGoalQueueReviewSummary;
+  return (
+    <section className="panel goal-queue-review" aria-label="Manual goal queue review">
+      <h2>Manual Goal Queue Review</h2>
+      <dl>
+        <StatusValue label="Goal pack id" value={review.goal_pack_id} />
+        <StatusValue label="Current pack hash" value={review.current_campaign_pack_hash} />
+        <StatusValue label="Validation result" value={review.validation_result} />
+        <StatusValue label="Hash drift count" value={review.hash_drift_count} />
+        <StatusValue label="Dependency/order status" value={review.dependency_order_status} />
+        <StatusValue label="Proposed update action" value={review.proposed_import_update_action} />
+        <StatusValue label="Re-import preview" value={`added=${review.reimport_preview_summary.added_goals}; removed=${review.reimport_preview_summary.removed_goals}; changed=${review.reimport_preview_summary.changed_goals}; safety=${review.reimport_preview_summary.safety_policy_changes}; safe=${review.reimport_preview_summary.update_safe}`} />
+        <StatusValue label="Archive preview" value={`${review.archive_preview_summary.archive_target}; would_archive=${review.archive_preview_summary.would_archive}; excludes_raw_logs_and_secrets=${review.archive_preview_summary.excludes_raw_logs_and_secrets}`} />
+        <StatusValue label="No execution controls" value={String(review.no_execution_controls)} />
+        <StatusValue label="Task created" value={String(review.task_created)} />
+        <StatusValue label="Worker loop started" value={String(review.worker_loop_started)} />
+        <StatusValue label="Queue execution enabled" value={String(review.queue_execution_enabled)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+    </section>
+  );
+}
+
 function AttentionPanel({ events }: { events: AttentionEvent[] }) {
   const top = events.find((event) => event.attention_level === "critical" || event.attention_level === "blocker" || event.attention_level === "action_required") ?? events[0];
   const routing = top ? routeAttentionEvent(top) : null;
@@ -522,7 +548,7 @@ function WorkerServicePanel({
         <button type="button" disabled aria-disabled="true" title="Preview only in this UI build">
           Start standby preview
         </button>
-        <button type="button" disabled aria-disabled="true" title="Bounded local supervisor apply is CLI-only for Goal 194 smokes">
+        <button type="button" disabled aria-disabled="true" title="Bounded local supervisor apply remains CLI-only and disabled for Goal 195 review">
           Start standby apply disabled
         </button>
         <button type="button" disabled aria-disabled="true" title="Heartbeat-only CLI smoke path; no task claim">

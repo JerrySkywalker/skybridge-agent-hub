@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-06-08 Goal 195 Manual Goal Queue Management
+
+- Added six reviewable goal templates under `goals/templates/` for super, patch, recovery, dashboard/control, worker/service and generated/proposed goals.
+- Added `skybridge-goal-pack.ps1` for offline goal pack validation, manifest hash update previews, explicit-apply local hash writes, hash drift reporting, re-import previews, archive previews and safe summaries.
+- Added Desktop/Web manual goal queue review surfaces backed by `GoalQueueReviewSummary`, plus safe summary fields for goal pack id, validation result, hash drift count, dependency/order status and proposed import/update action.
+- Updated `goals/dev-queue-189-200/campaign.skybridge.json` with per-goal `markdown_hash` metadata. This is local authoring metadata only; it does not update live campaign state.
+- Added focused Goal 195 smokes for templates, manifest preview, hash drift, duplicate validation, dependency validation, cycle validation, re-import preview, archive preview, no-execution, Desktop/Web review and no-secrets output.
+- Goal 195 does not run `start-one`, `start-all`, `resume -Apply`, task claim, Codex worker execution, live campaign update, PR creation or real queue start.
+
 ## 2026-06-08 Goal 194 Worker Service Mode
 
 - Added the shared `skybridge.worker_service_state.v1` contract and `skybridge.worker_service_readiness.v1` helper with heartbeat/status/stop capability and explicit `can_claim_tasks=false`, `can_execute_tasks=false` and `token_printed=false`.

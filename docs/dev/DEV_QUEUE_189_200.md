@@ -386,3 +386,38 @@ Worker service readiness is heartbeat-only:
 Desktop shows a Worker Service Panel. Web shows a Worker Readiness Panel. Web has no direct local process control. Desktop local controls remain bounded status/heartbeat/stop surfaces and do not expose task claim, task execution or arbitrary shell.
 
 See [WORKER_SERVICE_MODE.md](WORKER_SERVICE_MODE.md).
+
+## Goal 195 Manual Goal Queue Management
+
+Goal 195 adds the manual queue authoring and review foundation: templates, a dry-run-first goal pack helper, manifest hash previews and explicit local hash writes, hash drift reporting, dependency/order validation, re-import/update previews, archive previews, safe summary fields and Desktop/Web read-only review panels.
+
+The current state remains non-executing: current step `dev-queue-189-200:super-195-manual-goal-queue-management`, current goal `super-195-manual-goal-queue-management`, active tasks `0`, stale leases `0`, no task claim, no campaign-step task creation, `can_start_one=false`, `can_start_queue=false` and `token_printed=false`.
+
+Use:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-goal-pack.ps1 `
+  -Command validate `
+  -GoalPackDir goals/dev-queue-189-200 `
+  -Json
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-goal-pack.ps1 `
+  -Command manifest-preview `
+  -GoalPackDir goals/dev-queue-189-200 `
+  -Json
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-goal-pack.ps1 `
+  -Command reimport-preview `
+  -GoalPackDir goals/dev-queue-189-200 `
+  -ExistingManifestFile goals/dev-queue-189-200/campaign.skybridge.json `
+  -Json
+
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-goal-pack.ps1 `
+  -Command archive-preview `
+  -GoalPackDir goals/dev-queue-189-200 `
+  -Json
+```
+
+These commands do not execute the queue. `manifest-update -Apply` writes repository-local manifest hashes only. Live campaign import/update remains out of scope for Goal 195.
+
+See [MANUAL_GOAL_QUEUE_MANAGEMENT.md](MANUAL_GOAL_QUEUE_MANAGEMENT.md).

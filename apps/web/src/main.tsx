@@ -20,6 +20,7 @@ import {
   createAttentionModel,
   createWorkerServiceReadiness,
   fixtureCampaignRunReport,
+  fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
   queueControlActionMatrix,
   routeAttentionEvent,
@@ -322,6 +323,7 @@ function CampaignQueuePage() {
         </div>
         <aside className="dashboard-grid__side">
           <AttentionFeed events={attention.attention_events} />
+          <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
@@ -353,6 +355,74 @@ function CampaignQueuePage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function GoalQueueReviewPanel({
+  review,
+}: {
+  review: typeof fixtureGoalQueueReviewSummary;
+}) {
+  return (
+    <section className="skybridge-panel goal-queue-review" aria-label="Manual goal queue review">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Goal Pack Review</p>
+          <h2>Manual Queue Authoring</h2>
+        </div>
+        <span className={badgeClass(review.validation_result === "pass" ? "ok" : "bad")}>
+          {review.validation_result}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Goal pack id</dt>
+          <dd>{review.goal_pack_id}</dd>
+        </div>
+        <div>
+          <dt>Current pack hash</dt>
+          <dd>{review.current_campaign_pack_hash}</dd>
+        </div>
+        <div>
+          <dt>Hash drift</dt>
+          <dd>{review.hash_drift_count}</dd>
+        </div>
+        <div>
+          <dt>Dependency/order</dt>
+          <dd>{review.dependency_order_status}</dd>
+        </div>
+        <div>
+          <dt>Proposed action</dt>
+          <dd>{review.proposed_import_update_action}</dd>
+        </div>
+      </dl>
+      <QueueList title="Validation errors" items={review.validation_errors} fallback="No validation errors." />
+      <QueueList title="Validation warnings" items={review.validation_warnings} fallback="No validation warnings." />
+      <QueueList
+        title="Re-import preview"
+        items={[
+          `added=${review.reimport_preview_summary.added_goals}`,
+          `removed=${review.reimport_preview_summary.removed_goals}`,
+          `changed=${review.reimport_preview_summary.changed_goals}`,
+          `dependency_changes=${review.reimport_preview_summary.dependency_changes}`,
+          `order_changes=${review.reimport_preview_summary.order_changes}`,
+          `safety_policy_changes=${review.reimport_preview_summary.safety_policy_changes}`,
+          `update_safe=${review.reimport_preview_summary.update_safe}`,
+        ]}
+        fallback="No re-import preview."
+      />
+      <QueueList
+        title="Archive preview"
+        items={[
+          `target=${review.archive_preview_summary.archive_target}`,
+          `would_archive=${review.archive_preview_summary.would_archive}`,
+          `excludes_raw_logs_and_secrets=${review.archive_preview_summary.excludes_raw_logs_and_secrets}`,
+        ]}
+        fallback="No archive preview."
+      />
+      <p className="skybridge-state-note">No execution controls are available on this review surface.</p>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 

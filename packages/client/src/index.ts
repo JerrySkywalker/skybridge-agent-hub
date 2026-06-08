@@ -1510,6 +1510,11 @@ export interface CampaignSafeSummary {
   current_step: string;
   current_goal_id: string;
   current_goal_status: string;
+  goal_pack_id?: string;
+  validation_result?: "pass" | "fail" | "unknown";
+  hash_drift_count?: number;
+  dependency_order_status?: "valid" | "invalid" | "unknown";
+  proposed_import_update_action?: string;
   queue_readiness: Pick<
     CampaignQueueControlReadiness,
     | "can_start_one"
@@ -1529,6 +1534,38 @@ export interface CampaignSafeSummary {
   attention_count: number;
   top_blocker: string | null;
   recommended_next_action: string;
+  token_printed: false;
+}
+
+export interface GoalQueueReviewSummary {
+  schema: "skybridge.goal_queue_review_summary.v1";
+  goal_pack_id: string;
+  current_campaign_pack_hash: string;
+  validation_result: "pass" | "fail" | "unknown";
+  validation_errors: string[];
+  validation_warnings: string[];
+  hash_drift_count: number;
+  hash_drift_summary: string;
+  dependency_order_status: "valid" | "invalid" | "unknown";
+  proposed_import_update_action: string;
+  reimport_preview_summary: {
+    added_goals: number;
+    removed_goals: number;
+    changed_goals: number;
+    dependency_changes: number;
+    order_changes: number;
+    safety_policy_changes: number;
+    update_safe: boolean;
+  };
+  archive_preview_summary: {
+    archive_target: string;
+    would_archive: boolean;
+    excludes_raw_logs_and_secrets: boolean;
+  };
+  no_execution_controls: true;
+  task_created: false;
+  worker_loop_started: false;
+  queue_execution_enabled: false;
   token_printed: false;
 }
 
@@ -1556,6 +1593,11 @@ export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSa
     current_step: report.current_step_id,
     current_goal_id: report.current_goal_id,
     current_goal_status: report.current_goal_status,
+    goal_pack_id: report.campaign_id,
+    validation_result: "unknown",
+    hash_drift_count: 0,
+    dependency_order_status: "unknown",
+    proposed_import_update_action: "review_goal_pack_offline",
     queue_readiness: {
       can_start_one: readiness.can_start_one,
       can_start_queue: readiness.can_start_queue,
@@ -1831,8 +1873,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
-  current_goal_id: "super-194-worker-service-mode",
+  current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+  current_goal_id: "super-195-manual-goal-queue-management",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -1840,18 +1882,19 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+    current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
     step_count: 12,
     source: "fixture",
+    goal_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
-    goal_id: "super-194-worker-service-mode",
-    order: 6,
-    title: "Worker Service Mode",
+    campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+    goal_id: "super-195-manual-goal-queue-management",
+    order: 7,
+    title: "Manual Goal Queue Management",
     status: "ready",
     is_current: true,
-    dependencies: ["super-193-notification-attention-loop"],
+    dependencies: ["super-194-worker-service-mode"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -1864,15 +1907,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-    goal_id: "super-193-notification-attention-loop",
-    order: 5,
-    title: "Notification and Attention Loop",
+    campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+    goal_id: "super-194-worker-service-mode",
+    order: 6,
+    title: "Worker Service Mode",
     status: "completed",
     is_current: false,
-    dependencies: ["super-192-dashboard-safe-actions"],
+    dependencies: ["super-193-notification-attention-loop"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/111"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/112"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -1918,6 +1961,20 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
         goal_id: "super-194-worker-service-mode",
         evidence_id: "none",
+        status: "present",
+        classification: "present_evidence",
+        recovered: false,
+        missing: false,
+        skipped: false,
+        not_applicable: false,
+        operator_action_required: false,
+        summary: "Goal 194 worker service PR evidence is present.",
+      },
+      {
+        kind: "step",
+        campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+        goal_id: "super-195-manual-goal-queue-management",
+        evidence_id: "none",
         status: "missing",
         classification: "missing_evidence",
         recovered: false,
@@ -1925,21 +1982,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 194 PR evidence is missing until this worker-service PR exists.",
-      },
-      {
-        kind: "gate",
-        campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-        goal_id: "super-195-manual-goal-queue-management",
-        evidence_id: "none",
-        status: "not_applicable",
-        classification: "not_applicable_evidence",
-        recovered: false,
-        missing: false,
-        skipped: false,
-        not_applicable: true,
-        operator_action_required: false,
-        summary: "Future Goal 195 Start One gate evidence is not applicable.",
+        summary: "Goal 195 evidence is missing until the authoring foundation is completed.",
       },
     ],
   },
@@ -1954,8 +1997,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     can_resume: false,
     blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
     warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat"],
-    required_human_action: ["verify_worker_service_standby_before_goal_195"],
-    next_safe_action: "Start or refresh bounded standby heartbeat; keep Start One and Start Queue disabled until Goal 195.",
+    required_human_action: ["review_goal_pack_validation_and_hash_drift_before_any_import_update"],
+    next_safe_action: "Review manual goal queue management previews; keep Start One and Start Queue disabled.",
     worker_required: true,
     worker_status: "offline",
     run_budget_required: true,
@@ -1971,16 +2014,16 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
-  current_goal_id: "super-194-worker-service-mode",
+  current_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+  current_goal_id: "super-195-manual-goal-queue-management",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-194-worker-service-offline-active0-stale0",
-  revision: "fixture-goal-194-revision",
+  state_hash: "fixture-goal-195-manual-queue-review-offline-active0-stale0",
+  revision: "fixture-goal-195-revision",
   action_matrix: queueControlActionMatrix,
   blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
   warnings: ["standby_worker_can_only_heartbeat"],
@@ -2067,7 +2110,6 @@ fixtureCampaignRunReport.step_ledger = [
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-195-manual-goal-queue-management", "Manual Goal Queue Management"],
     ["super-196-campaign-locking-multi-campaign-queue", "Campaign Locking and Multi-campaign Queue"],
     ["super-197-multi-worker-readiness", "Multi-worker Readiness"],
     ["super-198-multi-project-support", "Multi-project Support"],
@@ -2076,7 +2118,7 @@ fixtureCampaignRunReport.step_ledger = [
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 7,
+    order: index + 8,
     title,
     status: "pending",
     is_current: false,
@@ -2093,6 +2135,38 @@ fixtureCampaignRunReport.step_ledger = [
     operator_action_required: false,
   })),
 ];
+
+export const fixtureGoalQueueReviewSummary: GoalQueueReviewSummary = {
+  schema: "skybridge.goal_queue_review_summary.v1",
+  goal_pack_id: "dev-queue-189-200",
+  current_campaign_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
+  validation_result: "pass",
+  validation_errors: [],
+  validation_warnings: [],
+  hash_drift_count: 0,
+  hash_drift_summary: "No fixture hash drift. Run skybridge-goal-pack.ps1 manifest-preview for live local hashes.",
+  dependency_order_status: "valid",
+  proposed_import_update_action: "safe_to_preview_import",
+  reimport_preview_summary: {
+    added_goals: 0,
+    removed_goals: 0,
+    changed_goals: 0,
+    dependency_changes: 0,
+    order_changes: 0,
+    safety_policy_changes: 0,
+    update_safe: true,
+  },
+  archive_preview_summary: {
+    archive_target: ".agent/tmp/campaign-archives/dev-queue-189-200",
+    would_archive: true,
+    excludes_raw_logs_and_secrets: true,
+  },
+  no_execution_controls: true,
+  task_created: false,
+  worker_loop_started: false,
+  queue_execution_enabled: false,
+  token_printed: false,
+};
 
 function queryString(query: object): string {
   const params = new URLSearchParams();

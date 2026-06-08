@@ -2,8 +2,8 @@ param(
   [ValidateSet("list", "routing-matrix", "safe-summary", "dispatch-fixture")]
   [string]$Command = "list",
   [string]$CampaignId = "dev-queue-189-200",
-  [string]$CurrentStepId = "dev-queue-189-200:super-194-worker-service-mode",
-  [string]$GoalId = "super-194-worker-service-mode",
+  [string]$CurrentStepId = "dev-queue-189-200:super-195-manual-goal-queue-management",
+  [string]$GoalId = "super-195-manual-goal-queue-management",
   [switch]$Json
 )
 
