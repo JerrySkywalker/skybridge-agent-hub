@@ -5,10 +5,13 @@ import {
   type CampaignRunReport,
   type CampaignSafeSummary,
   createCampaignSafeSummary,
+  createAttentionModel,
   fixtureCampaignRunReport,
   fixtureQueueControlState,
   queueControlActionMatrix,
+  routeAttentionEvent,
   summarizeCampaignEvidence,
+  type AttentionEvent,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
 
@@ -119,13 +122,13 @@ const fixtureStatus: DesktopStatus = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   worker_id: "laptop-zenbookduo",
-  worker_status: "online",
+  worker_status: "offline",
   current_step: fixtureCampaignRunReport.current_step_id,
   current_goal_id: fixtureCampaignRunReport.current_goal_id,
   current_goal_status: "ready",
   current_goal_linked_task_ids: [],
   current_goal_linked_pr_urls: [],
-  previous_goal_id: "super-190-campaign-run-report-evidence-ledger",
+  previous_goal_id: "super-192-dashboard-safe-actions",
   previous_goal_status: "completed",
   goal_190_linked_task_ids_count: 0,
   goal_190_linked_pr_urls_count: 0,
@@ -253,6 +256,7 @@ function App() {
   const report = status.campaign_report ?? fixtureCampaignRunReport;
   const readiness = report.queue_control_readiness;
   const evidence = summarizeCampaignEvidence(report);
+  const attention = createAttentionModel(report);
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
   const previewActions = queueControlActionMatrix.filter((entry) => entry.class === "preview");
@@ -303,6 +307,8 @@ function App() {
         </dl>
       </section>
 
+      <AttentionPanel events={attention.attention_events} />
+
       <section className="panel queue-panel">
         <h2>Queue Control Readiness</h2>
         <dl>
@@ -318,8 +324,8 @@ function App() {
       </section>
 
       <section className="future-controls" aria-label="Future execution controls">
-        <span>Start One Apply disabled by Goal 192 contract</span>
-        <span>Start Queue Apply disabled by Goal 192 contract</span>
+        <span>Start One Apply disabled by queue-control contract</span>
+        <span>Start Queue Apply disabled by queue-control contract</span>
         <span>Start All disabled</span>
         <span>Run Forever disabled</span>
         <span>Worker Loop disabled</span>
@@ -332,7 +338,7 @@ function App() {
           <StatusValue label="worker_offline blocker" value={String(readiness.blockers.includes("worker_offline"))} />
           <StatusValue label="State hash" value={fixtureQueueControlState.state_hash} />
           <StatusValue label="Audit result" value="shown after safe action apply" />
-          <StatusValue label="Start disabled reason" value={`worker=${readiness.worker_status}; execution apply deferred after Goal 192`} />
+          <StatusValue label="Start disabled reason" value={`worker=${readiness.worker_status}; execution apply deferred until worker service mode`} />
           <StatusValue label="Preview action ids" value="start_one_preview; start_queue_preview; resume_preview" />
         </dl>
         <div className="queue-action-grid">
@@ -438,6 +444,33 @@ function App() {
         </section>
       ) : null}
     </main>
+  );
+}
+
+function AttentionPanel({ events }: { events: AttentionEvent[] }) {
+  const top = events.find((event) => event.attention_level === "critical" || event.attention_level === "blocker" || event.attention_level === "action_required") ?? events[0];
+  const routing = top ? routeAttentionEvent(top) : null;
+  return (
+    <section className="panel attention-panel" aria-label="Attention panel">
+      <h2>Attention Panel</h2>
+      <dl>
+        <StatusValue label="Attention count" value={events.length} />
+        <StatusValue label="Top item" value={top ? `${top.event_type}: ${top.message}` : "none"} />
+        <StatusValue label="Recommended action" value={top?.recommended_action ?? "none"} />
+        <StatusValue label="Worker offline" value={String(events.some((event) => event.event_type === "worker_offline"))} />
+        <StatusValue label="Queue blocked" value={String(events.some((event) => event.event_type === "queue_blocked"))} />
+        <StatusValue label="Safe notification status" value={(routing?.routes ?? []).map((route) => `${route.route}=${route.status}`).join("; ") || "none"} />
+        <StatusValue label="External notification sent" value="false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <ul>
+        {events.slice(0, 5).map((event) => (
+          <li key={event.attention_event_id}>
+            <strong>{event.attention_level}</strong> {event.event_type}: {event.recommended_action}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

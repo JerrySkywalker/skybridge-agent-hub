@@ -816,6 +816,19 @@ fn get_string_array(value: &Value, path: &[&str]) -> Vec<String> {
 
 fn build_safe_summary(report: &Value) -> Value {
     let readiness = report.get("queue_control_readiness").cloned().unwrap_or(Value::Null);
+    let blockers = get_string_array(&readiness, &["blockers"]);
+    let warnings = get_string_array(&readiness, &["warnings"]);
+    let required_human_action = get_string_array(&readiness, &["required_human_action"]);
+    let worker_status = get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into());
+    let attention_count = (if matches!(worker_status.as_str(), "offline" | "stale" | "missing" | "unknown") { 1 } else { 0 })
+        + blockers.len()
+        + required_human_action.len();
+    let next_safe_action = get_string(&readiness, &["next_safe_action"]).unwrap_or_else(|| "Inspect report before any operator action.".into());
+    let top_blocker = if blockers.is_empty() {
+        None
+    } else {
+        Some(format!("Queue blocked by {}.", blockers.join(", ")))
+    };
     serde_json::json!({
         "schema": "skybridge.campaign_safe_summary.v1",
         "campaign_id": get_string(report, &["campaign_id"]).unwrap_or_else(|| CAMPAIGN_ID.into()),
@@ -828,13 +841,16 @@ fn build_safe_summary(report: &Value) -> Value {
             "can_resume": readiness.get("can_resume").and_then(Value::as_bool).unwrap_or(false),
             "can_stop": readiness.get("can_stop").and_then(Value::as_bool).unwrap_or(false),
             "can_emergency_stop": readiness.get("can_emergency_stop").and_then(Value::as_bool).unwrap_or(false),
-            "next_safe_action": get_string(&readiness, &["next_safe_action"]).unwrap_or_else(|| "Inspect report before any operator action.".into()),
+            "next_safe_action": next_safe_action.clone(),
             "worker_required": readiness.get("worker_required").and_then(Value::as_bool).unwrap_or(true),
-            "worker_status": get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into())
+            "worker_status": worker_status.clone()
         },
-        "blockers": get_string_array(&readiness, &["blockers"]),
-        "warnings": get_string_array(&readiness, &["warnings"]),
-        "worker_status": get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into()),
+        "blockers": blockers,
+        "warnings": warnings,
+        "worker_status": worker_status,
+        "attention_count": attention_count,
+        "top_blocker": top_blocker,
+        "recommended_next_action": next_safe_action,
         "token_printed": false
     })
 }

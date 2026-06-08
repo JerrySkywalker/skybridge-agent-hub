@@ -350,3 +350,21 @@ Forbidden in this goal:
 - worker loops, task claims and campaign-step task creation.
 
 Expected current state after Goal 192 remains: current step `dev-queue-189-200:super-192-dashboard-safe-actions`, current goal `super-192-dashboard-safe-actions`, active tasks `0`, stale leases `0`, worker offline, `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `token_printed=false`.
+
+## Goal 193 Notification Attention Loop
+
+Goal 193 adds the attention loop before any real queue execution is enabled. Desktop and Web consume shared attention events derived from the campaign report, queue-control readiness, worker offline state, required human action, PR/CI evidence and safe audit events.
+
+The expected current state remains non-executing: current step `dev-queue-189-200:super-193-notification-attention-loop`, current goal `super-193-notification-attention-loop`, active tasks `0`, stale leases `0`, worker offline, `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `token_printed=false`.
+
+Notification routing is fixture-safe:
+
+- Desktop-only rendering is enabled.
+- Web banner/feed rendering is enabled.
+- Local fixture notification writes only under ignored `.agent/tmp/notifications/`.
+- ntfy is represented as `not_configured` by default.
+- Real external notification sending is disabled by default.
+
+Queue-control fixture audit output now writes under ignored `.agent/tmp/queue-control-audit/`. Goal 193 does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or Goal 194.
+
+See [NOTIFICATION_ATTENTION_LOOP.md](NOTIFICATION_ATTENTION_LOOP.md).

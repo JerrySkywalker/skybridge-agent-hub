@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createAttentionModel,
+  deriveAttentionEvents,
   SkyBridgeClient,
+  fixtureCampaignRunReport,
   fixtureQueueControlState,
+  notificationRoutingMatrix,
   queueControlActionMatrix,
+  routeAttentionEvent,
 } from "./index.js";
 
 const fetchMock = vi.fn();
@@ -44,7 +49,7 @@ describe("SkyBridgeClient", () => {
       class: "armed_execution",
       apply_allowed: false,
       requires_arm_lease: true,
-      blockers: ["execution_apply_deferred_after_goal_192"],
+      blockers: ["execution_apply_deferred_until_worker_service_mode"],
     });
     expect(byAction.get("start_all")).toMatchObject({
       class: "forbidden",
@@ -52,13 +57,51 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-192-dashboard-safe-actions",
+      current_goal_id: "super-193-notification-attention-loop",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
       can_start_one: false,
       can_start_queue: false,
       can_resume: false,
+      token_printed: false,
+    });
+  });
+
+  it("derives attention events and fixture-only routes for Goal 193", () => {
+    const events = deriveAttentionEvents(fixtureCampaignRunReport);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          schema: "skybridge.attention_event.v1",
+          event_type: "worker_offline",
+          attention_level: "action_required",
+          token_printed: false,
+        }),
+        expect.objectContaining({
+          event_type: "queue_blocked",
+          attention_level: "blocker",
+        }),
+        expect.objectContaining({
+          event_type: "human_approval_required",
+        }),
+      ]),
+    );
+
+    const model = createAttentionModel(fixtureCampaignRunReport);
+    expect(model).toMatchObject({
+      schema: "skybridge.attention_model.v1",
+      goal_id: "super-193-notification-attention-loop",
+      token_printed: false,
+    });
+    expect(notificationRoutingMatrix).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ route: "local_fixture_notification", real_external_send: false }),
+        expect.objectContaining({ route: "ntfy_placeholder", status: "not_configured", real_external_send: false }),
+      ]),
+    );
+    expect(routeAttentionEvent(events[0])).toMatchObject({
+      external_notification_sent: false,
       token_printed: false,
     });
   });

@@ -211,9 +211,9 @@ function Get-QueueControlActionMatrix {
       reason_required = $true
       human_approval_required = $true
       requires_arm_lease = $true
-      blockers = @("execution_apply_deferred_after_goal_192")
+      blockers = @("execution_apply_deferred_until_worker_service_mode")
       warnings = @()
-      summary = "Armed execution is modeled but forbidden in Goal 192."
+      summary = "Armed execution is modeled but forbidden until a later worker service goal."
       token_printed = $false
     }
   }
@@ -241,19 +241,19 @@ function Get-QueueControlState {
     schema = "skybridge.queue_control_state.v1"
     project_id = $ProjectId
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-192-dashboard-safe-actions"
-    current_goal_id = "super-192-dashboard-safe-actions"
+    current_step_id = "$CampaignId`:super-193-notification-attention-loop"
+    current_goal_id = "super-193-notification-attention-loop"
     worker_status = "offline"
     active_tasks = 0
     stale_leases = 0
     can_start_one = $false
     can_start_queue = $false
     can_resume = $false
-    state_hash = "fixture-goal-192-worker-offline-active0-stale0"
-    revision = "fixture-goal-192-revision"
+    state_hash = "fixture-goal-193-worker-offline-active0-stale0"
+    revision = "fixture-goal-193-revision"
     action_matrix = @($matrix)
     blockers = @("worker_offline")
-    warnings = @("start_apply_deferred_after_goal_192")
+    warnings = @("start_apply_deferred_until_worker_service_mode")
     arm_lease = [pscustomobject]@{
       lease_id = "lease_fixture_goal_192_preview_only"
       campaign_id = $CampaignId
@@ -278,7 +278,7 @@ function New-QueueControlAuditEvent {
     mode = $Mode
     actor = $Actor
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-192-dashboard-safe-actions"
+    current_step_id = "$CampaignId`:super-193-notification-attention-loop"
     target_revision = $Revision
     reason = $ReasonText
     blockers = @($Blockers)
@@ -290,7 +290,7 @@ function New-QueueControlAuditEvent {
 
 function Write-QueueControlAuditEvent {
   param($AuditEvent)
-  $auditDir = Join-Path ".agent" "queue-control-audit"
+  $auditDir = Join-Path (Join-Path ".agent" "tmp") "queue-control-audit"
   New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
   $auditPath = Join-Path $auditDir "$CampaignId.jsonl"
   ($AuditEvent | ConvertTo-Json -Depth 30 -Compress) | Add-Content -LiteralPath $auditPath -Encoding UTF8
@@ -406,6 +406,7 @@ function Invoke-Preflight {
   $goal190 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-190-campaign-run-report-evidence-ledger" })[0]
   $goal191 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-191-readonly-operator-dashboard" })[0]
   $goal192 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-192-dashboard-safe-actions" })[0]
+  $goal193 = @($campaign.steps | Where-Object { $_.goal_id -eq "super-193-notification-attention-loop" })[0]
   $goal189Recovered = $false
   if ($goal189 -and $goal189.evidence_summary) {
     $goal189Recovered = [bool]$goal189.evidence_summary.recovered -or [string]$goal189.evidence_summary.recovery_status -in @("recovered", "completed")
@@ -414,6 +415,7 @@ function Invoke-Preflight {
   $goal190LinkedPrCount = if ($goal190) { @($goal190.linked_pr_urls).Count } else { 0 }
   $goal190Unexecuted = ($goal190 -and $goal190LinkedTaskCount -eq 0 -and $goal190LinkedPrCount -eq 0)
   $goal192Unexecuted = ($goal192 -and @($goal192.linked_task_ids).Count -eq 0 -and @($goal192.linked_pr_urls).Count -eq 0)
+  $goal193Unexecuted = ($goal193 -and @($goal193.linked_task_ids).Count -eq 0 -and @($goal193.linked_pr_urls).Count -eq 0)
   $checks = [ordered]@{
     git_clean = -not [bool]$git.dirty
     active_tasks_zero = ([int]$active.task_summary.active -eq 0)
@@ -424,9 +426,10 @@ function Invoke-Preflight {
     goal_189_recovered_or_evidence_complete = ($goal189 -and $goal189Recovered)
     goal_190_completed = ($goal190 -and [string]$goal190.status -eq "completed")
     goal_191_completed = ($goal191 -and [string]$goal191.status -eq "completed")
-    goal_192_current = ($goal192 -and [string]$campaign.campaign.current_step_id -eq [string]$goal192.campaign_step_id)
-    goal_192_ready = ($goal192 -and [string]$goal192.status -eq "ready")
-    goal_192_unexecuted = $goal192Unexecuted
+    goal_192_completed = ($goal192 -and [string]$goal192.status -eq "completed")
+    goal_193_current = ($goal193 -and [string]$campaign.campaign.current_step_id -eq [string]$goal193.campaign_step_id)
+    goal_193_ready = ($goal193 -and [string]$goal193.status -eq "ready")
+    goal_193_unexecuted = $goal193Unexecuted
     goal_190_unexecuted = $goal190Unexecuted
     project_paused = ([string]$active.control.state -eq "paused")
   }
@@ -444,11 +447,11 @@ function Invoke-Preflight {
     current_step = [string]$campaign.campaign.current_step_id
     previous_step = if ($goal189) { [pscustomobject]@{ goal_id = [string]$goal189.goal_id; status = [string]$goal189.status; linked_task_ids = @($goal189.linked_task_ids); linked_pr_urls = @($goal189.linked_pr_urls); recovered = $goal189Recovered } } else { $null }
     goal_190_detail = if ($goal190) { [pscustomobject]@{ goal_id = [string]$goal190.goal_id; status = [string]$goal190.status; linked_task_ids = @($goal190.linked_task_ids); linked_pr_urls = @($goal190.linked_pr_urls); unexecuted = $goal190Unexecuted } } else { $null }
-    current_step_detail = if ($goal192) { [pscustomobject]@{ goal_id = [string]$goal192.goal_id; status = [string]$goal192.status; linked_task_ids = @($goal192.linked_task_ids); linked_pr_urls = @($goal192.linked_pr_urls); unexecuted = $goal192Unexecuted } } else { $null }
+    current_step_detail = if ($goal193) { [pscustomobject]@{ goal_id = [string]$goal193.goal_id; status = [string]$goal193.status; linked_task_ids = @($goal193.linked_task_ids); linked_pr_urls = @($goal193.linked_pr_urls); unexecuted = $goal193Unexecuted } } else { $null }
     worker_status = if ($worker) { [string]$worker.remote_status } else { "unknown" }
     worker_current_task_id = if ($worker) { $worker.current_task_id } else { $null }
-    next_safe_action = "Goal 192 control contract only: use preview controls or reason-gated safe pause/stop; start-one/start-queue apply remain disabled."
-    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal192_unexecuted=$goal192Unexecuted"
+    next_safe_action = "Goal 193 attention loop only: review attention events and notification routing; start-one/start-queue apply remain disabled."
+    summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal193_unexecuted=$goal193Unexecuted"
   }
 }
 

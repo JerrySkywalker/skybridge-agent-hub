@@ -1,6 +1,6 @@
 # Unified Queue Dashboard
 
-Goal 191D adds the shared read-only foundation for the Desktop and Web queue dashboards. Goal 191E hardens the Desktop refresh path so slow local bridge commands cannot freeze the resident UI. Goal 192 adds the shared Safe Actions / Queue Controls contract without enabling execution apply. Both surfaces consume shared `@skybridge-agent-hub/client` models.
+Goal 191D adds the shared read-only foundation for the Desktop and Web queue dashboards. Goal 191E hardens the Desktop refresh path so slow local bridge commands cannot freeze the resident UI. Goal 192 adds the shared Safe Actions / Queue Controls contract without enabling execution apply. Goal 193 adds shared attention events and fixture-safe notification routing. Both surfaces consume shared `@skybridge-agent-hub/client` models.
 
 ## Scope
 
@@ -8,9 +8,9 @@ Goal 192 keeps start-one/start-queue execution disabled. It adds read-only, prev
 
 ## Shared Contract
 
-The shared consumer models `campaign_summary`, `current_step_summary`, `previous_step_summary`, `step_ledger`, evidence ledger summary counts, `blockers[]`, `warnings[]`, `queue_control_readiness`, `worker_status`, `next_safe_action` and `token_printed=false`.
+The shared consumer models `campaign_summary`, `current_step_summary`, `previous_step_summary`, `step_ledger`, evidence ledger summary counts, `blockers[]`, `warnings[]`, `queue_control_readiness`, `worker_status`, `next_safe_action`, attention events and `token_printed=false`.
 
-Goal 192 also adds `skybridge.queue_control_intent.v1`, `skybridge.queue_control_state.v1`, `skybridge.queue_control_action_response.v1`, `skybridge.queue_control_audit_event.v1`, `run_budget`, `arm_lease`, `revision` and `target_revision`. See [QUEUE_CONTROL_CONTRACT.md](QUEUE_CONTROL_CONTRACT.md).
+Goal 192 also adds `skybridge.queue_control_intent.v1`, `skybridge.queue_control_state.v1`, `skybridge.queue_control_action_response.v1`, `skybridge.queue_control_audit_event.v1`, `run_budget`, `arm_lease`, `revision` and `target_revision`. Goal 193 adds `skybridge.attention_event.v1` and notification routing decisions. See [QUEUE_CONTROL_CONTRACT.md](QUEUE_CONTROL_CONTRACT.md) and [NOTIFICATION_ATTENTION_LOOP.md](NOTIFICATION_ATTENTION_LOOP.md).
 
 Web uses fixture report data for the new `#/campaign-queue` route. Desktop uses the same fixture for visual QA and reads the local `runner-report` output through its Tauri bridge during normal refresh.
 
@@ -28,13 +28,15 @@ Desktop and Web must treat `queue_control_readiness` as the source of truth. `ca
 
 Goal 192 shows Safe Actions / Queue Controls on Web and Desktop. Refresh, Report and Copy Safe Summary are read-only. Resume Preview, Start One Preview and Start Queue Preview are preview-only. Safe Pause, Stop Queue and Emergency Stop require reason and audit for apply. Start One Apply, Start Queue Apply, Start All, Run Forever and Worker Loop remain disabled.
 
+Goal 193 shows an attention banner/feed on Web and an Attention Panel on Desktop. Current worker offline readiness becomes an action-required attention item. Notification routing status is shown as Desktop/Web/local-fixture/ntfy-placeholder/disabled without sending real external notifications.
+
 For current Goal 191 state, Desktop uses `Queue Readiness` / `Operator Readiness` as the primary status wording. Pre-190 wording is legacy and must not be the main banner after Goal 190 is complete.
 
 ## Safe Summary
 
 The shared safe summary is `skybridge.campaign_safe_summary.v1`. It is safe to copy into PR comments or ChatGPT after checking `token_printed=false`.
 
-It includes campaign id, current step and goal, queue readiness, blockers, warnings and worker status. It excludes raw logs, raw prompts, stdout/stderr, tokens, Authorization headers and local secret paths.
+It includes campaign id, current step and goal, queue readiness, blockers, warnings, worker status, attention count, top blocker and recommended next action. It excludes raw logs, raw prompts, stdout/stderr, tokens, Authorization headers and local secret paths.
 
 Desktop Copy safe summary uses the currently cached report snapshot. It must not wait for a slow refresh or trigger a bridge call.
 

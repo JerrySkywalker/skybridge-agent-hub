@@ -12,6 +12,9 @@ foreach ($required in @(
   "blockers",
   "warnings",
   "worker_status",
+  "attention_count",
+  "top_blocker",
+  "recommended_next_action",
   "token_printed: false",
   "containsSecretLookingText"
 )) {
