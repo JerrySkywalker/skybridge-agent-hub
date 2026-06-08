@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets", "sanitized-executor-contract", "no-raw-prompt-persistence", "no-raw-transcript-persistence", "no-raw-stdout-stderr", "redaction", "executor-fails-closed-if-raw-logs", "executor-one-task-only", "task-pr-open-only", "task-pr-path-allowlist", "evidence-safe")]
   [string]$Scenario,
   [switch]$Json
 )
@@ -52,15 +52,13 @@ $result = switch ($Scenario) {
     $preview = Invoke-Trial -Command start-one-preview
     if ($preview.selected_goal_id -ne "goal-201-controlled-start-one-bootstrap-trial") { throw "Preview selected wrong goal." }
     if ($preview.task_type -ne "docs/local-smoke") { throw "Preview selected wrong task type." }
-    if ($preview.would_create_tasks -ne 0) { throw "Preview must not create a task while worker claim is disabled." }
+    if ($preview.would_create_tasks -gt 1) { throw "Preview must never create more than one task." }
     foreach ($flag in @("task_created", "task_claimed", "task_executed", "worker_loop_started", "pr_created")) { Assert-FalseFlag $preview $flag }
     $preview
   }
   "start-one-gates" {
     $gate = Invoke-Trial -Command start-one-gates -Extra @("-Reason", "smoke gate reason")
-    foreach ($required in @("codex_executor_persists_prompt_or_logs")) {
-      if (@($gate.blockers) -notcontains $required) { throw "Expected blocker $required." }
-    }
+    if (-not $gate.ok) { throw "Start-one gates should pass after sanitized executor boundary: $(@($gate.blockers) -join '; ')" }
     if ($gate.operator_reason_recorded -ne $true) { throw "Operator reason was not recorded." }
     $gate
   }
@@ -76,9 +74,8 @@ $result = switch ($Scenario) {
   }
   "one-shot-executor-gate" {
     $executor = Invoke-Trial -Command one-shot-executor-gate
-    if ($executor.ok) { throw "Executor gate should fail closed while shared Codex executor persists prompt/log artifacts." }
-    if (@($executor.blockers) -notcontains "codex_executor_persists_prompt_or_logs") { throw "Executor artifact blocker missing." }
-    foreach ($flag in @("task_claimed", "task_executed", "codex_worker_execution_started", "pr_created", "auto_merge_enabled", "raw_transcript_included", "raw_logs_included", "external_notification_sent")) { Assert-FalseFlag $executor $flag }
+    if (-not $executor.ok) { throw "Executor gate should pass after sanitized executor boundary: $(@($executor.blockers) -join '; ')" }
+    foreach ($flag in @("task_claimed", "task_executed", "codex_worker_execution_started", "pr_created", "auto_merge_enabled", "raw_transcript_included", "raw_logs_included", "external_notification_sent", "stdout_persisted", "stderr_persisted", "prompt_persisted")) { Assert-FalseFlag $executor $flag }
     $executor
   }
   "claim-refuses-second-task" {
@@ -130,6 +127,61 @@ $result = switch ($Scenario) {
     if ($executor.raw_transcript_included -ne $false -or $executor.raw_logs_included -ne $false) { throw "Raw transcript/log flags must be false." }
     $executor
   }
+  "sanitized-executor-contract" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    if (-not $contract.ok) { throw "Sanitized executor contract blocked: $(@($contract.blockers) -join '; ')" }
+    if ($contract.prompt_persisted -ne $false -or $contract.transcript_persisted -ne $false) { throw "Prompt/transcript persistence must be false." }
+    if ($contract.stdout_persisted -ne $false -or $contract.stderr_persisted -ne $false) { throw "stdout/stderr persistence must be false." }
+    if ($contract.max_codex_executions -ne 1 -or $contract.max_tasks -ne 1 -or $contract.max_prs -ne 1) { throw "Executor must be one-shot." }
+    $contract
+  }
+  "no-raw-prompt-persistence" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    if ($contract.prompt_persisted -ne $false) { throw "Prompt must not be persisted." }
+    $contract
+  }
+  "no-raw-transcript-persistence" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    if ($contract.transcript_persisted -ne $false) { throw "Transcript must not be persisted." }
+    $contract
+  }
+  "no-raw-stdout-stderr" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    if ($contract.stdout_persisted -ne $false -or $contract.stderr_persisted -ne $false) { throw "stdout/stderr must not be persisted." }
+    $contract
+  }
+  "redaction" {
+    $redaction = Invoke-Trial -Command sanitized-redaction-test
+    if (-not $redaction.ok -or -not $redaction.redacted_secret_markers) { throw "Redaction failed." }
+    $redaction
+  }
+  "executor-fails-closed-if-raw-logs" {
+    $executor = Invoke-Trial -Command one-shot-executor-gate -Extra @("-SimulateRawLogPersistence")
+    if ($executor.ok) { throw "Executor must fail closed when raw log persistence is simulated." }
+    if (@($executor.blockers) -notcontains "sanitized_executor_refused_forced_log_persistence") { throw "Expected raw log persistence blocker." }
+    $executor
+  }
+  "executor-one-task-only" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    if ($contract.max_tasks -ne 1 -or $contract.max_codex_executions -ne 1) { throw "Expected one task and one Codex execution." }
+    $contract
+  }
+  "task-pr-open-only" {
+    $pr = Invoke-Trial -Command pr-safety
+    if ($pr.auto_merge_enabled -ne $false) { throw "Task PR must not auto-merge." }
+    $pr | Add-Member -NotePropertyName task_pr_expected_state -NotePropertyValue "open" -Force
+    $pr
+  }
+  "task-pr-path-allowlist" {
+    $executor = Invoke-Trial -Command one-shot-executor-gate -Extra @("-AllowedPaths", "apps/server/src/index.ts")
+    if (-not (@($executor.blockers) -match "^path_allowlist_violation:")) { throw "Path allowlist violation was not reported." }
+    $executor
+  }
+  "evidence-safe" {
+    $contract = Invoke-Trial -Command sanitized-executor-contract
+    foreach ($flag in @("prompt_persisted", "transcript_persisted", "stdout_persisted", "stderr_persisted", "auto_merge_enabled")) { Assert-FalseFlag $contract $flag }
+    $contract
+  }
   "no-secrets" {
     $claim = Invoke-Trial -Command one-shot-claim-gate
     Assert-SafeJson $claim
@@ -167,7 +219,7 @@ $result = switch ($Scenario) {
   }
   "evidence" {
     $evidence = Invoke-Trial -Command evidence
-    if ($evidence.final_state -ne "held_no_execution_worker_claim_disabled") { throw "Unexpected final state." }
+    if ($evidence.final_state -notin @("ready_for_one_shot_start_one_apply", "held_no_execution_executor_gate_blocked")) { throw "Unexpected final state." }
     if ($evidence.lease_outcome -ne "no_lease_created") { throw "No lease should be created." }
     foreach ($flag in @("no_start_all", "no_second_task", "no_auto_merge")) {
       if ($evidence.$flag -ne $true) { throw "Expected $flag=true." }
