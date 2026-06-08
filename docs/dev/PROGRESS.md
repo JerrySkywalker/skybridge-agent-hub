@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-06-08 Goal 194 Worker Service Mode
+
+- Added the shared `skybridge.worker_service_state.v1` contract and `skybridge.worker_service_readiness.v1` helper with heartbeat/status/stop capability and explicit `can_claim_tasks=false`, `can_execute_tasks=false` and `token_printed=false`.
+- Added a bounded local worker service wrapper, `skybridge-worker-service.ps1`, that writes heartbeat-only standby metadata under ignored `.agent/tmp/worker-service/`.
+- Integrated worker service readiness into the campaign report and queue-control readiness while keeping `can_start_one=false`, `can_start_queue=false`, `can_resume=false` and `execution_disabled_until_goal_195`.
+- Added Web Worker Readiness and Desktop Worker Service panels with capability matrix, heartbeat age, blockers and disabled execution controls.
+- Added focused worker service smokes for contract, heartbeat, stop, readiness gates, no task claim, no arbitrary shell, no secrets, Desktop/Web rendering, queue integration and clean-tree hygiene.
+- Goal 194 does not run `start-one`, `start-all`, `resume -Apply`, task claim, Codex worker execution, PR creation or real queue start.
+
 ## 2026-06-08 Goal 193 Notification and Attention Loop
 
 - Added the shared `skybridge.attention_event.v1` contract with attention levels, sources, required event types, routing decisions and `token_printed=false`.

@@ -52,9 +52,9 @@ The copied safe summary includes `attention_count`, `top_blocker`, `recommended_
 
 Goal 193 moves future fixture queue-control audit output to ignored `.agent/tmp/queue-control-audit/`. The clean-tree smoke verifies this path does not dirty the git worktree.
 
-## Goal 194 Preparation
+## Goal 194 Follow-on
 
-Goal 193 prepares worker service mode by giving operators a shared attention surface before real start-one/start-queue execution is enabled. Goal 194 can build on these fields to page the operator when worker service mode changes readiness, but execution still needs explicit approval, audit and safety gates.
+Goal 194 builds on the attention loop with `skybridge.worker_service_state.v1` and worker readiness panels. Worker offline and queue blocked attention remains display-only. Even with standby heartbeat present, real start-one/start-queue execution remains disabled until Goal 195 adds the reviewed Start One gate.
 
 ## Validation
 

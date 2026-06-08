@@ -205,6 +205,15 @@ h2 {
   font-size: 12px;
 }
 
+.worker-readiness {
+  border-color: #c7dbe5;
+}
+
+.worker-readiness .skybridge-state-note {
+  color: #52627a;
+  font-size: 12px;
+}
+
 .kpi-grid {
   display: grid;
   gap: 12px;

@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAttentionModel,
+  createWorkerServiceReadiness,
   deriveAttentionEvents,
   SkyBridgeClient,
   fixtureCampaignRunReport,
   fixtureQueueControlState,
+  fixtureWorkerServiceState,
   notificationRoutingMatrix,
   queueControlActionMatrix,
   routeAttentionEvent,
@@ -49,7 +51,7 @@ describe("SkyBridgeClient", () => {
       class: "armed_execution",
       apply_allowed: false,
       requires_arm_lease: true,
-      blockers: ["execution_apply_deferred_until_worker_service_mode"],
+      blockers: ["execution_apply_deferred_until_goal_195"],
     });
     expect(byAction.get("start_all")).toMatchObject({
       class: "forbidden",
@@ -57,7 +59,7 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-193-notification-attention-loop",
+      current_goal_id: "super-194-worker-service-mode",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
@@ -65,6 +67,46 @@ describe("SkyBridgeClient", () => {
       can_start_queue: false,
       can_resume: false,
       token_printed: false,
+    });
+  });
+
+  it("models Goal 194 worker service readiness without task claim or execution", () => {
+    expect(fixtureWorkerServiceState).toMatchObject({
+      schema: "skybridge.worker_service_state.v1",
+      mode: "offline",
+      current_task_id: null,
+      can_claim_tasks: false,
+      can_execute_tasks: false,
+      token_printed: false,
+    });
+    expect(fixtureWorkerServiceState.capability_matrix).toMatchObject({
+      heartbeat: true,
+      task_claim: false,
+      task_execute: false,
+      codex_execute: false,
+      pr_create: false,
+      arbitrary_shell: false,
+    });
+    const readiness = createWorkerServiceReadiness(fixtureWorkerServiceState, {
+      cleanWorktree: true,
+      activeTasks: 0,
+      staleLeases: 0,
+      runnerLockStatus: "none",
+    });
+    expect(readiness).toMatchObject({
+      schema: "skybridge.worker_service_readiness.v1",
+      ready_for_start_one_gate: false,
+      can_claim_tasks: false,
+      can_execute_tasks: false,
+      token_printed: false,
+    });
+    expect(readiness.blockers).toEqual(expect.arrayContaining(["worker_service_offline", "execution_disabled_until_goal_195"]));
+    expect(fixtureCampaignRunReport.worker_service_state).toMatchObject({ mode: "offline", token_printed: false });
+    expect(fixtureCampaignRunReport.queue_control_readiness).toMatchObject({
+      can_start_one: false,
+      can_start_queue: false,
+      can_resume: false,
+      execution_disabled_until_goal: "super-195-manual-goal-queue-management",
     });
   });
 
@@ -91,7 +133,7 @@ describe("SkyBridgeClient", () => {
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-193-notification-attention-loop",
+      goal_id: "super-194-worker-service-mode",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(

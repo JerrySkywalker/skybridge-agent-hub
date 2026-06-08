@@ -6,12 +6,15 @@ import {
   type CampaignSafeSummary,
   createCampaignSafeSummary,
   createAttentionModel,
+  createWorkerServiceReadiness,
   fixtureCampaignRunReport,
   fixtureQueueControlState,
+  fixtureWorkerServiceState,
   queueControlActionMatrix,
   routeAttentionEvent,
   summarizeCampaignEvidence,
   type AttentionEvent,
+  type WorkerServiceState,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
 
@@ -47,6 +50,7 @@ type DesktopStatus = {
     reasons: string[];
   };
   campaign_report: CampaignRunReport | null;
+  worker_service_state: WorkerServiceState | null;
   safe_summary: CampaignSafeSummary | null;
   bridge_outcomes: Array<{
     name: string;
@@ -103,6 +107,7 @@ const emptyStatus: DesktopStatus = {
     reasons: ["status=unknown"],
   },
   campaign_report: null,
+  worker_service_state: null,
   safe_summary: null,
   bridge_outcomes: [],
   report_cached: false,
@@ -146,6 +151,7 @@ const fixtureStatus: DesktopStatus = {
     reasons: ["active_tasks=0", "stale_leases=0", "token_printed=false", "can_start_one=false", "can_start_queue=false", "can_resume=false", "worker_status=offline"],
   },
   campaign_report: fixtureCampaignRunReport,
+  worker_service_state: fixtureWorkerServiceState,
   safe_summary: createCampaignSafeSummary(fixtureCampaignRunReport),
   bridge_outcomes: [
     { name: "campaign_report", ok: true, warning: null },
@@ -257,6 +263,8 @@ function App() {
   const readiness = report.queue_control_readiness;
   const evidence = summarizeCampaignEvidence(report);
   const attention = createAttentionModel(report);
+  const workerService = status.worker_service_state ?? report.worker_service_state ?? fixtureWorkerServiceState;
+  const workerReadiness = createWorkerServiceReadiness(workerService);
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
   const previewActions = queueControlActionMatrix.filter((entry) => entry.class === "preview");
@@ -308,6 +316,7 @@ function App() {
       </section>
 
       <AttentionPanel events={attention.attention_events} />
+      <WorkerServicePanel service={workerService} readiness={workerReadiness} />
 
       <section className="panel queue-panel">
         <h2>Queue Control Readiness</h2>
@@ -470,6 +479,65 @@ function AttentionPanel({ events }: { events: AttentionEvent[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function WorkerServicePanel({
+  service,
+  readiness,
+}: {
+  service: WorkerServiceState;
+  readiness: ReturnType<typeof createWorkerServiceReadiness>;
+}) {
+  const capabilities = service.capability_matrix;
+  return (
+    <section className="panel worker-service-panel" aria-label="Worker service panel">
+      <h2>Worker Service Panel</h2>
+      <dl>
+        <StatusValue label="Worker service status" value={service.mode} />
+        <StatusValue label="Worker id" value={service.worker_id} />
+        <StatusValue label="Worker profile" value={service.worker_profile} />
+        <StatusValue label="Heartbeat age" value={readiness.heartbeat_age_seconds === null ? "none" : `${readiness.heartbeat_age_seconds}s`} />
+        <StatusValue label="Current task id" value={service.current_task_id ?? "none"} />
+        <StatusValue label="Can claim tasks" value={String(readiness.can_claim_tasks)} />
+        <StatusValue label="Can execute tasks" value={String(readiness.can_execute_tasks)} />
+        <StatusValue label="Stop requested" value={String(service.stop_requested)} />
+        <StatusValue label="Pause requested" value={String(service.pause_requested)} />
+        <StatusValue label="Readiness blockers" value={readiness.blockers.join("; ") || "none"} />
+        <StatusValue label="Recommended action" value={readiness.recommended_action} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="capability-grid">
+        <span>heartbeat={String(capabilities.heartbeat)}</span>
+        <span>status={String(capabilities.status)}</span>
+        <span>stop={String(capabilities.stop)}</span>
+        <span>task_claim={String(capabilities.task_claim)}</span>
+        <span>task_execute={String(capabilities.task_execute)}</span>
+        <span>codex_execute={String(capabilities.codex_execute)}</span>
+        <span>pr_create={String(capabilities.pr_create)}</span>
+        <span>arbitrary_shell={String(capabilities.arbitrary_shell)}</span>
+      </div>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true" title="Preview only in this UI build">
+          Start standby preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Bounded local supervisor apply is CLI-only for Goal 194 smokes">
+          Start standby apply disabled
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Heartbeat-only CLI smoke path; no task claim">
+          Heartbeat only
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Stop request is safe local metadata only">
+          Stop standby
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Claim task disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Execute task disabled
+        </button>
+      </div>
     </section>
   );
 }

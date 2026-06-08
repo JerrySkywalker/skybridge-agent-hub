@@ -14,8 +14,14 @@ if ($web -match '<button[^>]*(Start One|Start Queue|Resume)[\s\S]*?onClick=') {
   throw "Web contains an active start/resume placeholder button."
 }
 
-if ($desktop -match '<button[^>]*(Start One|Start Queue|Resume|Stop|Emergency Stop)') {
-  throw "Desktop must not add execution-control buttons in Goal 191D."
+if ($desktop -match '<button[^>]*(Start One|Start Queue|Resume)[\s\S]*?onClick=') {
+  throw "Desktop contains an active start/resume execution button."
+}
+
+foreach ($disabledLabel in @("Claim task disabled", "Execute task disabled")) {
+  if ($desktop -notmatch [regex]::Escape($disabledLabel)) {
+    throw "Desktop worker service disabled label missing: $disabledLabel"
+  }
 }
 
 foreach ($forbidden in @("start-one", "start-all", "resume -Apply", "execute-step", "skybridge-edge-worker.ps1")) {

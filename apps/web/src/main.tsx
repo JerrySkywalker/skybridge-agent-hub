@@ -18,6 +18,7 @@ import {
   type CampaignRunReport,
   createCampaignSafeSummary,
   createAttentionModel,
+  createWorkerServiceReadiness,
   fixtureCampaignRunReport,
   fixtureQueueControlState,
   queueControlActionMatrix,
@@ -281,6 +282,7 @@ function CampaignQueuePage() {
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const safeSummary = createCampaignSafeSummary(report);
   const attention = createAttentionModel(report);
+  const workerReadiness = createWorkerServiceReadiness(report.worker_service_state);
 
   return (
     <div className="route-stack campaign-queue" data-readonly-dashboard="true">
@@ -320,6 +322,7 @@ function CampaignQueuePage() {
         </div>
         <aside className="dashboard-grid__side">
           <AttentionFeed events={attention.attention_events} />
+          <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
           <NotificationRoutingPanel events={attention.attention_events} />
@@ -341,6 +344,7 @@ function CampaignQueuePage() {
               `Campaign: ${safeSummary.campaign_id}`,
               `Current: ${safeSummary.current_goal_id}`,
               `Worker: ${safeSummary.worker_status}`,
+              `Worker service: ${safeSummary.worker_service_mode}`,
               `Attention: ${safeSummary.attention_count}`,
               `Top blocker: ${safeSummary.top_blocker ?? "none"}`,
               `token_printed=${String(safeSummary.token_printed)}`,
@@ -411,6 +415,65 @@ function NotificationRoutingPanel({ events }: { events: AttentionEvent[] }) {
         fallback="No route selected."
       />
       <p className="skybridge-state-note">ntfy placeholder is disabled/not configured by default; local fixture ledger is explicit only.</p>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WorkerReadinessPanel({
+  report,
+  readiness,
+}: {
+  report: CampaignRunReport;
+  readiness: ReturnType<typeof createWorkerServiceReadiness>;
+}) {
+  const service = report.worker_service_state;
+  const capabilities = service.capability_matrix;
+  return (
+    <section className="skybridge-panel worker-readiness" aria-label="Worker readiness panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Worker Service</p>
+          <h2>Readiness</h2>
+        </div>
+        <span className={badgeClass(readiness.blockers.length ? "bad" : "ok")}>
+          {service.mode}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Worker id</dt>
+          <dd>{service.worker_id}</dd>
+        </div>
+        <div>
+          <dt>Heartbeat age</dt>
+          <dd>{readiness.heartbeat_age_seconds === null ? "none" : `${readiness.heartbeat_age_seconds}s`}</dd>
+        </div>
+        <div>
+          <dt>Current task</dt>
+          <dd>{service.current_task_id ?? "none"}</dd>
+        </div>
+        <div>
+          <dt>Can claim</dt>
+          <dd>{String(readiness.can_claim_tasks)}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Capability"
+        items={[
+          `heartbeat=${capabilities.heartbeat}`,
+          `status=${capabilities.status}`,
+          `stop=${capabilities.stop}`,
+          `task_claim=${capabilities.task_claim}`,
+          `task_execute=${capabilities.task_execute}`,
+          `codex_execute=${capabilities.codex_execute}`,
+          `pr_create=${capabilities.pr_create}`,
+          `arbitrary_shell=${capabilities.arbitrary_shell}`,
+        ]}
+        fallback="No capability data."
+      />
+      <QueueList title="Readiness blockers" items={readiness.blockers} fallback="No worker service blockers." />
+      <p className="skybridge-state-note">Web has no direct local process control; Start One remains disabled until Goal 195.</p>
       <span>token_printed=false</span>
     </section>
   );

@@ -1,6 +1,6 @@
 # Queue Control Contract
 
-Goal 192 adds the queue-control contract foundation. Goal 193 adds attention events derived from this contract. Neither goal is execution enablement.
+Goal 192 adds the queue-control contract foundation. Goal 193 adds attention events derived from this contract. Goal 194 adds worker service readiness. None of these goals enables queue execution.
 
 Desktop, Web, CLI and Server use the same concepts:
 
@@ -10,6 +10,7 @@ Desktop, Web, CLI and Server use the same concepts:
 - `skybridge.queue_control_audit_event.v1` records safe mutations without raw logs, prompts, stdout/stderr, authorization headers, token values, cookies, private keys or secret-bearing paths.
 - `run_budget` and `arm_lease` are modeled for future execution gates only. Fixture arm leases are preview/schema-only and cannot start work.
 - `skybridge.attention_event.v1` derives operator-visible attention items from blockers, worker state, required human action and queue-control audit events.
+- `skybridge.worker_service_state.v1` reports bounded standby service state, heartbeat and capability without task claim or execution.
 
 ## Action Matrix
 
@@ -25,8 +26,8 @@ Desktop, Web, CLI and Server use the same concepts:
 | `resume_preview` | preview | preview only; no mutation |
 | `start_one_preview` | preview | preview only; no mutation |
 | `start_queue_preview` | preview | preview only; no mutation |
-| `start_one_apply` | armed execution | forbidden until later worker service mode |
-| `start_queue_apply` | armed execution | forbidden until later worker service mode |
+| `start_one_apply` | armed execution | forbidden until Goal 195 Start One gate |
+| `start_queue_apply` | armed execution | forbidden until Goal 195 Start One gate |
 | `start_all` | forbidden | forbidden |
 | `arbitrary_shell` | forbidden | forbidden |
 
@@ -43,7 +44,7 @@ Desktop and Web show the same Safe Actions / Queue Controls section:
 - reason-gated safe actions: Safe Pause, Stop Queue, Emergency Stop;
 - disabled/forbidden: Start One Apply, Start Queue Apply, Start All, Run Forever, Worker Loop.
 
-Worker offline remains a blocker. For the current campaign state, start actions stay disabled because worker status is `offline`, active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, and `token_printed=false`. Goal 193 surfaces this as `worker_offline`, `queue_blocked` and `human_approval_required` attention events.
+Worker offline remains a blocker. Goal 194 adds standby worker service readiness, but standby only reduces operator uncertainty; it does not enable start apply. For the current campaign state, start actions stay disabled because active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, `execution_disabled_until_goal_195` is present, and `token_printed=false`.
 
 ## CLI
 
@@ -65,4 +66,4 @@ Fixture queue-control audit output is local-only and ignored:
 
 ## Deferred Work
 
-Goal 194 can add worker service mode. Actual start-one/start-queue apply enablement remains deferred until a future reviewed goal adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.
+Actual start-one/start-queue apply enablement remains deferred until Goal 195 or later adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.
