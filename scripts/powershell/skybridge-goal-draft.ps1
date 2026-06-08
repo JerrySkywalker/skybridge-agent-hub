@@ -408,7 +408,12 @@ switch ($Command) {
       schema = "skybridge.proposed_goal_safe_summary.v1"
       proposed_goal_count = $items.Count
       pending_review_count = $pending.Count
+      approved_count = @($items | Where-Object { $_.review_status -in @("approved", "approved_for_import") }).Count
+      rejected_count = @($items | Where-Object { $_.review_status -eq "rejected" }).Count
+      imported_count = @($items | Where-Object { $_.review_status -eq "imported" }).Count
       blocked_draft_count = $blocked.Count
+      import_target = "goals/reviewed"
+      blocked_reason = if ($blocked.Count -gt 0) { "unsafe_import_blocked" } else { $null }
       next_action = "review proposed goals in Goal 200"
       imported = $false
       executed = $false

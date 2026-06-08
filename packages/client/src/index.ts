@@ -1523,8 +1523,13 @@ export type AttentionEventType =
   | "project_selection_preview_only"
   | "proposed_goal_created"
   | "proposed_goal_needs_review"
+  | "proposed_goal_approved"
   | "proposed_goal_blocked"
   | "proposed_goal_rejected"
+  | "proposed_goal_import_preview_ready"
+  | "proposed_goal_imported"
+  | "imported_goal_requires_execution_review"
+  | "unsafe_import_blocked"
   | "unsafe_goal_draft_detected"
   | "import_requires_goal_200";
 
@@ -2417,16 +2422,41 @@ export interface GoalQueueReviewSummary {
 
 export type ProposedGoalSource = "fixture" | "hermes" | "manual";
 export type ProposedGoalSafetyClassification = "low" | "medium" | "high" | "blocked";
-export type ProposedGoalReviewStatus = "proposed" | "needs_review" | "rejected" | "approved_for_import";
+export type ProposedGoalReviewStatus =
+  | "proposed"
+  | "needs_review"
+  | "approved"
+  | "rejected"
+  | "edited"
+  | "imported"
+  | "superseded"
+  | "approved_for_import";
 
 export interface ProposedGoalDraft {
+  draft_id?: string;
   proposed_goal_id: string;
   title: string;
   source: ProposedGoalSource;
   proposed_markdown_path: string;
   content_hash: string;
+  original_hash?: string;
+  edited_hash?: string | null;
   safety_classification: ProposedGoalSafetyClassification;
+  risk_level?: ProposedGoalSafetyClassification;
   review_status: ProposedGoalReviewStatus;
+  reviewer?: string;
+  decision?: string | null;
+  decision_reason?: string | null;
+  import_status?: "not_imported" | "preview_ready" | "imported" | "blocked";
+  import_target?: string | null;
+  import_preview?: {
+    import_target: string;
+    manifest_path: string;
+    manifest_diff: string[];
+    dependency_order_changes: string[];
+    validation_blockers: string[];
+    execution_review_required: true;
+  } | null;
   suggested_order: number;
   suggested_dependencies: string[];
   allowed_task_types: string[];
@@ -2435,6 +2465,7 @@ export interface ProposedGoalDraft {
   review_notes: string[];
   blocked_reasons: string[];
   generated_at: string;
+  reviewed_at?: string | null;
   token_printed: false;
 }
 
@@ -2442,7 +2473,12 @@ export interface ProposedGoalSafeSummary {
   schema: "skybridge.proposed_goal_safe_summary.v1";
   proposed_goal_count: number;
   pending_review_count: number;
+  approved_count?: number;
+  rejected_count?: number;
+  imported_count?: number;
   blocked_draft_count: number;
+  import_target?: string | null;
+  blocked_reason?: string | null;
   next_action: "review proposed goals in Goal 200";
   import_requires_goal_200: true;
   imported: false;
@@ -2456,7 +2492,12 @@ export interface ProposedGoalReviewSummary {
   schema: "skybridge.proposed_goal_review_summary.v1";
   proposed_goal_count: number;
   pending_review_count: number;
+  approved_count: number;
+  rejected_count: number;
+  imported_count: number;
   blocked_draft_count: number;
+  import_target: string;
+  blocked_reason: string | null;
   next_action: "review proposed goals in Goal 200";
   import_requires_goal_200: true;
   imported: false;
@@ -2464,6 +2505,23 @@ export interface ProposedGoalReviewSummary {
   task_created: false;
   worker_loop_started: false;
   proposed_goals: ProposedGoalDraft[];
+  review_controls: {
+    approve_preview: "reason-gated";
+    reject_preview: "reason-gated";
+    edit_staged: "hash-recompute";
+    import_preview: "dry-run";
+    import_apply: "disabled-until-approved-and-confirmed";
+    execute_imported_goal: "not_available";
+  };
+  import_preview_summary: {
+    target_path: string;
+    manifest_diff: string[];
+    dependency_order_changes: string[];
+    hash_changes: string[];
+    validation_blockers: string[];
+    dry_run_first: true;
+    execution_review_required: true;
+  };
   no_import_button: true;
   no_execute_button: true;
   no_execution_controls: true;
@@ -2898,6 +2956,67 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
         ),
       );
     }
+    if ((proposedSummary.approved_count ?? 0) > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_approved",
+          "info",
+          "campaign",
+          `${proposedSummary.approved_count} proposed goal draft(s) are approved for controlled import preview.`,
+          "Run import-preview first; do not execute imported goals.",
+          "proposed_goals_approved",
+        ),
+      );
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_import_preview_ready",
+          "info",
+          "campaign",
+          "A controlled import preview can be generated for approved proposed goals.",
+          "Review manifest diff, dependencies, hash changes and blockers before any import apply.",
+          "import_preview_ready",
+        ),
+      );
+    }
+    if ((proposedSummary.rejected_count ?? 0) > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_rejected",
+          "info",
+          "campaign",
+          `${proposedSummary.rejected_count} proposed goal draft(s) have been rejected.`,
+          "Keep rejected drafts out of import staging.",
+          "proposed_goals_rejected",
+        ),
+      );
+    }
+    if ((proposedSummary.imported_count ?? 0) > 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "proposed_goal_imported",
+          "info",
+          "campaign",
+          `${proposedSummary.imported_count} proposed goal draft(s) are staged as reviewed imports.`,
+          "Imported goals remain pending execution review in a later goal.",
+          "proposed_goals_imported",
+        ),
+      );
+      events.push(
+        makeAttentionEvent(
+          report,
+          "imported_goal_requires_execution_review",
+          "action_required",
+          "campaign",
+          "Imported proposed goals require separate future execution approval.",
+          "Do not create tasks, claim work, or start queue execution from import state.",
+          "imported_goal_execution_review",
+        ),
+      );
+    }
     if (proposedSummary.blocked_draft_count > 0) {
       events.push(
         makeAttentionEvent(
@@ -2908,6 +3027,17 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
           `${proposedSummary.blocked_draft_count} proposed goal draft(s) are blocked by the safety filter.`,
           "Reject or rewrite blocked proposed drafts during Goal 200 review.",
           "proposed_goals_blocked",
+        ),
+      );
+      events.push(
+        makeAttentionEvent(
+          report,
+          "unsafe_import_blocked",
+          "blocker",
+          "campaign",
+          "Unsafe proposed goal import is blocked by risk gating.",
+          "Reject or rewrite the unsafe draft; import remains disabled.",
+          "unsafe_import_blocked",
         ),
       );
       events.push(
@@ -3129,7 +3259,12 @@ export const fixtureProposedGoalReviewSummary: ProposedGoalReviewSummary = {
   schema: "skybridge.proposed_goal_review_summary.v1",
   proposed_goal_count: 2,
   pending_review_count: 1,
+  approved_count: 1,
+  rejected_count: 1,
+  imported_count: 0,
   blocked_draft_count: 1,
+  import_target: "goals/reviewed",
+  blocked_reason: "unsafe_import_blocked",
   next_action: "review proposed goals in Goal 200",
   import_requires_goal_200: true,
   imported: false,
@@ -3138,13 +3273,30 @@ export const fixtureProposedGoalReviewSummary: ProposedGoalReviewSummary = {
   worker_loop_started: false,
   proposed_goals: [
     {
+      draft_id: "proposed-goal-201-local-readme-refresh",
       proposed_goal_id: "proposed-goal-201-local-readme-refresh",
       title: "Goal 201 Local README Refresh",
       source: "fixture",
       proposed_markdown_path: "goals/proposed/proposed-goal-201-local-readme-refresh.md",
       content_hash: "a80296ad3f06fd009c1c82a8caa68e337821bc538040fb01141eff47ae6785fb",
+      original_hash: "a80296ad3f06fd009c1c82a8caa68e337821bc538040fb01141eff47ae6785fb",
+      edited_hash: null,
       safety_classification: "low",
-      review_status: "proposed",
+      risk_level: "low",
+      review_status: "approved",
+      reviewer: "local-operator",
+      decision: "approved",
+      decision_reason: "low-risk docs fixture approved for dry-run-first import preview",
+      import_status: "preview_ready",
+      import_target: "goals/reviewed/proposed-goal-201-local-readme-refresh.md",
+      import_preview: {
+        import_target: "goals/reviewed/proposed-goal-201-local-readme-refresh.md",
+        manifest_path: "goals/reviewed/manifest.skybridge-goal-import.json",
+        manifest_diff: ["add proposed-goal-201-local-readme-refresh to reviewed import manifest"],
+        dependency_order_changes: ["order=201", "depends_on=super-200-controlled-goal-draft-review-import"],
+        validation_blockers: [],
+        execution_review_required: true,
+      },
       suggested_order: 201,
       suggested_dependencies: ["super-200-controlled-goal-draft-review-import"],
       allowed_task_types: ["docs", "local-smoke"],
@@ -3153,16 +3305,27 @@ export const fixtureProposedGoalReviewSummary: ProposedGoalReviewSummary = {
       review_notes: ["Fixture-generated proposed goal for human review only."],
       blocked_reasons: [],
       generated_at: "2026-06-08T00:00:00.000Z",
+      reviewed_at: "2026-06-08T00:00:00.000Z",
       token_printed: false,
     },
     {
+      draft_id: "proposed-unsafe-production-deploy",
       proposed_goal_id: "proposed-unsafe-production-deploy",
       title: "Unsafe Production Deployment",
       source: "fixture",
       proposed_markdown_path: "goals/proposed/proposed-unsafe-production-deploy.md",
       content_hash: "5314ffd66b9f4013ff44822c2fced00ddfc4784b98210903c65efd60d4a09111",
+      original_hash: "5314ffd66b9f4013ff44822c2fced00ddfc4784b98210903c65efd60d4a09111",
+      edited_hash: null,
       safety_classification: "blocked",
-      review_status: "needs_review",
+      risk_level: "blocked",
+      review_status: "rejected",
+      reviewer: "local-operator",
+      decision: "rejected",
+      decision_reason: "blocked safety fixture cannot be imported",
+      import_status: "blocked",
+      import_target: null,
+      import_preview: null,
       suggested_order: 201,
       suggested_dependencies: ["super-200-controlled-goal-draft-review-import"],
       allowed_task_types: ["docs"],
@@ -3171,9 +3334,27 @@ export const fixtureProposedGoalReviewSummary: ProposedGoalReviewSummary = {
       review_notes: ["Safety fixture: blocked and review-only."],
       blocked_reasons: ["production_deploy", "secret_rotation", "github_settings", "branch_protection", "auto_import", "auto_execution", "self_approval"],
       generated_at: "2026-06-08T00:00:00.000Z",
+      reviewed_at: "2026-06-08T00:00:00.000Z",
       token_printed: false,
     },
   ],
+  review_controls: {
+    approve_preview: "reason-gated",
+    reject_preview: "reason-gated",
+    edit_staged: "hash-recompute",
+    import_preview: "dry-run",
+    import_apply: "disabled-until-approved-and-confirmed",
+    execute_imported_goal: "not_available",
+  },
+  import_preview_summary: {
+    target_path: "goals/reviewed/proposed-goal-201-local-readme-refresh.md",
+    manifest_diff: ["add reviewed import manifest entry", "token_printed=false"],
+    dependency_order_changes: ["order=201", "dependency super-200-controlled-goal-draft-review-import stays external/completed"],
+    hash_changes: ["original=a80296ad3f06", "edited=none", "target=a80296ad3f06"],
+    validation_blockers: ["unsafe_import_blocked for blocked fixture only"],
+    dry_run_first: true,
+    execution_review_required: true,
+  },
   no_import_button: true,
   no_execute_button: true,
   no_execution_controls: true,

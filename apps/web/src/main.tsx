@@ -566,11 +566,35 @@ function ProposedGoalReviewPanel({
         title="Drafts"
         items={review.proposed_goals.map(
           (goal) =>
-            `${goal.proposed_goal_id}: ${goal.safety_classification}; ${goal.review_status}; ${goal.proposed_markdown_path}; hash=${goal.content_hash.slice(0, 12)}; deps=${goal.suggested_dependencies.join(", ") || "none"}; blocked=${goal.blocked_reasons.join(", ") || "none"}`,
+            `${goal.proposed_goal_id}: ${goal.safety_classification}; ${goal.review_status}; ${goal.proposed_markdown_path}; hash=${goal.content_hash.slice(0, 12)}; reviewer=${goal.reviewer ?? "none"}; decision=${goal.decision ?? "pending"}; import=${goal.import_status ?? "not_imported"}; target=${goal.import_target ?? "none"}; deps=${goal.suggested_dependencies.join(", ") || "none"}; blocked=${goal.blocked_reasons.join(", ") || "none"}`,
         )}
         fallback="No proposed goals."
       />
-      <p className="skybridge-state-note">No import or execute controls are exposed on proposed-goal review.</p>
+      <QueueList
+        title="Controlled Review / Import"
+        items={[
+          `Approve preview=${review.review_controls.approve_preview}`,
+          `Reject preview=${review.review_controls.reject_preview}`,
+          `Edit staged=${review.review_controls.edit_staged}`,
+          `Import preview=${review.review_controls.import_preview}`,
+          `Import apply disabled=${review.review_controls.import_apply}`,
+          `reason-gated=${review.review_controls.approve_preview}`,
+          `execution review required=${review.import_preview_summary.execution_review_required}`,
+        ]}
+        fallback="No review controls."
+      />
+      <QueueList
+        title="manifest diff"
+        items={[
+          `target=${review.import_preview_summary.target_path}`,
+          ...review.import_preview_summary.manifest_diff,
+          ...review.import_preview_summary.dependency_order_changes,
+          ...review.import_preview_summary.hash_changes,
+          ...review.import_preview_summary.validation_blockers,
+        ]}
+        fallback="No manifest diff."
+      />
+      <p className="skybridge-state-note">No import or execute controls: no execute button, no start queue button and no imported-goal execution controls are exposed on proposed-goal review.</p>
       <span>token_printed=false</span>
     </section>
   );

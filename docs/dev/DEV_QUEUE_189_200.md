@@ -27,6 +27,8 @@ Goal 188A expanded every `super-*.md` file into full Super Goal style. Each file
 
 Goal 199 implementation adds a fixture-first `skybridge-goal-draft.ps1` helper and read-only proposed-goal review surfaces. Proposed drafts stay outside `campaign.skybridge.json`; the queue safe summary reports proposed counts and points the next action to Goal 200.
 
+Goal 200 implementation adds controlled proposed-goal review/import. Review decisions are local and auditable, approval/rejection require reasons, edits recompute hashes, import preview is dry-run-first, and import apply is approved-only with validation blockers enforced. Reviewed imports stage under `goals/reviewed/` by default instead of mutating the active dev-queue manifest. Imported goals require a separate future execution review and must not start `start-one`, `start-all`, `resume -Apply`, worker loops, task claims, campaign-step task creation or generated-goal execution.
+
 ## Dry-run Validation
 
 Use these checks before review or launch:
