@@ -164,6 +164,47 @@ h2 {
   background: #233544;
 }
 
+.attention-banner {
+  align-items: start;
+  background: #fff7e8;
+  border: 1px solid #e5b96d;
+  border-radius: 8px;
+  color: #2a2115;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.attention-banner h2 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.attention-banner p,
+.attention-banner small {
+  color: #5e4a2a;
+}
+
+.attention-feed .summary-lines li {
+  align-items: start;
+  display: grid;
+  gap: 4px;
+}
+
+.attention-feed .summary-lines strong {
+  color: #172033;
+}
+
+.attention-feed .summary-lines small {
+  color: #52627a;
+}
+
+.attention-routing span {
+  color: #52627a;
+  font-size: 12px;
+}
+
 .kpi-grid {
   display: grid;
   gap: 12px;

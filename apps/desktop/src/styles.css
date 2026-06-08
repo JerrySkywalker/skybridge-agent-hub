@@ -109,6 +109,19 @@ p {
   border-color: #c7d7df;
 }
 
+.attention-panel {
+  background: #fff7e8;
+  border-color: #e5b96d;
+}
+
+.attention-panel li {
+  margin: 7px 0;
+}
+
+.attention-panel strong {
+  color: #7b4a00;
+}
+
 .future-controls {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

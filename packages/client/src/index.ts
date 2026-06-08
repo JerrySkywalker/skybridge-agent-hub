@@ -1100,6 +1100,93 @@ export interface QueueControlActionResponse {
   token_printed: false;
 }
 
+export type AttentionLevel = "info" | "warning" | "blocker" | "action_required" | "critical";
+export type AttentionSource =
+  | "campaign"
+  | "worker"
+  | "queue_control"
+  | "pr"
+  | "ci"
+  | "notification"
+  | "desktop"
+  | "web";
+export type AttentionEventType =
+  | "worker_offline"
+  | "queue_blocked"
+  | "human_approval_required"
+  | "goal_ready"
+  | "goal_completed"
+  | "pr_created"
+  | "ci_failed"
+  | "stale_lease"
+  | "safe_action_applied"
+  | "emergency_stop_requested"
+  | "notification_delivery_skipped"
+  | "notification_delivery_fixture";
+
+export interface AttentionEvent {
+  schema: "skybridge.attention_event.v1";
+  attention_event: true;
+  attention_event_id: string;
+  attention_level: AttentionLevel;
+  source: AttentionSource;
+  campaign_id: string;
+  current_step_id: string;
+  goal_id: string;
+  event_type: AttentionEventType;
+  message: string;
+  recommended_action: string;
+  created_at: string;
+  acknowledged_at: string | null;
+  token_printed: false;
+}
+
+export type NotificationRouteKind =
+  | "desktop_only"
+  | "web_banner"
+  | "local_fixture_notification"
+  | "ntfy_placeholder"
+  | "disabled";
+
+export type NotificationRouteStatus =
+  | "enabled"
+  | "fixture_only"
+  | "not_configured"
+  | "disabled";
+
+export interface NotificationRoutingRule {
+  route: NotificationRouteKind;
+  status: NotificationRouteStatus;
+  levels: AttentionLevel[];
+  event_types: AttentionEventType[];
+  real_external_send: false;
+  fixture_ledger_dir?: string;
+  summary: string;
+  token_printed: false;
+}
+
+export interface NotificationRoutingDecision {
+  schema: "skybridge.notification_routing_decision.v1";
+  attention_event_id: string;
+  event_type: AttentionEventType;
+  routes: NotificationRoutingRule[];
+  external_notification_sent: false;
+  fixture_ledger_enabled: boolean;
+  token_printed: false;
+}
+
+export interface AttentionModel {
+  schema: "skybridge.attention_model.v1";
+  campaign_id: string;
+  current_step_id: string;
+  goal_id: string;
+  attention_events: AttentionEvent[];
+  routing_matrix: NotificationRoutingRule[];
+  top_blocker: AttentionEvent | null;
+  recommended_next_action: string;
+  token_printed: false;
+}
+
 export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
   {
     action: "refresh_status",
@@ -1195,9 +1282,9 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         reason_required: true,
         human_approval_required: true,
         requires_arm_lease: true,
-        blockers: ["execution_apply_deferred_after_goal_192"],
+        blockers: ["execution_apply_deferred_until_worker_service_mode"],
         warnings: [],
-        summary: "Armed execution is modeled but forbidden in Goal 192.",
+        summary: "Armed execution is modeled but forbidden until a later worker service goal.",
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
@@ -1285,6 +1372,9 @@ export interface CampaignSafeSummary {
   blockers: string[];
   warnings: string[];
   worker_status: string;
+  attention_count: number;
+  top_blocker: string | null;
+  recommended_next_action: string;
   token_printed: false;
 }
 
@@ -1304,6 +1394,8 @@ export function summarizeCampaignEvidence(
 
 export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSafeSummary {
   const readiness = report.queue_control_readiness;
+  const attention = deriveAttentionEvents(report);
+  const topBlocker = attention.find((event) => event.attention_level === "critical" || event.attention_level === "blocker") ?? null;
   return {
     schema: "skybridge.campaign_safe_summary.v1",
     campaign_id: report.campaign_id,
@@ -1323,18 +1415,268 @@ export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSa
     blockers: [...readiness.blockers],
     warnings: [...readiness.warnings],
     worker_status: readiness.worker_status,
+    attention_count: attention.length,
+    top_blocker: topBlocker?.message ?? null,
+    recommended_next_action: topBlocker?.recommended_action ?? readiness.next_safe_action,
+    token_printed: false,
+  };
+}
+
+const attentionCreatedAt = "2026-06-08T00:00:00.000Z";
+
+function attentionId(report: CampaignRunReport, eventType: AttentionEventType, suffix = "current") {
+  return `attention_${report.campaign_id}_${report.current_goal_id}_${eventType}_${suffix}`.replace(/[^A-Za-z0-9_:-]/g, "_");
+}
+
+function makeAttentionEvent(
+  report: CampaignRunReport,
+  event_type: AttentionEventType,
+  attention_level: AttentionLevel,
+  source: AttentionSource,
+  message: string,
+  recommended_action: string,
+  suffix?: string,
+): AttentionEvent {
+  return {
+    schema: "skybridge.attention_event.v1",
+    attention_event: true,
+    attention_event_id: attentionId(report, event_type, suffix),
+    attention_level,
+    source,
+    campaign_id: report.campaign_id,
+    current_step_id: report.current_step_id,
+    goal_id: report.current_goal_id,
+    event_type,
+    message,
+    recommended_action,
+    created_at: attentionCreatedAt,
+    acknowledged_at: null,
+    token_printed: false,
+  };
+}
+
+export const notificationRoutingMatrix: NotificationRoutingRule[] = [
+  {
+    route: "desktop_only",
+    status: "enabled",
+    levels: ["info", "warning", "blocker", "action_required", "critical"],
+    event_types: [
+      "worker_offline",
+      "queue_blocked",
+      "human_approval_required",
+      "goal_ready",
+      "goal_completed",
+      "pr_created",
+      "ci_failed",
+      "stale_lease",
+      "safe_action_applied",
+      "emergency_stop_requested",
+      "notification_delivery_skipped",
+      "notification_delivery_fixture",
+    ],
+    real_external_send: false,
+    summary: "Render in SkyBridge Desktop only.",
+    token_printed: false,
+  },
+  {
+    route: "web_banner",
+    status: "enabled",
+    levels: ["warning", "blocker", "action_required", "critical"],
+    event_types: ["worker_offline", "queue_blocked", "human_approval_required", "ci_failed", "stale_lease", "emergency_stop_requested"],
+    real_external_send: false,
+    summary: "Render in the Web attention banner/feed.",
+    token_printed: false,
+  },
+  {
+    route: "local_fixture_notification",
+    status: "fixture_only",
+    levels: ["blocker", "action_required", "critical"],
+    event_types: ["worker_offline", "queue_blocked", "human_approval_required", "ci_failed", "stale_lease", "emergency_stop_requested"],
+    real_external_send: false,
+    fixture_ledger_dir: ".agent/tmp/notifications",
+    summary: "Write a local ignored fixture ledger entry when fixture dispatch is explicitly requested.",
+    token_printed: false,
+  },
+  {
+    route: "ntfy_placeholder",
+    status: "not_configured",
+    levels: ["critical"],
+    event_types: ["ci_failed", "emergency_stop_requested"],
+    real_external_send: false,
+    summary: "Real ntfy delivery is disabled by default and represented as not configured.",
+    token_printed: false,
+  },
+  {
+    route: "disabled",
+    status: "disabled",
+    levels: ["info"],
+    event_types: ["goal_ready", "goal_completed", "pr_created", "safe_action_applied", "notification_delivery_skipped", "notification_delivery_fixture"],
+    real_external_send: false,
+    summary: "Low-noise events are not sent externally by default.",
+    token_printed: false,
+  },
+];
+
+export function routeAttentionEvent(event: AttentionEvent): NotificationRoutingDecision {
+  const routes = notificationRoutingMatrix.filter(
+    (rule) => rule.levels.includes(event.attention_level) && rule.event_types.includes(event.event_type),
+  );
+  return {
+    schema: "skybridge.notification_routing_decision.v1",
+    attention_event_id: event.attention_event_id,
+    event_type: event.event_type,
+    routes,
+    external_notification_sent: false,
+    fixture_ledger_enabled: routes.some((route) => route.route === "local_fixture_notification" && route.status === "fixture_only"),
+    token_printed: false,
+  };
+}
+
+export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: QueueControlAuditEvent[] = []): AttentionEvent[] {
+  const events: AttentionEvent[] = [];
+  const readiness = report.queue_control_readiness;
+
+  if (["offline", "stale", "missing", "unknown"].includes(readiness.worker_status)) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "worker_offline",
+        readiness.worker_status === "offline" ? "action_required" : "blocker",
+        "worker",
+        `Worker is ${readiness.worker_status}; queue execution remains disabled.`,
+        readiness.next_safe_action,
+      ),
+    );
+  }
+
+  if (readiness.blockers.length > 0 || report.blockers.length > 0) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "queue_blocked",
+        "blocker",
+        "queue_control",
+        `Queue blocked by ${[...readiness.blockers, ...report.blockers].join(", ")}.`,
+        readiness.next_safe_action,
+      ),
+    );
+  }
+
+  for (const action of readiness.required_human_action) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "human_approval_required",
+        "action_required",
+        "campaign",
+        `Human action required: ${action}.`,
+        readiness.next_safe_action,
+        action,
+      ),
+    );
+  }
+
+  if (report.current_goal_status === "ready" && report.current_goal_unexecuted) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "goal_ready",
+        "info",
+        "campaign",
+        `${report.current_goal_id} is ready but execution is not enabled.`,
+        "Review attention blockers and keep queue execution disabled until the next authorized goal.",
+      ),
+    );
+  }
+
+  if (report.previous_step_summary?.status === "completed") {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "goal_completed",
+        "info",
+        "campaign",
+        `${report.previous_step_summary.goal_id} is completed.`,
+        "Review PR/CI evidence before advancing execution policy.",
+        report.previous_step_summary.goal_id,
+      ),
+    );
+  }
+
+  for (const entry of report.evidence_ledger.all ?? []) {
+    if (entry.kind === "pr" && (entry.status === "present" || entry.classification === "present_evidence")) {
+      events.push(
+        makeAttentionEvent(report, "pr_created", "info", "pr", `PR evidence present for ${entry.goal_id}.`, "Review PR evidence and CI status.", entry.evidence_id),
+      );
+    }
+    if (entry.kind === "ci" && (entry.status === "failed" || entry.classification === "missing_evidence")) {
+      events.push(
+        makeAttentionEvent(report, "ci_failed", "critical", "ci", `CI attention required for ${entry.goal_id}.`, "Inspect safe CI evidence before queue execution.", entry.evidence_id),
+      );
+    }
+  }
+
+  if (readiness.blockers.includes("stale_lease") || report.blockers.includes("stale_lease")) {
+    events.push(
+      makeAttentionEvent(report, "stale_lease", "blocker", "worker", "A stale lease blocks queue readiness.", "Inspect lease evidence and use the existing stale-lease recovery runbook.", "lease"),
+    );
+  }
+
+  for (const audit of auditEvents) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        audit.action === "emergency_stop" ? "emergency_stop_requested" : "safe_action_applied",
+        audit.action === "emergency_stop" ? "critical" : "warning",
+        "queue_control",
+        `Queue-control audit recorded ${audit.action}.`,
+        "Review the safe audit event before taking further action.",
+        audit.audit_event_id,
+      ),
+    );
+  }
+
+  const notificationSkipped = events.some((event) => routeAttentionEvent(event).routes.some((route) => route.route === "ntfy_placeholder"));
+  if (notificationSkipped) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "notification_delivery_skipped",
+        "warning",
+        "notification",
+        "External notification delivery skipped because ntfy is not configured.",
+        "Use Desktop/Web attention surfaces or explicit fixture dispatch for local validation.",
+      ),
+    );
+  }
+
+  return events;
+}
+
+export function createAttentionModel(report: CampaignRunReport, auditEvents: QueueControlAuditEvent[] = []): AttentionModel {
+  const attentionEvents = deriveAttentionEvents(report, auditEvents);
+  const topBlocker = attentionEvents.find((event) => event.attention_level === "critical" || event.attention_level === "blocker") ?? null;
+  return {
+    schema: "skybridge.attention_model.v1",
+    campaign_id: report.campaign_id,
+    current_step_id: report.current_step_id,
+    goal_id: report.current_goal_id,
+    attention_events: attentionEvents,
+    routing_matrix: notificationRoutingMatrix,
+    top_blocker: topBlocker,
+    recommended_next_action: topBlocker?.recommended_action ?? report.queue_control_readiness.next_safe_action,
     token_printed: false,
   };
 }
 
 export const fixtureCampaignRunReport: CampaignRunReport = {
   schema: "skybridge.campaign_run_report.v1",
-  generated_at: "2026-06-05T00:00:00.000Z",
+  generated_at: "2026-06-08T00:00:00.000Z",
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-  current_goal_id: "super-192-dashboard-safe-actions",
+  current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+  current_goal_id: "super-193-notification-attention-loop",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -1342,18 +1684,18 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+    current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
     step_count: 12,
     source: "fixture",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-    goal_id: "super-192-dashboard-safe-actions",
-    order: 4,
-    title: "Dashboard Safe Actions",
+    campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+    goal_id: "super-193-notification-attention-loop",
+    order: 5,
+    title: "Notification and Attention Loop",
     status: "ready",
     is_current: true,
-    dependencies: ["super-191-readonly-operator-dashboard"],
+    dependencies: ["super-192-dashboard-safe-actions"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -1366,15 +1708,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
-    goal_id: "super-191-readonly-operator-dashboard",
-    order: 3,
-    title: "Read-only Operator Dashboard",
+    campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+    goal_id: "super-192-dashboard-safe-actions",
+    order: 4,
+    title: "Dashboard Safe Actions",
     status: "completed",
     is_current: false,
-    dependencies: ["super-190-campaign-run-report-evidence-ledger"],
+    dependencies: ["super-191-readonly-operator-dashboard"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/107"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/108"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -1388,10 +1730,10 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   evidence_ledger: {
     all: [
       {
-        kind: "step",
-        campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
-        goal_id: "super-191-readonly-operator-dashboard",
-        evidence_id: "goal-191-pr",
+        kind: "pr",
+        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+        goal_id: "super-192-dashboard-safe-actions",
+        evidence_id: "goal-192-pr",
         status: "present",
         classification: "present_evidence",
         recovered: false,
@@ -1399,7 +1741,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 191 dashboard PR evidence is present.",
+        summary: "Goal 192 safe-actions PR evidence is present.",
       },
       {
         kind: "step",
@@ -1417,8 +1759,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
       },
       {
         kind: "pr",
-        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-        goal_id: "super-192-dashboard-safe-actions",
+        campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+        goal_id: "super-193-notification-attention-loop",
         evidence_id: "none",
         status: "missing",
         classification: "missing_evidence",
@@ -1427,12 +1769,12 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 192 PR evidence is missing until this safe-actions PR exists.",
+        summary: "Goal 193 PR evidence is missing until this attention-loop PR exists.",
       },
       {
         kind: "gate",
-        campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-        goal_id: "super-193-notification-attention-loop",
+        campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+        goal_id: "super-194-worker-service-mode",
         evidence_id: "none",
         status: "not_applicable",
         classification: "not_applicable_evidence",
@@ -1441,7 +1783,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: true,
         operator_action_required: false,
-        summary: "Future Goal 193 evidence is not applicable.",
+        summary: "Future Goal 194 evidence is not applicable.",
       },
     ],
   },
@@ -1470,19 +1812,19 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-  current_goal_id: "super-192-dashboard-safe-actions",
+  current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+  current_goal_id: "super-193-notification-attention-loop",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-192-worker-offline-active0-stale0",
-  revision: "fixture-goal-192-revision",
+  state_hash: "fixture-goal-193-worker-offline-active0-stale0",
+  revision: "fixture-goal-193-revision",
   action_matrix: queueControlActionMatrix,
   blockers: ["worker_offline"],
-  warnings: ["start_apply_deferred_after_goal_192"],
+  warnings: ["start_apply_deferred_until_worker_service_mode"],
   token_printed: false,
 };
 
@@ -1506,10 +1848,47 @@ fixtureCampaignRunReport.step_ledger = [
     not_applicable_evidence: false,
     operator_action_required: false,
   },
+  {
+    campaign_step_id: "dev-queue-189-200:super-190-campaign-run-report-evidence-ledger",
+    goal_id: "super-190-campaign-run-report-evidence-ledger",
+    order: 2,
+    title: "Campaign Run Report and Evidence Ledger",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-189-ci-guardian-pr-finalizer-hardening"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/106"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
+  {
+    campaign_step_id: "dev-queue-189-200:super-191-readonly-operator-dashboard",
+    goal_id: "super-191-readonly-operator-dashboard",
+    order: 3,
+    title: "Read-only Operator Dashboard",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-190-campaign-run-report-evidence-ledger"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/107"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-193-notification-attention-loop", "Notification and Attention Loop"],
     ["super-194-worker-service-mode", "Worker Service Mode"],
     ["super-195-manual-goal-queue-management", "Manual Goal Queue Management"],
     ["super-196-campaign-locking-multi-campaign-queue", "Campaign Locking and Multi-campaign Queue"],
@@ -1520,7 +1899,7 @@ fixtureCampaignRunReport.step_ledger = [
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 4,
+    order: index + 6,
     title,
     status: "pending",
     is_current: false,

@@ -2874,9 +2874,9 @@ function queueControlActionMatrix(): QueueControlMatrixEntry[] {
     reason_required: true,
     human_approval_required: true,
     requires_arm_lease: true,
-    blockers: ["execution_apply_deferred_after_goal_192"],
+    blockers: ["execution_apply_deferred_until_worker_service_mode"],
     warnings: [],
-    summary: "Armed execution is modeled but forbidden in Goal 192.",
+    summary: "Armed execution is modeled but forbidden until a later worker service goal.",
     token_printed: false as const,
   }));
   const forbidden = ["start_all", "arbitrary_shell"].map((action) => ({

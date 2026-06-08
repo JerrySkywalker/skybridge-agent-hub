@@ -17,10 +17,13 @@ import {
   type AuditEntry,
   type CampaignRunReport,
   createCampaignSafeSummary,
+  createAttentionModel,
   fixtureCampaignRunReport,
   fixtureQueueControlState,
   queueControlActionMatrix,
+  routeAttentionEvent,
   summarizeCampaignEvidence,
+  type AttentionEvent,
   type HermesSummary,
   type IterationsSummary,
   type NotificationsSummary,
@@ -277,6 +280,7 @@ function CampaignQueuePage() {
   const readiness = report.queue_control_readiness;
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const safeSummary = createCampaignSafeSummary(report);
+  const attention = createAttentionModel(report);
 
   return (
     <div className="route-stack campaign-queue" data-readonly-dashboard="true">
@@ -290,11 +294,14 @@ function CampaignQueuePage() {
         </span>
       </section>
 
+      <AttentionBanner events={attention.attention_events} />
+
       <section className="kpi-grid">
         <Kpi label="Campaign" value={report.campaign_id} />
         <Kpi label="Status" value={report.campaign_status} />
         <Kpi label="Current goal" value={report.current_goal_id} />
         <Kpi label="Remaining steps" value={remainingSteps.length} />
+        <Kpi label="Attention" value={attention.attention_events.length} />
       </section>
 
       <section className="dashboard-grid">
@@ -312,8 +319,10 @@ function CampaignQueuePage() {
           <CampaignStepLedger steps={report.step_ledger} />
         </div>
         <aside className="dashboard-grid__side">
+          <AttentionFeed events={attention.attention_events} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
+          <NotificationRoutingPanel events={attention.attention_events} />
           <SummaryCard
             title="Evidence ledger"
             state={`${evidence.total} entries`}
@@ -332,12 +341,78 @@ function CampaignQueuePage() {
               `Campaign: ${safeSummary.campaign_id}`,
               `Current: ${safeSummary.current_goal_id}`,
               `Worker: ${safeSummary.worker_status}`,
+              `Attention: ${safeSummary.attention_count}`,
+              `Top blocker: ${safeSummary.top_blocker ?? "none"}`,
               `token_printed=${String(safeSummary.token_printed)}`,
             ]}
           />
         </aside>
       </section>
     </div>
+  );
+}
+
+function AttentionBanner({ events }: { events: AttentionEvent[] }) {
+  const top = events.find((event) => event.attention_level === "critical" || event.attention_level === "blocker" || event.attention_level === "action_required") ?? events[0];
+  if (!top) return null;
+  return (
+    <section className="attention-banner" aria-label="Attention required">
+      <div>
+        <p className="skybridge-kicker">Attention Loop</p>
+        <h2>{top.event_type}</h2>
+        <p>{top.message}</p>
+        <small>{top.recommended_action}</small>
+      </div>
+      <span className={badgeClass(top.attention_level === "info" ? "ok" : "bad")}>
+        {top.attention_level}
+      </span>
+    </section>
+  );
+}
+
+function AttentionFeed({ events }: { events: AttentionEvent[] }) {
+  return (
+    <section className="skybridge-panel attention-feed" aria-label="Attention feed">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Attention</p>
+          <h2>Action Items</h2>
+        </div>
+        <span className={badgeClass(events.length ? "bad" : "ok")}>{events.length} items</span>
+      </div>
+      <ul className="summary-lines">
+        {events.slice(0, 6).map((event) => (
+          <li key={event.attention_event_id}>
+            <strong>{event.event_type}</strong>
+            <span>{event.message}</span>
+            <small>{event.recommended_action}</small>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function NotificationRoutingPanel({ events }: { events: AttentionEvent[] }) {
+  const top = events[0];
+  const decision = top ? routeAttentionEvent(top) : null;
+  return (
+    <section className="skybridge-panel attention-routing" aria-label="Notification routing status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Notification Routing</p>
+          <h2>Fixture Matrix</h2>
+        </div>
+        <span className="skybridge-state">no external send</span>
+      </div>
+      <QueueList
+        title="Routes"
+        items={(decision?.routes ?? []).map((route) => `${route.route}: ${route.status}`)}
+        fallback="No route selected."
+      />
+      <p className="skybridge-state-note">ntfy placeholder is disabled/not configured by default; local fixture ledger is explicit only.</p>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 
@@ -525,7 +600,7 @@ function QueueSafeActionsPanel({
       <span>token_printed=false</span>
       <span>start_one_preview start_queue_preview resume_preview</span>
       <span>Audit result appears after safe action apply.</span>
-      <span>Start actions disabled because worker is {readiness.worker_status} and Goal 192 defers execution apply.</span>
+      <span>Start actions disabled because worker is {readiness.worker_status} and execution apply is deferred until worker service mode.</span>
       <QueueList
         title="Forbidden"
         items={forbiddenActions.map((entry) => `${entry.action}: ${entry.blockers.join(",")}`)}
