@@ -92,7 +92,7 @@ switch ($Scenario) {
 [pscustomobject]@{
   ok = $true
   scenario = "queue-control-$Scenario"
-  current_step = "dev-queue-189-200:super-198-multi-project-support"
+  current_step = "dev-queue-189-200:super-199-hermes-goal-draft-generator"
   active_tasks = 0
   stale_leases = 0
   worker_status = "offline"

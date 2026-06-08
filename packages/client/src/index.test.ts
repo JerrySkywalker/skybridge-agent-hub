@@ -9,6 +9,7 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureProjectSelectionPreview,
   fixtureQueueControlState,
@@ -80,7 +81,7 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-198-multi-project-support",
+      current_goal_id: "super-199-hermes-goal-draft-generator",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
@@ -172,7 +173,43 @@ describe("SkyBridgeClient", () => {
       can_start_one: false,
       can_start_queue: false,
       can_resume: false,
-      execution_disabled_until_goal: "super-199-hermes-goal-draft-generator",
+      execution_disabled_until_goal: "super-200-controlled-goal-draft-review-import",
+    });
+  });
+
+  it("models Goal 199 proposed goal review without import or execution controls", () => {
+    expect(fixtureProposedGoalReviewSummary).toMatchObject({
+      schema: "skybridge.proposed_goal_review_summary.v1",
+      proposed_goal_count: 2,
+      pending_review_count: 1,
+      blocked_draft_count: 1,
+      next_action: "review proposed goals in Goal 200",
+      import_requires_goal_200: true,
+      imported: false,
+      executed: false,
+      task_created: false,
+      worker_loop_started: false,
+      no_import_button: true,
+      no_execute_button: true,
+      no_execution_controls: true,
+      token_printed: false,
+    });
+    expect(fixtureProposedGoalReviewSummary.proposed_goals[0]).toMatchObject({
+      proposed_goal_id: "proposed-goal-201-local-readme-refresh",
+      source: "fixture",
+      safety_classification: "low",
+      review_status: "proposed",
+      token_printed: false,
+    });
+    expect(fixtureProposedGoalReviewSummary.proposed_goals[1]).toMatchObject({
+      safety_classification: "blocked",
+      review_status: "needs_review",
+    });
+    expect(fixtureCampaignRunReport.queue_control_readiness.proposed_goal_summary).toMatchObject({
+      proposed_goal_count: 2,
+      import_requires_goal_200: true,
+      imported: false,
+      executed: false,
     });
   });
 
@@ -262,13 +299,22 @@ describe("SkyBridgeClient", () => {
         expect.objectContaining({
           event_type: "project_selection_preview_only",
         }),
+        expect.objectContaining({
+          event_type: "proposed_goal_needs_review",
+        }),
+        expect.objectContaining({
+          event_type: "unsafe_goal_draft_detected",
+        }),
+        expect.objectContaining({
+          event_type: "import_requires_goal_200",
+        }),
       ]),
     );
 
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-198-multi-project-support",
+      goal_id: "super-199-hermes-goal-draft-generator",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(

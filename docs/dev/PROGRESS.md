@@ -1,5 +1,11 @@
 # Progress Log
 
+## 2026-06-08 Goal 199 Hermes Goal Draft Generator
+
+- Added a fixture-first proposed-goal draft generator with required safety sections, stable content hashes and `token_printed=false`.
+- Added proposed goal review metadata and read-only Desktop/Web review panels.
+- Added no-import/no-execution smokes and attention events that route operators to Goal 200 for controlled review/import.
+
 ## 2026-06-08 Goal 198 Multi-project Support
 
 - Added safe `skybridge.project_profile.v1` sample profiles for SkyBridge and a repository-local fixture project.

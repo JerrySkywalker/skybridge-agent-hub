@@ -25,6 +25,8 @@ Imported cloud state after Goal 188 development: campaign metadata exists, statu
 
 Goal 188A expanded every `super-*.md` file into full Super Goal style. Each file now includes context, mission, global safety boundaries, preflight, implementation phases, validation, final status, PR package, success criteria, stop/hold conditions and evidence requirements. Goal 199 remains candidate generation only: generated markdown goes to `goals/proposed` and must not be auto-imported or auto-executed. Goal 200 remains controlled review/import only: generated goals require review before import and later review before execution.
 
+Goal 199 implementation adds a fixture-first `skybridge-goal-draft.ps1` helper and read-only proposed-goal review surfaces. Proposed drafts stay outside `campaign.skybridge.json`; the queue safe summary reports proposed counts and points the next action to Goal 200.
+
 ## Dry-run Validation
 
 Use these checks before review or launch:

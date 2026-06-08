@@ -1558,6 +1558,26 @@ function New-QueueControlReadiness {
   if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -eq 0) { $blockers += "no_ready_worker" }
   if ($routingReadiness -and $routingReadiness.route_preview -and [bool]$routingReadiness.route_preview.repo_parallelism_guard.blocked) { $blockers += "repo_parallelism_blocked" }
   if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -gt 0) { $Warnings += "worker_ready_for_preview_only_execution_gate_disabled" }
+  $proposedGoalSummary = $null
+  try {
+    $proposedGoalSummary = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-goal-draft.ps1") -Command goal-draft-safe-summary -Json | ConvertFrom-Json
+  } catch {
+    $proposedGoalSummary = [pscustomobject]@{
+      schema = "skybridge.proposed_goal_safe_summary.v1"
+      proposed_goal_count = 0
+      pending_review_count = 0
+      blocked_draft_count = 0
+      next_action = "review proposed goals in Goal 200"
+      import_requires_goal_200 = $true
+      imported = $false
+      executed = $false
+      task_created = $false
+      worker_loop_started = $false
+      token_printed = $false
+    }
+  }
+  if ($proposedGoalSummary -and [int]$proposedGoalSummary.pending_review_count -gt 0) { $Warnings += "proposed_goals_need_review" }
+  if ($proposedGoalSummary -and [int]$proposedGoalSummary.blocked_draft_count -gt 0) { $blockers += "blocked_proposed_goal_draft" }
   $blockers += "active_repo_lock_blocks_execution_preview"
   if ($workerStatus -in @("online", "ready")) { $Warnings += "standby_worker_can_only_heartbeat" }
   if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
@@ -1573,7 +1593,7 @@ function New-QueueControlReadiness {
     blockers = @($blockers | Select-Object -Unique)
     warnings = @($Warnings | Where-Object { $_ } | Select-Object -Unique)
     required_human_action = @(@($requiredHuman) + @("review_campaign_and_repo_locks_before_any_start_preview") | Select-Object -Unique)
-    next_safe_action = if (-not $workerReady) { "Review campaign/repo locks and refresh bounded standby heartbeat; keep Start One and Start Queue disabled." } else { "Review repo-exclusive lock state; execution remains disabled until a later reviewed gate." }
+    next_safe_action = if ($proposedGoalSummary -and [int]$proposedGoalSummary.proposed_goal_count -gt 0) { "Review proposed goals in Goal 200; keep import and execution disabled." } elseif (-not $workerReady) { "Review campaign/repo locks and refresh bounded standby heartbeat; keep Start One and Start Queue disabled." } else { "Review repo-exclusive lock state; execution remains disabled until a later reviewed gate." }
     worker_required = $workerRequired
     worker_status = $workerStatus
     run_budget_required = $true
@@ -1615,6 +1635,7 @@ function New-QueueControlReadiness {
       token_printed = $false
     }
     routing_readiness = $routingReadiness
+    proposed_goal_summary = $proposedGoalSummary
   }
 }
 
@@ -1732,6 +1753,15 @@ function ConvertTo-CampaignReportMarkdown {
   $lines.Add("- can_emergency_stop: $($Report.queue_control_readiness.can_emergency_stop)") | Out-Null
   $lines.Add("- can_resume: $($Report.queue_control_readiness.can_resume)") | Out-Null
   $lines.Add("- next_safe_action: $($Report.queue_control_readiness.next_safe_action)") | Out-Null
+  $proposed = $Report.queue_control_readiness.proposed_goal_summary
+  if ($proposed) {
+    $lines.Add("- proposed_goal_count: $($proposed.proposed_goal_count)") | Out-Null
+    $lines.Add("- pending_proposed_goal_review_count: $($proposed.pending_review_count)") | Out-Null
+    $lines.Add("- blocked_proposed_goal_count: $($proposed.blocked_draft_count)") | Out-Null
+    $lines.Add("- proposed_goal_next_action: $($proposed.next_action)") | Out-Null
+    $lines.Add("- proposed_goal_imported: $($proposed.imported)") | Out-Null
+    $lines.Add("- proposed_goal_executed: $($proposed.executed)") | Out-Null
+  }
   $lines.Add("") | Out-Null
   $routing = $Report.queue_control_readiness.routing_readiness
   $lines.Add("## Multi-worker Routing Readiness") | Out-Null

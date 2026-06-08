@@ -11,6 +11,7 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
@@ -21,6 +22,7 @@ import {
   summarizeCampaignEvidence,
   type AttentionEvent,
   type WorkerServiceState,
+  type ProposedGoalReviewSummary,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
 
@@ -326,6 +328,7 @@ function App() {
       <CampaignPriorityQueuePanel />
       <ProjectProfileReviewPanel />
       <GoalQueueReviewPanel />
+      <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
       <WorkerRoutingPanel report={report} />
 
@@ -524,6 +527,37 @@ function GoalQueueReviewPanel() {
         <StatusValue label="Queue execution enabled" value={String(review.queue_execution_enabled)} />
         <StatusValue label="token_printed" value="false" />
       </dl>
+    </section>
+  );
+}
+
+function ProposedGoalReviewPanel({ review }: { review: ProposedGoalReviewSummary }) {
+  return (
+    <section className="panel proposed-goal-review" aria-label="Proposed goal review">
+      <h2>Proposed Goal Review</h2>
+      <dl>
+        <StatusValue label="Proposed goals" value={review.proposed_goal_count} />
+        <StatusValue label="Pending review" value={review.pending_review_count} />
+        <StatusValue label="Blocked drafts" value={review.blocked_draft_count} />
+        <StatusValue label="Next action" value={review.next_action} />
+        <StatusValue label="Import requires Goal 200" value={String(review.import_requires_goal_200)} />
+        <StatusValue label="Imported" value={String(review.imported)} />
+        <StatusValue label="Executed" value={String(review.executed)} />
+        <StatusValue label="Task created" value={String(review.task_created)} />
+        <StatusValue label="Worker loop started" value={String(review.worker_loop_started)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <ul>
+        {review.proposed_goals.map((goal) => (
+          <li key={goal.proposed_goal_id}>
+            <strong>{goal.title}</strong> {goal.safety_classification} {goal.review_status} {goal.proposed_markdown_path} {goal.content_hash.slice(0, 12)} deps={goal.suggested_dependencies.join(", ") || "none"} notes={goal.review_notes.join("; ")}
+          </li>
+        ))}
+      </ul>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Import disabled</button>
+        <button type="button" disabled aria-disabled="true">Execute disabled</button>
+      </div>
     </section>
   );
 }
