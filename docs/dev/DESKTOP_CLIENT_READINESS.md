@@ -2,6 +2,24 @@
 
 SkyBridge Desktop is a standby operator tool. It is not an execution surface.
 
+## Goal 194 Worker Service Panel
+
+Goal 194 adds a Worker Service Panel backed by `skybridge.worker_service_state.v1`.
+
+Desktop shows:
+
+- worker service status;
+- heartbeat age;
+- current task id;
+- capability matrix;
+- readiness blockers;
+- recommended next action;
+- disabled local standby, heartbeat, claim and execute controls.
+
+The bounded local service wrapper is available through CLI smokes and writes only under ignored `.agent/tmp/worker-service/`. It does not claim tasks, execute tasks, start Codex, create PRs or expose arbitrary shell execution.
+
+Desktop may display local standby controls, but Goal 194 keeps apply execution disabled and routes real Start One enablement to Goal 195. `can_claim_tasks=false`, `can_execute_tasks=false` and `token_printed=false` must remain visible.
+
 ## Goal 193 Attention Panel
 
 Goal 193 adds an Attention Panel backed by the shared `skybridge.attention_event.v1` model. Desktop shows current action-required items, worker offline state, queue readiness blocker, recommended next action and safe notification status.
@@ -80,6 +98,7 @@ The desktop app may:
 - call `skybridge-worker-status.ps1 -Command status -Json`;
 - call `skybridge-worker-status.ps1 -Command register-heartbeat -Json` from Heartbeat Now;
 - render the shared Goal 192 Safe Actions / Queue Controls contract;
+- render the shared Goal 194 Worker Service Panel;
 - call queue-control preview commands that do not mutate campaign state;
 - write `.agent/desktop-client/status.json`;
 - append concise local logs under `.agent/desktop-client/logs/`.
@@ -93,6 +112,8 @@ The desktop app must not:
 - claim tasks;
 - start `skybridge-edge-worker.ps1`;
 - start any worker loop;
+- claim tasks from worker service mode;
+- execute tasks from worker service mode;
 - create campaign-step-derived tasks;
 - create PRs;
 - execute Goal 190;

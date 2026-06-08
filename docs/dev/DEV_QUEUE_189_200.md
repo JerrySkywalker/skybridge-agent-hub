@@ -368,3 +368,21 @@ Notification routing is fixture-safe:
 Queue-control fixture audit output now writes under ignored `.agent/tmp/queue-control-audit/`. Goal 193 does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or Goal 194.
 
 See [NOTIFICATION_ATTENTION_LOOP.md](NOTIFICATION_ATTENTION_LOOP.md).
+
+## Goal 194 Worker Service Mode
+
+Goal 194 adds bounded worker service mode and Desktop-controlled readiness. It does not claim tasks or enable queue execution.
+
+The expected current state remains non-executing: current step `dev-queue-189-200:super-194-worker-service-mode`, current goal `super-194-worker-service-mode`, active tasks `0`, stale leases `0`, no task claim, no campaign-step task creation, `can_start_one=false`, `can_start_queue=false` and `token_printed=false`.
+
+Worker service readiness is heartbeat-only:
+
+- local standby metadata writes under ignored `.agent/tmp/worker-service/`;
+- `can_claim_tasks=false`;
+- `can_execute_tasks=false`;
+- Codex worker execution and PR creation remain disabled;
+- queue-control readiness includes `execution_disabled_until_goal_195`.
+
+Desktop shows a Worker Service Panel. Web shows a Worker Readiness Panel. Web has no direct local process control. Desktop local controls remain bounded status/heartbeat/stop surfaces and do not expose task claim, task execution or arbitrary shell.
+
+See [WORKER_SERVICE_MODE.md](WORKER_SERVICE_MODE.md).
