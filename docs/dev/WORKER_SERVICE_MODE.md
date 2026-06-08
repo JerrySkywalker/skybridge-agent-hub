@@ -59,7 +59,7 @@ Both surfaces keep Start One, Start Queue, task claim and execution disabled.
 
 ## Goal 195 Preparation
 
-This goal establishes the standby/readiness vocabulary used by Goal 195. Goal 195 adds manual queue review and hash/update/archive previews, not a Start One apply gate. A later reviewed goal must still add explicit approval, arm leases, audit and conflict handling before any real task claim or execution is allowed.
+This goal establishes the standby/readiness vocabulary used by Goal 195 and Goal 196. Goal 195 adds manual queue review and hash/update/archive previews. Goal 196 adds campaign/repo lock review and multi-campaign selection. Neither goal adds a Start One apply gate. A later reviewed goal must still add explicit approval, arm leases, audit, lock ownership and worker readiness before any real task claim or execution is allowed.
 
 ## Validation
 

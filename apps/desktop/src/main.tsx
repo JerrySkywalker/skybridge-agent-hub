@@ -8,8 +8,12 @@ import {
   createAttentionModel,
   createWorkerServiceReadiness,
   fixtureCampaignRunReport,
+  fixtureCampaignLock,
+  fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
   fixtureQueueControlState,
+  fixtureRepoExclusiveLock,
+  fixtureStaleCampaignLock,
   fixtureWorkerServiceState,
   queueControlActionMatrix,
   routeAttentionEvent,
@@ -317,6 +321,8 @@ function App() {
       </section>
 
       <AttentionPanel events={attention.attention_events} />
+      <CampaignLockPanel />
+      <CampaignPriorityQueuePanel />
       <GoalQueueReviewPanel />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
 
@@ -482,6 +488,63 @@ function GoalQueueReviewPanel() {
   );
 }
 
+function CampaignLockPanel() {
+  return (
+    <section className="panel campaign-lock-review" aria-label="Campaign and repo lock review">
+      <h2>Campaign Lock Review</h2>
+      <dl>
+        <StatusValue label="campaign_lock" value={fixtureCampaignLock.lock_status} />
+        <StatusValue label="repo_exclusive_lock" value={fixtureRepoExclusiveLock.lock_status} />
+        <StatusValue label="Lock owner" value={fixtureRepoExclusiveLock.lock_owner.display_name} />
+        <StatusValue label="Heartbeat age" value={`${fixtureRepoExclusiveLock.age_seconds}s`} />
+        <StatusValue label="Expires at" value={fixtureRepoExclusiveLock.expires_at} />
+        <StatusValue label="Blocks execution preview" value={String(fixtureRepoExclusiveLock.blocks_execution_preview)} />
+        <StatusValue label="Stale recovery preview" value={`${fixtureStaleCampaignLock.lock_status}; reason required=true`} />
+        <StatusValue label="Active unlock refused" value={String(!fixtureRepoExclusiveLock.force_release_allowed)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">
+          Unlock stale preview
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Unlock apply requires reason
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Force unlock active refused
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Start controls disabled
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CampaignPriorityQueuePanel() {
+  return (
+    <section className="panel campaign-priority-queue" aria-label="Campaign priority queue">
+      <h2>Campaign Priority Queue</h2>
+      <dl>
+        <StatusValue label="One active campaign per project" value={String(fixtureCampaignPriorityQueue.one_active_campaign_per_project)} />
+        <StatusValue label="Deterministic order" value={String(fixtureCampaignPriorityQueue.deterministic_order)} />
+        <StatusValue label="Selected campaign" value={fixtureCampaignPriorityQueue.selection.selected_campaign_id ?? "none"} />
+        <StatusValue label="Blocked reason" value={fixtureCampaignPriorityQueue.selection.blocked_campaign_reason ?? "none"} />
+        <StatusValue label="Queue decision summary" value={fixtureCampaignPriorityQueue.selection.queue_decision_summary} />
+        <StatusValue label="Execution side effects" value={String(fixtureCampaignPriorityQueue.selection.execution_side_effects)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <ul>
+        {fixtureCampaignPriorityQueue.items.map((item) => (
+          <li key={item.campaign_id}>
+            {item.priority}: {item.campaign_id} {item.status} selected={String(item.selected)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function AttentionPanel({ events }: { events: AttentionEvent[] }) {
   const top = events.find((event) => event.attention_level === "critical" || event.attention_level === "blocker" || event.attention_level === "action_required") ?? events[0];
   const routing = top ? routeAttentionEvent(top) : null;
@@ -548,7 +611,7 @@ function WorkerServicePanel({
         <button type="button" disabled aria-disabled="true" title="Preview only in this UI build">
           Start standby preview
         </button>
-        <button type="button" disabled aria-disabled="true" title="Bounded local supervisor apply remains CLI-only and disabled for Goal 195 review">
+        <button type="button" disabled aria-disabled="true" title="Bounded local supervisor apply remains CLI-only and disabled during Goal 196 lock review">
           Start standby apply disabled
         </button>
         <button type="button" disabled aria-disabled="true" title="Heartbeat-only CLI smoke path; no task claim">

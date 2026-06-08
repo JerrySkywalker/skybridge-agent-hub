@@ -8,7 +8,7 @@ foreach ($field in @("clean_worktree", "known_campaign", "active_tasks", "stale_
   if (-not $result.readiness.PSObject.Properties[$field]) { throw "Missing readiness gate field: $field" }
 }
 if ([bool]$result.readiness.ready_for_start_one_gate) { throw "Goal 195 must not mark Start One gate ready." }
-if (@($result.readiness.blockers) -notcontains "execution_disabled_until_goal_195") { throw "Missing Goal 195 execution blocker." }
+if (@($result.readiness.blockers) -notcontains "execution_disabled_until_goal_197") { throw "Missing later-gate execution blocker." }
 
 [pscustomobject]@{
   ok = $true

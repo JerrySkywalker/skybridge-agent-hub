@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview")]
+  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview", "campaign-lock-status", "campaign-lock-preview", "repo-lock-status", "repo-lock-preview", "unlock-stale-campaign-lock", "cancel-campaign-preview", "abort-campaign-preview", "hold-campaign-preview", "campaign-priority-queue", "campaign-select-next-preview")]
   [string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -211,9 +211,9 @@ function Get-QueueControlActionMatrix {
       reason_required = $true
       human_approval_required = $true
       requires_arm_lease = $true
-      blockers = @("execution_apply_deferred_until_goal_195")
+      blockers = @("execution_apply_deferred_until_goal_197")
       warnings = @()
-      summary = "Armed execution is modeled but forbidden until the Goal 195 Start One gate."
+      summary = "Armed execution is modeled but forbidden until a later reviewed multi-worker readiness gate."
       token_printed = $false
     }
   }
@@ -235,25 +235,183 @@ function Get-QueueControlActionMatrix {
   @($readOnly) + @($heartbeat) + @($safe) + @($preview) + @($armed) + @($forbidden)
 }
 
+function New-LockOwner {
+  [pscustomobject]@{
+    owner_id = "runner-dev-queue-189-200"
+    owner_kind = "campaign"
+    display_name = "dev queue campaign runner"
+    process_id = $null
+    host = "laptop-zenbookduo"
+    token_printed = $false
+  }
+}
+
+function Get-CampaignLockFixture {
+  param([switch]$Stale)
+  [pscustomobject]@{
+    schema = "skybridge.campaign_lock.v1"
+    lock_id = $(if ($Stale) { "campaign_lock_dev_queue_189_200_stale" } else { "campaign_lock_dev_queue_189_200" })
+    campaign_id = $CampaignId
+    project_id = $ProjectId
+    lock_owner = New-LockOwner
+    heartbeat_at = $(if ($Stale) { "2026-06-07T22:00:00.000Z" } else { "2026-06-08T00:00:00.000Z" })
+    expires_at = $(if ($Stale) { "2026-06-07T22:30:00.000Z" } else { "2026-06-08T00:30:00.000Z" })
+    lock_status = $(if ($Stale) { "stale" } else { "held" })
+    release_reason = $null
+    operator_reason = $(if ($Stale) { $null } else { "Goal 196 fixture: campaign held for lock review." })
+    age_seconds = $(if ($Stale) { 7200 } else { 0 })
+    stale = [bool]$Stale
+    token_printed = $false
+  }
+}
+
+function Get-RepoLockFixture {
+  param([switch]$Stale, [switch]$UnknownOwner)
+  $owner = New-LockOwner
+  if ($UnknownOwner) {
+    $owner.owner_id = "unknown"
+    $owner.owner_kind = "unknown"
+    $owner.display_name = "unknown lock owner"
+  }
+  [pscustomobject]@{
+    schema = "skybridge.repo_exclusive_lock.v1"
+    lock_id = $(if ($Stale) { "repo_lock_skybridge_agent_hub_stale" } else { "repo_lock_skybridge_agent_hub" })
+    campaign_id = $CampaignId
+    project_id = $ProjectId
+    repo_id = "skybridge-agent-hub"
+    worktree_identity = "V:/src/skybridge-agent-hub"
+    lock_owner = $owner
+    heartbeat_at = $(if ($Stale) { "2026-06-07T22:00:00.000Z" } else { "2026-06-08T00:00:00.000Z" })
+    expires_at = $(if ($Stale) { "2026-06-07T22:30:00.000Z" } else { "2026-06-08T00:30:00.000Z" })
+    lock_status = $(if ($Stale) { "stale" } else { "active" })
+    release_reason = $null
+    operator_reason = $null
+    age_seconds = $(if ($Stale) { 7200 } else { 0 })
+    stale = [bool]$Stale
+    blocks_execution_preview = $true
+    force_release_allowed = $false
+    token_printed = $false
+  }
+}
+
+function Get-CampaignPriorityQueueFixture {
+  [pscustomobject]@{
+    schema = "skybridge.campaign_priority_queue.v1"
+    project_id = $ProjectId
+    active_campaign_id = $CampaignId
+    current_campaign_id = $CampaignId
+    one_active_campaign_per_project = $true
+    deterministic_order = $true
+    filter_statuses = @("ready", "paused", "held", "completed", "archived")
+    items = @(
+      [pscustomobject]@{ campaign_id = $CampaignId; project_id = $ProjectId; priority = 10; status = "ready"; current_goal_id = "super-196-campaign-locking-multi-campaign-queue"; current_step_id = "$CampaignId`:super-196-campaign-locking-multi-campaign-queue"; blocked_reason = "repo_lock_requires_review_before_execution_preview"; selected = $true; token_printed = $false },
+      [pscustomobject]@{ campaign_id = "bootstrap-mvp"; project_id = $ProjectId; priority = 20; status = "held"; current_goal_id = "super-184b-operator-console-dashboard"; current_step_id = "bootstrap-mvp:super-184b-operator-console-dashboard"; blocked_reason = "lower_priority_campaign_held_while_dev_queue_is_current"; selected = $false; token_printed = $false }
+    )
+    selection = [pscustomobject]@{
+      selected_campaign_id = $CampaignId
+      decision = "blocked"
+      blocked_campaign_reason = "active_repo_lock_blocks_execution_preview"
+      queue_decision_summary = "$CampaignId is highest priority, but repo lock review blocks start previews."
+      execution_side_effects = $false
+      token_printed = $false
+    }
+    token_printed = $false
+  }
+}
+
+function New-LockAuditEvent {
+  param([string]$Action, [string]$ReasonText, [object]$Lock)
+  [pscustomobject]@{
+    schema = "skybridge.lock_audit_event.v1"
+    audit_event_id = "audit_lock_$([Guid]::NewGuid().ToString("n").Substring(0, 12))"
+    action = $Action
+    source = "cli_fixture"
+    actor = $Actor
+    campaign_id = $CampaignId
+    project_id = $ProjectId
+    lock_id = if ($Lock) { $Lock.lock_id } else { $null }
+    lock_status = if ($Lock) { $Lock.lock_status } else { $null }
+    reason = $ReasonText
+    created_at = (Get-Date).ToUniversalTime().ToString("o")
+    raw_logs_included = $false
+    token_printed = $false
+  }
+}
+
+function Write-LockAuditEvent {
+  param($AuditEvent)
+  $auditDir = Join-Path (Join-Path ".agent" "tmp") "campaign-lock-audit"
+  New-Item -ItemType Directory -Path $auditDir -Force | Out-Null
+  $auditPath = Join-Path $auditDir "$CampaignId.jsonl"
+  ($AuditEvent | ConvertTo-Json -Depth 30 -Compress) | Add-Content -LiteralPath $auditPath -Encoding UTF8
+  return $auditPath
+}
+
+function Invoke-LockDecision {
+  param(
+    [string]$Action,
+    [string]$DecisionMode,
+    [object]$Lock,
+    [switch]$RequiresStale,
+    [switch]$RefuseActive
+  )
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $warnings = New-Object System.Collections.Generic.List[string]
+  if ($DecisionMode -eq "apply" -and [string]::IsNullOrWhiteSpace($Reason)) { $blockers.Add("reason_required") | Out-Null }
+  if ($RequiresStale -and $Lock -and -not [bool]$Lock.stale) { $blockers.Add("lock_not_stale") | Out-Null }
+  if ($RefuseActive -and $Lock -and [string]$Lock.lock_status -eq "active" -and -not [bool]$Lock.stale) { $blockers.Add("active_lock_force_release_refused") | Out-Null }
+  if ($DecisionMode -eq "dry-run") { $warnings.Add("preview_only_no_mutation") | Out-Null }
+  $allowed = ($blockers.Count -eq 0)
+  $audit = $null
+  $auditPath = $null
+  if ($allowed -and $DecisionMode -eq "apply") {
+    $audit = New-LockAuditEvent -Action $Action -ReasonText $Reason -Lock $Lock
+    $auditPath = Write-LockAuditEvent -AuditEvent $audit
+  }
+  [pscustomobject]@{
+    schema = "skybridge.lock_recovery_decision.v1"
+    ok = $allowed
+    command = $Command
+    action = $Action
+    mode = $DecisionMode
+    allowed = $allowed
+    lock_status = if ($Lock) { $Lock.lock_status } else { $null }
+    requires_reason = $true
+    reason_recorded = (-not [string]::IsNullOrWhiteSpace($Reason))
+    blockers = @($blockers)
+    warnings = @($warnings)
+    lock = $Lock
+    audit_event_id = if ($audit) { $audit.audit_event_id } else { $null }
+    audit_path = $auditPath
+    task_created = $false
+    worker_loop_started = $false
+    queue_execution_enabled = $false
+    token_printed = $false
+  }
+}
+
 function Get-QueueControlState {
   $matrix = Get-QueueControlActionMatrix
   [pscustomobject]@{
     schema = "skybridge.queue_control_state.v1"
     project_id = $ProjectId
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-195-manual-goal-queue-management"
-    current_goal_id = "super-195-manual-goal-queue-management"
+    current_step_id = "$CampaignId`:super-196-campaign-locking-multi-campaign-queue"
+    current_goal_id = "super-196-campaign-locking-multi-campaign-queue"
     worker_status = "offline"
     active_tasks = 0
     stale_leases = 0
     can_start_one = $false
     can_start_queue = $false
     can_resume = $false
-    state_hash = "fixture-goal-195-manual-queue-review-offline-active0-stale0"
-    revision = "fixture-goal-195-revision"
+    state_hash = "fixture-goal-196-locking-offline-active0-stale0-repolock"
+    revision = "fixture-goal-196-revision"
     action_matrix = @($matrix)
-    blockers = @("worker_service_offline", "execution_apply_disabled_during_goal_195")
-    warnings = @("manual_goal_pack_review_required")
+    blockers = @("worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_apply_disabled_until_goal_197")
+    warnings = @("manual_goal_pack_review_required", "multiple_campaigns_require_selection_review")
+    campaign_lock = Get-CampaignLockFixture
+    repo_exclusive_lock = Get-RepoLockFixture
+    priority_queue = Get-CampaignPriorityQueueFixture
     arm_lease = [pscustomobject]@{
       lease_id = "lease_fixture_goal_194_preview_only"
       campaign_id = $CampaignId
@@ -278,7 +436,7 @@ function New-QueueControlAuditEvent {
     mode = $Mode
     actor = $Actor
     campaign_id = $CampaignId
-    current_step_id = "$CampaignId`:super-195-manual-goal-queue-management"
+    current_step_id = "$CampaignId`:super-196-campaign-locking-multi-campaign-queue"
     target_revision = $Revision
     reason = $ReasonText
     blockers = @($Blockers)
@@ -325,10 +483,13 @@ function Invoke-QueueControlContract {
     $blockers.Add("target_revision_mismatch") | Out-Null
   }
   if ($entry -and @($entry.allowed_modes) -notcontains $ControlMode) { $blockers.Add("mode_not_allowed") | Out-Null }
-  if ($ControlMode -eq "apply" -and $entry -and -not [bool]$entry.apply_allowed) { $blockers.Add("apply_forbidden_in_goal_195") | Out-Null }
+  if ($ControlMode -eq "apply" -and $entry -and -not [bool]$entry.apply_allowed) { $blockers.Add("apply_forbidden_in_goal_196") | Out-Null }
   if ($ControlMode -eq "apply" -and $entry -and [bool]$entry.reason_required -and [string]::IsNullOrWhiteSpace($Reason)) { $blockers.Add("reason_required") | Out-Null }
   if ($Action -in @("start_one_apply", "start_queue_apply", "start_all", "arbitrary_shell")) {
-    $blockers.Add("no_execution_enablement_in_goal_195") | Out-Null
+    $blockers.Add("no_execution_enablement_in_goal_196") | Out-Null
+  }
+  if ($Action -in @("start_one_preview", "start_queue_preview", "start_one_apply", "start_queue_apply")) {
+    $blockers.Add("active_repo_lock_blocks_execution_preview") | Out-Null
   }
   $allowed = ($blockers.Count -eq 0)
   $audit = $null
@@ -452,7 +613,7 @@ function Invoke-Preflight {
     current_step_detail = if ($goal194) { [pscustomobject]@{ goal_id = [string]$goal194.goal_id; status = [string]$goal194.status; linked_task_ids = @($goal194.linked_task_ids); linked_pr_urls = @($goal194.linked_pr_urls); unexecuted = $goal194Unexecuted } } else { $null }
     worker_status = if ($worker) { [string]$worker.remote_status } else { "unknown" }
     worker_current_task_id = if ($worker) { $worker.current_task_id } else { $null }
-    next_safe_action = "Goal 194 worker service mode only: verify bounded standby heartbeat; start-one/start-queue apply remain disabled until Goal 195."
+    next_safe_action = "Goal 196 lock review only: inspect campaign/repo locks and priority queue; start-one/start-queue apply remain disabled."
     summary = "preflight active=$($active.task_summary.active) stale_leases=$($hygiene.task_summary.stale_leases) runner_lock=$($runner.runner_lock_status) current=$($campaign.campaign.current_step_id) goal194_unexecuted=$goal194Unexecuted"
   }
 }
@@ -488,6 +649,69 @@ switch ($Command) {
   }
   "start-queue-preview" {
     $result = Invoke-QueueControlContract -Action "start_queue_preview" -ControlMode "preview"
+  }
+  "campaign-lock-status" {
+    $lock = Get-CampaignLockFixture
+    $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "read"; campaign_lock = $lock; token_printed = $false }
+  }
+  "campaign-lock-preview" {
+    $lock = Get-CampaignLockFixture -Stale
+    $result = Invoke-LockDecision -Action "campaign_lock_preview" -DecisionMode "dry-run" -Lock $lock
+  }
+  "repo-lock-status" {
+    $lock = Get-RepoLockFixture
+    $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "read"; repo_exclusive_lock = $lock; token_printed = $false }
+  }
+  "repo-lock-preview" {
+    $lock = Get-RepoLockFixture
+    $result = Invoke-LockDecision -Action "repo_lock_preview" -DecisionMode "dry-run" -Lock $lock -RefuseActive
+  }
+  "unlock-stale-campaign-lock" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "unlock-stale-campaign-lock requires -Reason." }
+    $lock = Get-CampaignLockFixture -Stale
+    $result = Invoke-LockDecision -Action "unlock_stale_campaign_lock" -DecisionMode $(if ($Apply) { "apply" } else { "dry-run" }) -Lock $lock -RequiresStale
+    if ($result.allowed -and $Apply) {
+      $result.lock.lock_status = "released"
+      $result.lock.release_reason = "stale_unlock"
+      $result.lock.operator_reason = $Reason
+      $result.lock.stale = $false
+    }
+  }
+  "cancel-campaign-preview" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "cancel-campaign-preview requires -Reason." }
+    $result = Invoke-LockDecision -Action "cancel_campaign" -DecisionMode $(if ($Apply) { "apply" } else { "dry-run" }) -Lock (Get-CampaignLockFixture)
+    $result | Add-Member -NotePropertyName campaign_status_after -NotePropertyValue $(if ($result.allowed -and $Apply) { "cancelled" } else { "ready" }) -Force
+  }
+  "abort-campaign-preview" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "abort-campaign-preview requires -Reason." }
+    $result = Invoke-LockDecision -Action "abort_campaign" -DecisionMode $(if ($Apply) { "apply" } else { "dry-run" }) -Lock (Get-CampaignLockFixture)
+    $result | Add-Member -NotePropertyName campaign_status_after -NotePropertyValue $(if ($result.allowed -and $Apply) { "aborted" } else { "ready" }) -Force
+    $result | Add-Member -NotePropertyName process_killed -NotePropertyValue $false -Force
+  }
+  "hold-campaign-preview" {
+    if ([string]::IsNullOrWhiteSpace($Reason)) { throw "hold-campaign-preview requires -Reason." }
+    $result = Invoke-LockDecision -Action "hold_campaign" -DecisionMode $(if ($Apply) { "apply" } else { "dry-run" }) -Lock (Get-CampaignLockFixture)
+    $result | Add-Member -NotePropertyName campaign_status_after -NotePropertyValue $(if ($result.allowed -and $Apply) { "held" } else { "ready" }) -Force
+  }
+  "campaign-priority-queue" {
+    $queue = Get-CampaignPriorityQueueFixture
+    $result = [pscustomobject]@{ ok = $true; command = $Command; mode = "read"; priority_queue = $queue; token_printed = $false }
+  }
+  "campaign-select-next-preview" {
+    $queue = Get-CampaignPriorityQueueFixture
+    $result = [pscustomobject]@{
+      ok = $true
+      command = $Command
+      mode = "dry-run"
+      schema = "skybridge.campaign_select_next_preview.v1"
+      selection = $queue.selection
+      selected_campaign_id = $queue.selection.selected_campaign_id
+      blocked_campaign_reason = $queue.selection.blocked_campaign_reason
+      task_created = $false
+      worker_loop_started = $false
+      queue_execution_enabled = $false
+      token_printed = $false
+    }
   }
   "preflight" {
     if ($Fixture) { $result = Invoke-QueueControlContract -Action "preflight" -ControlMode "read" }

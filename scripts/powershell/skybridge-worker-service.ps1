@@ -5,8 +5,8 @@ param(
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$WorkerProfile = "laptop-zenbookduo-standby",
   [string]$CampaignId = "dev-queue-189-200",
-  [string]$CurrentStepId = "dev-queue-189-200:super-195-manual-goal-queue-management",
-  [string]$CurrentGoalId = "super-195-manual-goal-queue-management",
+  [string]$CurrentStepId = "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+  [string]$CurrentGoalId = "super-196-campaign-locking-multi-campaign-queue",
   [int]$MaxHeartbeats = 1,
   [int]$IntervalSeconds = 0,
   [switch]$Apply,
@@ -65,7 +65,7 @@ function New-WorkerServiceState {
   if ($StopRequested) { $blockers.Add("stop_requested") | Out-Null }
   if ($PauseRequested) { $blockers.Add("pause_requested") | Out-Null }
   if (-not $TokenAvailable) { $blockers.Add("worker_token_unavailable") | Out-Null }
-  $blockers.Add("execution_disabled_until_goal_195") | Out-Null
+  $blockers.Add("execution_disabled_until_goal_197") | Out-Null
 
   [pscustomobject]@{
     schema = "skybridge.worker_service_state.v1"
@@ -154,7 +154,7 @@ function Get-WorkerReadiness {
   if (-not $clean) { $blockers.Add("worktree_dirty") | Out-Null }
   if ($runnerLock -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
   if (-not [bool]$State.token_available -and -not $blockers.Contains("worker_token_unavailable")) { $blockers.Add("worker_token_unavailable") | Out-Null }
-  if (-not $blockers.Contains("execution_disabled_until_goal_195")) { $blockers.Add("execution_disabled_until_goal_195") | Out-Null }
+  if (-not $blockers.Contains("execution_disabled_until_goal_197")) { $blockers.Add("execution_disabled_until_goal_197") | Out-Null }
 
   $age = $null
   if (-not [string]::IsNullOrWhiteSpace([string]$State.heartbeat_at)) {
@@ -167,7 +167,7 @@ function Get-WorkerReadiness {
     heartbeat_age_seconds = $age
     ready_for_start_one_gate = $false
     clean_worktree = $clean
-    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-195-manual-goal-queue-management")
+    known_campaign = ($CampaignId -eq "dev-queue-189-200" -and $CurrentGoalId -eq "super-196-campaign-locking-multi-campaign-queue")
     active_tasks = 0
     stale_leases = 0
     runner_lock_status = $runnerLock
@@ -177,7 +177,7 @@ function Get-WorkerReadiness {
     can_execute_tasks = $false
     blockers = @($blockers)
     warnings = @($(if ([string]$State.mode -eq "standby") { "standby_heartbeat_only_no_execution" }))
-    recommended_action = if ([string]$State.mode -eq "offline") { "Start a bounded standby heartbeat; keep Start One disabled until Goal 195." } else { "Monitor standby heartbeat; keep Start One disabled until Goal 195." }
+    recommended_action = if ([string]$State.mode -eq "offline") { "Start a bounded standby heartbeat; keep Start One disabled until a later reviewed gate." } else { "Monitor standby heartbeat; keep Start One disabled until a later reviewed gate." }
     token_printed = $false
   }
 }

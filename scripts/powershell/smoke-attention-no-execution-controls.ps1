@@ -6,7 +6,7 @@ $control = Get-Content -Raw -LiteralPath (Join-Path $repoRoot "scripts\powershel
 foreach ($forbidden in @("start-one -Apply", "start-all -Apply", "resume -Apply", "execute-step", "worker_loop_started=true", "Worker loop started true")) {
   if (($web + "`n" + $desktop) -match [regex]::Escape($forbidden)) { throw "Attention UI contains execution control text: $forbidden" }
 }
-foreach ($required in @("start_one_apply", "start_queue_apply", "start_all", "no_execution_enablement_in_goal_195")) {
+foreach ($required in @("start_one_apply", "start_queue_apply", "start_all", "no_execution_enablement_in_goal_196")) {
   if ($control -notmatch [regex]::Escape($required)) { throw "Queue control execution blocker missing: $required" }
 }
 

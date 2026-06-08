@@ -13,7 +13,7 @@ foreach ($needle in @(
   "task_execute=",
   "codex_execute=",
   "Web has no direct local process control",
-  "Start One remains disabled until Goal 195"
+  "Start One remains disabled until a later reviewed execution gate"
 )) {
   if ($source -notmatch [regex]::Escape($needle)) { throw "Web worker readiness panel missing text: $needle" }
 }

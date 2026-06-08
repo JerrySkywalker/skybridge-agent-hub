@@ -49,7 +49,8 @@ switch ($Scenario) {
   }
   "preview" {
     $preview = Invoke-ControlJson @("-Command", "start-one-preview", "-Fixture")
-    if (-not $preview.ok -or $preview.mutates -or $preview.task_created -or $preview.worker_loop_started) { throw "start-one preview mutated or failed." }
+    if ($preview.mutates -or $preview.task_created -or $preview.worker_loop_started) { throw "start-one preview mutated." }
+    if ($preview.allowed -or @($preview.blockers) -notcontains "active_repo_lock_blocks_execution_preview") { throw "start-one preview must be blocked by active repo lock in Goal 196." }
     $mismatch = Invoke-ControlJson @("-Command", "control-preview", "-Fixture", "-ControlAction", "start_one_preview", "-TargetRevision", "wrong-revision")
     if ($mismatch.allowed -or @($mismatch.blockers) -notcontains "target_revision_mismatch") { throw "Mismatched revision was not rejected." }
   }
@@ -73,7 +74,7 @@ switch ($Scenario) {
   }
   "start-apply-forbidden" {
     $startOne = Invoke-ControlJson @("-Command", "start-one", "-Fixture", "-Apply", "-Reason", "must fail")
-    if ($startOne.allowed -or @($startOne.blockers) -notcontains "apply_forbidden_in_goal_195") { throw "start-one apply was not forbidden." }
+    if ($startOne.allowed -or @($startOne.blockers) -notcontains "apply_forbidden_in_goal_196") { throw "start-one apply was not forbidden." }
     $startAll = Invoke-ControlJson @("-Command", "start-all", "-Fixture", "-Apply", "-Reason", "must fail")
     if ($startAll.allowed -or @($startAll.blockers) -notcontains "forbidden_action") { throw "start-all was not forbidden." }
   }
@@ -91,7 +92,7 @@ switch ($Scenario) {
 [pscustomobject]@{
   ok = $true
   scenario = "queue-control-$Scenario"
-  current_step = "dev-queue-189-200:super-195-manual-goal-queue-management"
+  current_step = "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue"
   active_tasks = 0
   stale_leases = 0
   worker_status = "offline"

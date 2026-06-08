@@ -1537,7 +1537,8 @@ function New-QueueControlReadiness {
     $requiredHuman += "verify_worker_online_before_execution"
   }
   $workerServiceState = New-WorkerServiceReportState -WorkerStatus $workerStatus
-  $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_195") })
+  $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_197") })
+  $blockers += "active_repo_lock_blocks_execution_preview"
   if ($workerStatus -in @("online", "ready")) { $Warnings += "standby_worker_can_only_heartbeat" }
   if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
   $projectStartable = ($projectControl -in @("paused", "ready"))
@@ -1551,14 +1552,48 @@ function New-QueueControlReadiness {
     can_resume = $false
     blockers = @($blockers | Select-Object -Unique)
     warnings = @($Warnings | Where-Object { $_ } | Select-Object -Unique)
-    required_human_action = @(@($requiredHuman) + @("verify_worker_service_standby_before_goal_195") | Select-Object -Unique)
-    next_safe_action = if (-not $workerReady) { "Start or refresh bounded standby heartbeat; keep Start One and Start Queue disabled until Goal 195." } else { "Monitor standby heartbeat; execution remains disabled until Goal 195 Start One gate." }
+    required_human_action = @(@($requiredHuman) + @("review_campaign_and_repo_locks_before_any_start_preview") | Select-Object -Unique)
+    next_safe_action = if (-not $workerReady) { "Review campaign/repo locks and refresh bounded standby heartbeat; keep Start One and Start Queue disabled." } else { "Review repo-exclusive lock state; execution remains disabled until a later reviewed gate." }
     worker_required = $workerRequired
     worker_status = $workerStatus
     run_budget_required = $true
     reason_required = $true
     worker_service_state = $workerServiceState
-    execution_disabled_until_goal = "super-195-manual-goal-queue-management"
+    execution_disabled_until_goal = "super-197-multi-worker-readiness"
+    campaign_lock = [pscustomobject]@{
+      schema = "skybridge.campaign_lock.v1"
+      lock_id = "campaign_lock_dev_queue_189_200"
+      campaign_id = $Campaign.id
+      project_id = $Campaign.project_id
+      lock_owner = [pscustomobject]@{ owner_id = "runner-dev-queue-189-200"; owner_kind = "campaign"; display_name = "dev queue campaign runner"; process_id = $null; host = "laptop-zenbookduo"; token_printed = $false }
+      heartbeat_at = $null
+      expires_at = $null
+      lock_status = "held"
+      release_reason = $null
+      operator_reason = "Goal 196 report lock review"
+      age_seconds = 0
+      stale = $false
+      token_printed = $false
+    }
+    repo_exclusive_lock = [pscustomobject]@{
+      schema = "skybridge.repo_exclusive_lock.v1"
+      lock_id = "repo_lock_skybridge_agent_hub"
+      campaign_id = $Campaign.id
+      project_id = $Campaign.project_id
+      repo_id = $ProjectId
+      worktree_identity = "skybridge-agent-hub"
+      lock_owner = [pscustomobject]@{ owner_id = "runner-dev-queue-189-200"; owner_kind = "campaign"; display_name = "dev queue campaign runner"; process_id = $null; host = "laptop-zenbookduo"; token_printed = $false }
+      heartbeat_at = $null
+      expires_at = $null
+      lock_status = "active"
+      release_reason = $null
+      operator_reason = $null
+      age_seconds = 0
+      stale = $false
+      blocks_execution_preview = $true
+      force_release_allowed = $false
+      token_printed = $false
+    }
   }
 }
 
@@ -1569,7 +1604,7 @@ function New-WorkerServiceReportState {
   if ($mode -eq "offline") { $blockers.Add("worker_service_offline") | Out-Null }
   if ($mode -eq "error") { $blockers.Add("worker_service_error") | Out-Null }
   if ($mode -eq "standby") { $blockers.Add("standby_worker_can_only_heartbeat") | Out-Null }
-  $blockers.Add("execution_disabled_until_goal_195") | Out-Null
+  $blockers.Add("execution_disabled_until_goal_197") | Out-Null
   [pscustomobject]@{
     schema = "skybridge.worker_service_state.v1"
     worker_service_state = $true

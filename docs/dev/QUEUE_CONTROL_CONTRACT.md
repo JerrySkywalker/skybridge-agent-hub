@@ -11,6 +11,7 @@ Desktop, Web, CLI and Server use the same concepts:
 - `run_budget` and `arm_lease` are modeled for future execution gates only. Fixture arm leases are preview/schema-only and cannot start work.
 - `skybridge.attention_event.v1` derives operator-visible attention items from blockers, worker state, required human action and queue-control audit events.
 - `skybridge.worker_service_state.v1` reports bounded standby service state, heartbeat and capability without task claim or execution.
+- `skybridge.campaign_lock.v1`, `skybridge.repo_exclusive_lock.v1` and `skybridge.campaign_priority_queue.v1` report lock ownership, repo exclusivity and deterministic multi-campaign selection without execution side effects.
 
 ## Action Matrix
 
@@ -26,8 +27,17 @@ Desktop, Web, CLI and Server use the same concepts:
 | `resume_preview` | preview | preview only; no mutation |
 | `start_one_preview` | preview | preview only; no mutation |
 | `start_queue_preview` | preview | preview only; no mutation |
-| `start_one_apply` | armed execution | forbidden until Goal 195 Start One gate |
-| `start_queue_apply` | armed execution | forbidden until Goal 195 Start One gate |
+| `campaign_lock_status` | preview/read | lock inspection only |
+| `campaign_lock_preview` | preview/read | stale recovery preview only |
+| `repo_lock_status` | preview/read | repo-exclusive lock inspection only |
+| `repo_lock_preview` | preview/read | active lock blocks execution previews |
+| `unlock_stale_campaign_lock` | safe recovery | apply allowed only for stale locks with reason and audit |
+| `cancel_campaign_preview` | safe review | reason required; no task creation |
+| `abort_campaign_preview` | safe review | reason required; does not kill arbitrary processes |
+| `campaign_priority_queue` | read-only | deterministic priority ordering |
+| `campaign_select_next_preview` | preview | selection preview only; no mutation |
+| `start_one_apply` | armed execution | forbidden until a later reviewed execution gate |
+| `start_queue_apply` | armed execution | forbidden until a later reviewed execution gate |
 | `start_all` | forbidden | forbidden |
 | `arbitrary_shell` | forbidden | forbidden |
 
@@ -60,10 +70,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 
 The CLI defaults to preview/dry-run behavior unless `-Apply` is supplied. In Goal 195, `start-one -Apply`, `start-all -Apply`, `resume -Apply`, `start_one_apply` and `start_queue_apply` are rejected before runner commands can execute.
 
-Fixture queue-control audit output is local-only and ignored:
+Fixture queue-control and lock audit output is local-only and ignored:
 
 ```text
 .agent/tmp/queue-control-audit/
+.agent/tmp/campaign-lock-audit/
 ```
 
 ## Deferred Work
