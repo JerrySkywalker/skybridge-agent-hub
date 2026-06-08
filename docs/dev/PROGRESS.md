@@ -1,5 +1,16 @@
 # Progress Log
 
+## 2026-06-08 Goal 193 Notification and Attention Loop
+
+- Added the shared `skybridge.attention_event.v1` contract with attention levels, sources, required event types, routing decisions and `token_printed=false`.
+- Added attention derivation from campaign report, queue-control readiness, worker offline state, required human action, PR/CI evidence and queue-control audit events.
+- Added fixture-safe notification routing: Desktop-only, Web banner, local fixture ledger, ntfy placeholder and disabled routes. All routes keep `real_external_send=false` by default.
+- Added Web Campaign Queue attention banner/feed and notification routing status, plus a Desktop Attention Panel with worker offline, queue blocker, recommended action and safe notification status.
+- Extended safe summaries with `attention_count`, `top_blocker` and `recommended_next_action`.
+- Moved queue-control fixture audit output from `.agent/queue-control-audit/` to ignored `.agent/tmp/queue-control-audit/`.
+- Added focused attention/notification smokes and clean-tree audit hygiene coverage.
+- Goal 193 implementation does not run `start-one`, `start-all`, `resume -Apply`, a worker loop, task claim, campaign-step task creation or real external notification sending.
+
 ## 2026-06-08 Goal 192 Dashboard Safe Actions and Queue Control Contract
 
 - Added the shared queue-control contract foundation for Desktop, Web, CLI and Server: control intents, queue-control state, action matrix, audit events, run budget, arm lease fixture, revision/state hash guard and `token_printed=false`.

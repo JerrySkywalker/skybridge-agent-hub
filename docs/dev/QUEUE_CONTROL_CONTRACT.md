@@ -1,6 +1,6 @@
 # Queue Control Contract
 
-Goal 192 adds the queue-control contract foundation. It is not execution enablement.
+Goal 192 adds the queue-control contract foundation. Goal 193 adds attention events derived from this contract. Neither goal is execution enablement.
 
 Desktop, Web, CLI and Server use the same concepts:
 
@@ -8,11 +8,12 @@ Desktop, Web, CLI and Server use the same concepts:
 - `skybridge.queue_control_state.v1` reports campaign state, worker status, active tasks, stale leases, state hash and the action matrix.
 - `skybridge.queue_control_action_response.v1` returns `ok`, `mode`, `action`, `allowed`, `blockers`, `warnings`, optional `audit_event_id` and `token_printed=false`.
 - `skybridge.queue_control_audit_event.v1` records safe mutations without raw logs, prompts, stdout/stderr, authorization headers, token values, cookies, private keys or secret-bearing paths.
-- `run_budget` and `arm_lease` are modeled for future execution gates only. Goal 192 fixture arm leases are preview/schema-only and cannot start work.
+- `run_budget` and `arm_lease` are modeled for future execution gates only. Fixture arm leases are preview/schema-only and cannot start work.
+- `skybridge.attention_event.v1` derives operator-visible attention items from blockers, worker state, required human action and queue-control audit events.
 
 ## Action Matrix
 
-| Action | Class | Goal 192 behavior |
+| Action | Class | Current behavior |
 | --- | --- | --- |
 | `refresh_status` | read-only | allowed read |
 | `report` | read-only | allowed read |
@@ -24,8 +25,8 @@ Desktop, Web, CLI and Server use the same concepts:
 | `resume_preview` | preview | preview only; no mutation |
 | `start_one_preview` | preview | preview only; no mutation |
 | `start_queue_preview` | preview | preview only; no mutation |
-| `start_one_apply` | armed execution | forbidden in Goal 192 |
-| `start_queue_apply` | armed execution | forbidden in Goal 192 |
+| `start_one_apply` | armed execution | forbidden until later worker service mode |
+| `start_queue_apply` | armed execution | forbidden until later worker service mode |
 | `start_all` | forbidden | forbidden |
 | `arbitrary_shell` | forbidden | forbidden |
 
@@ -42,7 +43,7 @@ Desktop and Web show the same Safe Actions / Queue Controls section:
 - reason-gated safe actions: Safe Pause, Stop Queue, Emergency Stop;
 - disabled/forbidden: Start One Apply, Start Queue Apply, Start All, Run Forever, Worker Loop.
 
-Worker offline remains a blocker. For the current campaign state, start actions stay disabled because worker status is `offline`, active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, and `token_printed=false`.
+Worker offline remains a blocker. For the current campaign state, start actions stay disabled because worker status is `offline`, active tasks are `0`, stale leases are `0`, `can_start_one=false`, `can_start_queue=false`, `can_resume=false`, and `token_printed=false`. Goal 193 surfaces this as `worker_offline`, `queue_blocked` and `human_approval_required` attention events.
 
 ## CLI
 
@@ -54,8 +55,14 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-control.ps1 -Command safe-pause -Reason "operator reason" -Json
 ```
 
-The CLI defaults to preview/dry-run behavior unless `-Apply` is supplied. In Goal 192, `start-one -Apply`, `start-all -Apply`, `resume -Apply`, `start_one_apply` and `start_queue_apply` are rejected before runner commands can execute.
+The CLI defaults to preview/dry-run behavior unless `-Apply` is supplied. In Goal 193, `start-one -Apply`, `start-all -Apply`, `resume -Apply`, `start_one_apply` and `start_queue_apply` are rejected before runner commands can execute.
+
+Fixture queue-control audit output is local-only and ignored:
+
+```text
+.agent/tmp/queue-control-audit/
+```
 
 ## Deferred Work
 
-Goal 193/194 can add the attention loop and worker service mode. Actual start-one/start-queue apply enablement remains deferred until a future reviewed goal adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.
+Goal 194 can add worker service mode. Actual start-one/start-queue apply enablement remains deferred until a future reviewed goal adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.

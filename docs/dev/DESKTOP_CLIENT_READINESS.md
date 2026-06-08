@@ -2,6 +2,20 @@
 
 SkyBridge Desktop is a standby operator tool. It is not an execution surface.
 
+## Goal 193 Attention Panel
+
+Goal 193 adds an Attention Panel backed by the shared `skybridge.attention_event.v1` model. Desktop shows current action-required items, worker offline state, queue readiness blocker, recommended next action and safe notification status.
+
+Desktop notification status is fixture-safe by default:
+
+- Desktop-only route is rendered locally.
+- Web banner/feed route is represented in the shared model.
+- Local fixture notification writes only under ignored `.agent/tmp/notifications/` when explicitly invoked by smokes.
+- ntfy is `not_configured` by default.
+- Real external notification sending is disabled by default.
+
+The panel supports Refresh through the existing nonblocking refresh path. It must not add `start-one`, `start-queue`, `resume -Apply`, task claim, worker loop, arbitrary shell or external notification send controls.
+
 ## Goal 192 Safe Actions
 
 Goal 192 adds a Safe Actions / Queue Controls section backed by the shared queue-control contract. Desktop remains non-executing: start-one apply, start-queue apply, start-all, run forever and worker loop controls are disabled.
