@@ -42,8 +42,8 @@ switch ($Scenario) {
     if (-not $byAction.safe_pause.apply_allowed -or -not $byAction.safe_pause.reason_required) { throw "safe_pause must allow reason-gated apply." }
     if ($byAction.start_one_preview.apply_allowed) { throw "start_one_preview must be preview-only." }
     if ($byAction.start_queue_preview.apply_allowed) { throw "start_queue_preview must be preview-only." }
-    if ($byAction.start_one_apply.apply_allowed) { throw "start_one_apply must be forbidden for Goal 193." }
-    if ($byAction.start_queue_apply.apply_allowed) { throw "start_queue_apply must be forbidden for Goal 193." }
+    if ($byAction.start_one_apply.apply_allowed) { throw "start_one_apply must be forbidden for Goal 194." }
+    if ($byAction.start_queue_apply.apply_allowed) { throw "start_queue_apply must be forbidden for Goal 194." }
     if ($byAction.start_all.class -ne "forbidden") { throw "start_all must be forbidden." }
     if ($byAction.arbitrary_shell.class -ne "forbidden") { throw "arbitrary_shell must be forbidden." }
   }
@@ -73,7 +73,7 @@ switch ($Scenario) {
   }
   "start-apply-forbidden" {
     $startOne = Invoke-ControlJson @("-Command", "start-one", "-Fixture", "-Apply", "-Reason", "must fail")
-    if ($startOne.allowed -or @($startOne.blockers) -notcontains "apply_forbidden_in_goal_192") { throw "start-one apply was not forbidden." }
+    if ($startOne.allowed -or @($startOne.blockers) -notcontains "apply_forbidden_in_goal_194") { throw "start-one apply was not forbidden." }
     $startAll = Invoke-ControlJson @("-Command", "start-all", "-Fixture", "-Apply", "-Reason", "must fail")
     if ($startAll.allowed -or @($startAll.blockers) -notcontains "forbidden_action") { throw "start-all was not forbidden." }
   }
@@ -91,7 +91,7 @@ switch ($Scenario) {
 [pscustomobject]@{
   ok = $true
   scenario = "queue-control-$Scenario"
-  current_step = "dev-queue-189-200:super-193-notification-attention-loop"
+  current_step = "dev-queue-189-200:super-194-worker-service-mode"
   active_tasks = 0
   stale_leases = 0
   worker_status = "offline"

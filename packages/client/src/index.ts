@@ -976,6 +976,56 @@ export interface CampaignQueueControlReadiness {
   worker_status: string;
   run_budget_required: boolean;
   reason_required: boolean;
+  worker_service_state?: WorkerServiceState;
+  execution_disabled_until_goal?: string;
+}
+
+export type WorkerServiceMode = "offline" | "standby" | "ready" | "paused" | "stopping" | "error";
+
+export interface WorkerServiceCapabilityMatrix {
+  heartbeat: boolean;
+  status: boolean;
+  stop: boolean;
+  pause: boolean;
+  task_claim: false;
+  task_execute: false;
+  codex_execute: false;
+  pr_create: false;
+  arbitrary_shell: false;
+  token_printed: false;
+}
+
+export interface WorkerServiceState {
+  schema: "skybridge.worker_service_state.v1";
+  worker_service_state: true;
+  worker_id: string;
+  worker_profile: string;
+  mode: WorkerServiceMode;
+  heartbeat_at: string | null;
+  service_started_at: string | null;
+  current_task_id: string | null;
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  stop_requested: boolean;
+  pause_requested: boolean;
+  capability_matrix: WorkerServiceCapabilityMatrix;
+  readiness_blockers: string[];
+  token_available: boolean;
+  token_printed: false;
+}
+
+export interface WorkerServiceReadiness {
+  schema: "skybridge.worker_service_readiness.v1";
+  worker_id: string;
+  mode: WorkerServiceMode;
+  heartbeat_age_seconds: number | null;
+  ready_for_start_one_gate: false;
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  blockers: string[];
+  warnings: string[];
+  recommended_action: string;
+  token_printed: false;
 }
 
 export type QueueControlAction =
@@ -1282,9 +1332,9 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         reason_required: true,
         human_approval_required: true,
         requires_arm_lease: true,
-        blockers: ["execution_apply_deferred_until_worker_service_mode"],
+        blockers: ["execution_apply_deferred_until_goal_195"],
         warnings: [],
-        summary: "Armed execution is modeled but forbidden until a later worker service goal.",
+        summary: "Armed execution is modeled but forbidden until the Goal 195 Start One gate.",
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
@@ -1305,6 +1355,107 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
       }) satisfies QueueControlActionMatrixEntry,
   ),
 ];
+
+export const workerServiceCapabilityMatrix: WorkerServiceCapabilityMatrix = {
+  heartbeat: true,
+  status: true,
+  stop: true,
+  pause: true,
+  task_claim: false,
+  task_execute: false,
+  codex_execute: false,
+  pr_create: false,
+  arbitrary_shell: false,
+  token_printed: false,
+};
+
+export const fixtureWorkerServiceState: WorkerServiceState = {
+  schema: "skybridge.worker_service_state.v1",
+  worker_service_state: true,
+  worker_id: "laptop-zenbookduo",
+  worker_profile: "laptop-zenbookduo-standby",
+  mode: "offline",
+  heartbeat_at: null,
+  service_started_at: null,
+  current_task_id: null,
+  can_claim_tasks: false,
+  can_execute_tasks: false,
+  stop_requested: false,
+  pause_requested: false,
+  capability_matrix: workerServiceCapabilityMatrix,
+  readiness_blockers: [
+    "worker_service_offline",
+    "standby_heartbeat_required",
+    "execution_disabled_until_goal_195",
+  ],
+  token_available: false,
+  token_printed: false,
+};
+
+export function createWorkerServiceReadiness(
+  state: WorkerServiceState = fixtureWorkerServiceState,
+  options: {
+    cleanWorktree?: boolean;
+    activeTasks?: number;
+    staleLeases?: number;
+    runnerLockStatus?: string;
+    knownCampaign?: boolean;
+    tokenAvailable?: boolean;
+    workerProfileValid?: boolean;
+    now?: string;
+  } = {},
+): WorkerServiceReadiness {
+  const blockers = new Set<string>(state.readiness_blockers);
+  const warnings = new Set<string>();
+  const activeTasks = options.activeTasks ?? 0;
+  const staleLeases = options.staleLeases ?? 0;
+  const runnerLockStatus = options.runnerLockStatus ?? "none";
+  const cleanWorktree = options.cleanWorktree ?? true;
+  const knownCampaign = options.knownCampaign ?? true;
+  const tokenAvailable = options.tokenAvailable ?? state.token_available;
+  const workerProfileValid = options.workerProfileValid ?? true;
+
+  if (!cleanWorktree) blockers.add("worktree_dirty");
+  if (!knownCampaign) blockers.add("unknown_campaign");
+  if (activeTasks > 0) blockers.add("active_tasks_present");
+  if (staleLeases > 0) blockers.add("stale_leases_present");
+  if (runnerLockStatus !== "none" && runnerLockStatus !== "released") blockers.add("runner_lock_present");
+  if (!tokenAvailable) blockers.add("worker_token_unavailable");
+  if (!workerProfileValid) blockers.add("worker_profile_invalid");
+  if (state.mode === "offline") blockers.add("worker_service_offline");
+  if (state.mode === "standby") warnings.add("standby_heartbeat_only_no_execution");
+  if (state.mode === "ready") warnings.add("ready_mode_still_execution_disabled_until_goal_195");
+  if (state.pause_requested) blockers.add("pause_requested");
+  if (state.stop_requested) blockers.add("stop_requested");
+  if (state.current_task_id) blockers.add("current_task_present");
+  blockers.add("execution_disabled_until_goal_195");
+
+  const heartbeatAge = state.heartbeat_at
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.parse(options.now ?? "2026-06-08T00:00:00.000Z") - Date.parse(state.heartbeat_at)) / 1000,
+        ),
+      )
+    : null;
+
+  return {
+    schema: "skybridge.worker_service_readiness.v1",
+    worker_id: state.worker_id,
+    mode: state.mode,
+    heartbeat_age_seconds: Number.isFinite(heartbeatAge as number) ? heartbeatAge : null,
+    ready_for_start_one_gate: false,
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    blockers: Array.from(blockers),
+    warnings: Array.from(warnings),
+    recommended_action:
+      state.mode === "offline"
+        ? "Start or refresh a bounded standby heartbeat, then keep Start One disabled until Goal 195."
+        : "Monitor standby heartbeat and keep execution disabled until the Goal 195 Start One gate.",
+    token_printed: false,
+  };
+}
 
 export interface CampaignRunReport {
   schema: "skybridge.campaign_run_report.v1";
@@ -1340,6 +1491,7 @@ export interface CampaignRunReport {
   blockers: string[];
   warnings: string[];
   queue_control_readiness: CampaignQueueControlReadiness;
+  worker_service_state: WorkerServiceState;
   token_printed: false;
 }
 
@@ -1372,6 +1524,8 @@ export interface CampaignSafeSummary {
   blockers: string[];
   warnings: string[];
   worker_status: string;
+  worker_service_mode: WorkerServiceMode;
+  worker_service_blockers: string[];
   attention_count: number;
   top_blocker: string | null;
   recommended_next_action: string;
@@ -1415,6 +1569,8 @@ export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSa
     blockers: [...readiness.blockers],
     warnings: [...readiness.warnings],
     worker_status: readiness.worker_status,
+    worker_service_mode: report.worker_service_state.mode,
+    worker_service_blockers: [...report.worker_service_state.readiness_blockers],
     attention_count: attention.length,
     top_blocker: topBlocker?.message ?? null,
     recommended_next_action: topBlocker?.recommended_action ?? readiness.next_safe_action,
@@ -1675,8 +1831,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-  current_goal_id: "super-193-notification-attention-loop",
+  current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+  current_goal_id: "super-194-worker-service-mode",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -1684,18 +1840,18 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+    current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
     step_count: 12,
     source: "fixture",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-    goal_id: "super-193-notification-attention-loop",
-    order: 5,
-    title: "Notification and Attention Loop",
+    campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+    goal_id: "super-194-worker-service-mode",
+    order: 6,
+    title: "Worker Service Mode",
     status: "ready",
     is_current: true,
-    dependencies: ["super-192-dashboard-safe-actions"],
+    dependencies: ["super-193-notification-attention-loop"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -1708,15 +1864,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-    goal_id: "super-192-dashboard-safe-actions",
-    order: 4,
-    title: "Dashboard Safe Actions",
+    campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+    goal_id: "super-193-notification-attention-loop",
+    order: 5,
+    title: "Notification and Attention Loop",
     status: "completed",
     is_current: false,
-    dependencies: ["super-191-readonly-operator-dashboard"],
+    dependencies: ["super-192-dashboard-safe-actions"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/108"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/111"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -1731,9 +1887,9 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     all: [
       {
         kind: "pr",
-        campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
-        goal_id: "super-192-dashboard-safe-actions",
-        evidence_id: "goal-192-pr",
+        campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
+        goal_id: "super-193-notification-attention-loop",
+        evidence_id: "goal-193-pr",
         status: "present",
         classification: "present_evidence",
         recovered: false,
@@ -1741,7 +1897,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 192 safe-actions PR evidence is present.",
+        summary: "Goal 193 notification attention loop PR evidence is present.",
       },
       {
         kind: "step",
@@ -1759,8 +1915,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
       },
       {
         kind: "pr",
-        campaign_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-        goal_id: "super-193-notification-attention-loop",
+        campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+        goal_id: "super-194-worker-service-mode",
         evidence_id: "none",
         status: "missing",
         classification: "missing_evidence",
@@ -1769,12 +1925,12 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 193 PR evidence is missing until this attention-loop PR exists.",
+        summary: "Goal 194 PR evidence is missing until this worker-service PR exists.",
       },
       {
         kind: "gate",
-        campaign_step_id: "dev-queue-189-200:super-194-worker-service-mode",
-        goal_id: "super-194-worker-service-mode",
+        campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
+        goal_id: "super-195-manual-goal-queue-management",
         evidence_id: "none",
         status: "not_applicable",
         classification: "not_applicable_evidence",
@@ -1783,7 +1939,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         skipped: false,
         not_applicable: true,
         operator_action_required: false,
-        summary: "Future Goal 194 evidence is not applicable.",
+        summary: "Future Goal 195 Start One gate evidence is not applicable.",
       },
     ],
   },
@@ -1796,15 +1952,18 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     can_stop: true,
     can_emergency_stop: true,
     can_resume: false,
-    blockers: ["worker_offline"],
-    warnings: ["approved_unconverted_proposals_present"],
-    required_human_action: ["verify_worker_online_before_execution"],
-    next_safe_action: "Verify or register an online worker before any start-one or start-queue action.",
+    blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
+    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat"],
+    required_human_action: ["verify_worker_service_standby_before_goal_195"],
+    next_safe_action: "Start or refresh bounded standby heartbeat; keep Start One and Start Queue disabled until Goal 195.",
     worker_required: true,
     worker_status: "offline",
     run_budget_required: true,
     reason_required: true,
+    worker_service_state: fixtureWorkerServiceState,
+    execution_disabled_until_goal: "super-195-manual-goal-queue-management",
   },
+  worker_service_state: fixtureWorkerServiceState,
   token_printed: false,
 };
 
@@ -1812,19 +1971,19 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-193-notification-attention-loop",
-  current_goal_id: "super-193-notification-attention-loop",
+  current_step_id: "dev-queue-189-200:super-194-worker-service-mode",
+  current_goal_id: "super-194-worker-service-mode",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-193-worker-offline-active0-stale0",
-  revision: "fixture-goal-193-revision",
+  state_hash: "fixture-goal-194-worker-service-offline-active0-stale0",
+  revision: "fixture-goal-194-revision",
   action_matrix: queueControlActionMatrix,
-  blockers: ["worker_offline"],
-  warnings: ["start_apply_deferred_until_worker_service_mode"],
+  blockers: ["worker_service_offline", "execution_disabled_until_goal_195"],
+  warnings: ["standby_worker_can_only_heartbeat"],
   token_printed: false,
 };
 
@@ -1886,10 +2045,28 @@ fixtureCampaignRunReport.step_ledger = [
     not_applicable_evidence: false,
     operator_action_required: false,
   },
+  {
+    campaign_step_id: "dev-queue-189-200:super-192-dashboard-safe-actions",
+    goal_id: "super-192-dashboard-safe-actions",
+    order: 4,
+    title: "Dashboard Safe Actions",
+    status: "completed",
+    is_current: false,
+    dependencies: ["super-191-readonly-operator-dashboard"],
+    linked_task_ids: [],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/108"],
+    linked_task_count: 0,
+    linked_pr_count: 1,
+    evidence_status: "present",
+    recovered: false,
+    missing_evidence: false,
+    skipped_evidence: false,
+    not_applicable_evidence: false,
+    operator_action_required: false,
+  },
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-194-worker-service-mode", "Worker Service Mode"],
     ["super-195-manual-goal-queue-management", "Manual Goal Queue Management"],
     ["super-196-campaign-locking-multi-campaign-queue", "Campaign Locking and Multi-campaign Queue"],
     ["super-197-multi-worker-readiness", "Multi-worker Readiness"],
@@ -1899,7 +2076,7 @@ fixtureCampaignRunReport.step_ledger = [
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 6,
+    order: index + 7,
     title,
     status: "pending",
     is_current: false,

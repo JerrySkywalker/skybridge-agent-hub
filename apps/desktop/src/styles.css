@@ -122,6 +122,27 @@ p {
   color: #7b4a00;
 }
 
+.worker-service-panel {
+  border-color: #9eb8c6;
+}
+
+.capability-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.capability-grid span {
+  background: #f8fbfc;
+  border: 1px solid #c7d7df;
+  border-radius: 6px;
+  color: #32434e;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
 .future-controls {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

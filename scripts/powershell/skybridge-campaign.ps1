@@ -1536,24 +1536,68 @@ function New-QueueControlReadiness {
     $blockers += $workerBlocker
     $requiredHuman += "verify_worker_online_before_execution"
   }
+  $workerServiceState = New-WorkerServiceReportState -WorkerStatus $workerStatus
+  $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_195") })
+  if ($workerStatus -in @("online", "ready")) { $Warnings += "standby_worker_can_only_heartbeat" }
   if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
   $projectStartable = ($projectControl -in @("paused", "ready"))
-  $canStart = ($blockers.Count -eq 0 -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $lockStatus -in @("none", "released") -and $projectStartable -and [string]$CurrentStep.status -eq "ready" -and $goalUnexecuted -and $workerReady)
+  $canStart = $false
   [pscustomobject]@{
     can_start_one = $canStart
-    can_start_queue = ($false -and $workerReady)
+    can_start_queue = $false
     can_pause = ($projectControl -ne "paused")
     can_stop = $true
     can_emergency_stop = $true
-    can_resume = ($projectControl -eq "paused" -and $lockStatus -in @("none", "released") -and $activeTasks -eq 0 -and $staleLeases -eq 0 -and $workerReady)
-    blockers = @($blockers)
+    can_resume = $false
+    blockers = @($blockers | Select-Object -Unique)
     warnings = @($Warnings | Where-Object { $_ } | Select-Object -Unique)
-    required_human_action = @($requiredHuman | Select-Object -Unique)
-    next_safe_action = if (-not $workerReady) { "Verify or register an online worker before any start-one or start-queue action." } elseif ($canStart) { "Generate and review this report artifact; after merge, a human may separately approve attaching Goal 190 evidence and completing the step. Do not start Goal 191 from this report." } elseif ($blockers.Count -gt 0) { "Resolve current blockers before any queue control action." } else { "Keep campaign paused and inspect warnings before any execution control." }
+    required_human_action = @(@($requiredHuman) + @("verify_worker_service_standby_before_goal_195") | Select-Object -Unique)
+    next_safe_action = if (-not $workerReady) { "Start or refresh bounded standby heartbeat; keep Start One and Start Queue disabled until Goal 195." } else { "Monitor standby heartbeat; execution remains disabled until Goal 195 Start One gate." }
     worker_required = $workerRequired
     worker_status = $workerStatus
     run_budget_required = $true
     reason_required = $true
+    worker_service_state = $workerServiceState
+    execution_disabled_until_goal = "super-195-manual-goal-queue-management"
+  }
+}
+
+function New-WorkerServiceReportState {
+  param([string]$WorkerStatus)
+  $mode = if ($WorkerStatus -in @("online", "ready")) { "standby" } elseif ($WorkerStatus -eq "stale") { "error" } else { "offline" }
+  $blockers = New-Object System.Collections.Generic.List[string]
+  if ($mode -eq "offline") { $blockers.Add("worker_service_offline") | Out-Null }
+  if ($mode -eq "error") { $blockers.Add("worker_service_error") | Out-Null }
+  if ($mode -eq "standby") { $blockers.Add("standby_worker_can_only_heartbeat") | Out-Null }
+  $blockers.Add("execution_disabled_until_goal_195") | Out-Null
+  [pscustomobject]@{
+    schema = "skybridge.worker_service_state.v1"
+    worker_service_state = $true
+    worker_id = "laptop-zenbookduo"
+    worker_profile = "laptop-zenbookduo-standby"
+    mode = $mode
+    heartbeat_at = $null
+    service_started_at = $null
+    current_task_id = $null
+    can_claim_tasks = $false
+    can_execute_tasks = $false
+    stop_requested = $false
+    pause_requested = $false
+    capability_matrix = [pscustomobject]@{
+      heartbeat = $true
+      status = $true
+      stop = $true
+      pause = $true
+      task_claim = $false
+      task_execute = $false
+      codex_execute = $false
+      pr_create = $false
+      arbitrary_shell = $false
+      token_printed = $false
+    }
+    readiness_blockers = @($blockers)
+    token_available = $false
+    token_printed = $false
   }
 }
 
@@ -1632,6 +1676,15 @@ function ConvertTo-CampaignReportMarkdown {
   $lines.Add("- can_emergency_stop: $($Report.queue_control_readiness.can_emergency_stop)") | Out-Null
   $lines.Add("- can_resume: $($Report.queue_control_readiness.can_resume)") | Out-Null
   $lines.Add("- next_safe_action: $($Report.queue_control_readiness.next_safe_action)") | Out-Null
+  $lines.Add("") | Out-Null
+  $lines.Add("## Worker Service Mode") | Out-Null
+  $lines.Add("- Mode: $($Report.worker_service_state.mode)") | Out-Null
+  $lines.Add("- Current task id: $($Report.worker_service_state.current_task_id)") | Out-Null
+  $lines.Add("- Can claim tasks: $($Report.worker_service_state.can_claim_tasks)") | Out-Null
+  $lines.Add("- Can execute tasks: $($Report.worker_service_state.can_execute_tasks)") | Out-Null
+  $lines.Add("- Readiness blockers: $(@($Report.worker_service_state.readiness_blockers) -join ', ')") | Out-Null
+  $lines.Add("- Execution disabled until: $($Report.queue_control_readiness.execution_disabled_until_goal)") | Out-Null
+  $lines.Add("- Token printed: false") | Out-Null
   $lines.Add("") | Out-Null
   $lines.Add("## Blockers And Warnings") | Out-Null
   $lines.Add("- Current blockers: $(@($Report.blockers) -join ', ')") | Out-Null
@@ -1737,6 +1790,7 @@ function Export-CampaignRunnerReport {
       current = @($warnings | Where-Object { $_ -notmatch "historical" })
     }
     queue_control_readiness = $queueReadiness
+    worker_service_state = $queueReadiness.worker_service_state
     blockers = @($currentBlockers | Select-Object -Unique)
     warnings = @($warnings | Select-Object -Unique)
     acceptance_summary = [pscustomobject]@{

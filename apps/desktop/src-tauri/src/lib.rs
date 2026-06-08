@@ -45,6 +45,7 @@ struct DesktopStatus {
     pre190_readiness: Pre190Readiness,
     operator_readiness: Pre190Readiness,
     campaign_report: Value,
+    worker_service_state: Value,
     safe_summary: Value,
     bridge_outcomes: Vec<BridgeOutcome>,
     report_cached: bool,
@@ -276,6 +277,10 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         },
     };
     let safe_summary = build_safe_summary(&campaign_report);
+    let worker_service_state = campaign_report
+        .get("worker_service_state")
+        .cloned()
+        .unwrap_or_else(|| fixture_worker_service_state(&worker_json));
     let pre190_readiness = evaluate_pre190_readiness(
         active_tasks,
         stale_leases,
@@ -317,6 +322,7 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         pre190_readiness,
         operator_readiness,
         campaign_report,
+        worker_service_state,
         safe_summary,
         bridge_outcomes,
         report_cached,
@@ -752,6 +758,15 @@ fn evaluate_operator_readiness(
     if let Some(worker_status) = get_string(readiness, &["worker_status"]) {
         reasons.push(format!("worker_status={worker_status}"));
     }
+    if let Some(mode) = get_string(report, &["worker_service_state", "mode"]) {
+        reasons.push(format!("worker_service_mode={mode}"));
+    }
+    if get_string_array(report, &["worker_service_state", "readiness_blockers"])
+        .iter()
+        .any(|item| item == "execution_disabled_until_goal_195")
+    {
+        reasons.push("execution_disabled_until_goal_195".into());
+    }
     if reasons.is_empty() {
         reasons.push("queue readiness unavailable".into());
     }
@@ -820,6 +835,12 @@ fn build_safe_summary(report: &Value) -> Value {
     let warnings = get_string_array(&readiness, &["warnings"]);
     let required_human_action = get_string_array(&readiness, &["required_human_action"]);
     let worker_status = get_string(&readiness, &["worker_status"]).unwrap_or_else(|| "unknown".into());
+    let worker_service = report
+        .get("worker_service_state")
+        .cloned()
+        .unwrap_or_else(|| fixture_worker_service_state(&Value::Null));
+    let worker_service_mode = get_string(&worker_service, &["mode"]).unwrap_or_else(|| "offline".into());
+    let worker_service_blockers = get_string_array(&worker_service, &["readiness_blockers"]);
     let attention_count = (if matches!(worker_status.as_str(), "offline" | "stale" | "missing" | "unknown") { 1 } else { 0 })
         + blockers.len()
         + required_human_action.len();
@@ -848,9 +869,54 @@ fn build_safe_summary(report: &Value) -> Value {
         "blockers": blockers,
         "warnings": warnings,
         "worker_status": worker_status,
+        "worker_service_mode": worker_service_mode,
+        "worker_service_blockers": worker_service_blockers,
         "attention_count": attention_count,
         "top_blocker": top_blocker,
         "recommended_next_action": next_safe_action,
+        "token_printed": false
+    })
+}
+
+fn fixture_worker_service_state(worker_json: &Value) -> Value {
+    let remote_status = get_string(worker_json, &["remote_status"]).unwrap_or_else(|| "offline".into());
+    let mode = if remote_status == "online" || remote_status == "ready" {
+        "standby"
+    } else {
+        "offline"
+    };
+    let first_blocker = if mode == "offline" {
+        "worker_service_offline"
+    } else {
+        "standby_heartbeat_only_no_execution"
+    };
+    serde_json::json!({
+        "schema": "skybridge.worker_service_state.v1",
+        "worker_service_state": true,
+        "worker_id": WORKER_ID,
+        "worker_profile": "laptop-zenbookduo-standby",
+        "mode": mode,
+        "heartbeat_at": get_string(worker_json, &["last_seen"]),
+        "service_started_at": null,
+        "current_task_id": get_string(worker_json, &["current_task_id"]),
+        "can_claim_tasks": false,
+        "can_execute_tasks": false,
+        "stop_requested": false,
+        "pause_requested": false,
+        "capability_matrix": {
+            "heartbeat": true,
+            "status": true,
+            "stop": true,
+            "pause": true,
+            "task_claim": false,
+            "task_execute": false,
+            "codex_execute": false,
+            "pr_create": false,
+            "arbitrary_shell": false,
+            "token_printed": false
+        },
+        "readiness_blockers": [first_blocker, "execution_disabled_until_goal_195"],
+        "token_available": false,
         "token_printed": false
     })
 }
