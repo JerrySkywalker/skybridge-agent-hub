@@ -541,6 +541,14 @@ function ProposedGoalReviewPanel({ review }: { review: ProposedGoalReviewSummary
         <StatusValue label="Blocked drafts" value={review.blocked_draft_count} />
         <StatusValue label="Next action" value={review.next_action} />
         <StatusValue label="Import requires Goal 200" value={String(review.import_requires_goal_200)} />
+        <StatusValue label="Approved" value={String(review.approved_count)} />
+        <StatusValue label="Rejected" value={String(review.rejected_count)} />
+        <StatusValue label="Imported" value={String(review.imported_count)} />
+        <StatusValue label="Import target" value={review.import_target} />
+        <StatusValue label="Controlled Review / Import" value={`Approve preview=${review.review_controls.approve_preview}; Reject preview=${review.review_controls.reject_preview}; Edit staged=${review.review_controls.edit_staged}; Import preview=${review.review_controls.import_preview}; Import apply disabled=${review.review_controls.import_apply}`} />
+        <StatusValue label="Reason gated" value={review.review_controls.approve_preview === "reason-gated" ? "reason-gated" : "unavailable"} />
+        <StatusValue label="manifest diff" value={`${review.import_preview_summary.target_path}; ${review.import_preview_summary.manifest_diff.join("; ")}; ${review.import_preview_summary.dependency_order_changes.join("; ")}; ${review.import_preview_summary.hash_changes.join("; ")}`} />
+        <StatusValue label="execution review required" value={String(review.import_preview_summary.execution_review_required)} />
         <StatusValue label="Imported" value={String(review.imported)} />
         <StatusValue label="Executed" value={String(review.executed)} />
         <StatusValue label="Task created" value={String(review.task_created)} />
@@ -550,11 +558,16 @@ function ProposedGoalReviewPanel({ review }: { review: ProposedGoalReviewSummary
       <ul>
         {review.proposed_goals.map((goal) => (
           <li key={goal.proposed_goal_id}>
-            <strong>{goal.title}</strong> {goal.safety_classification} {goal.review_status} {goal.proposed_markdown_path} {goal.content_hash.slice(0, 12)} deps={goal.suggested_dependencies.join(", ") || "none"} notes={goal.review_notes.join("; ")}
+            <strong>{goal.title}</strong> {goal.safety_classification} {goal.review_status} {goal.proposed_markdown_path} {goal.content_hash.slice(0, 12)} reviewer={goal.reviewer ?? "none"} decision={goal.decision ?? "pending"} import={goal.import_status ?? "not_imported"} target={goal.import_target ?? "none"} deps={goal.suggested_dependencies.join(", ") || "none"} notes={goal.review_notes.join("; ")}
           </li>
         ))}
       </ul>
       <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Approve preview reason-gated</button>
+        <button type="button" disabled aria-disabled="true">Reject preview reason-gated</button>
+        <button type="button" disabled aria-disabled="true">Edit staged hash recompute</button>
+        <button type="button" disabled aria-disabled="true">Import preview dry-run</button>
+        <button type="button" disabled aria-disabled="true">Import apply disabled</button>
         <button type="button" disabled aria-disabled="true">Import disabled</button>
         <button type="button" disabled aria-disabled="true">Execute disabled</button>
       </div>

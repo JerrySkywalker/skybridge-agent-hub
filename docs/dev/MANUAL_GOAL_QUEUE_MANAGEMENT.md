@@ -8,6 +8,8 @@ Proposed goals are not campaign goals. They live under `goals/proposed/` with re
 
 Goal 199 can generate fixture drafts for human review. Import remains a separate Goal 200 workflow so a generated goal cannot approve or execute itself.
 
+Goal 200 adds the controlled review/import command surface. Proposed drafts can be approved, rejected, edited or superseded with audit metadata. Import preview reports target path, manifest diff, dependency/order changes and hash changes. Import apply is approved-only, reason-gated and stages into `goals/reviewed/` by default, leaving execution disabled.
+
 ## Author A Goal Pack
 
 A goal pack is a directory with `campaign.skybridge.json` and one markdown file per goal. Use the templates in `goals/templates/`:

@@ -32,3 +32,5 @@ Goal 199 does not require a real Hermes service. The supported path is fixture-f
 ## Goal 200 Boundary
 
 Goal 199 intentionally does not import or execute generated goals. Goal 200 is required for controlled review/import so proposed drafts cannot approve themselves or bypass campaign review.
+
+Goal 200 uses `skybridge-goal-draft-review.ps1` to list, validate, approve, reject, edit and import-preview proposed drafts. Import apply is dry-run-first, reason-gated and approved-only. The default import target is a reviewed staging pack such as `goals/reviewed/`, not the active campaign manifest. Imported drafts still require separate future execution review.

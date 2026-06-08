@@ -182,6 +182,9 @@ describe("SkyBridgeClient", () => {
       schema: "skybridge.proposed_goal_review_summary.v1",
       proposed_goal_count: 2,
       pending_review_count: 1,
+      approved_count: 1,
+      rejected_count: 1,
+      imported_count: 0,
       blocked_draft_count: 1,
       next_action: "review proposed goals in Goal 200",
       import_requires_goal_200: true,
@@ -198,12 +201,14 @@ describe("SkyBridgeClient", () => {
       proposed_goal_id: "proposed-goal-201-local-readme-refresh",
       source: "fixture",
       safety_classification: "low",
-      review_status: "proposed",
+      review_status: "approved",
+      import_status: "preview_ready",
       token_printed: false,
     });
     expect(fixtureProposedGoalReviewSummary.proposed_goals[1]).toMatchObject({
       safety_classification: "blocked",
-      review_status: "needs_review",
+      review_status: "rejected",
+      import_status: "blocked",
     });
     expect(fixtureCampaignRunReport.queue_control_readiness.proposed_goal_summary).toMatchObject({
       proposed_goal_count: 2,

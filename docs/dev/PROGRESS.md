@@ -1,5 +1,13 @@
 # Progress Log
 
+## 2026-06-08 Goal 200 Controlled Goal Draft Review And Import
+
+- Added `skybridge-goal-draft-review.ps1` with review queue, validate, approve/reject/edit/supersede, import-preview, import-apply, safe-summary and attention-event commands.
+- Added risk gating for blocked/unsafe drafts, reason-gated approval/rejection, edit hash recompute, manifest/dependency validation and dry-run-first import staging.
+- Added Desktop/Web controlled review/import panel state with approve/reject/edit/import preview summaries, manifest diff, import target and execution-review-required status.
+- Added focused Goal 200 smokes covering reason requirements, risk gating, edit hashes, import preview/apply, no execution, manifest/dependency validation, attention, no secrets and clean worktree.
+- Imports stage reviewed goals only; they do not execute, create tasks, claim tasks, start worker loops, start queues or advance campaigns.
+
 ## 2026-06-08 Goal 199 Hermes Goal Draft Generator
 
 - Added a fixture-first proposed-goal draft generator with required safety sections, stable content hashes and `token_printed=false`.
