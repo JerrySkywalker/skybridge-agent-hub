@@ -982,6 +982,80 @@ export interface CampaignQueueControlReadiness {
   repo_exclusive_lock?: RepoExclusiveLock;
   priority_queue?: CampaignPriorityQueue;
   routing_readiness?: WorkerRoutingReadinessDetail;
+  project_profile?: ProjectProfileReviewSummary;
+  project_selection?: ProjectSelectionPreview;
+}
+
+export interface ProjectValidationCommandSummary {
+  id: string;
+  command: string;
+  known_fixture: boolean;
+  executes: false;
+}
+
+export interface ProjectWorkerProfileSummary {
+  default_worker_profile: string;
+  allowed_worker_profiles: string[];
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+}
+
+export interface ProjectGoalPackSummary {
+  default_goal_pack_dir: string;
+  allowed_goal_pack_dirs: string[];
+  import_apply_enabled: false;
+}
+
+export interface ProjectPolicySummary {
+  fixture_only: boolean;
+  dry_run_default: boolean;
+  selection_preview_only: true;
+  forbid_arbitrary_shell: true;
+  forbid_secret_fields: true;
+  forbid_production_paths: true;
+}
+
+export interface ProjectProfileReviewSummary {
+  schema: "skybridge.project_profile_review_summary.v1";
+  project_id: string;
+  display_name: string;
+  validation_status: "valid" | "invalid" | "missing";
+  validation_errors: string[];
+  validation_warnings: string[];
+  repo_identity: string;
+  repo_path_display: string;
+  default_branch: string;
+  allowed_paths: string[];
+  blocked_paths: string[];
+  validation_commands: ProjectValidationCommandSummary[];
+  worker_profile_summary: ProjectWorkerProfileSummary;
+  goal_pack_summary: ProjectGoalPackSummary;
+  policy_summary: ProjectPolicySummary;
+  profile_hash: string;
+  no_execution_controls: true;
+  token_printed: false;
+}
+
+export interface ProjectSelectionPreview {
+  schema: "skybridge.project_selection_preview.v1";
+  mode: "preview";
+  selected_project_id: string;
+  profile_hash: string;
+  repo_identity: string;
+  repo_path_display: string;
+  default_branch: string;
+  allowed_path_summary: string;
+  worker_profile_summary: ProjectWorkerProfileSummary;
+  goal_pack_summary: ProjectGoalPackSummary;
+  blocked_reason: string | null;
+  project_selection_preview_only: true;
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  worker_loop_started: false;
+  queue_execution_enabled: false;
+  validation_commands_executed: false;
+  token_printed: false;
 }
 
 export type WorkerOs = "windows" | "linux" | "macos" | "unknown";
@@ -1029,6 +1103,9 @@ export interface WorkerRouteTaskPreview {
   task_type: string;
   project_id: string;
   repo_id: string;
+  project_profile_required?: boolean;
+  project_profile_hash?: string;
+  project_selection_preview_only?: boolean;
   required_os: WorkerOs | null;
   required_tools: WorkerTool[];
   required_capabilities: string[];
@@ -1282,6 +1359,11 @@ export type QueueControlAction =
   | "abort_campaign_preview"
   | "campaign_priority_queue"
   | "campaign_select_next_preview"
+  | "project_profile_validate"
+  | "project_profile_preview"
+  | "project_profile_list"
+  | "project_profile_hash"
+  | "project_select_preview"
   | "start_one_apply"
   | "start_queue_apply"
   | "start_all"
@@ -1327,6 +1409,7 @@ export interface QueueControlState {
   action_matrix: QueueControlActionMatrixEntry[];
   blockers: string[];
   warnings: string[];
+  project_selection?: ProjectSelectionPreview;
   token_printed: false;
 }
 
@@ -1430,7 +1513,13 @@ export type AttentionEventType =
   | "worker_disabled"
   | "capability_mismatch"
   | "repo_parallelism_blocked"
-  | "selected_worker_ready_for_preview_only";
+  | "selected_worker_ready_for_preview_only"
+  | "project_profile_invalid"
+  | "project_profile_missing"
+  | "project_repo_path_invalid"
+  | "project_default_branch_mismatch"
+  | "project_policy_blocked_path"
+  | "project_selection_preview_only";
 
 export interface AttentionEvent {
   schema: "skybridge.attention_event.v1";
@@ -1576,6 +1665,11 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
     "abort_campaign_preview",
     "campaign_priority_queue",
     "campaign_select_next_preview",
+    "project_profile_validate",
+    "project_profile_preview",
+    "project_profile_list",
+    "project_profile_hash",
+    "project_select_preview",
   ] as const).map(
     (action) =>
       ({
@@ -1615,9 +1709,9 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
         reason_required: true,
         human_approval_required: true,
         requires_arm_lease: true,
-        blockers: ["execution_apply_deferred_until_goal_197"],
+        blockers: ["execution_apply_deferred_until_goal_199"],
         warnings: [],
-        summary: "Armed execution is modeled but forbidden until a later reviewed multi-worker readiness gate.",
+        summary: "Armed execution is modeled but forbidden until a later reviewed project bootstrap gate.",
         token_printed: false,
       }) satisfies QueueControlActionMatrixEntry,
   ),
@@ -1655,6 +1749,94 @@ export const workerRoutingPolicy: WorkerRoutingPolicy = {
   stale_repo_lock_requires_recovery_first: true,
   can_claim_tasks: false,
   can_execute_tasks: false,
+  token_printed: false,
+};
+
+export const fixtureProjectProfileReviewSummary: ProjectProfileReviewSummary = {
+  schema: "skybridge.project_profile_review_summary.v1",
+  project_id: "skybridge-agent-hub",
+  display_name: "SkyBridge Agent Hub",
+  validation_status: "valid",
+  validation_errors: [],
+  validation_warnings: [],
+  repo_identity: "JerrySkywalker/skybridge-agent-hub",
+  repo_path_display: "V:/src/skybridge-agent-hub",
+  default_branch: "main",
+  allowed_paths: [
+    ".",
+    "apps/desktop",
+    "apps/web",
+    "config/project-profiles",
+    "docs/dev",
+    "goals/dev-queue-189-200",
+    "packages/client",
+    "scripts/powershell",
+  ],
+  blocked_paths: [
+    ".env",
+    ".env.local",
+    ".agent/runs",
+    ".data",
+    "deploy/production",
+    "docs/operations/openresty-hermes-api.example.conf",
+  ],
+  validation_commands: [
+    {
+      id: "pnpm-check",
+      command: "corepack pnpm check",
+      known_fixture: false,
+      executes: false,
+    },
+    {
+      id: "powershell-parse",
+      command: "pwsh -ExecutionPolicy Bypass -File scripts/powershell/validate-powershell.ps1",
+      known_fixture: false,
+      executes: false,
+    },
+  ],
+  worker_profile_summary: {
+    default_worker_profile: "laptop-zenbookduo-standby",
+    allowed_worker_profiles: ["laptop-zenbookduo-standby", "linux-ci-preview"],
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+  },
+  goal_pack_summary: {
+    default_goal_pack_dir: "goals/dev-queue-189-200",
+    allowed_goal_pack_dirs: ["goals/dev-queue-189-200"],
+    import_apply_enabled: false,
+  },
+  policy_summary: {
+    fixture_only: false,
+    dry_run_default: true,
+    selection_preview_only: true,
+    forbid_arbitrary_shell: true,
+    forbid_secret_fields: true,
+    forbid_production_paths: true,
+  },
+  profile_hash: "258fbacefb78c8d8bd42900c90fbc04ff6d7dd020204cb4bdd9c67d1a2e24d7a",
+  no_execution_controls: true,
+  token_printed: false,
+};
+
+export const fixtureProjectSelectionPreview: ProjectSelectionPreview = {
+  schema: "skybridge.project_selection_preview.v1",
+  mode: "preview",
+  selected_project_id: fixtureProjectProfileReviewSummary.project_id,
+  profile_hash: fixtureProjectProfileReviewSummary.profile_hash,
+  repo_identity: fixtureProjectProfileReviewSummary.repo_identity,
+  repo_path_display: fixtureProjectProfileReviewSummary.repo_path_display,
+  default_branch: fixtureProjectProfileReviewSummary.default_branch,
+  allowed_path_summary: `${fixtureProjectProfileReviewSummary.allowed_paths.length} allowed paths; ${fixtureProjectProfileReviewSummary.blocked_paths.length} blocked paths`,
+  worker_profile_summary: fixtureProjectProfileReviewSummary.worker_profile_summary,
+  goal_pack_summary: fixtureProjectProfileReviewSummary.goal_pack_summary,
+  blocked_reason: null,
+  project_selection_preview_only: true,
+  task_created: false,
+  task_claimed: false,
+  task_executed: false,
+  worker_loop_started: false,
+  queue_execution_enabled: false,
+  validation_commands_executed: false,
   token_printed: false,
 };
 
@@ -1801,10 +1983,13 @@ export const fixtureWorkerReadiness: WorkerReadinessEntry[] = [
 ];
 
 export const fixtureRouteTaskPreview: WorkerRouteTaskPreview = {
-  task_id: "preview-super-197-local-smoke",
+  task_id: "preview-super-198-local-smoke",
   task_type: "local-smoke",
   project_id: "skybridge-agent-hub",
   repo_id: "skybridge-agent-hub",
+  project_profile_required: true,
+  project_profile_hash: fixtureProjectProfileReviewSummary.profile_hash,
+  project_selection_preview_only: true,
   required_os: "windows",
   required_tools: ["git", "node", "pnpm", "powershell"],
   required_capabilities: ["local-smoke"],
@@ -1934,7 +2119,7 @@ export const fixtureWorkerServiceState: WorkerServiceState = {
   readiness_blockers: [
     "worker_service_offline",
     "standby_heartbeat_required",
-    "execution_disabled_until_goal_197",
+    "execution_disabled_until_goal_199",
   ],
   token_available: false,
   token_printed: false,
@@ -1959,7 +2144,7 @@ export const fixtureCampaignLock: CampaignLock = {
   expires_at: "2026-06-08T00:30:00.000Z",
   lock_status: "held",
   release_reason: null,
-  operator_reason: "Goal 196 fixture: campaign is held for lock review before execution.",
+  operator_reason: "Goal 198 fixture: campaign remains held for project policy review before execution.",
   age_seconds: 0,
   stale: false,
   token_printed: false,
@@ -2009,9 +2194,9 @@ export const fixtureCampaignPriorityQueue: CampaignPriorityQueue = {
       project_id: "skybridge-agent-hub",
       priority: 10,
       status: "ready",
-      current_goal_id: "super-197-multi-worker-readiness",
-      current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
-      blocked_reason: "execution_gate_disabled_until_controlled_start_one_trial",
+      current_goal_id: "super-198-multi-project-support",
+      current_step_id: "dev-queue-189-200:super-198-multi-project-support",
+      blocked_reason: "project_selection_preview_only",
       selected: true,
       token_printed: false,
     },
@@ -2030,8 +2215,8 @@ export const fixtureCampaignPriorityQueue: CampaignPriorityQueue = {
   selection: {
     selected_campaign_id: "dev-queue-189-200",
     decision: "blocked",
-    blocked_campaign_reason: "execution_gate_disabled_until_controlled_start_one_trial",
-    queue_decision_summary: "dev-queue-189-200 is highest priority; routing can preview a worker but cannot claim or execute tasks.",
+    blocked_campaign_reason: "project_selection_preview_only",
+    queue_decision_summary: "dev-queue-189-200 is highest priority; project selection is preview-only and cannot claim or execute tasks.",
     execution_side_effects: false,
     token_printed: false,
   },
@@ -2070,11 +2255,11 @@ export function createWorkerServiceReadiness(
   if (!workerProfileValid) blockers.add("worker_profile_invalid");
   if (state.mode === "offline") blockers.add("worker_service_offline");
   if (state.mode === "standby") warnings.add("standby_heartbeat_only_no_execution");
-  if (state.mode === "ready") warnings.add("ready_mode_still_execution_disabled_until_goal_197");
+  if (state.mode === "ready") warnings.add("ready_mode_still_execution_disabled_until_goal_199");
   if (state.pause_requested) blockers.add("pause_requested");
   if (state.stop_requested) blockers.add("stop_requested");
   if (state.current_task_id) blockers.add("current_task_present");
-  blockers.add("execution_disabled_until_goal_197");
+  blockers.add("execution_disabled_until_goal_199");
 
   const heartbeatAge = state.heartbeat_at
     ? Math.max(
@@ -2161,6 +2346,10 @@ export interface CampaignSafeSummary {
   hash_drift_count?: number;
   dependency_order_status?: "valid" | "invalid" | "unknown";
   proposed_import_update_action?: string;
+  selected_project_id?: string;
+  project_profile_hash?: string;
+  project_validation_status?: "valid" | "invalid" | "missing";
+  project_selection_preview_only?: boolean;
   queue_readiness: Pick<
     CampaignQueueControlReadiness,
     | "can_start_one"
@@ -2244,6 +2433,10 @@ export function createCampaignSafeSummary(report: CampaignRunReport): CampaignSa
     hash_drift_count: 0,
     dependency_order_status: "unknown",
     proposed_import_update_action: "review_goal_pack_offline",
+    selected_project_id: readiness.project_selection?.selected_project_id ?? readiness.project_profile?.project_id,
+    project_profile_hash: readiness.project_selection?.profile_hash ?? readiness.project_profile?.profile_hash,
+    project_validation_status: readiness.project_profile?.validation_status,
+    project_selection_preview_only: readiness.project_selection?.project_selection_preview_only ?? false,
     queue_readiness: {
       can_start_one: readiness.can_start_one,
       can_start_queue: readiness.can_start_queue,
@@ -2332,6 +2525,12 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "capability_mismatch",
       "repo_parallelism_blocked",
       "selected_worker_ready_for_preview_only",
+      "project_profile_invalid",
+      "project_profile_missing",
+      "project_repo_path_invalid",
+      "project_default_branch_mismatch",
+      "project_policy_blocked_path",
+      "project_selection_preview_only",
     ],
     real_external_send: false,
     summary: "Render in SkyBridge Desktop only.",
@@ -2509,6 +2708,88 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
         ),
       );
     }
+  }
+
+  const projectProfile = readiness.project_profile;
+  const projectSelection = readiness.project_selection;
+  if (!projectProfile) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "project_profile_missing",
+        "blocker",
+        "queue_control",
+        "Selected project profile is missing.",
+        "Add a safe project profile and validate it before any future project onboarding.",
+        "project_profile_missing",
+      ),
+    );
+  } else {
+    if (projectProfile.validation_status !== "valid") {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "project_profile_invalid",
+          "blocker",
+          "queue_control",
+          `Project profile ${projectProfile.project_id} is invalid.`,
+          "Review profile validation errors before any future queue execution gate.",
+          projectProfile.project_id,
+        ),
+      );
+    }
+    if (projectProfile.validation_errors.some((error) => error.includes("repo_path"))) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "project_repo_path_invalid",
+          "blocker",
+          "queue_control",
+          `Project repo path is invalid for ${projectProfile.project_id}.`,
+          "Keep project selection preview-only until the repo path is approved and inside the declared root.",
+          "repo_path",
+        ),
+      );
+    }
+    if (projectProfile.validation_warnings.includes("project_default_branch_mismatch")) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "project_default_branch_mismatch",
+          "warning",
+          "queue_control",
+          `Project default branch mismatch for ${projectProfile.project_id}.`,
+          "Confirm the expected default branch before onboarding or importing goals.",
+          "default_branch",
+        ),
+      );
+    }
+    if (projectProfile.validation_errors.some((error) => error.includes("blocked_operational") || error.includes("blocked_path"))) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "project_policy_blocked_path",
+          "blocker",
+          "queue_control",
+          `Project policy blocked a path for ${projectProfile.project_id}.`,
+          "Remove production/server-root/DNS/OpenResty/Hermes or out-of-repo paths from the profile.",
+          "blocked_path",
+        ),
+      );
+    }
+  }
+  if (projectSelection?.project_selection_preview_only) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "project_selection_preview_only",
+        "info",
+        "queue_control",
+        `Project ${projectSelection.selected_project_id} is selected for preview only.`,
+        "Do not claim tasks or mutate another repository from project selection.",
+        "project_selection",
+      ),
+    );
   }
 
   if (readiness.blockers.length > 0 || report.blockers.length > 0) {
@@ -2705,8 +2986,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
-  current_goal_id: "super-197-multi-worker-readiness",
+  current_step_id: "dev-queue-189-200:super-198-multi-project-support",
+  current_goal_id: "super-198-multi-project-support",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -2714,19 +2995,19 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+    current_step_id: "dev-queue-189-200:super-198-multi-project-support",
     step_count: 12,
     source: "fixture",
     goal_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
-    goal_id: "super-197-multi-worker-readiness",
-    order: 9,
-    title: "Multi-worker Readiness",
+    campaign_step_id: "dev-queue-189-200:super-198-multi-project-support",
+    goal_id: "super-198-multi-project-support",
+    order: 10,
+    title: "Multi-project Support",
     status: "ready",
     is_current: true,
-    dependencies: ["super-196-campaign-locking-multi-campaign-queue"],
+    dependencies: ["super-197-multi-worker-readiness"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -2739,15 +3020,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-    goal_id: "super-196-campaign-locking-multi-campaign-queue",
-    order: 8,
-    title: "Campaign Locking and Multi-campaign Queue",
+    campaign_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+    goal_id: "super-197-multi-worker-readiness",
+    order: 9,
+    title: "Multi-worker Readiness",
     status: "completed",
     is_current: false,
-    dependencies: ["super-195-manual-goal-queue-management"],
+    dependencies: ["super-196-campaign-locking-multi-campaign-queue"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/114"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/115"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -2807,14 +3088,14 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
         campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
         goal_id: "super-196-campaign-locking-multi-campaign-queue",
         evidence_id: "none",
-        status: "missing",
-        classification: "missing_evidence",
+        status: "present",
+        classification: "present_evidence",
         recovered: false,
-        missing: true,
+        missing: false,
         skipped: false,
         not_applicable: false,
         operator_action_required: false,
-        summary: "Goal 196 evidence is missing until the locking foundation is completed.",
+        summary: "Goal 196 locking foundation evidence is represented by completed campaign state.",
       },
     ],
   },
@@ -2827,20 +3108,22 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     can_stop: true,
     can_emergency_stop: true,
     can_resume: false,
-    blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_197"],
-    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review"],
-    required_human_action: ["review_campaign_and_repo_locks_before_any_start_preview", "unlock_stale_locks_only_after_inspection_with_reason"],
-    next_safe_action: "Review campaign lock, repo lock and priority queue previews; keep Start One and Start Queue disabled.",
+    blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_199"],
+    warnings: ["approved_unconverted_proposals_present", "standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only"],
+    required_human_action: ["review_project_profile_before_any_future_start_preview", "unlock_stale_locks_only_after_inspection_with_reason"],
+    next_safe_action: "Review project profile and selection preview; keep Start One and Start Queue disabled.",
     worker_required: true,
     worker_status: "offline",
     run_budget_required: true,
     reason_required: true,
     worker_service_state: fixtureWorkerServiceState,
-    execution_disabled_until_goal: "super-197-multi-worker-readiness",
+    execution_disabled_until_goal: "super-199-hermes-goal-draft-generator",
     campaign_lock: fixtureCampaignLock,
     repo_exclusive_lock: fixtureRepoExclusiveLock,
     priority_queue: fixtureCampaignPriorityQueue,
     routing_readiness: fixtureWorkerRoutingReadiness,
+    project_profile: fixtureProjectProfileReviewSummary,
+    project_selection: fixtureProjectSelectionPreview,
   },
   worker_service_state: fixtureWorkerServiceState,
   token_printed: false,
@@ -2850,19 +3133,20 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
-  current_goal_id: "super-197-multi-worker-readiness",
+  current_step_id: "dev-queue-189-200:super-198-multi-project-support",
+  current_goal_id: "super-198-multi-project-support",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-197-routing-preview-active0-stale0",
-  revision: "fixture-goal-197-revision",
+  state_hash: "fixture-goal-198-project-profile-preview-active0-stale0",
+  revision: "fixture-goal-198-revision",
   action_matrix: queueControlActionMatrix,
-  blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_197"],
-  warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review"],
+  blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_199"],
+  warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review", "project_selection_preview_only"],
+  project_selection: fixtureProjectSelectionPreview,
   token_printed: false,
 };
 
@@ -2984,14 +3268,12 @@ fixtureCampaignRunReport.step_ledger = [
   fixtureCampaignRunReport.previous_step_summary!,
   fixtureCampaignRunReport.current_step_summary,
   ...[
-    ["super-197-multi-worker-readiness", "Multi-worker Readiness"],
-    ["super-198-multi-project-support", "Multi-project Support"],
     ["super-199-hermes-goal-draft-generator", "Hermes Goal Draft Generator"],
     ["super-200-controlled-goal-draft-review-import", "Controlled Goal Draft Review and Import"],
   ].map(([goalId, title], index) => ({
     campaign_step_id: `dev-queue-189-200:${goalId}`,
     goal_id: goalId,
-    order: index + 9,
+    order: index + 11,
     title,
     status: "pending",
     is_current: false,

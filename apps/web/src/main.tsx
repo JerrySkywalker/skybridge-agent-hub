@@ -23,6 +23,7 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
@@ -329,6 +330,7 @@ function CampaignQueuePage() {
           <AttentionFeed events={attention.attention_events} />
           <CampaignLockPanel />
           <CampaignPriorityQueuePanel />
+          <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <WorkerRoutingPanel report={report} />
@@ -514,6 +516,76 @@ function GoalQueueReviewPanel({
         fallback="No archive preview."
       />
       <p className="skybridge-state-note">No execution controls are available on this review surface.</p>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function ProjectProfileReviewPanel({
+  profile,
+}: {
+  profile: typeof fixtureProjectProfileReviewSummary;
+}) {
+  return (
+    <section className="skybridge-panel project-profile-review" aria-label="Project profile review">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Project Profile Review</p>
+          <h2>{profile.display_name}</h2>
+        </div>
+        <span className={badgeClass(profile.validation_status === "valid" ? "ok" : "bad")}>
+          {profile.validation_status}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Selected project</dt>
+          <dd>{profile.project_id}</dd>
+        </div>
+        <div>
+          <dt>Profile hash</dt>
+          <dd>{profile.profile_hash}</dd>
+        </div>
+        <div>
+          <dt>Repo identity</dt>
+          <dd>{profile.repo_identity}</dd>
+        </div>
+        <div>
+          <dt>Repo path</dt>
+          <dd>{profile.repo_path_display}</dd>
+        </div>
+        <div>
+          <dt>Default branch</dt>
+          <dd>{profile.default_branch}</dd>
+        </div>
+        <div>
+          <dt>Worker profile</dt>
+          <dd>{profile.worker_profile_summary.default_worker_profile}</dd>
+        </div>
+        <div>
+          <dt>Goal pack</dt>
+          <dd>{profile.goal_pack_summary.default_goal_pack_dir}</dd>
+        </div>
+      </dl>
+      <QueueList title="Allowed paths" items={profile.allowed_paths} fallback="No allowed paths." />
+      <QueueList title="Blocked paths" items={profile.blocked_paths} fallback="No blocked paths." />
+      <QueueList
+        title="Validation commands"
+        items={profile.validation_commands.map((command) => `${command.id}: ${command.command}; executes=${command.executes}`)}
+        fallback="No validation commands."
+      />
+      <QueueList
+        title="Policy summary"
+        items={[
+          `dry_run_default=${profile.policy_summary.dry_run_default}`,
+          `selection_preview_only=${profile.policy_summary.selection_preview_only}`,
+          `forbid_arbitrary_shell=${profile.policy_summary.forbid_arbitrary_shell}`,
+          `forbid_secret_fields=${profile.policy_summary.forbid_secret_fields}`,
+          `forbid_production_paths=${profile.policy_summary.forbid_production_paths}`,
+        ]}
+        fallback="No policy summary."
+      />
+      <p className="skybridge-state-note">No execution controls are available on this project profile review surface.</p>
       <span>token_printed=false</span>
     </section>
   );
@@ -741,6 +813,14 @@ function WorkerRoutingPanel({ report }: { report: CampaignRunReport }) {
         <div>
           <dt>Selected preview</dt>
           <dd>{preview?.selected_worker?.worker_label ?? "none"}</dd>
+        </div>
+        <div>
+          <dt>Project profile hash</dt>
+          <dd>{preview?.task.project_profile_hash ?? "none"}</dd>
+        </div>
+        <div>
+          <dt>Project selection</dt>
+          <dd>{preview?.task.project_selection_preview_only ? "preview only" : "unavailable"}</dd>
         </div>
         <div>
           <dt>Repo max parallel</dt>

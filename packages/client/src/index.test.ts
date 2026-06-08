@@ -9,6 +9,8 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProjectProfileReviewSummary,
+  fixtureProjectSelectionPreview,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
@@ -37,7 +39,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("SkyBridgeClient", () => {
-  it("classifies queue-control actions and lock previews for Goal 196", () => {
+  it("classifies queue-control actions and lock previews for Goal 198", () => {
     const byAction = new Map(queueControlActionMatrix.map((entry) => [entry.action, entry]));
 
     expect(byAction.get("refresh_status")).toMatchObject({
@@ -60,7 +62,7 @@ describe("SkyBridgeClient", () => {
       class: "armed_execution",
       apply_allowed: false,
       requires_arm_lease: true,
-      blockers: ["execution_apply_deferred_until_goal_197"],
+      blockers: ["execution_apply_deferred_until_goal_199"],
     });
     expect(byAction.get("campaign_lock_preview")).toMatchObject({
       class: "preview",
@@ -78,7 +80,7 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-197-multi-worker-readiness",
+      current_goal_id: "super-198-multi-project-support",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
@@ -164,13 +166,13 @@ describe("SkyBridgeClient", () => {
       can_execute_tasks: false,
       token_printed: false,
     });
-    expect(readiness.blockers).toEqual(expect.arrayContaining(["worker_service_offline", "execution_disabled_until_goal_197"]));
+    expect(readiness.blockers).toEqual(expect.arrayContaining(["worker_service_offline", "execution_disabled_until_goal_199"]));
     expect(fixtureCampaignRunReport.worker_service_state).toMatchObject({ mode: "offline", token_printed: false });
     expect(fixtureCampaignRunReport.queue_control_readiness).toMatchObject({
       can_start_one: false,
       can_start_queue: false,
       can_resume: false,
-      execution_disabled_until_goal: "super-197-multi-worker-readiness",
+      execution_disabled_until_goal: "super-199-hermes-goal-draft-generator",
     });
   });
 
@@ -206,6 +208,31 @@ describe("SkyBridgeClient", () => {
     });
   });
 
+  it("models Goal 198 project profiles and selection as preview-only", () => {
+    expect(fixtureProjectProfileReviewSummary).toMatchObject({
+      schema: "skybridge.project_profile_review_summary.v1",
+      project_id: "skybridge-agent-hub",
+      validation_status: "valid",
+      default_branch: "main",
+      no_execution_controls: true,
+      token_printed: false,
+    });
+    expect(fixtureProjectProfileReviewSummary.validation_commands.every((command) => command.executes === false)).toBe(true);
+    expect(fixtureProjectSelectionPreview).toMatchObject({
+      schema: "skybridge.project_selection_preview.v1",
+      mode: "preview",
+      selected_project_id: "skybridge-agent-hub",
+      project_selection_preview_only: true,
+      task_claimed: false,
+      task_executed: false,
+      worker_loop_started: false,
+      queue_execution_enabled: false,
+      validation_commands_executed: false,
+      token_printed: false,
+    });
+    expect(fixtureCampaignRunReport.queue_control_readiness.project_profile?.profile_hash).toBe(fixtureProjectSelectionPreview.profile_hash);
+  });
+
   it("derives attention events and fixture-only routes for Goal 193", () => {
     const events = deriveAttentionEvents(fixtureCampaignRunReport);
     expect(events).toEqual(
@@ -232,13 +259,16 @@ describe("SkyBridgeClient", () => {
         expect.objectContaining({
           event_type: "multi_campaign_conflict",
         }),
+        expect.objectContaining({
+          event_type: "project_selection_preview_only",
+        }),
       ]),
     );
 
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-197-multi-worker-readiness",
+      goal_id: "super-198-multi-project-support",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(

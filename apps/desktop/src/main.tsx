@@ -11,6 +11,7 @@ import {
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
   fixtureGoalQueueReviewSummary,
+  fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
@@ -323,6 +324,7 @@ function App() {
       <AttentionPanel events={attention.attention_events} />
       <CampaignLockPanel />
       <CampaignPriorityQueuePanel />
+      <ProjectProfileReviewPanel />
       <GoalQueueReviewPanel />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
       <WorkerRoutingPanel report={report} />
@@ -475,6 +477,8 @@ function WorkerRoutingPanel({ report }: { report: CampaignRunReport }) {
         <StatusValue label="Worker pool counts" value={routing ? `total=${routing.worker_pool_counts.total}; online=${routing.worker_pool_counts.online}; stale=${routing.worker_pool_counts.stale}; offline=${routing.worker_pool_counts.offline}; disabled=${routing.worker_pool_counts.disabled}; busy=${routing.worker_pool_counts.busy}` : "unavailable"} />
         <StatusValue label="Preview candidates" value={String(routing?.worker_pool_counts.preview_candidates ?? 0)} />
         <StatusValue label="Selected worker preview" value={preview?.selected_worker?.worker_label ?? "none"} />
+        <StatusValue label="Project profile hash" value={preview?.task.project_profile_hash ?? "none"} />
+        <StatusValue label="Project selection" value={preview?.task.project_selection_preview_only ? "preview only" : "unavailable"} />
         <StatusValue label="Execution enabled" value={String(routing?.execution_enabled ?? false)} />
         <StatusValue label="max_parallel_per_repo" value={String(preview?.repo_parallelism_guard.max_parallel_per_repo ?? 1)} />
         <StatusValue label="Repo guard" value={preview ? `blocked=${preview.repo_parallelism_guard.blocked}; blocker=${preview.repo_parallelism_guard.blocker ?? "none"}` : "unavailable"} />
@@ -520,6 +524,43 @@ function GoalQueueReviewPanel() {
         <StatusValue label="Queue execution enabled" value={String(review.queue_execution_enabled)} />
         <StatusValue label="token_printed" value="false" />
       </dl>
+    </section>
+  );
+}
+
+function ProjectProfileReviewPanel() {
+  const profile = fixtureProjectProfileReviewSummary;
+  return (
+    <section className="panel project-profile-review" aria-label="Project profile review">
+      <h2>Project Profile Review</h2>
+      <dl>
+        <StatusValue label="Selected project" value={profile.project_id} />
+        <StatusValue label="Display name" value={profile.display_name} />
+        <StatusValue label="Validation status" value={profile.validation_status} />
+        <StatusValue label="Repo identity" value={profile.repo_identity} />
+        <StatusValue label="Repo path" value={profile.repo_path_display} />
+        <StatusValue label="Default branch" value={profile.default_branch} />
+        <StatusValue label="Allowed paths" value={profile.allowed_paths.join("; ")} />
+        <StatusValue label="Blocked paths" value={profile.blocked_paths.join("; ")} />
+        <StatusValue label="Validation commands" value={profile.validation_commands.map((command) => `${command.id}: executes=${String(command.executes)}`).join("; ")} />
+        <StatusValue label="Worker profile" value={`${profile.worker_profile_summary.default_worker_profile}; can_claim=${String(profile.worker_profile_summary.can_claim_tasks)}; can_execute=${String(profile.worker_profile_summary.can_execute_tasks)}`} />
+        <StatusValue label="Goal pack" value={`${profile.goal_pack_summary.default_goal_pack_dir}; import_apply=${String(profile.goal_pack_summary.import_apply_enabled)}`} />
+        <StatusValue label="Policy summary" value={`dry_run_default=${String(profile.policy_summary.dry_run_default)}; selection_preview_only=${String(profile.policy_summary.selection_preview_only)}; forbid_arbitrary_shell=${String(profile.policy_summary.forbid_arbitrary_shell)}`} />
+        <StatusValue label="Profile hash" value={profile.profile_hash} />
+        <StatusValue label="No execution controls" value={String(profile.no_execution_controls)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">
+          Validate commands disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Project selection apply disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          External repo mutation disabled
+        </button>
+      </div>
     </section>
   );
 }
