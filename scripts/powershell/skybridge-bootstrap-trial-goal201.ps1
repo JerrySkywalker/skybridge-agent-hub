@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
   [string]$Command = "contract",
   [string]$CampaignDir = "goals/bootstrap-trial-201",
   [string]$CampaignId = "bootstrap-trial-201",
@@ -13,6 +13,7 @@ param(
   [string]$StateDir = ".agent/tmp/bootstrap-trial-201-one-shot",
   [string]$ProposedPath = "goals/proposed/proposed-goal-201-local-readme-refresh.md",
   [string]$Reason,
+  [switch]$SimulateRawLogPersistence,
   [switch]$Apply,
   [switch]$Json
 )
@@ -58,6 +59,29 @@ function Test-SecretLookingText {
   return $Text -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript'
 }
 
+function ConvertTo-RedactedText {
+  param([string]$Text)
+  if ([string]::IsNullOrWhiteSpace($Text)) { return $Text }
+  $value = $Text
+  $value = $value -replace '(?i)authorization\s*[:=]\s*bearer\s+[A-Za-z0-9_.-]+', 'Authorization: [REDACTED]'
+  $value = $value -replace '(?i)\bbearer\s+[A-Za-z0-9_.-]{12,}', 'Bearer [REDACTED]'
+  $value = $value -replace 'sk-[A-Za-z0-9_-]{20,}', 'sk-[REDACTED]'
+  $value = $value -replace 'gh[pousr]_[A-Za-z0-9_]{20,}', 'gh[REDACTED]'
+  $value = $value -replace '(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----', '[REDACTED PRIVATE KEY]'
+  return $value
+}
+
+function Get-Sha256Text {
+  param([string]$Text)
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 function Get-GitState {
   $status = (git status --short | Out-String).Trim()
   $branch = (git branch --show-current).Trim()
@@ -97,6 +121,27 @@ function Get-OneShotExecutorEvidencePath {
   Join-Path (Get-OneShotStateDir) "executor-evidence.json"
 }
 
+function Get-OneShotSanitizedEvidencePath {
+  Join-Path (Get-OneShotStateDir) "sanitized-executor-evidence.json"
+}
+
+function Test-OwnedOneShotClaimEvidence {
+  $path = Get-OneShotClaimEvidencePath
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+  try {
+    $evidence = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    return (
+      $evidence.campaign_id -eq "bootstrap-trial-201" -and
+      $evidence.goal_id -eq "goal-201-controlled-start-one-bootstrap-trial" -and
+      $evidence.task_id -eq "bootstrap-trial-201-task-001" -and
+      $evidence.worker_id -eq "laptop-zenbookduo" -and
+      $evidence.token_printed -eq $false
+    )
+  } catch {
+    return $false
+  }
+}
+
 function Test-BootstrapAllowedPath {
   param([string]$Path)
   $normalized = ([string]$Path).Replace("\", "/")
@@ -114,6 +159,74 @@ function Get-OpenBootstrapTaskPrs {
   } catch {
     return @()
   }
+}
+
+function Get-SafeChangedFiles {
+  $files = @(git status --porcelain=v1 | ForEach-Object {
+    if ($_ -match "^\s*(?:[AMDRCU?!]{1,2})\s+(.+)$") { $Matches[1].Trim('"').Replace("\", "/") }
+  } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+  return @($files)
+}
+
+function Test-ChangedFilesAllowed {
+  param([string[]]$Files)
+  foreach ($file in @($Files)) {
+    if (-not (Test-BootstrapAllowedPath -Path $file)) { return $false }
+  }
+  return $true
+}
+
+function Invoke-SilentProcess {
+  param(
+    [Parameter(Mandatory = $true)][string]$FilePath,
+    [Parameter(Mandatory = $true)][string[]]$ArgumentList,
+    [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+    [string]$StandardInputText,
+    [int]$TimeoutMinutes = 30
+  )
+
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $FilePath
+  foreach ($arg in @($ArgumentList)) { [void]$startInfo.ArgumentList.Add($arg) }
+  $startInfo.WorkingDirectory = $WorkingDirectory
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardInput = -not [string]::IsNullOrWhiteSpace($StandardInputText)
+  $startInfo.RedirectStandardOutput = $true
+  $startInfo.RedirectStandardError = $true
+  $startInfo.CreateNoWindow = $true
+
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $startInfo
+  $stdoutChars = 0
+  $stderrChars = 0
+  $process.add_OutputDataReceived({
+    param($sender, $eventArgs)
+    if ($null -ne $eventArgs.Data) { $script:goal201cStdoutChars += ([string]$eventArgs.Data).Length }
+  })
+  $process.add_ErrorDataReceived({
+    param($sender, $eventArgs)
+    if ($null -ne $eventArgs.Data) { $script:goal201cStderrChars += ([string]$eventArgs.Data).Length }
+  })
+  $script:goal201cStdoutChars = 0
+  $script:goal201cStderrChars = 0
+
+  [void]$process.Start()
+  $process.BeginOutputReadLine()
+  $process.BeginErrorReadLine()
+  if ($startInfo.RedirectStandardInput) {
+    $process.StandardInput.Write($StandardInputText)
+    $process.StandardInput.Close()
+  }
+  $timeoutMs = [Math]::Max(1, $TimeoutMinutes) * 60 * 1000
+  if (-not $process.WaitForExit($timeoutMs)) {
+    try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    return [pscustomobject]@{ ok = $false; exit_code = 124; timed_out = $true; stdout_chars_discarded = $script:goal201cStdoutChars; stderr_chars_discarded = $script:goal201cStderrChars; output_persisted = $false; token_printed = $false }
+  }
+  $stdoutChars = $script:goal201cStdoutChars
+  $stderrChars = $script:goal201cStderrChars
+  $exitCode = $process.ExitCode
+  $process.Dispose()
+  [pscustomobject]@{ ok = ($exitCode -eq 0); exit_code = $exitCode; timed_out = $false; stdout_chars_discarded = $stdoutChars; stderr_chars_discarded = $stderrChars; output_persisted = $false; token_printed = $false }
 }
 
 function Get-RoutePreview {
@@ -211,7 +324,7 @@ function Get-GateResult {
   $executorGate = Get-OneShotExecutorGate
   if (-not $claimGate.ok) { foreach ($item in @($claimGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
   if (-not $executorGate.ok) { foreach ($item in @($executorGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
-  $warnings.Add("one_shot_execution_held_until_executor_gate_passes") | Out-Null
+  if (-not $executorGate.ok) { $warnings.Add("one_shot_execution_held_until_executor_gate_passes") | Out-Null }
 
   [pscustomobject]@{
     ok = ($blockers.Count -eq 0)
@@ -278,16 +391,70 @@ function Get-StartOneApplyResult {
       token_printed = $false
     }
   }
+  $claimGate = Get-OneShotClaimGate
+  if (-not $claimGate.ok) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
+      mode = "held"
+      campaign_id = $gate.campaign_id
+      attempted = $false
+      applied = $false
+      task_created = $false
+      task_id = $null
+      task_claimed = $false
+      worker_id = $gate.selected_worker_id
+      pr_created = $false
+      pr_url = $null
+      auto_merge_enabled = $false
+      final_state = "held_no_execution_claim_gate_blocked"
+      hold_reason = "one-shot claim gate cannot be enforced"
+      blockers = @($claimGate.blockers)
+      gate = $gate
+      no_start_all = $true
+      no_second_task = $true
+      no_unbounded_worker_loop = $true
+      no_resume_apply = $true
+      token_printed = $false
+    }
+  }
+  if (-not $Apply) {
+    return [pscustomobject]@{
+      ok = $true
+      schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
+      mode = "preview"
+      campaign_id = $gate.campaign_id
+      attempted = $false
+      applied = $false
+      task_created = $false
+      task_id = $claimGate.task_id
+      task_claimed = $false
+      worker_id = $gate.selected_worker_id
+      pr_created = $false
+      pr_url = $null
+      auto_merge_enabled = $false
+      final_state = "ready_for_one_shot_executor"
+      hold_reason = "start-one apply preview only"
+      blockers = @()
+      gate = $gate
+      no_start_all = $true
+      no_second_task = $true
+      no_unbounded_worker_loop = $true
+      no_resume_apply = $true
+      token_printed = $false
+    }
+  }
+  $appliedClaim = Get-OneShotClaimGate
   [pscustomobject]@{
-    ok = $false
+    ok = $true
     schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
-    mode = "held"
+    mode = "apply"
     campaign_id = $gate.campaign_id
-    attempted = $false
-    applied = $false
-    task_created = $false
-    task_id = $null
-    task_claimed = $false
+    attempted = $true
+    applied = $true
+    task_created = [bool]$appliedClaim.task_created
+    task_id = $appliedClaim.task_id
+    task_claimed = [bool]$appliedClaim.task_claimed
     worker_id = $gate.selected_worker_id
     pr_created = $false
     pr_url = $null
@@ -318,7 +485,7 @@ function Get-Evidence {
     route_reason = $gate.route_reason
     run_budget = $gate.run_budget
     lease_outcome = "no_lease_created"
-    final_state = "held_no_execution_worker_claim_disabled"
+    final_state = if ($gate.ok) { "ready_for_one_shot_start_one_apply" } else { "held_no_execution_executor_gate_blocked" }
     active_tasks = 0
     stale_leases = 0
     runner_lock_status = $gate.runner_lock_status
@@ -428,17 +595,16 @@ function Get-OneShotClaimGate {
 
 function Get-OneShotExecutorGate {
   $claimGate = Get-OneShotClaimGate
+  $contract = Get-SanitizedExecutorContract
   $blockers = New-Object System.Collections.Generic.List[string]
-  foreach ($item in @($claimGate.blockers)) { $blockers.Add([string]$item) | Out-Null }
-
-  # The current shared Codex executor writes prompt.md, codex-exec.jsonl and local logs.
-  # Goal 201B forbids persisting raw prompts/transcripts/logs for the trial evidence path,
-  # so actual execution must fail closed until a redacted executor is available.
-  $executorScript = Join-Path $PSScriptRoot "invoke-codex-task.ps1"
-  $executorText = if (Test-Path -LiteralPath $executorScript -PathType Leaf) { Get-Content -Raw -LiteralPath $executorScript } else { "" }
-  if ($executorText -match 'prompt\.md' -or $executorText -match 'codex-exec\.jsonl' -or $executorText -match 'validation-\$index\.log') {
-    $blockers.Add("codex_executor_persists_prompt_or_logs") | Out-Null
+  $ownedClaim = Test-OwnedOneShotClaimEvidence
+  foreach ($item in @($claimGate.blockers)) {
+    if ($ownedClaim -and [string]$item -eq "second_claim_refused") { continue }
+    $blockers.Add([string]$item) | Out-Null
   }
+
+  if (-not $contract.ok) { foreach ($item in @($contract.blockers)) { $blockers.Add([string]$item) | Out-Null } }
+  if ($SimulateRawLogPersistence) { $blockers.Add("sanitized_executor_refused_forced_log_persistence") | Out-Null }
 
   foreach ($path in @($AllowedPaths)) {
     if (-not (Test-BootstrapAllowedPath -Path $path)) { $blockers.Add("path_allowlist_violation:$path") | Out-Null }
@@ -451,10 +617,13 @@ function Get-OneShotExecutorGate {
     campaign_id = $CampaignId
     goal_id = $GoalId
     task_type = $TaskType
+    worker_id = if ($claimGate.worker_id) { $claimGate.worker_id } else { "laptop-zenbookduo" }
+    task_id = if ($claimGate.task_id) { $claimGate.task_id } else { "bootstrap-trial-201-task-001" }
     max_codex_executions = 1
     max_prs = $MaxPrs
     allowed_paths = @($AllowedPaths)
     would_run_codex = ($blockers.Count -eq 0)
+    command_class = "codex_exec_sanitized_stdin_discard_output"
     task_claimed = $false
     task_executed = $false
     codex_worker_execution_started = $false
@@ -462,10 +631,220 @@ function Get-OneShotExecutorGate {
     auto_merge_enabled = $false
     stops_after_pr_or_failure = $true
     prompt_included = $false
+    prompt_persisted = $false
     raw_transcript_included = $false
     raw_logs_included = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
     external_notification_sent = $false
     blockers = @($blockers | Select-Object -Unique)
+    token_printed = $false
+  }
+}
+
+function Get-SanitizedExecutorContract {
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $codex = Get-Command "codex" -ErrorAction SilentlyContinue
+  $gh = Get-Command "gh" -ErrorAction SilentlyContinue
+  if (-not $codex) { $blockers.Add("codex_cli_missing") | Out-Null }
+  if (-not $gh) { $blockers.Add("github_cli_missing") | Out-Null }
+  [pscustomobject]@{
+    ok = ($blockers.Count -eq 0)
+    schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_contract.v1"
+    campaign_id = "bootstrap-trial-201"
+    goal_id = "goal-201-controlled-start-one-bootstrap-trial"
+    task_type = "docs/local-smoke"
+    max_codex_executions = 1
+    max_tasks = 1
+    max_prs = 1
+    prompt_source = "bounded_in_memory_template"
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    command_class = "codex_exec_sanitized_stdin_discard_output"
+    saved_metadata = @("task_id", "worker_id", "command_class", "changed_files", "pr_url", "evidence_hashes", "token_printed")
+    artifacts_under_ignored_path = ".agent/tmp/bootstrap-trial-201-one-shot/"
+    raw_log_persistence_allowed = $false
+    arbitrary_shell_exposed = $false
+    auto_merge_enabled = $false
+    blockers = @($blockers)
+    token_printed = $false
+  }
+}
+
+function New-SanitizedTaskPrompt {
+  @"
+Execute the controlled SkyBridge bootstrap trial task.
+
+Task id: bootstrap-trial-201-task-001
+Campaign: bootstrap-trial-201
+Goal: goal-201-controlled-start-one-bootstrap-trial
+Task type: docs/local-smoke
+Payload: Local README Refresh
+
+Make one small documentation-only improvement to README.md or docs/** that helps local smoke-test orientation for SkyBridge Agent Hub.
+
+Hard limits:
+- modify only README.md or docs/**;
+- do not touch secrets, .env files, production config, GitHub settings, branch protection, server-root config, or any other repository;
+- do not run git commit, git push, gh pr create, start-all, start-queue, resume -Apply, or any worker loop;
+- keep the change small and reviewable.
+"@
+}
+
+function Invoke-SanitizedOneShotExecutor {
+  $gate = Get-OneShotExecutorGate
+  if (-not $gate.ok) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
+      mode = if ($Apply) { "blocked" } else { "preview" }
+      campaign_id = $CampaignId
+      task_id = $null
+      worker_id = $gate.worker_id
+      pr_url = $null
+      pr_created = $false
+      task_executed = $false
+      final_state = "held_no_execution_executor_gate_blocked"
+      blockers = @($gate.blockers)
+      token_printed = $false
+    }
+  }
+  if (-not $Apply) {
+    return [pscustomobject]@{
+      ok = $true
+      schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
+      mode = "preview"
+      campaign_id = $CampaignId
+      task_id = "bootstrap-trial-201-task-001"
+      worker_id = $gate.worker_id
+      command_class = "codex_exec_sanitized_stdin_discard_output"
+      would_run_codex = $true
+      pr_created = $false
+      task_executed = $false
+      token_printed = $false
+    }
+  }
+
+  $stateDir = Get-OneShotStateDir
+  New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+  $taskId = "bootstrap-trial-201-task-001"
+  $workerId = "laptop-zenbookduo"
+  $branch = "ai/edge-worker/bootstrap-trial-201-task-001-local-readme-refresh"
+  $evidencePath = Get-OneShotSanitizedEvidencePath
+  if (Test-Path -LiteralPath $evidencePath -PathType Leaf) { throw "Sanitized executor evidence already exists; refusing second execution." }
+
+  git fetch origin main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed." }
+  git switch -C $branch origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git switch task branch failed." }
+
+  $prompt = New-SanitizedTaskPrompt
+  $promptHash = Get-Sha256Text -Text $prompt
+  $codex = Get-Command "codex" -ErrorAction Stop
+  $execution = Invoke-SilentProcess -FilePath $codex.Source -ArgumentList @("exec", "--sandbox", "workspace-write", "-") -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $changedFiles = @(Get-SafeChangedFiles)
+  if (-not $execution.ok) {
+    git switch main *> $null
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
+      mode = "controlled_failure"
+      campaign_id = $CampaignId
+      task_id = $taskId
+      worker_id = $workerId
+      command_class = "codex_exec_sanitized_stdin_discard_output"
+      task_executed = $true
+      pr_created = $false
+      final_state = "held_no_execution_executor_failed"
+      exit_code = $execution.exit_code
+      timed_out = $execution.timed_out
+      stdout_persisted = $false
+      stderr_persisted = $false
+      prompt_persisted = $false
+      token_printed = $false
+    }
+  }
+  if ($changedFiles.Count -lt 1) { throw "Sanitized executor produced no changed files." }
+  if (-not (Test-ChangedFilesAllowed -Files $changedFiles)) { throw "Sanitized executor changed disallowed paths: $($changedFiles -join ', ')" }
+
+  foreach ($file in @($changedFiles)) {
+    git add -- $file *> $null
+    if ($LASTEXITCODE -ne 0) { throw "git add failed for $file" }
+  }
+  git commit -m "docs: refresh local smoke orientation" *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
+  git push -u origin $branch *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git push failed." }
+
+  $bodyPath = Join-Path $stateDir "task-pr-body.md"
+  $body = @"
+## Summary
+
+Controlled one-shot bootstrap trial for `bootstrap-trial-201`.
+
+## Safety
+
+- Task id: `bootstrap-trial-201-task-001`
+- Worker: `laptop-zenbookduo`
+- Task type: `docs/local-smoke`
+- Changed files: $($changedFiles -join ", ")
+- No raw prompt, Codex transcript, stdout or stderr is included.
+- No auto-merge requested.
+- token_printed=false
+"@
+  $safeBody = ConvertTo-RedactedText -Text $body
+  if (Test-SecretLookingText $safeBody) { throw "Secret-looking PR body detected." }
+  Set-Content -LiteralPath $bodyPath -Value $safeBody -Encoding UTF8
+  $prOutput = gh pr create --title "Task bootstrap-trial-201-task-001: Local README Refresh" --body-file $bodyPath --base main --head $branch
+  if ($LASTEXITCODE -ne 0) { throw "gh pr create failed." }
+  $prUrl = (($prOutput | Out-String).Trim() -split "\r?\n" | Select-Object -Last 1)
+  $fileSummary = @($changedFiles | ForEach-Object { [pscustomobject]@{ path = $_; sha256 = Get-Sha256Text -Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $_)); token_printed = $false } })
+  $evidence = [pscustomobject]@{
+    schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_evidence.v1"
+    campaign_id = $CampaignId
+    goal_id = $GoalId
+    task_id = $taskId
+    worker_id = $workerId
+    command_class = "codex_exec_sanitized_stdin_discard_output"
+    changed_files = @($changedFiles)
+    file_evidence = @($fileSummary)
+    prompt_sha256 = $promptHash
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    output_persisted = $false
+    pr_url = $prUrl
+    auto_merge_enabled = $false
+    final_state = "held_waiting_human_pr_review"
+    token_printed = $false
+  }
+  $evidenceJson = $evidence | ConvertTo-Json -Depth 40
+  if (Test-SecretLookingText $evidenceJson) { throw "Secret-looking executor evidence detected." }
+  Set-Content -LiteralPath $evidencePath -Value $evidenceJson -Encoding UTF8
+  git switch main *> $null
+  [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
+    mode = "apply"
+    campaign_id = $CampaignId
+    task_id = $taskId
+    worker_id = $workerId
+    command_class = "codex_exec_sanitized_stdin_discard_output"
+    changed_files = @($changedFiles)
+    pr_url = $prUrl
+    pr_created = $true
+    task_executed = $true
+    evidence_path = ConvertTo-ShortPath $evidencePath
+    lease_outcome = "safe_claim_evidence_recorded"
+    final_state = "held_waiting_human_pr_review"
+    stdout_persisted = $false
+    stderr_persisted = $false
+    prompt_persisted = $false
+    transcript_persisted = $false
+    auto_merge_enabled = $false
     token_printed = $false
   }
 }
@@ -478,6 +857,19 @@ $result = switch ($Command) {
   "start-one-apply" { Get-StartOneApplyResult }
   "one-shot-claim-gate" { Get-OneShotClaimGate }
   "one-shot-executor-gate" { Get-OneShotExecutorGate }
+  "sanitized-executor-contract" { Get-SanitizedExecutorContract }
+  "sanitized-executor-gate" { Get-OneShotExecutorGate }
+  "sanitized-redaction-test" {
+    $sample = "Authorization: Bearer abcdefghijklmnop sk-abcdefghijklmnopqrstuvwxyz ghp_abcdefghijklmnopqrstuvwxyz123456"
+    $redacted = ConvertTo-RedactedText -Text $sample
+    [pscustomobject]@{
+      ok = -not (Test-SecretLookingText $redacted)
+      schema = "skybridge.bootstrap_trial_goal201_redaction_test.v1"
+      redacted_secret_markers = ($redacted -match "\[REDACTED\]")
+      token_printed = $false
+    }
+  }
+  "run-sanitized-executor" { Invoke-SanitizedOneShotExecutor }
   "worker-route" { Get-RoutePreview }
   "no-start-all" { [pscustomobject]@{ ok = $true; schema = "skybridge.bootstrap_trial_goal201_no_start_all.v1"; start_all_allowed = $false; blocker = "start_all_forbidden_for_bootstrap_trial_201"; task_created = $false; token_printed = $false } }
   "no-second-task" { [pscustomobject]@{ ok = $true; schema = "skybridge.bootstrap_trial_goal201_no_second_task.v1"; max_tasks = 1; second_task_allowed = $false; blocker = "max_tasks_1"; task_created = $false; token_printed = $false } }

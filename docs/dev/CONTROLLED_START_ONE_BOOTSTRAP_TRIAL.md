@@ -29,21 +29,25 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-tria
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-trial-goal201.ps1 -Command start-one-apply -Reason "operator authorized one-shot bootstrap trial" -Json
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-trial-goal201.ps1 -Command one-shot-claim-gate -Json
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-trial-goal201.ps1 -Command one-shot-executor-gate -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-trial-goal201.ps1 -Command sanitized-executor-contract -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-trial-goal201.ps1 -Command run-sanitized-executor -Json
 ```
 
 Preview is read-only and never creates a task or claims work. The Goal 201B one-shot claim gate now proves the fixed campaign, goal, task type, budget, route, path allowlist, clean worktree, no open trial PR and second-claim refusal rules. Its `-Apply` mode records only safe local claim/lease evidence under ignored `.agent/tmp/...` state and is not a general queue claim API.
 
-The one-shot executor gate remains fail-closed for actual execution because the current shared Codex executor persists local prompt/log artifacts (`prompt.md`, `codex-exec.jsonl` and validation logs). Goal 201B forbids persisting raw prompts, raw transcripts or raw worker logs for the trial path, so `start-one-apply` must remain held until a redacted executor path exists.
+The one-shot executor gate uses a sanitized Codex boundary for Goal 201C. It invokes Codex only for the single `bootstrap-trial-201` docs/local-smoke task, feeds the bounded task prompt through stdin, discards process stdout/stderr without writing logs, and persists only safe metadata under ignored `.agent/tmp/bootstrap-trial-201-one-shot/`.
+
+The executor records task id, worker id, command class, changed files, PR URL and evidence hashes. It does not persist the prompt, Codex transcript, stdout, stderr or raw shell session logs. It fails closed if raw log persistence is requested or if any task, campaign, path, PR or worker gate is outside the one-shot contract.
 
 ## Current Hold
 
-This infrastructure pass stages the reviewed trial and proves the claim gate plus executor stop condition. It does not execute the trial because the current executor cannot yet satisfy the no-raw-prompt/log persistence boundary.
+This infrastructure pass stages the reviewed trial and proves the claim gate plus sanitized executor stop condition. Actual execution is allowed only after the infrastructure PR is merged, local `main` is clean and latest, and the final preflight confirms every one-shot gate.
 
 Required follow-up before execution:
 
-- replace or harden the Codex executor path so it does not persist raw prompts, raw transcripts or raw worker logs for the bootstrap trial;
-- then run the already-staged one-shot executor that can create at most one PR and then stop;
-- record a lease outcome and safe evidence without raw transcripts or raw logs;
+- run `start-one-apply` exactly once for the bootstrap trial;
+- run `run-sanitized-executor -Apply` exactly once;
+- verify the task PR remains open for human review and touches only `README.md` or `docs/**`;
 - keep the queue held after the PR is opened.
 
-Until then, final state is `held_no_execution_executor_gate_blocked` and `token_printed=false`.
+After the task PR opens, final state is `held_waiting_human_pr_review` and `token_printed=false`.
