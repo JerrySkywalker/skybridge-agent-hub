@@ -331,6 +331,7 @@ function CampaignQueuePage() {
           <CampaignPriorityQueuePanel />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
+          <WorkerRoutingPanel report={report} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
           <NotificationRoutingPanel events={attention.attention_events} />
@@ -714,6 +715,53 @@ function CampaignStepLedger({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function WorkerRoutingPanel({ report }: { report: CampaignRunReport }) {
+  const routing = report.queue_control_readiness.routing_readiness;
+  const preview = routing?.route_preview;
+  return (
+    <section className="skybridge-panel worker-routing" aria-label="Multi-worker routing preview">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Multi-worker Routing</p>
+          <h2>Preview Policy</h2>
+        </div>
+        <span className={badgeClass(preview?.selected_worker ? "ok" : "bad")}>
+          preview only
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Pool counts</dt>
+          <dd>{routing ? `total=${routing.worker_pool_counts.total}; online=${routing.worker_pool_counts.online}; stale=${routing.worker_pool_counts.stale}; offline=${routing.worker_pool_counts.offline}; disabled=${routing.worker_pool_counts.disabled}; busy=${routing.worker_pool_counts.busy}` : "unavailable"}</dd>
+        </div>
+        <div>
+          <dt>Selected preview</dt>
+          <dd>{preview?.selected_worker?.worker_label ?? "none"}</dd>
+        </div>
+        <div>
+          <dt>Repo max parallel</dt>
+          <dd>{preview ? `${preview.repo_parallelism_guard.max_parallel_per_repo}; blocked=${preview.repo_parallelism_guard.blocked}; ${preview.repo_parallelism_guard.blocker ?? "none"}` : "1"}</dd>
+        </div>
+        <div>
+          <dt>No execution</dt>
+          <dd>{`task_claimed=${String(preview?.task_claimed ?? false)}; task_executed=${String(preview?.task_executed ?? false)}; worker_loop_started=${String(preview?.worker_loop_started ?? false)}`}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Capability matrix"
+        items={(routing?.worker_capability_matrix ?? []).map((worker) => `${worker.worker_label}: ${worker.os}; tools=${worker.tools.join(", ")}; task_types=${worker.task_type_capabilities.join(", ")}`)}
+        fallback="No worker capability matrix."
+      />
+      <QueueList
+        title="Rejected workers"
+        items={(preview?.rejected_workers ?? []).map((worker) => `${worker.worker_label}: ${worker.rejection_reasons.join(", ") || "none"}`)}
+        fallback="No rejected workers."
+      />
+      <p className="skybridge-state-note">Execution controls remain disabled; this route preview does not claim tasks.</p>
     </section>
   );
 }

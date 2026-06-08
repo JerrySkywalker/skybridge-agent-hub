@@ -981,6 +981,133 @@ export interface CampaignQueueControlReadiness {
   campaign_lock?: CampaignLock;
   repo_exclusive_lock?: RepoExclusiveLock;
   priority_queue?: CampaignPriorityQueue;
+  routing_readiness?: WorkerRoutingReadinessDetail;
+}
+
+export type WorkerOs = "windows" | "linux" | "macos" | "unknown";
+export type WorkerTool = "codex" | "git" | "node" | "pnpm" | "rust" | "docker" | "powershell" | "bash";
+export type WorkerReadinessState = "online" | "offline" | "stale" | "disabled" | "busy" | "unknown";
+
+export interface WorkerCapabilityMatrixEntry {
+  schema: "skybridge.worker_capability_matrix_entry.v1";
+  worker_id: string;
+  worker_label: string;
+  worker_profile: string;
+  os: WorkerOs;
+  tools: WorkerTool[];
+  task_type_capabilities: string[];
+  project_access: string[];
+  repo_access: string[];
+  can_run_local_smokes: boolean;
+  can_run_frontend: boolean;
+  can_run_backend: boolean;
+  can_run_docs: boolean;
+  can_run_worker_service: boolean;
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  token_printed: false;
+}
+
+export interface WorkerReadinessEntry {
+  schema: "skybridge.worker_readiness_entry.v1";
+  worker_id: string;
+  worker_label: string;
+  readiness_state: WorkerReadinessState;
+  heartbeat_age_seconds: number | null;
+  current_task_id: string | null;
+  service_mode: string;
+  readiness_score: number;
+  readiness_blockers: string[];
+  readiness_warnings: string[];
+  recommended_action: string;
+  capability_matrix: WorkerCapabilityMatrixEntry;
+  token_printed: false;
+}
+
+export interface WorkerRouteTaskPreview {
+  task_id: string;
+  task_type: string;
+  project_id: string;
+  repo_id: string;
+  required_os: WorkerOs | null;
+  required_tools: WorkerTool[];
+  required_capabilities: string[];
+  token_printed: false;
+}
+
+export interface WorkerRouteDecision {
+  worker_id: string;
+  worker_label: string;
+  accepted: boolean;
+  readiness_score: number;
+  rejection_reasons: string[];
+  warnings: string[];
+  token_printed: false;
+}
+
+export interface WorkerRoutingPolicy {
+  schema: "skybridge.worker_routing_policy.v1";
+  default_mode: "preview";
+  max_parallel_per_repo: 1;
+  reject_offline_workers: true;
+  reject_stale_workers: true;
+  reject_disabled_workers: true;
+  reject_busy_workers: true;
+  require_capability_match: true;
+  require_project_access: true;
+  require_repo_access: true;
+  require_os_tool_match: true;
+  repo_lock_blocks_preview: true;
+  stale_repo_lock_requires_recovery_first: true;
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  token_printed: false;
+}
+
+export interface WorkerRoutePreview {
+  schema: "skybridge.worker_route_preview.v1";
+  mode: "preview";
+  task: WorkerRouteTaskPreview;
+  selected_worker: WorkerRouteDecision | null;
+  rejected_workers: WorkerRouteDecision[];
+  decisions: WorkerRouteDecision[];
+  policy: WorkerRoutingPolicy;
+  repo_parallelism_guard: {
+    repo_id: string;
+    max_parallel_per_repo: 1;
+    active_mutating_workers: number;
+    repo_lock_status: LockStatus | "none";
+    blocked: boolean;
+    blocker: string | null;
+    token_printed: false;
+  };
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  worker_loop_started: false;
+  queue_execution_enabled: false;
+  token_printed: false;
+}
+
+export interface WorkerRoutingReadinessDetail {
+  schema: "skybridge.worker_routing_readiness_detail.v1";
+  worker_pool_counts: {
+    total: number;
+    online: number;
+    stale: number;
+    offline: number;
+    disabled: number;
+    busy: number;
+    preview_candidates: number;
+  };
+  worker_capability_matrix: WorkerCapabilityMatrixEntry[];
+  worker_readiness: WorkerReadinessEntry[];
+  route_preview: WorkerRoutePreview;
+  selected_worker_ready_for_preview_only: boolean;
+  execution_enabled: false;
+  can_start_one: false;
+  can_start_queue: false;
+  token_printed: false;
 }
 
 export type WorkerServiceMode = "offline" | "standby" | "ready" | "paused" | "stopping" | "error";
@@ -1296,7 +1423,14 @@ export type AttentionEventType =
   | "safe_action_applied"
   | "emergency_stop_requested"
   | "notification_delivery_skipped"
-  | "notification_delivery_fixture";
+  | "notification_delivery_fixture"
+  | "no_ready_worker"
+  | "all_workers_offline"
+  | "worker_stale"
+  | "worker_disabled"
+  | "capability_mismatch"
+  | "repo_parallelism_blocked"
+  | "selected_worker_ready_for_preview_only";
 
 export interface AttentionEvent {
   schema: "skybridge.attention_event.v1";
@@ -1505,6 +1639,271 @@ export const queueControlActionMatrix: QueueControlActionMatrixEntry[] = [
   ),
 ];
 
+export const workerRoutingPolicy: WorkerRoutingPolicy = {
+  schema: "skybridge.worker_routing_policy.v1",
+  default_mode: "preview",
+  max_parallel_per_repo: 1,
+  reject_offline_workers: true,
+  reject_stale_workers: true,
+  reject_disabled_workers: true,
+  reject_busy_workers: true,
+  require_capability_match: true,
+  require_project_access: true,
+  require_repo_access: true,
+  require_os_tool_match: true,
+  repo_lock_blocks_preview: true,
+  stale_repo_lock_requires_recovery_first: true,
+  can_claim_tasks: false,
+  can_execute_tasks: false,
+  token_printed: false,
+};
+
+export const fixtureWorkerCapabilityMatrix: WorkerCapabilityMatrixEntry[] = [
+  {
+    schema: "skybridge.worker_capability_matrix_entry.v1",
+    worker_id: "laptop-zenbookduo",
+    worker_label: "Jerry Windows standby",
+    worker_profile: "laptop-zenbookduo-standby",
+    os: "windows",
+    tools: ["codex", "git", "node", "pnpm", "powershell"],
+    task_type_capabilities: ["docs", "local-smoke", "frontend", "backend", "worker-service"],
+    project_access: ["skybridge-agent-hub"],
+    repo_access: ["skybridge-agent-hub"],
+    can_run_local_smokes: true,
+    can_run_frontend: true,
+    can_run_backend: true,
+    can_run_docs: true,
+    can_run_worker_service: true,
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_capability_matrix_entry.v1",
+    worker_id: "linux-ci-preview",
+    worker_label: "Linux CI preview",
+    worker_profile: "linux-ci-preview",
+    os: "linux",
+    tools: ["git", "node", "pnpm", "bash", "docker"],
+    task_type_capabilities: ["docs", "local-smoke", "frontend", "backend"],
+    project_access: ["skybridge-agent-hub"],
+    repo_access: ["skybridge-agent-hub"],
+    can_run_local_smokes: true,
+    can_run_frontend: true,
+    can_run_backend: true,
+    can_run_docs: true,
+    can_run_worker_service: false,
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_capability_matrix_entry.v1",
+    worker_id: "docs-disabled",
+    worker_label: "Docs disabled fixture",
+    worker_profile: "docs-disabled",
+    os: "unknown",
+    tools: ["git"],
+    task_type_capabilities: ["docs"],
+    project_access: ["skybridge-agent-hub"],
+    repo_access: ["skybridge-agent-hub"],
+    can_run_local_smokes: false,
+    can_run_frontend: false,
+    can_run_backend: false,
+    can_run_docs: true,
+    can_run_worker_service: false,
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_capability_matrix_entry.v1",
+    worker_id: "foreign-repo-worker",
+    worker_label: "Foreign repo worker",
+    worker_profile: "foreign-repo-worker",
+    os: "windows",
+    tools: ["git", "node", "pnpm", "powershell"],
+    task_type_capabilities: ["docs", "local-smoke"],
+    project_access: ["other-project"],
+    repo_access: ["other-repo"],
+    can_run_local_smokes: true,
+    can_run_frontend: false,
+    can_run_backend: false,
+    can_run_docs: true,
+    can_run_worker_service: false,
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    token_printed: false,
+  },
+];
+
+export const fixtureWorkerReadiness: WorkerReadinessEntry[] = [
+  {
+    schema: "skybridge.worker_readiness_entry.v1",
+    worker_id: "laptop-zenbookduo",
+    worker_label: "Jerry Windows standby",
+    readiness_state: "online",
+    heartbeat_age_seconds: 12,
+    current_task_id: null,
+    service_mode: "standby",
+    readiness_score: 92,
+    readiness_blockers: [],
+    readiness_warnings: ["preview_only_execution_gate_disabled"],
+    recommended_action: "Worker can be selected for preview only; execution remains disabled.",
+    capability_matrix: fixtureWorkerCapabilityMatrix[0],
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_readiness_entry.v1",
+    worker_id: "linux-ci-preview",
+    worker_label: "Linux CI preview",
+    readiness_state: "stale",
+    heartbeat_age_seconds: 900,
+    current_task_id: null,
+    service_mode: "standby",
+    readiness_score: 30,
+    readiness_blockers: ["worker_stale"],
+    readiness_warnings: [],
+    recommended_action: "Refresh heartbeat before route preview can select this worker.",
+    capability_matrix: fixtureWorkerCapabilityMatrix[1],
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_readiness_entry.v1",
+    worker_id: "docs-disabled",
+    worker_label: "Docs disabled fixture",
+    readiness_state: "disabled",
+    heartbeat_age_seconds: null,
+    current_task_id: null,
+    service_mode: "disabled",
+    readiness_score: 0,
+    readiness_blockers: ["worker_disabled"],
+    readiness_warnings: [],
+    recommended_action: "Enable the worker outside this goal before it can be considered.",
+    capability_matrix: fixtureWorkerCapabilityMatrix[2],
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.worker_readiness_entry.v1",
+    worker_id: "foreign-repo-worker",
+    worker_label: "Foreign repo worker",
+    readiness_state: "online",
+    heartbeat_age_seconds: 6,
+    current_task_id: null,
+    service_mode: "standby",
+    readiness_score: 90,
+    readiness_blockers: [],
+    readiness_warnings: ["preview_only_execution_gate_disabled"],
+    recommended_action: "Worker can be selected for preview only; execution remains disabled.",
+    capability_matrix: fixtureWorkerCapabilityMatrix[3],
+    token_printed: false,
+  },
+];
+
+export const fixtureRouteTaskPreview: WorkerRouteTaskPreview = {
+  task_id: "preview-super-197-local-smoke",
+  task_type: "local-smoke",
+  project_id: "skybridge-agent-hub",
+  repo_id: "skybridge-agent-hub",
+  required_os: "windows",
+  required_tools: ["git", "node", "pnpm", "powershell"],
+  required_capabilities: ["local-smoke"],
+  token_printed: false,
+};
+
+export function createWorkerRoutePreview(
+  task: WorkerRouteTaskPreview = fixtureRouteTaskPreview,
+  workers: WorkerReadinessEntry[] = fixtureWorkerReadiness,
+  options: {
+    repoLock?: RepoExclusiveLock | null;
+    activeMutatingWorkers?: number;
+  } = {},
+): WorkerRoutePreview {
+  const repoLock = options.repoLock === undefined ? null : options.repoLock;
+  const activeMutatingWorkers = options.activeMutatingWorkers ?? 0;
+  const repoBlocked = activeMutatingWorkers >= workerRoutingPolicy.max_parallel_per_repo || !!repoLock?.blocks_execution_preview || !!repoLock?.stale;
+  const repoBlocker = activeMutatingWorkers >= workerRoutingPolicy.max_parallel_per_repo
+    ? "max_parallel_per_repo_exceeded"
+    : repoLock?.stale
+      ? "stale_repo_lock_requires_recovery_first"
+      : repoLock?.blocks_execution_preview
+        ? "active_repo_lock_blocks_routing_preview"
+        : null;
+  const decisions = workers.map((worker): WorkerRouteDecision => {
+    const reasons = new Set<string>();
+    if (worker.readiness_state === "offline") reasons.add("worker_offline");
+    if (worker.readiness_state === "stale") reasons.add("worker_stale");
+    if (worker.readiness_state === "disabled") reasons.add("worker_disabled");
+    if (worker.readiness_state === "busy" || worker.current_task_id) reasons.add("worker_busy_current_task");
+    if (!worker.capability_matrix.task_type_capabilities.includes(task.task_type)) reasons.add("capability_mismatch");
+    if (!worker.capability_matrix.project_access.includes(task.project_id)) reasons.add("project_access_mismatch");
+    if (!worker.capability_matrix.repo_access.includes(task.repo_id)) reasons.add("repo_access_mismatch");
+    if (task.required_os && worker.capability_matrix.os !== task.required_os) reasons.add("os_mismatch");
+    for (const tool of task.required_tools) {
+      if (!worker.capability_matrix.tools.includes(tool)) reasons.add(`tool_mismatch_${tool}`);
+    }
+    for (const capability of task.required_capabilities) {
+      if (!worker.capability_matrix.task_type_capabilities.includes(capability)) reasons.add(`capability_mismatch_${capability}`);
+    }
+    if (repoBlocked && repoBlocker) reasons.add(repoBlocker);
+    return {
+      worker_id: worker.worker_id,
+      worker_label: worker.worker_label,
+      accepted: reasons.size === 0,
+      readiness_score: worker.readiness_score,
+      rejection_reasons: Array.from(reasons),
+      warnings: [...worker.readiness_warnings, "preview_only_no_task_claim"],
+      token_printed: false,
+    };
+  });
+  const selected = decisions.filter((decision) => decision.accepted).sort((a, b) => b.readiness_score - a.readiness_score)[0] ?? null;
+  return {
+    schema: "skybridge.worker_route_preview.v1",
+    mode: "preview",
+    task,
+    selected_worker: selected,
+    rejected_workers: decisions.filter((decision) => !decision.accepted),
+    decisions,
+    policy: workerRoutingPolicy,
+    repo_parallelism_guard: {
+      repo_id: task.repo_id,
+      max_parallel_per_repo: 1,
+      active_mutating_workers: activeMutatingWorkers,
+      repo_lock_status: repoLock?.lock_status ?? "none",
+      blocked: repoBlocked,
+      blocker: repoBlocker,
+      token_printed: false,
+    },
+    task_created: false,
+    task_claimed: false,
+    task_executed: false,
+    worker_loop_started: false,
+    queue_execution_enabled: false,
+    token_printed: false,
+  };
+}
+
+export const fixtureWorkerRoutingReadiness: WorkerRoutingReadinessDetail = {
+  schema: "skybridge.worker_routing_readiness_detail.v1",
+  worker_pool_counts: {
+    total: fixtureWorkerReadiness.length,
+    online: fixtureWorkerReadiness.filter((worker) => worker.readiness_state === "online").length,
+    stale: fixtureWorkerReadiness.filter((worker) => worker.readiness_state === "stale").length,
+    offline: fixtureWorkerReadiness.filter((worker) => worker.readiness_state === "offline").length,
+    disabled: fixtureWorkerReadiness.filter((worker) => worker.readiness_state === "disabled").length,
+    busy: fixtureWorkerReadiness.filter((worker) => worker.readiness_state === "busy").length,
+    preview_candidates: createWorkerRoutePreview(fixtureRouteTaskPreview, fixtureWorkerReadiness).decisions.filter((decision) => decision.accepted).length,
+  },
+  worker_capability_matrix: fixtureWorkerCapabilityMatrix,
+  worker_readiness: fixtureWorkerReadiness,
+  route_preview: createWorkerRoutePreview(fixtureRouteTaskPreview, fixtureWorkerReadiness),
+  selected_worker_ready_for_preview_only: createWorkerRoutePreview(fixtureRouteTaskPreview, fixtureWorkerReadiness).selected_worker !== null,
+  execution_enabled: false,
+  can_start_one: false,
+  can_start_queue: false,
+  token_printed: false,
+};
+
 export const workerServiceCapabilityMatrix: WorkerServiceCapabilityMatrix = {
   heartbeat: true,
   status: true,
@@ -1610,9 +2009,9 @@ export const fixtureCampaignPriorityQueue: CampaignPriorityQueue = {
       project_id: "skybridge-agent-hub",
       priority: 10,
       status: "ready",
-      current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
-      current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-      blocked_reason: "repo_lock_requires_review_before_execution_preview",
+      current_goal_id: "super-197-multi-worker-readiness",
+      current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+      blocked_reason: "execution_gate_disabled_until_controlled_start_one_trial",
       selected: true,
       token_printed: false,
     },
@@ -1631,8 +2030,8 @@ export const fixtureCampaignPriorityQueue: CampaignPriorityQueue = {
   selection: {
     selected_campaign_id: "dev-queue-189-200",
     decision: "blocked",
-    blocked_campaign_reason: "active_repo_lock_blocks_execution_preview",
-    queue_decision_summary: "dev-queue-189-200 is highest priority, but repo lock review blocks start previews.",
+    blocked_campaign_reason: "execution_gate_disabled_until_controlled_start_one_trial",
+    queue_decision_summary: "dev-queue-189-200 is highest priority; routing can preview a worker but cannot claim or execute tasks.",
     execution_side_effects: false,
     token_printed: false,
   },
@@ -1926,6 +2325,13 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "multi_campaign_conflict",
       "repo_lock_owner_unknown",
       "unlock_requires_reason",
+      "no_ready_worker",
+      "all_workers_offline",
+      "worker_stale",
+      "worker_disabled",
+      "capability_mismatch",
+      "repo_parallelism_blocked",
+      "selected_worker_ready_for_preview_only",
     ],
     real_external_send: false,
     summary: "Render in SkyBridge Desktop only.",
@@ -1950,6 +2356,12 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "multi_campaign_conflict",
       "repo_lock_owner_unknown",
       "unlock_requires_reason",
+      "no_ready_worker",
+      "all_workers_offline",
+      "worker_stale",
+      "worker_disabled",
+      "capability_mismatch",
+      "repo_parallelism_blocked",
     ],
     real_external_send: false,
     summary: "Render in the Web attention banner/feed.",
@@ -1974,6 +2386,9 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "multi_campaign_conflict",
       "repo_lock_owner_unknown",
       "unlock_requires_reason",
+      "no_ready_worker",
+      "all_workers_offline",
+      "repo_parallelism_blocked",
     ],
     real_external_send: false,
     fixture_ledger_dir: ".agent/tmp/notifications",
@@ -2030,6 +2445,70 @@ export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: Qu
         readiness.next_safe_action,
       ),
     );
+  }
+
+  const routing = readiness.routing_readiness;
+  if (routing) {
+    const counts = routing.worker_pool_counts;
+    if (counts.preview_candidates === 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "no_ready_worker",
+          "blocker",
+          "worker",
+          "No worker is eligible for route preview.",
+          "Review rejected worker reasons; execution remains disabled.",
+        ),
+      );
+    }
+    if (counts.total > 0 && counts.online === 0) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "all_workers_offline",
+          "action_required",
+          "worker",
+          "All workers are offline, stale, disabled, or busy.",
+          "Refresh standby heartbeat or register an eligible worker before any future execution gate.",
+        ),
+      );
+    }
+    if (counts.stale > 0) {
+      events.push(makeAttentionEvent(report, "worker_stale", "warning", "worker", "One or more workers have stale heartbeats.", "Refresh stale worker heartbeats before route preview selection.", "stale"));
+    }
+    if (counts.disabled > 0) {
+      events.push(makeAttentionEvent(report, "worker_disabled", "warning", "worker", "One or more workers are disabled.", "Disabled workers are rejected by routing policy.", "disabled"));
+    }
+    if (routing.route_preview.rejected_workers.some((worker) => worker.rejection_reasons.some((reason) => reason.includes("capability_mismatch") || reason.includes("os_mismatch") || reason.includes("tool_mismatch")))) {
+      events.push(makeAttentionEvent(report, "capability_mismatch", "warning", "worker", "At least one worker was rejected for capability, OS, or tool mismatch.", "Review the worker capability matrix before future route selection.", "capability"));
+    }
+    if (routing.route_preview.repo_parallelism_guard.blocked) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "repo_parallelism_blocked",
+          "blocker",
+          "queue_control",
+          `Repo parallelism guard blocked preview: ${routing.route_preview.repo_parallelism_guard.blocker ?? "unknown"}.`,
+          "Recover stale locks or wait for the active repo owner before any future route selection.",
+          "repo_parallelism",
+        ),
+      );
+    }
+    if (routing.selected_worker_ready_for_preview_only) {
+      events.push(
+        makeAttentionEvent(
+          report,
+          "selected_worker_ready_for_preview_only",
+          "info",
+          "worker",
+          `Selected worker ${routing.route_preview.selected_worker?.worker_label ?? "unknown"} is ready for preview only.`,
+          "Keep execution disabled until the controlled Start-One Bootstrap Trial.",
+          "selected_preview_only",
+        ),
+      );
+    }
   }
 
   if (readiness.blockers.length > 0 || report.blockers.length > 0) {
@@ -2226,8 +2705,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   project_id: "skybridge-agent-hub",
   campaign_id: "dev-queue-189-200",
   campaign_status: "paused",
-  current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-  current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
+  current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+  current_goal_id: "super-197-multi-worker-readiness",
   current_goal_status: "ready",
   current_goal_unexecuted: true,
   campaign_summary: {
@@ -2235,19 +2714,19 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     project_id: "skybridge-agent-hub",
     title: "Dev Queue 189-200",
     status: "paused",
-    current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+    current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
     step_count: 12,
     source: "fixture",
     goal_pack_hash: "fixture-dev-queue-189-200-local-pack-hash",
   },
   current_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-    goal_id: "super-196-campaign-locking-multi-campaign-queue",
-    order: 8,
-    title: "Campaign Locking and Multi-campaign Queue",
+    campaign_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+    goal_id: "super-197-multi-worker-readiness",
+    order: 9,
+    title: "Multi-worker Readiness",
     status: "ready",
     is_current: true,
-    dependencies: ["super-194-worker-service-mode"],
+    dependencies: ["super-196-campaign-locking-multi-campaign-queue"],
     linked_task_ids: [],
     linked_pr_urls: [],
     linked_task_count: 0,
@@ -2260,15 +2739,15 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     operator_action_required: false,
   },
   previous_step_summary: {
-    campaign_step_id: "dev-queue-189-200:super-195-manual-goal-queue-management",
-    goal_id: "super-195-manual-goal-queue-management",
-    order: 7,
-    title: "Manual Goal Queue Management",
+    campaign_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
+    goal_id: "super-196-campaign-locking-multi-campaign-queue",
+    order: 8,
+    title: "Campaign Locking and Multi-campaign Queue",
     status: "completed",
     is_current: false,
-    dependencies: ["super-194-worker-service-mode"],
+    dependencies: ["super-195-manual-goal-queue-management"],
     linked_task_ids: [],
-    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/113"],
+    linked_pr_urls: ["https://github.com/JerrySkywalker/skybridge-agent-hub/pull/114"],
     linked_task_count: 0,
     linked_pr_count: 1,
     evidence_status: "present",
@@ -2361,6 +2840,7 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     campaign_lock: fixtureCampaignLock,
     repo_exclusive_lock: fixtureRepoExclusiveLock,
     priority_queue: fixtureCampaignPriorityQueue,
+    routing_readiness: fixtureWorkerRoutingReadiness,
   },
   worker_service_state: fixtureWorkerServiceState,
   token_printed: false,
@@ -2370,16 +2850,16 @@ export const fixtureQueueControlState: QueueControlState = {
   schema: "skybridge.queue_control_state.v1",
   project_id: fixtureCampaignRunReport.project_id,
   campaign_id: fixtureCampaignRunReport.campaign_id,
-  current_step_id: "dev-queue-189-200:super-196-campaign-locking-multi-campaign-queue",
-  current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
+  current_step_id: "dev-queue-189-200:super-197-multi-worker-readiness",
+  current_goal_id: "super-197-multi-worker-readiness",
   worker_status: "offline",
   active_tasks: 0,
   stale_leases: 0,
   can_start_one: false,
   can_start_queue: false,
   can_resume: false,
-  state_hash: "fixture-goal-196-locking-offline-active0-stale0-repolock",
-  revision: "fixture-goal-196-revision",
+  state_hash: "fixture-goal-197-routing-preview-active0-stale0",
+  revision: "fixture-goal-197-revision",
   action_matrix: queueControlActionMatrix,
   blockers: ["worker_service_offline", "active_repo_lock_blocks_execution_preview", "execution_disabled_until_goal_197"],
   warnings: ["standby_worker_can_only_heartbeat", "multiple_campaigns_require_selection_review"],

@@ -84,3 +84,6 @@ Attention events derive from active repo lock blockers, stale lock review, cance
 ## Goal 197
 
 Goal 197 can build multi-worker readiness on top of these locks. Goal 196 only adds inspection, preview, reason-gated local recovery semantics and UI review panels.
+## Goal 197 Routing Guard Note
+
+The Goal 196 repo-exclusive-lock model is now consumed by the Goal 197 route preview. `max_parallel_per_repo=1` is explicit. Active locks block routing preview, stale locks require recovery first, and unknown or foreign lock ownership blocks selection. This does not weaken repo serialization.

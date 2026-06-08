@@ -78,3 +78,6 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-web-worker-readine
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-queue-readiness-worker-service-integration.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-worker-service-clean-worktree.ps1
 ```
+## Goal 197 Multi-worker Readiness Note
+
+Worker service mode remains heartbeat/status oriented. Goal 197 layers a read-only routing preview over worker metadata, but `can_claim_tasks=false` and `can_execute_tasks=false` remain mandatory. A worker can be selected as `selected_worker_ready_for_preview_only`; that selection is not a claim and does not start a worker loop.

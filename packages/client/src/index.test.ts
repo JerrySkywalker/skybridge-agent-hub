@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAttentionModel,
   createWorkerServiceReadiness,
+  createWorkerRoutePreview,
   deriveAttentionEvents,
   SkyBridgeClient,
   fixtureCampaignRunReport,
@@ -11,10 +12,13 @@ import {
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
+  fixtureWorkerReadiness,
+  fixtureWorkerRoutingReadiness,
   fixtureWorkerServiceState,
   notificationRoutingMatrix,
   queueControlActionMatrix,
   routeAttentionEvent,
+  workerRoutingPolicy,
 } from "./index.js";
 
 const fetchMock = vi.fn();
@@ -74,7 +78,7 @@ describe("SkyBridgeClient", () => {
       blockers: ["forbidden_action"],
     });
     expect(fixtureQueueControlState).toMatchObject({
-      current_goal_id: "super-196-campaign-locking-multi-campaign-queue",
+      current_goal_id: "super-197-multi-worker-readiness",
       active_tasks: 0,
       stale_leases: 0,
       worker_status: "offline",
@@ -170,6 +174,38 @@ describe("SkyBridgeClient", () => {
     });
   });
 
+  it("models Goal 197 multi-worker route preview without claim or execution", () => {
+    const preview = createWorkerRoutePreview(undefined, fixtureWorkerReadiness);
+
+    expect(workerRoutingPolicy).toMatchObject({
+      max_parallel_per_repo: 1,
+      can_claim_tasks: false,
+      can_execute_tasks: false,
+      token_printed: false,
+    });
+    expect(preview).toMatchObject({
+      schema: "skybridge.worker_route_preview.v1",
+      mode: "preview",
+      task_created: false,
+      task_claimed: false,
+      task_executed: false,
+      worker_loop_started: false,
+      queue_execution_enabled: false,
+      token_printed: false,
+    });
+    expect(preview.selected_worker?.worker_id).toBe("laptop-zenbookduo");
+    expect(preview.rejected_workers.map((worker) => worker.rejection_reasons).flat()).toEqual(
+      expect.arrayContaining(["worker_stale", "worker_disabled", "project_access_mismatch", "repo_access_mismatch"]),
+    );
+    expect(fixtureWorkerRoutingReadiness).toMatchObject({
+      execution_enabled: false,
+      can_start_one: false,
+      can_start_queue: false,
+      selected_worker_ready_for_preview_only: true,
+      token_printed: false,
+    });
+  });
+
   it("derives attention events and fixture-only routes for Goal 193", () => {
     const events = deriveAttentionEvents(fixtureCampaignRunReport);
     expect(events).toEqual(
@@ -202,7 +238,7 @@ describe("SkyBridgeClient", () => {
     const model = createAttentionModel(fixtureCampaignRunReport);
     expect(model).toMatchObject({
       schema: "skybridge.attention_model.v1",
-      goal_id: "super-196-campaign-locking-multi-campaign-queue",
+      goal_id: "super-197-multi-worker-readiness",
       token_printed: false,
     });
     expect(notificationRoutingMatrix).toEqual(

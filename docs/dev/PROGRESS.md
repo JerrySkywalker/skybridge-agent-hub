@@ -726,3 +726,9 @@
 - Split `skybridge-campaign-watch.ps1` rendering from remote polling: `-RenderIntervalMilliseconds` controls spinner smoothness, while `-PollIntervalSeconds` controls bounded API polling. Recommended launch watch settings are 250 ms render and 5 second polling.
 - Added focused smokes for mixed JSON extraction, JSON cleanliness, watch render/poll behavior, fast demo spinner and cached-frame poll failure handling.
 - Goal 189-200 full queue execution remains held pending reviewed `start-one` verification.
+## 2026-06-08 Goal 197 Multi-worker Readiness
+
+- Added preview-only multi-worker capability matrix, readiness scoring, route preview, and routing policy fixtures.
+- Added OS/tool/project/repo access checks and explicit `max_parallel_per_repo=1` guard.
+- Integrated routing readiness into `queue_control_readiness`, Desktop/Web panels, and attention events.
+- Execution remains disabled: no task claim, no task execution, no worker loop, and no queue start.

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview", "campaign-lock-status", "campaign-lock-preview", "repo-lock-status", "repo-lock-preview", "unlock-stale-campaign-lock", "cancel-campaign-preview", "abort-campaign-preview", "hold-campaign-preview", "campaign-priority-queue", "campaign-select-next-preview")]
+  [ValidateSet("preflight", "watch", "start-one", "start-all", "safe-pause", "stop-queue", "emergency-stop", "resume", "report", "unlock-stale-runner", "control-matrix", "control-preview", "resume-preview", "start-one-preview", "start-queue-preview", "campaign-lock-status", "campaign-lock-preview", "repo-lock-status", "repo-lock-preview", "unlock-stale-campaign-lock", "cancel-campaign-preview", "abort-campaign-preview", "hold-campaign-preview", "campaign-priority-queue", "campaign-select-next-preview", "worker-capability-matrix", "worker-readiness", "worker-route-preview", "worker-route-fixture", "worker-routing-policy", "worker-readiness-summary")]
   [string]$Command,
   [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
   [string]$ProjectId = "skybridge-agent-hub",
@@ -712,6 +712,10 @@ switch ($Command) {
       queue_execution_enabled = $false
       token_printed = $false
     }
+  }
+  { $_ -in @("worker-capability-matrix", "worker-readiness", "worker-route-preview", "worker-route-fixture", "worker-routing-policy", "worker-readiness-summary") } {
+    $workerArgs = @("-File", ".\scripts\powershell\skybridge-worker-routing.ps1", "-Command", $Command, "-ProjectId", $ProjectId, "-Json")
+    $result = Invoke-JsonScript $workerArgs
   }
   "preflight" {
     if ($Fixture) { $result = Invoke-QueueControlContract -Action "preflight" -ControlMode "read" }

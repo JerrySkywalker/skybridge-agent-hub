@@ -1537,7 +1537,27 @@ function New-QueueControlReadiness {
     $requiredHuman += "verify_worker_online_before_execution"
   }
   $workerServiceState = New-WorkerServiceReportState -WorkerStatus $workerStatus
+  $routingReadiness = $null
+  try {
+    $routingReadiness = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-worker-routing.ps1") -Command worker-readiness-summary -Json | ConvertFrom-Json
+  } catch {
+    $routingReadiness = [pscustomobject]@{
+      schema = "skybridge.worker_routing_readiness_detail.v1"
+      worker_pool_counts = [pscustomobject]@{ total = 0; online = 0; stale = 0; offline = 0; disabled = 0; busy = 0; preview_candidates = 0 }
+      worker_capability_matrix = @()
+      worker_readiness = @()
+      route_preview = $null
+      selected_worker_ready_for_preview_only = $false
+      execution_enabled = $false
+      can_start_one = $false
+      can_start_queue = $false
+      token_printed = $false
+    }
+  }
   $blockers += @($workerServiceState.readiness_blockers | Where-Object { $_ -in @("worker_service_offline", "execution_disabled_until_goal_197") })
+  if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -eq 0) { $blockers += "no_ready_worker" }
+  if ($routingReadiness -and $routingReadiness.route_preview -and [bool]$routingReadiness.route_preview.repo_parallelism_guard.blocked) { $blockers += "repo_parallelism_blocked" }
+  if ($routingReadiness -and [int]$routingReadiness.worker_pool_counts.preview_candidates -gt 0) { $Warnings += "worker_ready_for_preview_only_execution_gate_disabled" }
   $blockers += "active_repo_lock_blocks_execution_preview"
   if ($workerStatus -in @("online", "ready")) { $Warnings += "standby_worker_can_only_heartbeat" }
   if ($CurrentStep -and [bool]$CurrentStep.advance_gate.requires_human_approval) { $requiredHuman += "Operator approval is required before any execution control starts the current campaign step." }
@@ -1594,6 +1614,7 @@ function New-QueueControlReadiness {
       force_release_allowed = $false
       token_printed = $false
     }
+    routing_readiness = $routingReadiness
   }
 }
 
@@ -1711,6 +1732,29 @@ function ConvertTo-CampaignReportMarkdown {
   $lines.Add("- can_emergency_stop: $($Report.queue_control_readiness.can_emergency_stop)") | Out-Null
   $lines.Add("- can_resume: $($Report.queue_control_readiness.can_resume)") | Out-Null
   $lines.Add("- next_safe_action: $($Report.queue_control_readiness.next_safe_action)") | Out-Null
+  $lines.Add("") | Out-Null
+  $routing = $Report.queue_control_readiness.routing_readiness
+  $lines.Add("## Multi-worker Routing Readiness") | Out-Null
+  if ($routing) {
+    $selected = if ($routing.route_preview -and $routing.route_preview.selected_worker) { $routing.route_preview.selected_worker.worker_id } else { "none" }
+    $repoGuard = if ($routing.route_preview) { $routing.route_preview.repo_parallelism_guard } else { $null }
+    $lines.Add("- Worker pool total: $($routing.worker_pool_counts.total)") | Out-Null
+    $lines.Add("- Online/stale/offline/disabled/busy: $($routing.worker_pool_counts.online)/$($routing.worker_pool_counts.stale)/$($routing.worker_pool_counts.offline)/$($routing.worker_pool_counts.disabled)/$($routing.worker_pool_counts.busy)") | Out-Null
+    $lines.Add("- Preview candidates: $($routing.worker_pool_counts.preview_candidates)") | Out-Null
+    $lines.Add("- Selected worker preview: $selected") | Out-Null
+    $lines.Add("- Execution enabled: $($routing.execution_enabled)") | Out-Null
+    if ($repoGuard) {
+      $lines.Add("- Repo max parallel: $($repoGuard.max_parallel_per_repo)") | Out-Null
+      $lines.Add("- Repo guard blocked: $($repoGuard.blocked)") | Out-Null
+      $lines.Add("- Repo guard blocker: $($repoGuard.blocker)") | Out-Null
+    }
+    foreach ($decision in @($routing.route_preview.rejected_workers | Select-Object -First 8)) {
+      $lines.Add("- Rejected $($decision.worker_id): $(@($decision.rejection_reasons) -join ', ')") | Out-Null
+    }
+  } else {
+    $lines.Add("- Routing readiness unavailable") | Out-Null
+  }
+  $lines.Add("- Token printed: false") | Out-Null
   $lines.Add("") | Out-Null
   $lines.Add("## Worker Service Mode") | Out-Null
   $lines.Add("- Mode: $($Report.worker_service_state.mode)") | Out-Null
