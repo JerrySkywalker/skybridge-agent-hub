@@ -241,6 +241,8 @@ Campaign run reports and the safe evidence ledger are documented in [docs/dev/CA
 
 The shared read-only Desktop/Web queue dashboard foundation is documented in [docs/dev/UNIFIED_QUEUE_DASHBOARD.md](docs/dev/UNIFIED_QUEUE_DASHBOARD.md). It consumes the same report contract and keeps execution controls disabled until later Goal 192 work.
 
+The Goal 201 controlled start-one bootstrap trial is staged as a dedicated one-step reviewed pack in `goals/bootstrap-trial-201/`. Its contract and current hold state are documented in [docs/dev/CONTROLLED_START_ONE_BOOTSTRAP_TRIAL.md](docs/dev/CONTROLLED_START_ONE_BOOTSTRAP_TRIAL.md). The current gate remains no-execution because worker claim and execution are still disabled.
+
 The bounded self-bootstrap supervisor is documented in [docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md](docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md). Use `skybridge-supervise.ps1` to preview or apply one safe plan -> proposal -> convert -> run-once round with explicit limits; it is dry-run by default and does not start a long-running worker loop.
 
 Validate the local cloud-control-plane foundations:

@@ -1,0 +1,73 @@
+{
+  "schema": "skybridge.campaign.v1",
+  "campaign_id": "bootstrap-trial-201",
+  "project_id": "skybridge-agent-hub",
+  "title": "Goal 201 Controlled Start-One Bootstrap Trial",
+  "description": "Dedicated one-step trial campaign for the reviewed Local README Refresh payload.",
+  "source": "reviewed-goal-201-bootstrap-trial",
+  "created_by": "operator",
+  "review_status": "execution-review-required",
+  "source_proposed_goal_id": "proposed-goal-201-local-readme-refresh",
+  "source_proposed_markdown_path": "goals/proposed/proposed-goal-201-local-readme-refresh.md",
+  "safety_policy": {
+    "dry_run_default": true,
+    "mutations_require_apply": true,
+    "no_start_all": true,
+    "no_unbounded_worker_loop": true,
+    "no_auto_merge": true,
+    "max_steps": 1,
+    "max_tasks": 1,
+    "max_prs": 1,
+    "max_runtime_minutes": 30,
+    "max_parallel_per_repo": 1,
+    "allowed_task_types": [
+      "docs",
+      "local-smoke"
+    ],
+    "blocked_task_types": [
+      "production_deploy",
+      "secret_rotation",
+      "server_root_config",
+      "github_settings",
+      "branch_protection",
+      "auto_execution",
+      "start_all",
+      "unbounded_worker_loop"
+    ]
+  },
+  "default_advance_gates": {
+    "requires_clean_worktree": true,
+    "requires_no_active_tasks": true,
+    "requires_no_stale_leases": true,
+    "requires_parent_pr_merged": false,
+    "requires_human_approval": true
+  },
+  "stop_conditions": [
+    "active_tasks_present",
+    "stale_leases_present",
+    "runner_lock_present",
+    "repo_lock_present",
+    "worker_claim_disabled",
+    "max_steps_reached",
+    "max_tasks_reached",
+    "max_prs_reached",
+    "post_run_human_review_hold"
+  ],
+  "goals": [
+    {
+      "path": "goal-201-controlled-start-one-bootstrap-trial.md",
+      "goal_id": "goal-201-controlled-start-one-bootstrap-trial",
+      "title": "Controlled Start-One Bootstrap Trial",
+      "order": 1,
+      "risk": "low",
+      "task_type": "docs/local-smoke",
+      "allowed_task_types": [
+        "docs",
+        "local-smoke"
+      ],
+      "source_proposed_goal_id": "proposed-goal-201-local-readme-refresh",
+      "execution_review_required": true
+    }
+  ],
+  "token_printed": false
+}
