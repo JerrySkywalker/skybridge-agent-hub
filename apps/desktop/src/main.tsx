@@ -325,6 +325,7 @@ function App() {
       <CampaignPriorityQueuePanel />
       <GoalQueueReviewPanel />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
+      <WorkerRoutingPanel report={report} />
 
       <section className="panel queue-panel">
         <h2>Queue Control Readiness</h2>
@@ -461,6 +462,41 @@ function App() {
         </section>
       ) : null}
     </main>
+  );
+}
+
+function WorkerRoutingPanel({ report }: { report: CampaignRunReport }) {
+  const routing = report.queue_control_readiness.routing_readiness;
+  const preview = routing?.route_preview;
+  return (
+    <section className="panel worker-routing-panel" aria-label="Multi-worker readiness and routing panel">
+      <h2>Multi-worker Readiness</h2>
+      <dl>
+        <StatusValue label="Worker pool counts" value={routing ? `total=${routing.worker_pool_counts.total}; online=${routing.worker_pool_counts.online}; stale=${routing.worker_pool_counts.stale}; offline=${routing.worker_pool_counts.offline}; disabled=${routing.worker_pool_counts.disabled}; busy=${routing.worker_pool_counts.busy}` : "unavailable"} />
+        <StatusValue label="Preview candidates" value={String(routing?.worker_pool_counts.preview_candidates ?? 0)} />
+        <StatusValue label="Selected worker preview" value={preview?.selected_worker?.worker_label ?? "none"} />
+        <StatusValue label="Execution enabled" value={String(routing?.execution_enabled ?? false)} />
+        <StatusValue label="max_parallel_per_repo" value={String(preview?.repo_parallelism_guard.max_parallel_per_repo ?? 1)} />
+        <StatusValue label="Repo guard" value={preview ? `blocked=${preview.repo_parallelism_guard.blocked}; blocker=${preview.repo_parallelism_guard.blocker ?? "none"}` : "unavailable"} />
+        <StatusValue label="No claim/no execution" value={`task_claimed=${String(preview?.task_claimed ?? false)}; task_executed=${String(preview?.task_executed ?? false)}; worker_loop_started=${String(preview?.worker_loop_started ?? false)}`} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="capability-grid">
+        {(routing?.worker_capability_matrix ?? []).map((worker) => (
+          <span key={worker.worker_id}>{worker.worker_label}: {worker.os}; {worker.tools.join(", ")}</span>
+        ))}
+      </div>
+      <ul>
+        {(preview?.rejected_workers ?? []).slice(0, 5).map((worker) => (
+          <li key={worker.worker_id}>{worker.worker_label}: {worker.rejection_reasons.join(", ") || "accepted"}</li>
+        ))}
+      </ul>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Start One disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim task disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execution disabled</button>
+      </div>
+    </section>
   );
 }
 

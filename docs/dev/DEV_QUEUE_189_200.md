@@ -447,3 +447,14 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-dev-queue-cont
 ```
 
 See [CAMPAIGN_LOCKING_MULTI_CAMPAIGN_QUEUE.md](CAMPAIGN_LOCKING_MULTI_CAMPAIGN_QUEUE.md). Goal 197 will add multi-worker readiness on top of this lock foundation without retroactively enabling execution from Goal 196.
+## Goal 197 Update
+
+Goal 197 adds the multi-worker readiness foundation for `dev-queue-189-200:super-197-multi-worker-readiness`.
+
+- Worker route preview is read-only and fixture/local-status based.
+- Windows/Linux/tool labels are visible in CLI, Desktop, and Web.
+- `max_parallel_per_repo=1` remains the repository serialization rule.
+- Repo lock integration blocks route preview when a repo lock is active or stale.
+- Goal 197 does not enable Start One, Start Queue, task claim, task execution, or campaign-step-derived execution tasks.
+
+See `docs/dev/MULTI_WORKER_READINESS.md`.

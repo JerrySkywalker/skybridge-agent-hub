@@ -80,3 +80,8 @@ Fixture queue-control and lock audit output is local-only and ignored:
 ## Deferred Work
 
 Actual start-one/start-queue apply enablement remains deferred until a later reviewed goal adds real arm leases, approval policy, worker readiness, conflict handling and execution-specific audit.
+## Goal 197 Routing Readiness Detail
+
+`queue_control_readiness` now includes `routing_readiness` with worker pool counts, capability matrix, selected preview worker, rejected workers, routing policy, and repo parallelism guard.
+
+`can_start_one=false` and `can_start_queue=false` remain hard false in Goal 197. A ready worker means `selected_worker_ready_for_preview_only`, not execution enabled. The contract must continue to distinguish preview selection from task claim or worker execution.
