@@ -10,6 +10,8 @@ import {
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
+  fixtureBoundedQueuePlan,
+  fixtureBoundedQueueReadiness,
   fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
   fixtureLocalExecutionGuard,
@@ -25,6 +27,8 @@ import {
   routeAttentionEvent,
   summarizeCampaignEvidence,
   type AttentionEvent,
+  type BoundedQueuePlan,
+  type BoundedQueueReadiness,
   type DesktopResidentState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
@@ -71,6 +75,8 @@ type DesktopStatus = {
   local_worker_supervisor_state: LocalWorkerSupervisorState | null;
   local_resource_policy: LocalResourcePolicy | null;
   local_execution_guard: LocalExecutionGuard | null;
+  workunit_preview_plan: BoundedQueuePlan | null;
+  bounded_queue_readiness: BoundedQueueReadiness | null;
   safe_summary: CampaignSafeSummary | null;
   bridge_outcomes: Array<{
     name: string;
@@ -132,6 +138,8 @@ const emptyStatus: DesktopStatus = {
   local_worker_supervisor_state: null,
   local_resource_policy: null,
   local_execution_guard: null,
+  workunit_preview_plan: null,
+  bounded_queue_readiness: null,
   safe_summary: null,
   bridge_outcomes: [],
   report_cached: false,
@@ -180,6 +188,8 @@ const fixtureStatus: DesktopStatus = {
   local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
   local_resource_policy: fixtureLocalResourcePolicy,
   local_execution_guard: fixtureLocalExecutionGuard,
+  workunit_preview_plan: fixtureBoundedQueuePlan,
+  bounded_queue_readiness: fixtureBoundedQueueReadiness,
   safe_summary: createCampaignSafeSummary(fixtureCampaignRunReport),
   bridge_outcomes: [
     { name: "campaign_report", ok: true, warning: null },
@@ -281,6 +291,43 @@ function LocalResourcePolicyPanel({ policy }: { policy: LocalResourcePolicy }) {
   );
 }
 
+function WorkunitPreviewPanel({
+  plan,
+  readiness,
+}: {
+  plan: BoundedQueuePlan;
+  readiness: BoundedQueueReadiness;
+}) {
+  const completed = plan.workunits.filter((workunit) => workunit.state === "completed").length;
+  return (
+    <section className="panel workunit-preview-card" aria-label="Workunit bounded queue preview card">
+      <h2>Workunit / Bounded Queue Preview</h2>
+      <dl>
+        <StatusValue label="Plan" value={`${plan.plan_id}; mode=${plan.mode}`} />
+        <StatusValue label="Workunits" value={`${plan.workunits.length}; completed=${completed}`} />
+        <StatusValue label="Bootstrap mapping" value={plan.workunits[0]?.workunit_id ?? "none"} />
+        <StatusValue label="State" value={plan.workunits[0]?.state ?? "none"} />
+        <StatusValue label="Would create tasks" value={String(plan.would_create_tasks)} />
+        <StatusValue label="Would claim tasks" value={String(plan.would_claim_tasks)} />
+        <StatusValue label="Would execute tasks" value={String(plan.would_execute_tasks)} />
+        <StatusValue label="Would create PRs" value={String(plan.would_create_prs)} />
+        <StatusValue label="Would start runner" value={String(plan.would_start_runner)} />
+        <StatusValue label="Apply available" value={String(readiness.start_bounded_queue_apply_available)} />
+        <StatusValue label="Can start bounded queue" value={String(readiness.can_start_bounded_queue)} />
+        <StatusValue label="Blockers" value={readiness.blockers.join("; ")} />
+        <StatusValue label="Policy" value={`max_tasks=${plan.policy.max_tasks}; max_prs=${plan.policy.max_prs}; human_review=${String(plan.policy.require_human_review)}`} />
+        <StatusValue label="token_printed" value={String(plan.token_printed && readiness.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Bounded Queue Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No task creation</button>
+        <button type="button" disabled aria-disabled="true">No task claim</button>
+        <button type="button" disabled aria-disabled="true">No execution</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -375,6 +422,8 @@ function App() {
   const supervisorState = status.local_worker_supervisor_state ?? report.local_worker_supervisor_state ?? fixtureLocalWorkerSupervisorState;
   const resourcePolicy = status.local_resource_policy ?? report.local_resource_policy ?? fixtureLocalResourcePolicy;
   const executionGuard = status.local_execution_guard ?? report.local_execution_guard ?? fixtureLocalExecutionGuard;
+  const workunitPlan = status.workunit_preview_plan ?? report.workunit_preview_plan ?? fixtureBoundedQueuePlan;
+  const boundedQueueReadiness = status.bounded_queue_readiness ?? report.bounded_queue_readiness ?? fixtureBoundedQueueReadiness;
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
   const previewActions = queueControlActionMatrix.filter((entry) => entry.class === "preview");
@@ -430,6 +479,7 @@ function App() {
       <ResidentStatusPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />
+      <WorkunitPreviewPanel plan={workunitPlan} readiness={boundedQueueReadiness} />
       <CampaignLockPanel />
       <CampaignPriorityQueuePanel />
       <ProjectProfileReviewPanel />

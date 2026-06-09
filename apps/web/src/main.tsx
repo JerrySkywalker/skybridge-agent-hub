@@ -22,6 +22,8 @@ import {
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
+  fixtureBoundedQueuePlan,
+  fixtureBoundedQueueReadiness,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
@@ -35,6 +37,8 @@ import {
   routeAttentionEvent,
   summarizeCampaignEvidence,
   type AttentionEvent,
+  type BoundedQueuePlan,
+  type BoundedQueueReadiness,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerSupervisorState,
@@ -297,6 +301,8 @@ function CampaignQueuePage() {
   const safeSummary = createCampaignSafeSummary(report);
   const attention = createAttentionModel(report);
   const workerReadiness = createWorkerServiceReadiness(report.worker_service_state);
+  const workunitPlan = report.workunit_preview_plan ?? fixtureBoundedQueuePlan;
+  const boundedQueueReadiness = report.bounded_queue_readiness ?? fixtureBoundedQueueReadiness;
 
   return (
     <div className="route-stack campaign-queue" data-readonly-dashboard="true">
@@ -347,6 +353,7 @@ function CampaignQueuePage() {
             policy={report.local_resource_policy ?? fixtureLocalResourcePolicy}
             guard={report.local_execution_guard ?? fixtureLocalExecutionGuard}
           />
+          <WebBoundedQueuePreviewPanel plan={workunitPlan} readiness={boundedQueueReadiness} />
           <WorkerRoutingPanel report={report} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
@@ -846,6 +853,52 @@ function WebLocalWorkerPolicyPanel({
       </dl>
       <QueueList title="Readiness blockers" items={supervisor.readiness_blockers} fallback="No local worker blockers." />
       <p className="skybridge-state-note">Web policy summary is read-only; local execution controls remain disabled.</p>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebBoundedQueuePreviewPanel({
+  plan,
+  readiness,
+}: {
+  plan: BoundedQueuePlan;
+  readiness: BoundedQueueReadiness;
+}) {
+  const first = plan.workunits[0];
+  return (
+    <section className="skybridge-panel web-bounded-queue-preview" aria-label="Web bounded queue preview panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Workunit</p>
+          <h2>Bounded Queue Preview</h2>
+        </div>
+        <span className={badgeClass(readiness.can_start_bounded_queue ? "ok" : "bad")}>apply disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Plan</dt>
+          <dd>{`${plan.plan_id}; ${plan.mode}`}</dd>
+        </div>
+        <div>
+          <dt>Bootstrap workunit</dt>
+          <dd>{`${first?.workunit_id ?? "none"}; state=${first?.state ?? "none"}`}</dd>
+        </div>
+        <div>
+          <dt>Mutation</dt>
+          <dd>{`no_mutation=${String(plan.no_mutation)}; tasks=${String(plan.would_create_tasks)}; claims=${String(plan.would_claim_tasks)}; execution=${String(plan.would_execute_tasks)}`}</dd>
+        </div>
+        <div>
+          <dt>PR / runner</dt>
+          <dd>{`prs=${String(plan.would_create_prs)}; runner=${String(plan.would_start_runner)}`}</dd>
+        </div>
+        <div>
+          <dt>Readiness</dt>
+          <dd>{`can_start_bounded_queue=${String(readiness.can_start_bounded_queue)}; apply=${String(readiness.start_bounded_queue_apply_available)}`}</dd>
+        </div>
+      </dl>
+      <QueueList title="Bounded queue blockers" items={readiness.blockers} fallback="No bounded queue blockers." />
+      <p className="skybridge-state-note">Preview only: no task creation, no task claim, no execution, no PR creation, bounded queue apply disabled.</p>
       <span>token_printed=false</span>
     </section>
   );
