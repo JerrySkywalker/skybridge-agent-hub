@@ -14,6 +14,7 @@ param(
   [string]$ProposedPath = "goals/proposed/proposed-goal-201-local-readme-refresh.md",
   [string]$Reason,
   [switch]$SimulateRawLogPersistence,
+  [switch]$SimulateExistingOpenTaskPr,
   [switch]$Apply,
   [switch]$Json
 )
@@ -125,21 +126,97 @@ function Get-OneShotSanitizedEvidencePath {
   Join-Path (Get-OneShotStateDir) "sanitized-executor-evidence.json"
 }
 
-function Test-OwnedOneShotClaimEvidence {
-  $path = Get-OneShotClaimEvidencePath
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
-  try {
-    $evidence = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
-    return (
-      $evidence.campaign_id -eq "bootstrap-trial-201" -and
-      $evidence.goal_id -eq "goal-201-controlled-start-one-bootstrap-trial" -and
-      $evidence.task_id -eq "bootstrap-trial-201-task-001" -and
-      $evidence.worker_id -eq "laptop-zenbookduo" -and
-      $evidence.token_printed -eq $false
-    )
-  } catch {
-    return $false
+function Get-ExpectedOneShotClaimFields {
+  [pscustomobject]@{
+    campaign_id = "bootstrap-trial-201"
+    goal_id = "goal-201-controlled-start-one-bootstrap-trial"
+    task_id = "bootstrap-trial-201-task-001"
+    worker_id = "laptop-zenbookduo"
+    lease_id = "bootstrap-trial-201-lease-001"
   }
+}
+
+function Get-OneShotClaimEvidenceState {
+  $path = Get-OneShotClaimEvidencePath
+  $executorEvidencePath = Get-OneShotSanitizedEvidencePath
+  $legacyExecutorEvidencePath = Get-OneShotExecutorEvidencePath
+  $openPrs = @(Get-OpenBootstrapTaskPrs)
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    return [pscustomobject]@{
+      exists = $false
+      valid_owned = $false
+      resumable = $false
+      malformed = $false
+      foreign = $false
+      already_executed = (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) -or (Test-Path -LiteralPath $legacyExecutorEvidencePath -PathType Leaf) -or $openPrs.Count -gt 0
+      blockers = @()
+      evidence = $null
+      evidence_path = ConvertTo-ShortPath $path
+      token_printed = $false
+    }
+  }
+  try {
+    $raw = Get-Content -Raw -LiteralPath $path
+    $evidence = $raw | ConvertFrom-Json
+    $expected = Get-ExpectedOneShotClaimFields
+    $blockers = New-Object System.Collections.Generic.List[string]
+
+    if (Test-SecretLookingText $raw) { $blockers.Add("secret_or_raw_log_in_claim_evidence") | Out-Null }
+    if ($evidence.campaign_id -ne $expected.campaign_id) { $blockers.Add("foreign_claim_refused") | Out-Null }
+    if ($evidence.goal_id -ne $expected.goal_id) { $blockers.Add("foreign_claim_refused") | Out-Null }
+    if ($evidence.task_id -ne $expected.task_id) { $blockers.Add("foreign_claim_refused") | Out-Null }
+    if ($evidence.worker_id -ne $expected.worker_id) { $blockers.Add("foreign_claim_refused") | Out-Null }
+    if ($evidence.lease_id -ne $expected.lease_id) { $blockers.Add("malformed_claim_refused") | Out-Null }
+    if ($evidence.token_printed -ne $false) { $blockers.Add("unsafe_claim_token_printed") | Out-Null }
+    if ($evidence.prompt_included -ne $false) { $blockers.Add("unsafe_claim_prompt_included") | Out-Null }
+    if ($evidence.raw_transcript_included -ne $false) { $blockers.Add("unsafe_claim_raw_transcript_included") | Out-Null }
+    if ($evidence.raw_logs_included -ne $false) { $blockers.Add("unsafe_claim_raw_logs_included") | Out-Null }
+
+    $executorEvidenceExists = (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) -or (Test-Path -LiteralPath $legacyExecutorEvidencePath -PathType Leaf)
+    if ($executorEvidenceExists) { $blockers.Add("existing_executor_evidence_for_bootstrap_trial") | Out-Null }
+    if ($openPrs.Count -gt 0) { $blockers.Add("existing_open_task_pr_for_bootstrap_trial") | Out-Null }
+
+    $uniqueBlockers = @($blockers | Select-Object -Unique)
+    $foreign = @($uniqueBlockers | Where-Object { $_ -eq "foreign_claim_refused" }).Count -gt 0
+    $malformed = @($uniqueBlockers | Where-Object { $_ -ne "foreign_claim_refused" -and $_ -ne "existing_executor_evidence_for_bootstrap_trial" -and $_ -ne "existing_open_task_pr_for_bootstrap_trial" }).Count -gt 0
+    $validOwned = (-not $foreign) -and (-not $malformed)
+    $resumable = $validOwned -and (-not $executorEvidenceExists) -and ($openPrs.Count -eq 0)
+
+    return [pscustomobject]@{
+      exists = $true
+      valid_owned = $validOwned
+      resumable = $resumable
+      malformed = $malformed
+      foreign = $foreign
+      already_executed = $executorEvidenceExists -or $openPrs.Count -gt 0
+      blockers = @($uniqueBlockers)
+      evidence = $evidence
+      evidence_path = ConvertTo-ShortPath $path
+      claim_state = if ($resumable) { "resumable_owned_claim" } elseif ($validOwned) { "claimed" } elseif ($foreign) { "foreign" } else { "malformed" }
+      executor_evidence_path = if (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) { ConvertTo-ShortPath $executorEvidencePath } elseif (Test-Path -LiteralPath $legacyExecutorEvidencePath -PathType Leaf) { ConvertTo-ShortPath $legacyExecutorEvidencePath } else { $null }
+      open_task_pr_count = $openPrs.Count
+      token_printed = $false
+    }
+  } catch {
+    return [pscustomobject]@{
+      exists = $true
+      valid_owned = $false
+      resumable = $false
+      malformed = $true
+      foreign = $false
+      already_executed = $false
+      blockers = @("malformed_claim_refused")
+      evidence = $null
+      evidence_path = ConvertTo-ShortPath $path
+      claim_state = "malformed"
+      token_printed = $false
+    }
+  }
+}
+
+function Test-OwnedOneShotClaimEvidence {
+  $state = Get-OneShotClaimEvidenceState
+  return [bool]$state.valid_owned
 }
 
 function Test-BootstrapAllowedPath {
@@ -149,6 +226,15 @@ function Test-BootstrapAllowedPath {
 }
 
 function Get-OpenBootstrapTaskPrs {
+  if ($SimulateExistingOpenTaskPr) {
+    return @([pscustomobject]@{
+      number = 201001
+      url = "https://github.com/local/skybridge-agent-hub/pull/201001"
+      title = "Task bootstrap-trial-201-task-001: Local README Refresh"
+      headRefName = "ai/edge-worker/bootstrap-trial-201-task-001-local-readme-refresh"
+      token_printed = $false
+    })
+  }
   try {
     $output = gh pr list --state open --search "bootstrap-trial-201-task-001 in:title,body" --json number,url,title,headRefName 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($output | Out-String).Trim())) { return @() }
@@ -320,7 +406,7 @@ function Get-GateResult {
   if ($route.repo_parallelism_guard.blocked -eq $true) { $blockers.Add("repo_parallelism_blocked") | Out-Null }
   if ($route.task_created -or $route.task_claimed -or $route.task_executed -or $route.worker_loop_started) { $blockers.Add("route_preview_mutated_execution_state") | Out-Null }
 
-  $claimGate = Get-OneShotClaimGate
+  $claimGate = Get-OneShotClaimGate -Mutate:$false
   $executorGate = Get-OneShotExecutorGate
   if (-not $claimGate.ok) { foreach ($item in @($claimGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
   if (-not $executorGate.ok) { foreach ($item in @($executorGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
@@ -391,7 +477,7 @@ function Get-StartOneApplyResult {
       token_printed = $false
     }
   }
-  $claimGate = Get-OneShotClaimGate
+  $claimGate = Get-OneShotClaimGate -Mutate:$false
   if (-not $claimGate.ok) {
     return [pscustomobject]@{
       ok = $false
@@ -444,7 +530,7 @@ function Get-StartOneApplyResult {
       token_printed = $false
     }
   }
-  $appliedClaim = Get-OneShotClaimGate
+  $appliedClaim = Get-OneShotClaimGate -Mutate:$true
   [pscustomobject]@{
     ok = $true
     schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
@@ -502,6 +588,8 @@ function Get-Evidence {
 }
 
 function Get-OneShotClaimGate {
+  param([bool]$Mutate = $false)
+
   $contract = Get-Contract
   $git = Get-GitState
   $runner = Get-RunnerLockState
@@ -510,6 +598,7 @@ function Get-OneShotClaimGate {
   $blockers = New-Object System.Collections.Generic.List[string]
   $warnings = New-Object System.Collections.Generic.List[string]
   $claimEvidencePath = Get-OneShotClaimEvidencePath
+  $claimState = Get-OneShotClaimEvidenceState
 
   if (-not $contract.ok) { foreach ($item in @($contract.errors)) { $blockers.Add([string]$item) | Out-Null } }
   if ($CampaignId -ne "bootstrap-trial-201") { $blockers.Add("wrong_campaign_refused") | Out-Null }
@@ -527,15 +616,23 @@ function Get-OneShotClaimGate {
   if (-not $route.selected_worker -or [string]$route.selected_worker.worker_id -ne "laptop-zenbookduo") { $blockers.Add("selected_worker_not_explicitly_eligible") | Out-Null }
   if ($route.task_created -or $route.task_claimed -or $route.task_executed -or $route.worker_loop_started) { $blockers.Add("route_preview_mutated_execution_state") | Out-Null }
   if ($openPrs.Count -gt 0) { $blockers.Add("existing_open_task_pr_for_bootstrap_trial") | Out-Null }
-  if (Test-Path -LiteralPath $claimEvidencePath -PathType Leaf) { $blockers.Add("second_claim_refused") | Out-Null }
+  if ($claimState.exists) {
+    if ($claimState.resumable) {
+      $warnings.Add("resumable_owned_claim") | Out-Null
+    } else {
+      foreach ($item in @($claimState.blockers)) { $blockers.Add([string]$item) | Out-Null }
+      if (@($claimState.blockers).Count -eq 0) { $blockers.Add("second_claim_refused") | Out-Null }
+    }
+  }
 
   $taskId = "bootstrap-trial-201-task-001"
   $leaseId = "bootstrap-trial-201-lease-001"
   $result = [pscustomobject]@{
     ok = ($blockers.Count -eq 0)
     schema = "skybridge.bootstrap_trial_goal201_one_shot_claim_gate.v1"
-    mode = if ($Apply) { "apply" } else { "preview" }
-    mutates = [bool]$Apply
+    mode = if ($Mutate) { "apply" } else { "preview" }
+    mutates = [bool]$Mutate
+    claim_state = if ($claimState.exists -and $claimState.resumable) { "resumable_owned_claim" } elseif ($claimState.exists) { $claimState.claim_state } elseif ($Mutate) { "prepared" } else { "preview" }
     campaign_id = $CampaignId
     goal_id = $GoalId
     task_type = $TaskType
@@ -559,7 +656,8 @@ function Get-OneShotClaimGate {
     task_claimed = $false
     lease_created = $false
     lease_id = $null
-    evidence_path = if ($Apply -and $blockers.Count -eq 0) { ConvertTo-ShortPath $claimEvidencePath } else { $null }
+    evidence_path = if (($Mutate -or $claimState.exists) -and $blockers.Count -eq 0) { ConvertTo-ShortPath $claimEvidencePath } else { $null }
+    executor_evidence_path = $claimState.executor_evidence_path
     blockers = @($blockers | Select-Object -Unique)
     warnings = @($warnings | Select-Object -Unique)
     start_all_allowed = $false
@@ -568,12 +666,28 @@ function Get-OneShotClaimGate {
     token_printed = $false
   }
 
-  if ($Apply -and $result.ok) {
+  if ($Mutate -and $result.ok -and $claimState.resumable) {
+    $evidence = $claimState.evidence
+    $evidence | Add-Member -NotePropertyName claim_state -NotePropertyValue "resumable_owned_claim" -Force
+    $evidence | Add-Member -NotePropertyName resumed_at -NotePropertyValue (Get-Date).ToUniversalTime().ToString("o") -Force
+    $evidence | Add-Member -NotePropertyName executor_evidence_path -NotePropertyValue $null -Force
+    $evidence | Add-Member -NotePropertyName pr_url -NotePropertyValue $null -Force
+    $evidence | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $claimEvidencePath -Encoding UTF8
+    $result.claim_state = "resumable_owned_claim"
+    $result.task_created = $false
+    $result.task_claimed = $true
+    $result.lease_created = $false
+    $result.lease_id = $leaseId
+    return $result
+  }
+
+  if ($Mutate -and $result.ok) {
     New-Item -ItemType Directory -Path (Get-OneShotStateDir) -Force | Out-Null
     $result.task_created = $true
     $result.task_claimed = $true
     $result.lease_created = $true
     $result.lease_id = $leaseId
+    $result.claim_state = "claimed"
     $safeEvidence = [pscustomobject]@{
       schema = "skybridge.bootstrap_trial_goal201_safe_claim_evidence.v1"
       campaign_id = $CampaignId
@@ -582,6 +696,10 @@ function Get-OneShotClaimGate {
       worker_id = $result.worker_id
       lease_id = $leaseId
       allowed_paths = @($AllowedPaths)
+      claim_state = "claimed"
+      claim_created_at = (Get-Date).ToUniversalTime().ToString("o")
+      executor_evidence_path = $null
+      pr_url = $null
       prompt_included = $false
       raw_transcript_included = $false
       raw_logs_included = $false
@@ -594,17 +712,30 @@ function Get-OneShotClaimGate {
 }
 
 function Get-OneShotExecutorGate {
-  $claimGate = Get-OneShotClaimGate
+  param([bool]$RequireOwnedClaim = $false)
+
+  $claimGate = Get-OneShotClaimGate -Mutate:$false
   $contract = Get-SanitizedExecutorContract
   $blockers = New-Object System.Collections.Generic.List[string]
-  $ownedClaim = Test-OwnedOneShotClaimEvidence
+  $claimState = Get-OneShotClaimEvidenceState
+  $ownedClaim = [bool]$claimState.valid_owned
   foreach ($item in @($claimGate.blockers)) {
-    if ($ownedClaim -and [string]$item -eq "second_claim_refused") { continue }
     $blockers.Add([string]$item) | Out-Null
   }
 
   if (-not $contract.ok) { foreach ($item in @($contract.blockers)) { $blockers.Add([string]$item) | Out-Null } }
   if ($SimulateRawLogPersistence) { $blockers.Add("sanitized_executor_refused_forced_log_persistence") | Out-Null }
+  if ($RequireOwnedClaim -and -not $claimState.resumable) {
+    if (-not $claimState.exists) { $blockers.Add("owned_claim_required_for_executor_apply") | Out-Null }
+    foreach ($item in @($claimState.blockers)) { $blockers.Add([string]$item) | Out-Null }
+  }
+  if ($claimState.exists -and -not $claimState.valid_owned) {
+    foreach ($item in @($claimState.blockers)) { $blockers.Add([string]$item) | Out-Null }
+  }
+  if ($claimState.already_executed) {
+    if ($claimState.executor_evidence_path) { $blockers.Add("existing_executor_evidence_for_bootstrap_trial") | Out-Null }
+    if ($claimState.open_task_pr_count -gt 0) { $blockers.Add("existing_open_task_pr_for_bootstrap_trial") | Out-Null }
+  }
 
   foreach ($path in @($AllowedPaths)) {
     if (-not (Test-BootstrapAllowedPath -Path $path)) { $blockers.Add("path_allowlist_violation:$path") | Out-Null }
@@ -619,6 +750,9 @@ function Get-OneShotExecutorGate {
     task_type = $TaskType
     worker_id = if ($claimGate.worker_id) { $claimGate.worker_id } else { "laptop-zenbookduo" }
     task_id = if ($claimGate.task_id) { $claimGate.task_id } else { "bootstrap-trial-201-task-001" }
+    claim_state = if ($claimState.exists) { $claimState.claim_state } else { "absent" }
+    claim_evidence_path = if ($claimState.exists) { $claimState.evidence_path } else { $null }
+    executor_evidence_path = $claimState.executor_evidence_path
     max_codex_executions = 1
     max_prs = $MaxPrs
     allowed_paths = @($AllowedPaths)
@@ -694,7 +828,7 @@ Hard limits:
 }
 
 function Invoke-SanitizedOneShotExecutor {
-  $gate = Get-OneShotExecutorGate
+  $gate = Get-OneShotExecutorGate -RequireOwnedClaim:$Apply
   if (-not $gate.ok) {
     return [pscustomobject]@{
       ok = $false
@@ -729,11 +863,14 @@ function Invoke-SanitizedOneShotExecutor {
 
   $stateDir = Get-OneShotStateDir
   New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+  $claimState = Get-OneShotClaimEvidenceState
+  if (-not $claimState.resumable) { throw "Valid owned unexecuted claim is required for executor apply." }
   $taskId = "bootstrap-trial-201-task-001"
   $workerId = "laptop-zenbookduo"
   $branch = "ai/edge-worker/bootstrap-trial-201-task-001-local-readme-refresh"
   $evidencePath = Get-OneShotSanitizedEvidencePath
   if (Test-Path -LiteralPath $evidencePath -PathType Leaf) { throw "Sanitized executor evidence already exists; refusing second execution." }
+  if (@(Get-OpenBootstrapTaskPrs).Count -gt 0) { throw "Open bootstrap task PR already exists; refusing second execution." }
 
   git fetch origin main *> $null
   if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed." }
@@ -824,6 +961,13 @@ Controlled one-shot bootstrap trial for `bootstrap-trial-201`.
   $evidenceJson = $evidence | ConvertTo-Json -Depth 40
   if (Test-SecretLookingText $evidenceJson) { throw "Secret-looking executor evidence detected." }
   Set-Content -LiteralPath $evidencePath -Value $evidenceJson -Encoding UTF8
+  $claimEvidencePath = Get-OneShotClaimEvidencePath
+  $claimEvidence = Get-Content -Raw -LiteralPath $claimEvidencePath | ConvertFrom-Json
+  $claimEvidence | Add-Member -NotePropertyName claim_state -NotePropertyValue "executed" -Force
+  $claimEvidence | Add-Member -NotePropertyName executor_evidence_path -NotePropertyValue (ConvertTo-ShortPath $evidencePath) -Force
+  $claimEvidence | Add-Member -NotePropertyName pr_url -NotePropertyValue $prUrl -Force
+  $claimEvidence | Add-Member -NotePropertyName token_printed -NotePropertyValue $false -Force
+  $claimEvidence | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $claimEvidencePath -Encoding UTF8
   git switch main *> $null
   [pscustomobject]@{
     ok = $true
@@ -855,7 +999,7 @@ $result = switch ($Command) {
   "start-one-preview" { Get-GateResult }
   "start-one-gates" { Get-GateResult }
   "start-one-apply" { Get-StartOneApplyResult }
-  "one-shot-claim-gate" { Get-OneShotClaimGate }
+  "one-shot-claim-gate" { Get-OneShotClaimGate -Mutate:$Apply }
   "one-shot-executor-gate" { Get-OneShotExecutorGate }
   "sanitized-executor-contract" { Get-SanitizedExecutorContract }
   "sanitized-executor-gate" { Get-OneShotExecutorGate }
