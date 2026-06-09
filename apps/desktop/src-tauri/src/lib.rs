@@ -50,6 +50,8 @@ struct DesktopStatus {
     local_worker_supervisor_state: Value,
     local_resource_policy: Value,
     local_execution_guard: Value,
+    workunit_preview_plan: Value,
+    bounded_queue_readiness: Value,
     safe_summary: Value,
     bridge_outcomes: Vec<BridgeOutcome>,
     report_cached: bool,
@@ -289,6 +291,8 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
     let local_worker_supervisor_state = fixture_local_worker_supervisor_state(&worker_service_state);
     let local_resource_policy = fixture_local_resource_policy();
     let local_execution_guard = fixture_local_execution_guard();
+    let workunit_preview_plan = fixture_workunit_preview_plan();
+    let bounded_queue_readiness = fixture_bounded_queue_readiness();
     let pre190_readiness = evaluate_pre190_readiness(
         active_tasks,
         stale_leases,
@@ -335,6 +339,8 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         local_worker_supervisor_state,
         local_resource_policy,
         local_execution_guard,
+        workunit_preview_plan,
+        bounded_queue_readiness,
         safe_summary,
         bridge_outcomes,
         report_cached,
@@ -1003,6 +1009,90 @@ fn fixture_local_execution_guard() -> Value {
         "bounded_queue_execution_enabled": false,
         "reason": "Goal 203A is resident supervisor and policy visibility only.",
         "next_safe_action": "Standby worker may be observed or heartbeated; execution remains disabled until bounded queue/workunit goals authorize it.",
+        "token_printed": false
+    })
+}
+
+fn fixture_bounded_queue_policy() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.bounded_queue_policy.v1",
+        "max_steps": 1,
+        "max_tasks": 1,
+        "max_prs": 0,
+        "max_runtime_minutes": 30,
+        "max_parallel_per_repo": 1,
+        "stop_on_pr_created": true,
+        "stop_on_ci_failure": true,
+        "stop_on_warning": true,
+        "drain_after_current": true,
+        "pause_after_current": true,
+        "require_human_review": true,
+        "allow_task_types": ["docs_refresh", "infrastructure_preview"],
+        "block_task_types": ["production_change", "server_root_change", "secret_mutation", "unbounded_worker_loop"],
+        "token_printed": false
+    })
+}
+
+fn fixture_bootstrap_workunit() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.workunit.v1",
+        "workunit_id": "workunit-bootstrap-trial-201-task-001",
+        "project_id": PROJECT_ID,
+        "campaign_id": "bootstrap-trial-201",
+        "goal_id": "goal-201-controlled-start-one-bootstrap-trial",
+        "task_id": "bootstrap-trial-201-task-001",
+        "task_type": "docs_refresh",
+        "required_capabilities": ["codex_exec_adapter", "repo_local_docs"],
+        "allowed_paths": ["docs/local-smoke-orientation.md"],
+        "risk": "low",
+        "state": "completed",
+        "lease_id": null,
+        "lease_owner": null,
+        "lease_expires_at": null,
+        "retry_count": 0,
+        "max_retries": 0,
+        "deadline": null,
+        "result_artifact": ".agent/tmp/bootstrap-trial-201-one-shot/trial-report.json",
+        "evidence_artifact": ".agent/tmp/bootstrap-trial-201-one-shot/finalizer-evidence.json",
+        "pr_url": "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/124",
+        "ci_status": "not_applicable",
+        "token_printed": false
+    })
+}
+
+fn fixture_workunit_preview_plan() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.bounded_queue_plan.v1",
+        "plan_id": "bounded-queue-preview-bootstrap-trial-201",
+        "mode": "preview",
+        "campaign_id": "bootstrap-trial-201",
+        "project_id": PROJECT_ID,
+        "policy": fixture_bounded_queue_policy(),
+        "workunits": [fixture_bootstrap_workunit()],
+        "would_create_tasks": false,
+        "would_claim_tasks": false,
+        "would_execute_tasks": false,
+        "would_create_prs": false,
+        "would_start_runner": false,
+        "no_mutation": true,
+        "token_printed": false
+    })
+}
+
+fn fixture_bounded_queue_readiness() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.bounded_queue_readiness.v1",
+        "campaign_id": "bootstrap-trial-201",
+        "project_id": PROJECT_ID,
+        "can_start_bounded_queue": false,
+        "start_bounded_queue_apply_available": false,
+        "bounded_queue_execution_enabled": false,
+        "blockers": [
+            "bounded_queue_apply_not_yet_enabled",
+            "requires_future_goal_authorization"
+        ],
+        "warnings": ["preview_only_no_task_creation_no_claim_no_execution_no_pr"],
+        "next_safe_action": "Review the workunit preview and keep bounded queue apply disabled until a future explicit goal authorizes execution.",
         "token_printed": false
     })
 }

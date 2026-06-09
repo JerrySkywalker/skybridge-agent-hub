@@ -128,7 +128,8 @@ p {
 
 .resident-status-card,
 .local-worker-supervisor-card,
-.local-resource-policy-card {
+.local-resource-policy-card,
+.workunit-preview-card {
   border-color: #adc2b3;
 }
 

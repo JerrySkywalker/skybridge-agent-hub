@@ -1297,6 +1297,117 @@ export interface LocalExecutionGuard {
   token_printed: false;
 }
 
+export type WorkunitState =
+  | "proposed"
+  | "ready"
+  | "claimed"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "expired"
+  | "cancelled"
+  | "held_for_review"
+  | "completed";
+
+export interface WorkunitLease {
+  schema: "skybridge.workunit_lease.v1";
+  lease_id: string | null;
+  lease_owner: string | null;
+  lease_expires_at: string | null;
+  token_printed: false;
+}
+
+export interface WorkunitResult {
+  schema: "skybridge.workunit_result.v1";
+  result_artifact: string | null;
+  evidence_artifact: string | null;
+  pr_url: string | null;
+  ci_status: "not_applicable" | "not_started" | "pending" | "passing" | "failing" | "unknown";
+  token_printed: false;
+}
+
+export interface Workunit {
+  schema: "skybridge.workunit.v1";
+  workunit_id: string;
+  project_id: string;
+  campaign_id: string;
+  goal_id: string;
+  task_id: string;
+  task_type: string;
+  required_capabilities: string[];
+  allowed_paths: string[];
+  risk: GoalRisk;
+  state: WorkunitState;
+  lease_id: string | null;
+  lease_owner: string | null;
+  lease_expires_at: string | null;
+  retry_count: number;
+  max_retries: number;
+  deadline: string | null;
+  result_artifact: string | null;
+  evidence_artifact: string | null;
+  pr_url: string | null;
+  ci_status: WorkunitResult["ci_status"];
+  token_printed: false;
+}
+
+export interface WorkunitStateEnvelope {
+  schema: "skybridge.workunit_state.v1";
+  workunit_id: string;
+  state: WorkunitState;
+  terminal: boolean;
+  requires_human_review: boolean;
+  token_printed: false;
+}
+
+export interface BoundedQueuePolicy {
+  schema: "skybridge.bounded_queue_policy.v1";
+  max_steps: number;
+  max_tasks: number;
+  max_prs: number;
+  max_runtime_minutes: number;
+  max_parallel_per_repo: number;
+  stop_on_pr_created: boolean;
+  stop_on_ci_failure: boolean;
+  stop_on_warning: boolean;
+  drain_after_current: boolean;
+  pause_after_current: boolean;
+  require_human_review: boolean;
+  allow_task_types: string[];
+  block_task_types: string[];
+  token_printed: false;
+}
+
+export interface BoundedQueuePlan {
+  schema: "skybridge.bounded_queue_plan.v1";
+  plan_id: string;
+  mode: "preview";
+  campaign_id: string;
+  project_id: string;
+  policy: BoundedQueuePolicy;
+  workunits: Workunit[];
+  would_create_tasks: false;
+  would_claim_tasks: false;
+  would_execute_tasks: false;
+  would_create_prs: false;
+  would_start_runner: false;
+  no_mutation: true;
+  token_printed: false;
+}
+
+export interface BoundedQueueReadiness {
+  schema: "skybridge.bounded_queue_readiness.v1";
+  campaign_id: string;
+  project_id: string;
+  can_start_bounded_queue: false;
+  start_bounded_queue_apply_available: false;
+  bounded_queue_execution_enabled: false;
+  blockers: string[];
+  warnings: string[];
+  next_safe_action: string;
+  token_printed: false;
+}
+
 export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
 
 export interface LockOwner {
@@ -1555,6 +1666,8 @@ export type AttentionEventType =
   | "goal_ready"
   | "goal_completed"
   | "bootstrap_trial_completed"
+  | "bounded_queue_preview_available"
+  | "bounded_queue_apply_disabled"
   | "pr_created"
   | "ci_failed"
   | "stale_lease"
@@ -2264,6 +2377,108 @@ export const fixtureLocalExecutionGuard: LocalExecutionGuard = {
   token_printed: false,
 };
 
+export const fixtureBoundedQueuePolicy: BoundedQueuePolicy = {
+  schema: "skybridge.bounded_queue_policy.v1",
+  max_steps: 1,
+  max_tasks: 1,
+  max_prs: 0,
+  max_runtime_minutes: 30,
+  max_parallel_per_repo: 1,
+  stop_on_pr_created: true,
+  stop_on_ci_failure: true,
+  stop_on_warning: true,
+  drain_after_current: true,
+  pause_after_current: true,
+  require_human_review: true,
+  allow_task_types: ["docs_refresh", "infrastructure_preview"],
+  block_task_types: ["production_change", "server_root_change", "secret_mutation", "unbounded_worker_loop"],
+  token_printed: false,
+};
+
+export const fixtureBootstrapTrialWorkunit: Workunit = {
+  schema: "skybridge.workunit.v1",
+  workunit_id: "workunit-bootstrap-trial-201-task-001",
+  project_id: "skybridge-agent-hub",
+  campaign_id: "bootstrap-trial-201",
+  goal_id: "goal-201-controlled-start-one-bootstrap-trial",
+  task_id: "bootstrap-trial-201-task-001",
+  task_type: "docs_refresh",
+  required_capabilities: ["codex_exec_adapter", "repo_local_docs"],
+  allowed_paths: ["docs/local-smoke-orientation.md"],
+  risk: "low",
+  state: "completed",
+  lease_id: null,
+  lease_owner: null,
+  lease_expires_at: null,
+  retry_count: 0,
+  max_retries: 0,
+  deadline: null,
+  result_artifact: ".agent/tmp/bootstrap-trial-201-one-shot/trial-report.json",
+  evidence_artifact: ".agent/tmp/bootstrap-trial-201-one-shot/finalizer-evidence.json",
+  pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/124",
+  ci_status: "not_applicable",
+  token_printed: false,
+};
+
+export const fixtureBootstrapTrialWorkunitLease: WorkunitLease = {
+  schema: "skybridge.workunit_lease.v1",
+  lease_id: null,
+  lease_owner: null,
+  lease_expires_at: null,
+  token_printed: false,
+};
+
+export const fixtureBootstrapTrialWorkunitResult: WorkunitResult = {
+  schema: "skybridge.workunit_result.v1",
+  result_artifact: fixtureBootstrapTrialWorkunit.result_artifact,
+  evidence_artifact: fixtureBootstrapTrialWorkunit.evidence_artifact,
+  pr_url: fixtureBootstrapTrialWorkunit.pr_url,
+  ci_status: fixtureBootstrapTrialWorkunit.ci_status,
+  token_printed: false,
+};
+
+export const fixtureBootstrapTrialWorkunitState: WorkunitStateEnvelope = {
+  schema: "skybridge.workunit_state.v1",
+  workunit_id: fixtureBootstrapTrialWorkunit.workunit_id,
+  state: fixtureBootstrapTrialWorkunit.state,
+  terminal: true,
+  requires_human_review: false,
+  token_printed: false,
+};
+
+export const fixtureBoundedQueuePlan: BoundedQueuePlan = {
+  schema: "skybridge.bounded_queue_plan.v1",
+  plan_id: "bounded-queue-preview-bootstrap-trial-201",
+  mode: "preview",
+  campaign_id: "bootstrap-trial-201",
+  project_id: "skybridge-agent-hub",
+  policy: fixtureBoundedQueuePolicy,
+  workunits: [fixtureBootstrapTrialWorkunit],
+  would_create_tasks: false,
+  would_claim_tasks: false,
+  would_execute_tasks: false,
+  would_create_prs: false,
+  would_start_runner: false,
+  no_mutation: true,
+  token_printed: false,
+};
+
+export const fixtureBoundedQueueReadiness: BoundedQueueReadiness = {
+  schema: "skybridge.bounded_queue_readiness.v1",
+  campaign_id: "bootstrap-trial-201",
+  project_id: "skybridge-agent-hub",
+  can_start_bounded_queue: false,
+  start_bounded_queue_apply_available: false,
+  bounded_queue_execution_enabled: false,
+  blockers: [
+    "bounded_queue_apply_not_yet_enabled",
+    "requires_future_goal_authorization",
+  ],
+  warnings: ["preview_only_no_task_creation_no_claim_no_execution_no_pr"],
+  next_safe_action: "Review the workunit preview and keep bounded queue apply disabled until a future explicit goal authorizes execution.",
+  token_printed: false,
+};
+
 export const fixtureLockOwner: LockOwner = {
   owner_id: "runner-dev-queue-189-200",
   owner_kind: "campaign",
@@ -2466,6 +2681,8 @@ export interface CampaignRunReport {
   local_worker_supervisor_state?: LocalWorkerSupervisorState;
   local_resource_policy?: LocalResourcePolicy;
   local_execution_guard?: LocalExecutionGuard;
+  workunit_preview_plan?: BoundedQueuePlan;
+  bounded_queue_readiness?: BoundedQueueReadiness;
   token_printed: false;
 }
 
@@ -2763,6 +2980,8 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "goal_ready",
       "goal_completed",
       "bootstrap_trial_completed",
+      "bounded_queue_preview_available",
+      "bounded_queue_apply_disabled",
       "pr_created",
       "ci_failed",
       "stale_lease",
@@ -2821,6 +3040,7 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "worker_disabled",
       "capability_mismatch",
       "repo_parallelism_blocked",
+      "bounded_queue_apply_disabled",
       "proposed_goal_created",
       "proposed_goal_needs_review",
       "proposed_goal_blocked",
@@ -2900,6 +3120,35 @@ export function routeAttentionEvent(event: AttentionEvent): NotificationRoutingD
 export function deriveAttentionEvents(report: CampaignRunReport, auditEvents: QueueControlAuditEvent[] = []): AttentionEvent[] {
   const events: AttentionEvent[] = [];
   const readiness = report.queue_control_readiness;
+  const boundedQueueReadiness = report.bounded_queue_readiness;
+
+  if (report.workunit_preview_plan) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "bounded_queue_preview_available",
+        "info",
+        "queue_control",
+        "Bounded queue preview is available without mutation.",
+        "Inspect workunit mapping and keep bounded queue apply disabled.",
+        "bounded_queue_preview",
+      ),
+    );
+  }
+
+  if (boundedQueueReadiness && !boundedQueueReadiness.start_bounded_queue_apply_available) {
+    events.push(
+      makeAttentionEvent(
+        report,
+        "bounded_queue_apply_disabled",
+        "blocker",
+        "queue_control",
+        "Bounded queue apply is disabled by policy.",
+        boundedQueueReadiness.next_safe_action,
+        "bounded_queue_apply",
+      ),
+    );
+  }
 
   if (["offline", "stale", "missing", "unknown"].includes(readiness.worker_status)) {
     events.push(
@@ -3644,6 +3893,8 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
   local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
   local_resource_policy: fixtureLocalResourcePolicy,
   local_execution_guard: fixtureLocalExecutionGuard,
+  workunit_preview_plan: fixtureBoundedQueuePlan,
+  bounded_queue_readiness: fixtureBoundedQueueReadiness,
   token_printed: false,
 };
 
