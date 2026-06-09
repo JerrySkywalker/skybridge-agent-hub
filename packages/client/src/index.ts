@@ -1629,6 +1629,116 @@ export interface BoundedQueueReadiness {
   token_printed: false;
 }
 
+export interface ManagedModePilotPolicy {
+  schema: "skybridge.managed_mode_pilot_policy.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  max_workunits: 1;
+  max_tasks: 1;
+  max_claims: 1;
+  max_codex_executions: 1;
+  max_prs: 1;
+  max_runtime_minutes: number;
+  max_parallel_per_repo: 1;
+  stop_on_pr_created: true;
+  stop_on_ci_failure: true;
+  stop_on_warning: true;
+  require_human_review: true;
+  allow_task_types: string[];
+  block_task_types: string[];
+  allowed_paths: string[];
+  selected_worker_id: string;
+  can_start_managed_mode: false;
+  general_bounded_queue_apply_enabled: false;
+  pilot_bounded_queue_apply_enabled: boolean;
+  token_printed: false;
+}
+
+export interface BoundedQueueApplyRequest {
+  schema: "skybridge.bounded_queue_apply_request.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  plan_id: string;
+  policy: ManagedModePilotPolicy;
+  workunits: Workunit[];
+  selected_routes: Array<{
+    workunit_id: string;
+    selected_worker_id: string;
+    queue_order: number;
+    token_printed: false;
+  }>;
+  selected_worker_count: number;
+  selected_workunit_count: number;
+  would_create_tasks: boolean;
+  would_claim_tasks: boolean;
+  would_execute_tasks: boolean;
+  would_create_prs: boolean;
+  would_start_runner: false;
+  no_mutation: true;
+  token_printed: false;
+}
+
+export interface BoundedQueueApplyGate {
+  schema: "skybridge.bounded_queue_apply_gate.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  can_run_pilot: boolean;
+  can_start_managed_mode: false;
+  general_bounded_queue_apply_enabled: false;
+  pilot_bounded_queue_apply_enabled: boolean;
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  open_pilot_pr_count: number;
+  selected_workunit_count: number;
+  selected_worker_count: number;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface BoundedQueueApplyResult {
+  schema: "skybridge.bounded_queue_apply_result.v1";
+  pilot_id: string;
+  mode: string;
+  final_state: string;
+  task_created: boolean;
+  task_claimed: boolean;
+  codex_execution_started: boolean;
+  pr_created: boolean;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModeV1Readiness {
+  schema: "skybridge.managed_mode_v1_readiness.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  managed_mode_v1: "pilot only";
+  can_start_managed_mode: false;
+  can_run_pilot: boolean;
+  general_bounded_queue_apply_enabled: false;
+  pilot_bounded_queue_apply_enabled: boolean;
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModePilotState {
+  schema: "skybridge.managed_mode_pilot_state.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  state: "ready_for_one_workunit_pilot" | "pilot_gate_blocked" | "held_waiting_human_pr_review" | "managed_mode_pilot_completed";
+  workunits_executed: number;
+  task_count: number;
+  claim_count: number;
+  codex_execution_count: number;
+  pr_count: number;
+  evidence_path: string | null;
+  token_printed: false;
+}
+
 export type BoincModeId =
   | "standby"
   | "armed_preview"
@@ -1724,6 +1834,12 @@ export interface BoincManagerSafeSummary {
   project_id: string;
   mode_id: BoincModeId;
   mode_display_name: string;
+  managed_mode_v1?: "pilot only";
+  managed_mode_v1_summary?: string;
+  general_apply?: "disabled";
+  general_bounded_queue_apply_enabled?: false;
+  pilot_bounded_queue_apply_enabled?: boolean;
+  one_workunit_pilot_possible_only_after_gate?: true;
   enabled: boolean;
   bounded_queue_apply_available: false;
   can_start_bounded_queue: false;

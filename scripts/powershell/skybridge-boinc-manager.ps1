@@ -54,6 +54,13 @@ function Get-WorkunitPlan {
   $raw | ConvertFrom-Json
 }
 
+function Get-ManagedModeSummary {
+  $scriptPath = Join-Path $PSScriptRoot "skybridge-managed-mode-pilot.ps1"
+  if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return $null }
+  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Command safe-summary -Json
+  $raw | ConvertFrom-Json
+}
+
 function Get-LocalPolicy {
   $scriptPath = Join-Path $PSScriptRoot "skybridge-local-resource-policy.ps1"
   $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Command safe-summary -Json
@@ -200,11 +207,18 @@ function New-ManagerState {
 
 function New-SafeSummary {
   $state = New-ManagerState
+  $managedMode = Get-ManagedModeSummary
   [pscustomobject]@{
     schema = "skybridge.boinc_manager_safe_summary.v1"
     project_id = $state.project_id
     mode_id = $state.control_surface.current_mode.mode_id
     mode_display_name = $state.control_surface.current_mode.display_name
+    managed_mode_v1 = "pilot only"
+    managed_mode_v1_summary = "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate"
+    general_apply = "disabled"
+    general_bounded_queue_apply_enabled = $false
+    pilot_bounded_queue_apply_enabled = if ($managedMode) { [bool]$managedMode.pilot_bounded_queue_apply_enabled } else { $false }
+    one_workunit_pilot_possible_only_after_gate = $true
     enabled = $state.control_surface.current_mode.enabled
     bounded_queue_apply_available = $false
     can_start_bounded_queue = $false
