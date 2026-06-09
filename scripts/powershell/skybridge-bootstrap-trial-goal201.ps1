@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "codex-launcher-stdin-test", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "codex-launcher-stdin-test", "start-one-reliability-report", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
   [string]$Command = "contract",
   [string]$CampaignDir = "goals/bootstrap-trial-201",
   [string]$CampaignId = "bootstrap-trial-201",
@@ -127,6 +127,20 @@ function Get-OneShotSanitizedEvidencePath {
   Join-Path (Get-OneShotStateDir) "sanitized-executor-evidence.json"
 }
 
+function Get-OneShotTrialReportPath {
+  Join-Path (Get-OneShotStateDir) "trial-report.json"
+}
+
+function ConvertTo-SafeReportPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $root = Get-RepoRoot
+  $full = [System.IO.Path]::GetFullPath($Path)
+  if ($full.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return ConvertTo-ShortPath $full
+  }
+  return [System.IO.Path]::GetFileName($full)
+}
+
 function Get-ExpectedOneShotClaimFields {
   [pscustomobject]@{
     campaign_id = "bootstrap-trial-201"
@@ -246,6 +260,199 @@ function Get-OpenBootstrapTaskPrs {
   } catch {
     return @()
   }
+}
+
+function ConvertTo-SafeCheckStatus {
+  param($Check)
+  $status = ([string]$Check.status).ToLowerInvariant()
+  $conclusion = ([string]$Check.conclusion).ToLowerInvariant()
+  if ($status -eq "completed") {
+    switch ($conclusion) {
+      "success" { return "success" }
+      "failure" { return "failure" }
+      "timed_out" { return "failure" }
+      "action_required" { return "failure" }
+      "cancelled" { return "cancelled" }
+      "skipped" { return "skipped" }
+      "neutral" { return "skipped" }
+      default { return "unknown" }
+    }
+  }
+  if ($status -in @("queued", "in_progress", "waiting", "requested", "pending")) { return "pending" }
+  if ($status -eq "cancelled") { return "cancelled" }
+  if ($status -eq "failure") { return "failure" }
+  if ($status -eq "error") { return "error" }
+  return "unknown"
+}
+
+function Get-BootstrapTaskPrSnapshot {
+  $openPrs = @(Get-OpenBootstrapTaskPrs)
+  if ($openPrs.Count -eq 0) {
+    return [pscustomobject]@{
+      exists = $false
+      duplicate_execution_refused = $false
+      duplicate_claim_refused = $false
+      token_printed = $false
+    }
+  }
+  if ($openPrs.Count -gt 1) { throw "Multiple open bootstrap task PRs detected; refusing to summarize ambiguous state." }
+  if ($SimulateExistingOpenTaskPr) {
+    return [pscustomobject]@{
+      exists = $true
+      task_id = "bootstrap-trial-201-task-001"
+      pr_number = [int]$openPrs[0].number
+      pr_url = [string]$openPrs[0].url
+      pr_state = "OPEN"
+      task_pr_state = "open"
+      base_ref = "main"
+      changed_files = @("docs/local-smoke-orientation.md")
+      checks_status = "pending"
+      checks = @([pscustomobject]@{ name = "fixture"; workflow = "fixture"; status = "pending"; token_printed = $false })
+      auto_merge_enabled = $false
+      waiting_for_human_review = $true
+      duplicate_execution_refused = $true
+      duplicate_claim_refused = $true
+      raw_ci_logs_persisted = $false
+      raw_annotations_persisted = $false
+      token_printed = $false
+    }
+  }
+  try {
+    $viewJson = gh pr view ([int]$openPrs[0].number) --json number,title,url,state,closed,mergedAt,isDraft,baseRefName,headRefName,files,statusCheckRollup,autoMergeRequest 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($viewJson | Out-String).Trim())) { throw "gh pr view failed." }
+    $view = $viewJson | ConvertFrom-Json
+    $checks = @($view.statusCheckRollup | ForEach-Object {
+      [pscustomobject]@{
+        name = [string]$_.name
+        workflow = [string]$_.workflowName
+        status = ConvertTo-SafeCheckStatus -Check $_
+        token_printed = $false
+      }
+    })
+    $checkStatuses = @($checks | ForEach-Object { $_.status })
+    $overall = if ($checkStatuses.Count -eq 0) {
+      "unknown"
+    } elseif ($checkStatuses -contains "failure") {
+      "failure"
+    } elseif ($checkStatuses -contains "error") {
+      "error"
+    } elseif ($checkStatuses -contains "cancelled") {
+      "cancelled"
+    } elseif ($checkStatuses -contains "pending") {
+      "pending"
+    } elseif (($checkStatuses | Where-Object { $_ -notin @("success", "skipped") }).Count -eq 0) {
+      "success"
+    } else {
+      "unknown"
+    }
+    [pscustomobject]@{
+      exists = $true
+      task_id = "bootstrap-trial-201-task-001"
+      pr_number = [int]$view.number
+      pr_url = [string]$view.url
+      pr_state = [string]$view.state
+      task_pr_state = ([string]$view.state).ToLowerInvariant()
+      base_ref = [string]$view.baseRefName
+      changed_files = @($view.files | ForEach-Object { [string]$_.path })
+      checks_status = $overall
+      checks = @($checks)
+      auto_merge_enabled = ($null -ne $view.autoMergeRequest)
+      waiting_for_human_review = ($view.state -eq "OPEN" -and $null -eq $view.mergedAt)
+      duplicate_execution_refused = $true
+      duplicate_claim_refused = $true
+      raw_ci_logs_persisted = $false
+      raw_annotations_persisted = $false
+      token_printed = $false
+    }
+  } catch {
+    [pscustomobject]@{
+      exists = $true
+      task_id = "bootstrap-trial-201-task-001"
+      pr_number = [int]$openPrs[0].number
+      pr_url = [string]$openPrs[0].url
+      pr_state = "OPEN"
+      task_pr_state = "open"
+      base_ref = "main"
+      changed_files = @()
+      checks_status = "unknown"
+      checks = @()
+      auto_merge_enabled = $false
+      waiting_for_human_review = $true
+      duplicate_execution_refused = $true
+      duplicate_claim_refused = $true
+      raw_ci_logs_persisted = $false
+      raw_annotations_persisted = $false
+      token_printed = $false
+    }
+  }
+}
+
+function Get-StartOneReliabilityReport {
+  $snapshot = Get-BootstrapTaskPrSnapshot
+  $claimState = Get-OneShotClaimEvidenceState
+  $executorEvidencePath = Get-OneShotSanitizedEvidencePath
+  $report = [pscustomobject]@{
+    ok = $snapshot.exists
+    schema = "skybridge.bootstrap_trial_goal202a_start_one_reliability_report.v1"
+    campaign_id = "bootstrap-trial-201"
+    goal_id = "goal-201-controlled-start-one-bootstrap-trial"
+    task_id = "bootstrap-trial-201-task-001"
+    worker_id = "laptop-zenbookduo"
+    final_state = if ($snapshot.exists) { "held_waiting_human_pr_review" } else { "held_no_task_pr" }
+    report_state = if ($snapshot.exists) { "held_waiting_human_pr_review" } else { "held_no_task_pr" }
+    attention_event = if ($snapshot.exists) { "human_pr_review_required" } else { "task_pr_missing" }
+    dashboard = [pscustomobject]@{
+      task_id = "bootstrap-trial-201-task-001"
+      task_pr_url = $snapshot.pr_url
+      task_pr_state = $snapshot.task_pr_state
+      checks_status = $snapshot.checks_status
+      changed_files = @($snapshot.changed_files)
+      no_auto_merge = -not [bool]$snapshot.auto_merge_enabled
+      waiting_for_human_review = [bool]$snapshot.waiting_for_human_review
+      token_printed = $false
+    }
+    task_pr = $snapshot
+    duplicate_run_prevention = [pscustomobject]@{
+      existing_open_task_pr_for_bootstrap_trial = [bool]$snapshot.exists
+      start_one_preview_reports_existing_pr = [bool]$snapshot.exists
+      start_one_apply_refuses_existing_pr = [bool]$snapshot.exists
+      executor_apply_refuses_existing_pr = [bool]$snapshot.exists
+      duplicate_execution_refused = [bool]$snapshot.duplicate_execution_refused
+      duplicate_claim_refused = [bool]$snapshot.duplicate_claim_refused
+      no_second_task = $true
+      no_second_task_pr = $true
+      token_printed = $false
+    }
+    evidence = [pscustomobject]@{
+      claim_state = $claimState.claim_state
+      executor_evidence_exists = Test-Path -LiteralPath $executorEvidencePath -PathType Leaf
+      executor_evidence_path = if (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) { ConvertTo-ShortPath $executorEvidencePath } else { $null }
+      trial_report_path = ConvertTo-SafeReportPath (Get-OneShotTrialReportPath)
+      prompt_persisted = $false
+      transcript_persisted = $false
+      stdout_persisted = $false
+      stderr_persisted = $false
+      raw_ci_logs_persisted = $false
+      token_printed = $false
+    }
+    operator_guidance = @(
+      "Review task PR manually.",
+      "If acceptable, merge task PR manually.",
+      "After merge, run a later goal to attach final evidence and mark bootstrap trial completed.",
+      "Do not execute a second task."
+    )
+    active_tasks = 0
+    stale_leases = 0
+    no_auto_merge = $true
+    token_printed = $false
+  }
+  if ($Apply) {
+    New-Item -ItemType Directory -Path (Get-OneShotStateDir) -Force | Out-Null
+    $json = $report | ConvertTo-Json -Depth 100
+    if (Test-SecretLookingText $json) { throw "Secret-looking reliability report detected." }
+    Set-Content -LiteralPath (Get-OneShotTrialReportPath) -Value $json -Encoding UTF8
+  }
+  return $report
 }
 
 function Get-SafeChangedFiles {
@@ -492,9 +699,10 @@ function Get-GateResult {
 
   $claimGate = Get-OneShotClaimGate -Mutate:$false
   $executorGate = Get-OneShotExecutorGate
+  $taskPrSnapshot = Get-BootstrapTaskPrSnapshot
   if (-not $claimGate.ok) { foreach ($item in @($claimGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
   if (-not $executorGate.ok) { foreach ($item in @($executorGate.blockers)) { $blockers.Add([string]$item) | Out-Null } }
-  if (-not $executorGate.ok) { $warnings.Add("one_shot_execution_held_until_executor_gate_passes") | Out-Null }
+  if (-not $executorGate.ok -and -not $taskPrSnapshot.exists) { $warnings.Add("one_shot_execution_held_until_executor_gate_passes") | Out-Null }
 
   [pscustomobject]@{
     ok = ($blockers.Count -eq 0)
@@ -514,8 +722,9 @@ function Get-GateResult {
     worker_service_readiness = $service.readiness
     run_budget = $contract.run_budget
     operator_reason_recorded = -not [string]::IsNullOrWhiteSpace($Reason)
-    attention_state = "one-shot bootstrap trial held: waiting for executor gate"
-    dashboard_state = if ($executorGate.ok) { "ready_for_one_shot_start_one_apply" } else { "held_no_execution_executor_gate_blocked" }
+    attention_state = if ($taskPrSnapshot.exists) { "human_pr_review_required" } else { "one-shot bootstrap trial held: waiting for executor gate" }
+    dashboard_state = if ($taskPrSnapshot.exists) { "held_waiting_human_pr_review" } elseif ($executorGate.ok) { "ready_for_one_shot_start_one_apply" } else { "held_no_execution_executor_gate_blocked" }
+    task_pr = if ($taskPrSnapshot.exists) { $taskPrSnapshot } else { $null }
     blockers = @($blockers | Select-Object -Unique)
     warnings = @($warnings | Select-Object -Unique)
     would_create_tasks = if ($blockers.Count -eq 0) { 1 } else { 0 }
@@ -536,6 +745,7 @@ function Get-StartOneApplyResult {
   if ([string]::IsNullOrWhiteSpace($Reason)) { throw "start-one-apply requires -Reason." }
   $gate = Get-GateResult
   if (-not $gate.ok) {
+    $existingTaskPr = @($gate.blockers) -contains "existing_open_task_pr_for_bootstrap_trial"
     return [pscustomobject]@{
       ok = $false
       schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
@@ -550,8 +760,10 @@ function Get-StartOneApplyResult {
       pr_created = $false
       pr_url = $null
       auto_merge_enabled = $false
-      final_state = "held_no_execution_executor_gate_blocked"
-      hold_reason = "one-shot worker executor gate cannot be fully enforced"
+      final_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
+      hold_reason = if ($existingTaskPr) { "existing open bootstrap task PR requires human review" } else { "one-shot worker executor gate cannot be fully enforced" }
+      attention_event = if ($existingTaskPr) { "human_pr_review_required" } else { $null }
+      dashboard_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
       blockers = @($gate.blockers)
       gate = $gate
       no_start_all = $true
@@ -946,6 +1158,7 @@ function Invoke-CodexLauncherStdinTest {
 function Invoke-SanitizedOneShotExecutor {
   $gate = Get-OneShotExecutorGate -RequireOwnedClaim:$Apply
   if (-not $gate.ok) {
+    $existingTaskPr = @($gate.blockers) -contains "existing_open_task_pr_for_bootstrap_trial"
     return [pscustomobject]@{
       ok = $false
       schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
@@ -956,7 +1169,8 @@ function Invoke-SanitizedOneShotExecutor {
       pr_url = $null
       pr_created = $false
       task_executed = $false
-      final_state = "held_no_execution_executor_gate_blocked"
+      final_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
+      attention_event = if ($existingTaskPr) { "human_pr_review_required" } else { $null }
       blockers = @($gate.blockers)
       token_printed = $false
     }
@@ -1133,6 +1347,7 @@ $result = switch ($Command) {
     }
   }
   "codex-launcher-stdin-test" { Invoke-CodexLauncherStdinTest }
+  "start-one-reliability-report" { Get-StartOneReliabilityReport }
   "run-sanitized-executor" { Invoke-SanitizedOneShotExecutor }
   "worker-route" { Get-RoutePreview }
   "no-start-all" { [pscustomobject]@{ ok = $true; schema = "skybridge.bootstrap_trial_goal201_no_start_all.v1"; start_all_allowed = $false; blocker = "start_all_forbidden_for_bootstrap_trial_201"; task_created = $false; token_printed = $false } }
