@@ -58,6 +58,29 @@ function Get-Sha256Text {
   }
 }
 
+function ConvertTo-WindowsCommandLineArgument {
+  param([Parameter(Mandatory = $true)][string]$Value)
+  if ($Value -notmatch '[\s"]') { return $Value }
+  return '"' + ($Value -replace '"', '\"') + '"'
+}
+
+function New-CodexLauncherMetadata {
+  param(
+    [Parameter(Mandatory = $true)][string]$LauncherKind,
+    [Parameter(Mandatory = $true)][string]$HostExecutableName
+  )
+  [pscustomobject]@{
+    launcher_kind = $LauncherKind
+    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    host_executable_name = $HostExecutableName
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    token_printed = $false
+  }
+}
+
 function Invoke-SilentProcess {
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
@@ -95,13 +118,67 @@ function Invoke-SilentProcess {
 }
 
 function Get-CodexCommand {
-  $cmd = Get-Command "codex" -ErrorAction SilentlyContinue
-  if (-not $cmd) { return $null }
-  [pscustomobject]@{
-    file_path = $cmd.Source
-    argument_list = @("exec", "--ephemeral", "--cd", (Get-RepoRoot), "-")
-    token_printed = $false
+  $commands = @(Get-Command "codex" -All -ErrorAction SilentlyContinue)
+  if ($commands.Count -eq 0) { return $null }
+  $preferred = @(
+    $commands | Where-Object { [System.IO.Path]::GetExtension([string]$_.Source).ToLowerInvariant() -eq ".exe" } | Select-Object -First 1
+    $commands | Where-Object { [System.IO.Path]::GetExtension([string]$_.Source).ToLowerInvariant() -eq ".cmd" } | Select-Object -First 1
+    $commands | Where-Object { [System.IO.Path]::GetExtension([string]$_.Source).ToLowerInvariant() -eq ".bat" } | Select-Object -First 1
+    $commands | Where-Object { [System.IO.Path]::GetExtension([string]$_.Source).ToLowerInvariant() -eq ".ps1" } | Select-Object -First 1
+    $commands | Select-Object -First 1
+  ) | Where-Object { $null -ne $_ } | Select-Object -First 1
+
+  $resolvedPath = [string]$preferred.Source
+  $extension = [System.IO.Path]::GetExtension($resolvedPath).ToLowerInvariant()
+  $fileName = [System.IO.Path]::GetFileName($resolvedPath)
+  $codexArgs = @("exec", "--ephemeral", "--cd", (Get-RepoRoot), "-")
+
+  if ($extension -eq ".exe") {
+    return [pscustomobject]@{
+      file_path = $resolvedPath
+      argument_list = @($codexArgs)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "codex.exe" -HostExecutableName $fileName)
+      token_printed = $false
+    }
   }
+
+  if ($extension -eq ".cmd" -or $extension -eq ".bat") {
+    $cmdHost = Get-Command "cmd.exe" -ErrorAction SilentlyContinue
+    if (-not $cmdHost) { return $null }
+    $commandLine = @(
+      (ConvertTo-WindowsCommandLineArgument -Value $resolvedPath)
+      @($codexArgs | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value ([string]$_) })
+    ) -join " "
+    return [pscustomobject]@{
+      file_path = [string]$cmdHost.Source
+      argument_list = @("/d", "/s", "/c", $commandLine)
+      metadata = (New-CodexLauncherMetadata -LauncherKind $extension.TrimStart(".") -HostExecutableName "cmd.exe")
+      token_printed = $false
+    }
+  }
+
+  if ($extension -eq ".ps1") {
+    $pwsh = Get-Command "pwsh" -ErrorAction SilentlyContinue
+    if (-not $pwsh) { $pwsh = Get-Command "powershell.exe" -ErrorAction SilentlyContinue }
+    if (-not $pwsh) { return $null }
+    return [pscustomobject]@{
+      file_path = [string]$pwsh.Source
+      argument_list = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $resolvedPath) + @($codexArgs)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "ps1" -HostExecutableName ([System.IO.Path]::GetFileName([string]$pwsh.Source)))
+      token_printed = $false
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($extension)) {
+    return [pscustomobject]@{
+      file_path = $resolvedPath
+      argument_list = @($codexArgs)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "extensionless" -HostExecutableName $fileName)
+      token_printed = $false
+    }
+  }
+
+  return $null
 }
 
 function Get-StateDirPath {
@@ -321,6 +398,7 @@ function New-ApplyGate {
   $policy = New-PilotPolicy
   $plan = New-PilotPlan
   $runner = Get-RunnerLockState
+  $codex = Get-CodexCommand
   $openPrs = @(Get-OpenPilotPrs)
   $blockers = New-Object System.Collections.Generic.List[string]
 
@@ -338,6 +416,7 @@ function New-ApplyGate {
   if ($policy.general_bounded_queue_apply_enabled) { $blockers.Add("general_bounded_queue_apply_must_remain_disabled") | Out-Null }
   if (-not $policy.pilot_bounded_queue_apply_enabled) { $blockers.Add("pilot_bounded_queue_apply_not_enabled") | Out-Null }
   if ($WorkerId -ne "laptop-zenbookduo") { $blockers.Add("selected_worker_must_be_laptop_zenbookduo") | Out-Null }
+  if (-not $codex) { $blockers.Add("codex_cli_missing_or_unclassified") | Out-Null }
   if (@($plan.selected_routes | Select-Object -ExpandProperty selected_worker_id -Unique).Count -ne 1) { $blockers.Add("exactly_one_worker_required") | Out-Null }
   if ($runner.runner_lock_status -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
   if ($openPrs.Count -gt 0) { $blockers.Add("existing_open_pilot_pr") | Out-Null }
@@ -365,6 +444,7 @@ function New-ApplyGate {
     open_pilot_pr_count = $openPrs.Count
     selected_workunit_count = @($plan.workunits).Count
     selected_worker_count = @($plan.selected_routes | Select-Object -ExpandProperty selected_worker_id -Unique).Count
+    launcher_metadata = if ($codex) { $codex.metadata } else { $null }
     blockers = @($blockers | Select-Object -Unique)
     token_printed = $false
   }
@@ -517,6 +597,7 @@ function Invoke-PilotApply {
       task_created = $true
       task_claimed = $true
       codex_execution_started = $true
+      launcher_metadata = $codex.metadata
       pr_created = $false
       exit_code = $execution.exit_code
       timed_out = $execution.timed_out
@@ -586,6 +667,7 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
     task_id = "managed-mode-pilot-208-task-001"
     worker_id = "laptop-zenbookduo"
     command_class = "codex_exec_ephemeral_stdin_discard_output"
+    launcher_metadata = $codex.metadata
     changed_files = @($changedFiles)
     file_evidence = @($fileEvidence)
     prompt_sha256 = $promptHash
@@ -615,6 +697,7 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
     task_id = "managed-mode-pilot-208-task-001"
     workunit_id = "managed-mode-pilot-208-workunit-001"
     worker_id = "laptop-zenbookduo"
+    launcher_metadata = $codex.metadata
     changed_files = @($changedFiles)
     pr_url = $prUrl
     task_created = $true
@@ -662,6 +745,7 @@ function New-SafeSummary {
     can_run_pilot = $readiness.can_run_pilot
     general_bounded_queue_apply_enabled = $false
     pilot_bounded_queue_apply_enabled = $gate.pilot_bounded_queue_apply_enabled
+    launcher_metadata = $gate.launcher_metadata
     max_workunits = $MaxWorkunits
     max_tasks = $MaxTasks
     max_claims = $MaxClaims
