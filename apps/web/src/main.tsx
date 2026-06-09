@@ -28,11 +28,13 @@ import {
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
+  fixtureMultiWorkerReadiness,
   fixtureGoalQueueReviewSummary,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
+  fixtureSchedulingPreview,
   fixtureStaleCampaignLock,
   queueControlActionMatrix,
   routeAttentionEvent,
@@ -44,6 +46,8 @@ import {
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerSupervisorState,
+  type MultiWorkerReadiness,
+  type SchedulingPreview,
   type HermesSummary,
   type IterationsSummary,
   type NotificationsSummary,
@@ -357,6 +361,7 @@ function CampaignQueuePage() {
             guard={report.local_execution_guard ?? fixtureLocalExecutionGuard}
           />
           <WebBoundedQueuePreviewPanel plan={workunitPlan} readiness={boundedQueueReadiness} />
+          <WorkerSchedulingPreviewPanel preview={fixtureSchedulingPreview} readiness={fixtureMultiWorkerReadiness} />
           <WorkerRoutingPanel report={report} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
@@ -1041,6 +1046,65 @@ function CampaignStepLedger({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function WorkerSchedulingPreviewPanel({
+  preview,
+  readiness,
+}: {
+  preview: SchedulingPreview;
+  readiness: MultiWorkerReadiness;
+}) {
+  return (
+    <section className="skybridge-panel worker-scheduling-preview-panel" aria-label="Worker distribution scheduling preview">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Multi-worker</p>
+          <h2>Scheduling Preview</h2>
+        </div>
+        <span className={badgeClass(preview.apply_available ? "bad" : "ok")}>apply disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Worker readiness</dt>
+          <dd>{`total=${readiness.worker_pool_count}; ready_preview_only=${readiness.ready_preview_only_count}; stale=${readiness.stale_count}; disabled=${readiness.disabled_count}`}</dd>
+        </div>
+        <div>
+          <dt>Worker groups</dt>
+          <dd>{preview.worker_pool.groups.join("; ")}</dd>
+        </div>
+        <div>
+          <dt>Route plan</dt>
+          <dd>{`${preview.route_plan.plan_id}; routes=${preview.route_plan.selected_routes.length}`}</dd>
+        </div>
+        <div>
+          <dt>Repo policy</dt>
+          <dd>{`max_parallel_per_repo=${preview.repo_parallelism_policy.max_parallel_per_repo}; mutating_serialized=${String(preview.repo_parallelism_policy.mutating_work_serialized)}`}</dd>
+        </div>
+        <div>
+          <dt>No claim/lease/execution</dt>
+          <dd>{`task_claimed=${String(preview.task_claimed)}; lease_created=${String(preview.lease_created)}; task_executed=${String(preview.task_executed)}`}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Selected routes"
+        items={preview.route_plan.selected_routes.map((route) => `${route.queue_order}: ${route.workunit_id}->${route.selected_worker_id ?? "none"} serialized=${route.serialized_by_repo_policy}`)}
+        fallback="No selected routes."
+      />
+      <QueueList
+        title="Blockers and attention"
+        items={[...readiness.blockers, ...readiness.attention_events]}
+        fallback="No blockers."
+      />
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Scheduling apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker claim disabled</button>
+        <button type="button" disabled aria-disabled="true">Lease creation disabled</button>
+        <button type="button" disabled aria-disabled="true">Execution disabled</button>
+      </div>
+      <span>token_printed=false</span>
     </section>
   );
 }

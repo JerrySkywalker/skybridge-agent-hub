@@ -1188,6 +1188,125 @@ export interface WorkerRoutingReadinessDetail {
   token_printed: false;
 }
 
+export interface WorkerProfile {
+  schema: "skybridge.worker_profile.v1";
+  worker_id: string;
+  display_name: string;
+  host_label: string;
+  os: WorkerOs;
+  arch: string;
+  location_label: string;
+  worker_group: string;
+  supported_task_types: string[];
+  supported_projects: string[];
+  supported_repos: string[];
+  tools_available: WorkerTool[];
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  max_concurrent_workunits: number;
+  heartbeat_at: string | null;
+  stale_after_seconds: number;
+  resource_policy_summary: string;
+  trust_level: "local_operator" | "ci_fixture" | "untrusted_fixture";
+  token_printed: false;
+}
+
+export interface WorkerPool {
+  schema: "skybridge.worker_pool.v1";
+  workers: WorkerProfile[];
+  groups: string[];
+  preview_only: true;
+  token_printed: false;
+}
+
+export interface WorkerAvailability {
+  schema: "skybridge.worker_availability.v1";
+  worker_id: string;
+  state: "online" | "offline" | "stale" | "disabled" | "busy" | "ready_preview_only";
+  heartbeat_age_seconds: number | null;
+  busy_workunit_id: string | null;
+  readiness_blockers: string[];
+  score: number;
+  token_printed: false;
+}
+
+export interface WorkerCapabilityMatch {
+  schema: "skybridge.worker_capability_match.v1";
+  worker_id: string;
+  workunit_id: string;
+  accepted: boolean;
+  score: number;
+  rejected_reasons: string[];
+  token_printed: false;
+}
+
+export interface WorkerScore {
+  schema: "skybridge.worker_score.v1";
+  worker_id: string;
+  score: number;
+  factors: string[];
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface RepoParallelismPolicy {
+  schema: "skybridge.repo_parallelism_policy.v1";
+  repo_id: string;
+  max_parallel_per_repo: 1;
+  mutating_work_serialized: true;
+  read_only_parallel_allowed_when_explicit: boolean;
+  uncertain_counts_as_mutating: true;
+  token_printed: false;
+}
+
+export interface WorkunitRoutePlan {
+  schema: "skybridge.workunit_route_plan.v1";
+  plan_id: string;
+  mode: "preview";
+  selected_routes: Array<{
+    workunit_id: string;
+    selected_worker_id: string | null;
+    queue_order: number;
+    serialized_by_repo_policy: boolean;
+    token_printed: false;
+  }>;
+  rejected_workers: WorkerCapabilityMatch[];
+  policy_blockers: string[];
+  task_claimed: false;
+  lease_created: false;
+  task_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface SchedulingPreview {
+  schema: "skybridge.scheduling_preview.v1";
+  preview_id: string;
+  worker_pool: WorkerPool;
+  availability: WorkerAvailability[];
+  scores: WorkerScore[];
+  repo_parallelism_policy: RepoParallelismPolicy;
+  route_plan: WorkunitRoutePlan;
+  apply_available: false;
+  task_claimed: false;
+  lease_created: false;
+  task_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface MultiWorkerReadiness {
+  schema: "skybridge.multi_worker_readiness.v1";
+  worker_pool_count: number;
+  ready_preview_only_count: number;
+  stale_count: number;
+  disabled_count: number;
+  apply_available: false;
+  blockers: string[];
+  attention_events: string[];
+  token_printed: false;
+}
+
 export type WorkerServiceMode = "offline" | "standby" | "ready" | "paused" | "stopping" | "error";
 
 export interface WorkerServiceCapabilityMatrix {
@@ -1798,6 +1917,10 @@ export type AttentionEventType =
   | "capability_mismatch"
   | "repo_parallelism_blocked"
   | "selected_worker_ready_for_preview_only"
+  | "multi_worker_preview_available"
+  | "worker_capability_mismatch"
+  | "repo_parallelism_blocks_concurrent_work"
+  | "scheduling_apply_disabled"
   | "project_profile_invalid"
   | "project_profile_missing"
   | "project_repo_path_invalid"
@@ -2381,6 +2504,137 @@ export const fixtureWorkerRoutingReadiness: WorkerRoutingReadinessDetail = {
   execution_enabled: false,
   can_start_one: false,
   can_start_queue: false,
+  token_printed: false,
+};
+
+export const fixtureWorkerProfiles: WorkerProfile[] = fixtureWorkerCapabilityMatrix.map((entry, index) => ({
+  schema: "skybridge.worker_profile.v1",
+  worker_id: entry.worker_id,
+  display_name: entry.worker_label,
+  host_label: index === 1 ? "linux-ci-preview" : "laptop-zenbookduo",
+  os: entry.os,
+  arch: "x64",
+  location_label: index === 1 ? "ci-preview" : "local-desktop",
+  worker_group: index === 1 ? "ci-preview" : "local-preview",
+  supported_task_types: entry.task_type_capabilities,
+  supported_projects: entry.project_access,
+  supported_repos: entry.repo_access,
+  tools_available: entry.tools,
+  can_claim_tasks: false,
+  can_execute_tasks: false,
+  max_concurrent_workunits: 1,
+  heartbeat_at: index === 1 ? "2026-06-08T23:45:00.000Z" : "2026-06-09T00:00:00.000Z",
+  stale_after_seconds: 300,
+  resource_policy_summary: "preview only; local resource policy gates execution",
+  trust_level: index === 3 ? "untrusted_fixture" : index === 1 ? "ci_fixture" : "local_operator",
+  token_printed: false,
+}));
+
+export const fixtureWorkerPool: WorkerPool = {
+  schema: "skybridge.worker_pool.v1",
+  workers: fixtureWorkerProfiles,
+  groups: Array.from(new Set(fixtureWorkerProfiles.map((worker) => worker.worker_group))),
+  preview_only: true,
+  token_printed: false,
+};
+
+export const fixtureWorkerAvailability: WorkerAvailability[] = fixtureWorkerReadiness.map((entry) => ({
+  schema: "skybridge.worker_availability.v1",
+  worker_id: entry.worker_id,
+  state: entry.readiness_state === "online" && entry.readiness_blockers.length === 0
+    ? "ready_preview_only"
+    : entry.readiness_state === "unknown"
+      ? "offline"
+      : entry.readiness_state,
+  heartbeat_age_seconds: entry.heartbeat_age_seconds,
+  busy_workunit_id: entry.current_task_id,
+  readiness_blockers: entry.readiness_blockers,
+  score: entry.readiness_score,
+  token_printed: false,
+}));
+
+export const fixtureWorkerScores: WorkerScore[] = fixtureWorkerRoutingReadiness.route_preview.decisions.map((decision) => ({
+  schema: "skybridge.worker_score.v1",
+  worker_id: decision.worker_id,
+  score: decision.accepted ? decision.readiness_score : 0,
+  factors: decision.accepted ? ["task_type", "project_repo", "tools", "heartbeat", "trust_level"] : [],
+  blockers: decision.rejection_reasons,
+  token_printed: false,
+}));
+
+export const fixtureRepoParallelismPolicy: RepoParallelismPolicy = {
+  schema: "skybridge.repo_parallelism_policy.v1",
+  repo_id: "skybridge-agent-hub",
+  max_parallel_per_repo: 1,
+  mutating_work_serialized: true,
+  read_only_parallel_allowed_when_explicit: true,
+  uncertain_counts_as_mutating: true,
+  token_printed: false,
+};
+
+const fixtureSchedulingWorkunitId = "workunit-bootstrap-trial-201-task-001";
+
+export const fixtureWorkunitRoutePlan: WorkunitRoutePlan = {
+  schema: "skybridge.workunit_route_plan.v1",
+  plan_id: "route-plan-preview-bootstrap-trial-201",
+  mode: "preview",
+  selected_routes: [
+    {
+      workunit_id: fixtureSchedulingWorkunitId,
+      selected_worker_id: fixtureWorkerRoutingReadiness.route_preview.selected_worker?.worker_id ?? null,
+      queue_order: 1,
+      serialized_by_repo_policy: true,
+      token_printed: false,
+    },
+  ],
+  rejected_workers: fixtureWorkerRoutingReadiness.route_preview.rejected_workers.map((decision) => ({
+    schema: "skybridge.worker_capability_match.v1",
+    worker_id: decision.worker_id,
+    workunit_id: fixtureSchedulingWorkunitId,
+    accepted: false,
+    score: decision.readiness_score,
+    rejected_reasons: decision.rejection_reasons,
+    token_printed: false,
+  })),
+  policy_blockers: ["scheduling_apply_disabled"],
+  task_claimed: false,
+  lease_created: false,
+  task_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureSchedulingPreview: SchedulingPreview = {
+  schema: "skybridge.scheduling_preview.v1",
+  preview_id: "multi-worker-scheduling-preview-bootstrap-trial-201",
+  worker_pool: fixtureWorkerPool,
+  availability: fixtureWorkerAvailability,
+  scores: fixtureWorkerScores,
+  repo_parallelism_policy: fixtureRepoParallelismPolicy,
+  route_plan: fixtureWorkunitRoutePlan,
+  apply_available: false,
+  task_claimed: false,
+  lease_created: false,
+  task_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureMultiWorkerReadiness: MultiWorkerReadiness = {
+  schema: "skybridge.multi_worker_readiness.v1",
+  worker_pool_count: fixtureWorkerPool.workers.length,
+  ready_preview_only_count: fixtureWorkerAvailability.filter((worker) => worker.state === "ready_preview_only").length,
+  stale_count: fixtureWorkerAvailability.filter((worker) => worker.state === "stale").length,
+  disabled_count: fixtureWorkerAvailability.filter((worker) => worker.state === "disabled").length,
+  apply_available: false,
+  blockers: ["scheduling_apply_disabled", "preview_only_no_claim_no_lease_no_execution"],
+  attention_events: [
+    "multi_worker_preview_available",
+    "worker_stale",
+    "worker_capability_mismatch",
+    "repo_parallelism_blocks_concurrent_work",
+    "scheduling_apply_disabled",
+  ],
   token_printed: false,
 };
 
