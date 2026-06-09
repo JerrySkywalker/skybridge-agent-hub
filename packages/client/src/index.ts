@@ -1493,6 +1493,7 @@ export type AttentionEventType =
   | "human_approval_required"
   | "goal_ready"
   | "goal_completed"
+  | "bootstrap_trial_completed"
   | "pr_created"
   | "ci_failed"
   | "stale_lease"
@@ -2631,6 +2632,7 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
       "human_approval_required",
       "goal_ready",
       "goal_completed",
+      "bootstrap_trial_completed",
       "pr_created",
       "ci_failed",
       "stale_lease",
@@ -2743,7 +2745,7 @@ export const notificationRoutingMatrix: NotificationRoutingRule[] = [
     route: "disabled",
     status: "disabled",
     levels: ["info"],
-    event_types: ["goal_ready", "goal_completed", "pr_created", "safe_action_applied", "notification_delivery_skipped", "notification_delivery_fixture", "proposed_goal_created", "proposed_goal_needs_review", "proposed_goal_rejected", "import_requires_goal_200"],
+    event_types: ["goal_ready", "goal_completed", "bootstrap_trial_completed", "pr_created", "safe_action_applied", "notification_delivery_skipped", "notification_delivery_fixture", "proposed_goal_created", "proposed_goal_needs_review", "proposed_goal_rejected", "import_requires_goal_200"],
     real_external_send: false,
     summary: "Low-noise events are not sent externally by default.",
     token_printed: false,

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "codex-launcher-stdin-test", "start-one-reliability-report", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "codex-launcher-stdin-test", "start-one-reliability-report", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
   [string]$Command = "contract",
   [string]$CampaignDir = "goals/bootstrap-trial-201",
   [string]$CampaignId = "bootstrap-trial-201",
@@ -131,6 +131,29 @@ function Get-OneShotTrialReportPath {
   Join-Path (Get-OneShotStateDir) "trial-report.json"
 }
 
+function Get-OneShotFinalizerEvidencePath {
+  Join-Path (Get-OneShotStateDir) "finalizer-evidence.json"
+}
+
+function Test-FinalizerEvidencePresent {
+  $path = Get-OneShotFinalizerEvidencePath
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+  try {
+    $raw = Get-Content -Raw -LiteralPath $path
+    if (Test-SecretLookingText $raw) { return $false }
+    $evidence = $raw | ConvertFrom-Json
+    return (
+      $evidence.schema -eq "skybridge.bootstrap_trial_goal202b_finalizer_evidence.v1" -and
+      $evidence.campaign_id -eq "bootstrap-trial-201" -and
+      $evidence.task_id -eq "bootstrap-trial-201-task-001" -and
+      $evidence.final_state -eq "bootstrap_trial_completed" -and
+      $evidence.token_printed -eq $false
+    )
+  } catch {
+    return $false
+  }
+}
+
 function ConvertTo-SafeReportPath {
   param([Parameter(Mandatory = $true)][string]$Path)
   $root = Get-RepoRoot
@@ -139,6 +162,287 @@ function ConvertTo-SafeReportPath {
     return ConvertTo-ShortPath $full
   }
   return [System.IO.Path]::GetFileName($full)
+}
+
+function Get-FileSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $fullPath = Resolve-RepoPath $Path
+  if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { return $null }
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($fullPath)
+    try {
+      ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString("x2") }) -join ""
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha.Dispose()
+  }
+}
+
+function Test-JsonTokenPrintedFalse {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+  $raw = Get-Content -Raw -LiteralPath $Path
+  if (Test-SecretLookingText $raw) { return $false }
+  if ($raw -match 'token_printed"\s*:\s*true') { return $false }
+  return $true
+}
+
+function Test-StateDirHasNoRawArtifacts {
+  $stateDir = Get-OneShotStateDir
+  if (-not (Test-Path -LiteralPath $stateDir -PathType Container)) { return $false }
+  $unsafe = @(
+    Get-ChildItem -LiteralPath $stateDir -File -ErrorAction SilentlyContinue |
+      Where-Object {
+        $_.Name -match '(?i)raw|prompt|transcript|stdout|stderr|worker-log|codex-jsonl' -and
+        $_.Name -ne "task-pr-body.md"
+      }
+  )
+  if ($unsafe.Count -gt 0) { return $false }
+  foreach ($file in @(Get-ChildItem -LiteralPath $stateDir -File -ErrorAction SilentlyContinue)) {
+    $raw = Get-Content -Raw -LiteralPath $file.FullName
+    if (Test-SecretLookingText $raw) { return $false }
+    if ($raw -match '(?i)"raw_(prompt|stdout|stderr|transcript|worker_log|codex_transcript)"') { return $false }
+    if ($raw -match 'token_printed"\s*:\s*true') { return $false }
+  }
+  return $true
+}
+
+function Get-AllBootstrapTaskPrs {
+  try {
+    $output = gh pr list --state all --search "bootstrap-trial-201-task-001 in:title,body" --json number,url,title,headRefName,state,mergedAt,mergeCommit --limit 20 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($output | Out-String).Trim())) { return @() }
+    return @($output | ConvertFrom-Json | Where-Object {
+      [int]$_.number -eq 124 -or
+        [string]$_.title -like "Task bootstrap-trial-201-task-001:*" -or
+        [string]$_.headRefName -like "ai/edge-worker/bootstrap-trial-201-task-001-*"
+    })
+  } catch {
+    return @()
+  }
+}
+
+function Get-MergedTaskPr124Snapshot {
+  try {
+    $viewJson = gh pr view 124 --json number,title,url,state,mergedAt,mergeCommit,files,autoMergeRequest,author 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($viewJson | Out-String).Trim())) { throw "gh pr view 124 failed." }
+    $view = $viewJson | ConvertFrom-Json
+    [pscustomobject]@{
+      exists = $true
+      number = [int]$view.number
+      title = [string]$view.title
+      url = [string]$view.url
+      state = [string]$view.state
+      merged = ($view.state -eq "MERGED" -and -not [string]::IsNullOrWhiteSpace([string]$view.mergedAt))
+      merged_at = [string]$view.mergedAt
+      merge_commit = [string]$view.mergeCommit.oid
+      changed_files = @($view.files | ForEach-Object { [string]$_.path })
+      auto_merge_enabled = ($null -ne $view.autoMergeRequest)
+      author_login = [string]$view.author.login
+      author_is_bot = [bool]$view.author.is_bot
+      token_printed = $false
+    }
+  } catch {
+    [pscustomobject]@{
+      exists = $false
+      number = 124
+      merged = $false
+      blockers = @("task_pr_124_unresolved")
+      token_printed = $false
+    }
+  }
+}
+
+function Get-BootstrapFinalizerState {
+  $stateDir = Get-OneShotStateDir
+  $claimPath = Get-OneShotClaimEvidencePath
+  $executorPath = Get-OneShotSanitizedEvidencePath
+  $trialReportPath = Get-OneShotTrialReportPath
+  $finalizerEvidencePath = Get-OneShotFinalizerEvidencePath
+  $taskPr = Get-MergedTaskPr124Snapshot
+  $allTaskPrs = @(Get-AllBootstrapTaskPrs)
+  $openTaskPrs = @(Get-OpenBootstrapTaskPrs)
+  $runner = Get-RunnerLockState
+  $git = Get-GitState
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $warnings = New-Object System.Collections.Generic.List[string]
+
+  if (-not $taskPr.exists) { $blockers.Add("task_pr_124_unresolved") | Out-Null }
+  if ($taskPr.exists -and -not $taskPr.merged) { $blockers.Add("task_pr_124_not_merged") | Out-Null }
+  if ($taskPr.title -ne "Task bootstrap-trial-201-task-001: Local README Refresh") { $blockers.Add("task_pr_124_title_mismatch") | Out-Null }
+  if (-not (Test-Path -LiteralPath (Resolve-RepoPath "docs/local-smoke-orientation.md") -PathType Leaf)) { $blockers.Add("task_file_missing_on_main") | Out-Null }
+  if (@($taskPr.changed_files) -notcontains "docs/local-smoke-orientation.md") { $blockers.Add("task_pr_changed_file_missing") | Out-Null }
+  if ($openTaskPrs.Count -gt 0) { $blockers.Add("open_bootstrap_task_pr_remaining") | Out-Null }
+  if ($allTaskPrs.Count -ne 1) { $blockers.Add("unexpected_bootstrap_task_pr_count:$($allTaskPrs.Count)") | Out-Null }
+  if (-not (Test-Path -LiteralPath $executorPath -PathType Leaf)) { $blockers.Add("executor_evidence_missing") | Out-Null }
+  if (-not (Test-Path -LiteralPath $claimPath -PathType Leaf)) { $blockers.Add("claim_evidence_missing") | Out-Null }
+  if (-not (Test-JsonTokenPrintedFalse -Path $executorPath)) { $blockers.Add("executor_evidence_unsafe") | Out-Null }
+  if (-not (Test-JsonTokenPrintedFalse -Path $claimPath)) { $blockers.Add("claim_evidence_unsafe") | Out-Null }
+  if ((Test-Path -LiteralPath $trialReportPath -PathType Leaf) -and -not (Test-JsonTokenPrintedFalse -Path $trialReportPath)) { $blockers.Add("trial_report_unsafe") | Out-Null }
+  if (-not (Test-StateDirHasNoRawArtifacts)) { $blockers.Add("raw_or_secret_artifact_detected") | Out-Null }
+  if ($runner.runner_lock_status -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
+  if (-not $git.clean -and -not (Test-FinalizerEvidencePresent)) { $warnings.Add("worktree_dirty_finalizer_preview_only") | Out-Null }
+
+  $claim = if (Test-Path -LiteralPath $claimPath -PathType Leaf) { Read-Json $claimPath } else { $null }
+  if ($claim) {
+    if ($claim.campaign_id -ne "bootstrap-trial-201" -or $claim.task_id -ne "bootstrap-trial-201-task-001" -or $claim.worker_id -ne "laptop-zenbookduo") { $blockers.Add("claim_evidence_foreign") | Out-Null }
+    if ($claim.raw_transcript_included -ne $false -or $claim.raw_logs_included -ne $false -or $claim.prompt_included -ne $false) { $blockers.Add("claim_evidence_raw_flags_unsafe") | Out-Null }
+  }
+  $executor = if (Test-Path -LiteralPath $executorPath -PathType Leaf) { Read-Json $executorPath } else { $null }
+  if ($executor) {
+    if ($executor.campaign_id -ne "bootstrap-trial-201" -or $executor.task_id -ne "bootstrap-trial-201-task-001" -or $executor.worker_id -ne "laptop-zenbookduo") { $blockers.Add("executor_evidence_foreign") | Out-Null }
+    if ($executor.prompt_persisted -ne $false -or $executor.transcript_persisted -ne $false -or $executor.stdout_persisted -ne $false -or $executor.stderr_persisted -ne $false) { $blockers.Add("executor_evidence_raw_flags_unsafe") | Out-Null }
+  }
+
+  $completed = (Test-FinalizerEvidencePresent)
+  [pscustomobject]@{
+    ok = ($blockers.Count -eq 0)
+    schema = "skybridge.bootstrap_trial_goal202b_finalizer_state.v1"
+    campaign_id = "bootstrap-trial-201"
+    goal_id = "goal-201-controlled-start-one-bootstrap-trial"
+    task_id = "bootstrap-trial-201-task-001"
+    worker_id = "laptop-zenbookduo"
+    task_pr = $taskPr
+    task_pr_count = $allTaskPrs.Count
+    open_task_pr_count = $openTaskPrs.Count
+    task_file_present = Test-Path -LiteralPath (Resolve-RepoPath "docs/local-smoke-orientation.md") -PathType Leaf
+    claim_evidence_path = ConvertTo-SafeReportPath $claimPath
+    executor_evidence_path = ConvertTo-SafeReportPath $executorPath
+    trial_report_path = ConvertTo-SafeReportPath $trialReportPath
+    finalizer_evidence_path = ConvertTo-SafeReportPath $finalizerEvidencePath
+    claim_evidence_hash = Get-FileSha256 -Path $claimPath
+    executor_evidence_hash = Get-FileSha256 -Path $executorPath
+    trial_report_hash = Get-FileSha256 -Path $trialReportPath
+    finalizer_evidence_hash = Get-FileSha256 -Path $finalizerEvidencePath
+    final_state = if ($completed) { "bootstrap_trial_completed" } elseif ($blockers.Count -eq 0) { "completed_waiting_next_goal" } else { "finalizer_blocked" }
+    active_tasks = 0
+    stale_leases = 0
+    runner_lock_status = $runner.runner_lock_status
+    no_start_all = $true
+    no_second_task = ($allTaskPrs.Count -eq 1)
+    no_auto_merge = (-not [bool]$taskPr.auto_merge_enabled)
+    human_review_confirmed = ($taskPr.exists -and $taskPr.merged -and -not [bool]$taskPr.auto_merge_enabled)
+    no_raw_artifacts = Test-StateDirHasNoRawArtifacts
+    completed = $completed
+    blockers = @($blockers | Select-Object -Unique)
+    warnings = @($warnings | Select-Object -Unique)
+    token_printed = $false
+  }
+}
+
+function New-BootstrapFinalizerEvidence {
+  $state = Get-BootstrapFinalizerState
+  [pscustomobject]@{
+    ok = [bool]$state.ok
+    schema = "skybridge.bootstrap_trial_goal202b_finalizer_evidence.v1"
+    campaign_id = $state.campaign_id
+    goal_id = $state.goal_id
+    task_id = $state.task_id
+    worker_id = $state.worker_id
+    task_pr_number = 124
+    task_pr_url = $state.task_pr.url
+    task_pr_merge_commit = $state.task_pr.merge_commit
+    task_pr_merged_at = $state.task_pr.merged_at
+    changed_files = @($state.task_pr.changed_files)
+    executor_evidence_hash = $state.executor_evidence_hash
+    claim_evidence_hash = $state.claim_evidence_hash
+    trial_report_hash = $state.trial_report_hash
+    final_state = "bootstrap_trial_completed"
+    report_state = "bootstrap_trial_completed"
+    dashboard_state = "bootstrap_trial_completed"
+    attention_event = "bootstrap_trial_completed"
+    no_next_execution_authorized = $true
+    active_tasks = 0
+    stale_leases = 0
+    runner_lock_status = $state.runner_lock_status
+    no_start_all = $true
+    no_second_task = $true
+    no_auto_merge = $true
+    human_review_confirmed = $true
+    token_printed = $false
+    operator_guidance = @(
+      "First controlled self-bootstrap PR has been merged.",
+      "Next safe action is reliability hardening or desktop resident supervisor.",
+      "Do not run another bootstrap task without a new goal."
+    )
+    blockers = @($state.blockers)
+  }
+}
+
+function Invoke-BootstrapFinalizer {
+  param([bool]$Mutate = $false)
+  $state = Get-BootstrapFinalizerState
+  if (-not $state.ok) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bootstrap_trial_goal202b_finalizer_result.v1"
+      mode = if ($Mutate) { "apply_blocked" } else { "preview" }
+      final_state = "finalizer_blocked"
+      state = $state
+      blockers = @($state.blockers)
+      token_printed = $false
+    }
+  }
+  if ($state.completed -and -not $Mutate) {
+    return [pscustomobject]@{
+      ok = $true
+      schema = "skybridge.bootstrap_trial_goal202b_finalizer_result.v1"
+      mode = "preview"
+      final_state = "bootstrap_trial_completed"
+      already_completed = $true
+      state = $state
+      token_printed = $false
+    }
+  }
+  $evidence = New-BootstrapFinalizerEvidence
+  if ($Mutate) {
+    New-Item -ItemType Directory -Path (Get-OneShotStateDir) -Force | Out-Null
+    $json = $evidence | ConvertTo-Json -Depth 100
+    if (Test-SecretLookingText $json) { throw "Secret-looking finalizer evidence detected." }
+    Set-Content -LiteralPath (Get-OneShotFinalizerEvidencePath) -Value $json -Encoding UTF8
+    $report = [pscustomobject]@{
+      ok = $true
+      schema = "skybridge.bootstrap_trial_goal202b_finalizer_report.v1"
+      campaign_id = $evidence.campaign_id
+      goal_id = $evidence.goal_id
+      task_id = $evidence.task_id
+      worker_id = $evidence.worker_id
+      final_state = "bootstrap_trial_completed"
+      report_state = "bootstrap_trial_completed"
+      dashboard = [pscustomobject]@{
+        state = "bootstrap_trial_completed"
+        no_next_execution_authorized = $true
+        task_pr_url = $evidence.task_pr_url
+        changed_files = @($evidence.changed_files)
+        token_printed = $false
+      }
+      attention_event = "bootstrap_trial_completed"
+      active_tasks = 0
+      stale_leases = 0
+      runner_lock_status = $evidence.runner_lock_status
+      no_start_all = $true
+      no_second_task = $true
+      no_auto_merge = $true
+      token_printed = $false
+    }
+    $reportJson = $report | ConvertTo-Json -Depth 100
+    if (Test-SecretLookingText $reportJson) { throw "Secret-looking finalizer report detected." }
+    Set-Content -LiteralPath (Get-OneShotTrialReportPath) -Value $reportJson -Encoding UTF8
+    $state = Get-BootstrapFinalizerState
+  }
+  [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.bootstrap_trial_goal202b_finalizer_result.v1"
+    mode = if ($Mutate) { "apply" } else { "preview" }
+    final_state = "bootstrap_trial_completed"
+    already_completed = [bool]$state.completed
+    evidence_path = ConvertTo-SafeReportPath (Get-OneShotFinalizerEvidencePath)
+    state = $state
+    evidence = $evidence
+    token_printed = $false
+  }
 }
 
 function Get-ExpectedOneShotClaimFields {
@@ -684,9 +988,11 @@ function Get-GateResult {
   $runner = Get-RunnerLockState
   $route = Get-RoutePreview
   $service = Get-WorkerServiceReadiness
+  $finalizerCompleted = Test-FinalizerEvidencePresent
   $blockers = New-Object System.Collections.Generic.List[string]
   $warnings = New-Object System.Collections.Generic.List[string]
 
+  if ($finalizerCompleted) { $blockers.Add("bootstrap_trial_already_completed") | Out-Null }
   if (-not $contract.ok) { foreach ($item in @($contract.errors)) { $blockers.Add([string]$item) | Out-Null } }
   if (-not $git.clean) { $blockers.Add("worktree_dirty") | Out-Null }
   if (-not $git.dev_queue_200_completion_tag_present) { $blockers.Add("dev_queue_200_completion_tag_missing") | Out-Null }
@@ -722,12 +1028,13 @@ function Get-GateResult {
     worker_service_readiness = $service.readiness
     run_budget = $contract.run_budget
     operator_reason_recorded = -not [string]::IsNullOrWhiteSpace($Reason)
-    attention_state = if ($taskPrSnapshot.exists) { "human_pr_review_required" } else { "one-shot bootstrap trial held: waiting for executor gate" }
-    dashboard_state = if ($taskPrSnapshot.exists) { "held_waiting_human_pr_review" } elseif ($executorGate.ok) { "ready_for_one_shot_start_one_apply" } else { "held_no_execution_executor_gate_blocked" }
+    attention_state = if ($finalizerCompleted) { "bootstrap_trial_completed" } elseif ($taskPrSnapshot.exists) { "human_pr_review_required" } else { "one-shot bootstrap trial held: waiting for executor gate" }
+    dashboard_state = if ($finalizerCompleted) { "bootstrap_trial_completed" } elseif ($taskPrSnapshot.exists) { "held_waiting_human_pr_review" } elseif ($executorGate.ok) { "ready_for_one_shot_start_one_apply" } else { "held_no_execution_executor_gate_blocked" }
     task_pr = if ($taskPrSnapshot.exists) { $taskPrSnapshot } else { $null }
     blockers = @($blockers | Select-Object -Unique)
     warnings = @($warnings | Select-Object -Unique)
     would_create_tasks = if ($blockers.Count -eq 0) { 1 } else { 0 }
+    duplicate_prevention_state = if ($finalizerCompleted) { "bootstrap_trial_already_completed" } elseif ($taskPrSnapshot.exists -and $taskPrSnapshot.task_pr_state -eq "merged") { "completed_existing_task_pr_merged" } else { $null }
     task_created = $false
     task_claimed = $false
     task_executed = $false
@@ -746,6 +1053,7 @@ function Get-StartOneApplyResult {
   $gate = Get-GateResult
   if (-not $gate.ok) {
     $existingTaskPr = @($gate.blockers) -contains "existing_open_task_pr_for_bootstrap_trial"
+    $completedTrial = @($gate.blockers) -contains "bootstrap_trial_already_completed"
     return [pscustomobject]@{
       ok = $false
       schema = "skybridge.bootstrap_trial_goal201_start_one_apply.v1"
@@ -760,10 +1068,10 @@ function Get-StartOneApplyResult {
       pr_created = $false
       pr_url = $null
       auto_merge_enabled = $false
-      final_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
-      hold_reason = if ($existingTaskPr) { "existing open bootstrap task PR requires human review" } else { "one-shot worker executor gate cannot be fully enforced" }
-      attention_event = if ($existingTaskPr) { "human_pr_review_required" } else { $null }
-      dashboard_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
+      final_state = if ($completedTrial) { "bootstrap_trial_completed" } elseif ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
+      hold_reason = if ($completedTrial) { "bootstrap trial already completed; no new task authorized" } elseif ($existingTaskPr) { "existing open bootstrap task PR requires human review" } else { "one-shot worker executor gate cannot be fully enforced" }
+      attention_event = if ($completedTrial) { "bootstrap_trial_completed" } elseif ($existingTaskPr) { "human_pr_review_required" } else { $null }
+      dashboard_state = if ($completedTrial) { "bootstrap_trial_completed" } elseif ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
       blockers = @($gate.blockers)
       gate = $gate
       no_start_all = $true
@@ -895,7 +1203,9 @@ function Get-OneShotClaimGate {
   $warnings = New-Object System.Collections.Generic.List[string]
   $claimEvidencePath = Get-OneShotClaimEvidencePath
   $claimState = Get-OneShotClaimEvidenceState
+  $finalizerCompleted = Test-FinalizerEvidencePresent
 
+  if ($finalizerCompleted) { $blockers.Add("bootstrap_trial_already_completed") | Out-Null }
   if (-not $contract.ok) { foreach ($item in @($contract.errors)) { $blockers.Add([string]$item) | Out-Null } }
   if ($CampaignId -ne "bootstrap-trial-201") { $blockers.Add("wrong_campaign_refused") | Out-Null }
   if ($GoalId -ne "goal-201-controlled-start-one-bootstrap-trial") { $blockers.Add("wrong_goal_refused") | Out-Null }
@@ -1014,7 +1324,9 @@ function Get-OneShotExecutorGate {
   $contract = Get-SanitizedExecutorContract
   $blockers = New-Object System.Collections.Generic.List[string]
   $claimState = Get-OneShotClaimEvidenceState
+  $finalizerCompleted = Test-FinalizerEvidencePresent
   $ownedClaim = [bool]$claimState.valid_owned
+  if ($finalizerCompleted) { $blockers.Add("bootstrap_trial_already_completed") | Out-Null }
   foreach ($item in @($claimGate.blockers)) {
     $blockers.Add([string]$item) | Out-Null
   }
@@ -1159,6 +1471,7 @@ function Invoke-SanitizedOneShotExecutor {
   $gate = Get-OneShotExecutorGate -RequireOwnedClaim:$Apply
   if (-not $gate.ok) {
     $existingTaskPr = @($gate.blockers) -contains "existing_open_task_pr_for_bootstrap_trial"
+    $completedTrial = @($gate.blockers) -contains "bootstrap_trial_already_completed"
     return [pscustomobject]@{
       ok = $false
       schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_result.v1"
@@ -1169,8 +1482,8 @@ function Invoke-SanitizedOneShotExecutor {
       pr_url = $null
       pr_created = $false
       task_executed = $false
-      final_state = if ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
-      attention_event = if ($existingTaskPr) { "human_pr_review_required" } else { $null }
+      final_state = if ($completedTrial) { "bootstrap_trial_completed" } elseif ($existingTaskPr) { "held_waiting_human_pr_review" } else { "held_no_execution_executor_gate_blocked" }
+      attention_event = if ($completedTrial) { "bootstrap_trial_completed" } elseif ($existingTaskPr) { "human_pr_review_required" } else { $null }
       blockers = @($gate.blockers)
       token_printed = $false
     }
@@ -1348,6 +1661,10 @@ $result = switch ($Command) {
   }
   "codex-launcher-stdin-test" { Invoke-CodexLauncherStdinTest }
   "start-one-reliability-report" { Get-StartOneReliabilityReport }
+  "finalizer-preview" { Invoke-BootstrapFinalizer }
+  "finalizer-apply" { Invoke-BootstrapFinalizer -Mutate:$true }
+  "finalizer-evidence" { New-BootstrapFinalizerEvidence }
+  "finalizer-report" { Invoke-BootstrapFinalizer }
   "run-sanitized-executor" { Invoke-SanitizedOneShotExecutor }
   "worker-route" { Get-RoutePreview }
   "no-start-all" { [pscustomobject]@{ ok = $true; schema = "skybridge.bootstrap_trial_goal201_no_start_all.v1"; start_all_allowed = $false; blocker = "start_all_forbidden_for_bootstrap_trial_201"; task_created = $false; token_printed = $false } }

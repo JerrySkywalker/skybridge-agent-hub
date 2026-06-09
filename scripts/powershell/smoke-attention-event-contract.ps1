@@ -17,6 +17,7 @@ foreach ($required in @(
   "human_approval_required",
   "goal_ready",
   "goal_completed",
+  "bootstrap_trial_completed",
   "pr_created",
   "ci_failed",
   "stale_lease",
