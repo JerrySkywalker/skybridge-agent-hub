@@ -1479,6 +1479,106 @@ export interface WorkunitStateEnvelope {
   token_printed: false;
 }
 
+export type WorkunitCandidateConversionStatus =
+  | "proposed"
+  | "reviewed"
+  | "candidate_ready"
+  | "blocked"
+  | "imported_preview_only"
+  | "rejected";
+
+export interface ProposedGoalWorkunitCandidate {
+  schema: "skybridge.proposed_goal_workunit_candidate.v1";
+  candidate_id: string;
+  source_proposed_goal_id: string;
+  source_goal_path: string;
+  reviewed_goal_path: string | null;
+  project_id: string;
+  campaign_id: string | null;
+  candidate_pack_id: string;
+  suggested_workunit_id: string;
+  suggested_task_type: string;
+  risk: GoalRisk | "blocked";
+  allowed_paths: string[];
+  blocked_paths: string[];
+  required_capabilities: string[];
+  estimated_runtime_minutes: number;
+  max_prs: number;
+  requires_human_review: boolean;
+  conversion_status: WorkunitCandidateConversionStatus;
+  blockers: string[];
+  warnings: string[];
+  content_hash: string;
+  manifest_hash: string;
+  token_printed: false;
+}
+
+export interface GoalToWorkunitConversion {
+  schema: "skybridge.goal_to_workunit_conversion.v1";
+  conversion_id: string;
+  mode: "preview" | "fixture";
+  candidate_count: number;
+  candidate_ready_count: number;
+  blocked_count: number;
+  execution_review_required: true;
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface WorkunitCandidateRiskGate {
+  schema: "skybridge.workunit_candidate_risk_gate.v1";
+  candidate_id: string;
+  decision: "allow_candidate_ready" | "review_required" | "blocked";
+  reasons: string[];
+  blocked_terms: string[];
+  generated_goal_self_approved: false;
+  token_printed: false;
+}
+
+export interface WorkunitCandidateReview {
+  schema: "skybridge.workunit_candidate_review.v1";
+  candidate_id: string;
+  review_status: "preview_only" | "requires_human_review" | "blocked" | "rejected";
+  reviewer: "operator_required";
+  execution_review_required: true;
+  token_printed: false;
+}
+
+export interface WorkunitCandidateManifest {
+  schema: "skybridge.workunit_candidate_manifest.v1";
+  manifest_id: string;
+  candidate_pack_id: string;
+  manifest_path: string;
+  manifest_hash: string;
+  candidates: ProposedGoalWorkunitCandidate[];
+  execution_review_required: true;
+  apply_available: false;
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  token_printed: false;
+}
+
+export interface WorkunitCandidatePack {
+  schema: "skybridge.workunit_candidate_pack.v1";
+  candidate_pack_id: string;
+  project_id: string;
+  campaign_id: string | null;
+  candidates: ProposedGoalWorkunitCandidate[];
+  risk_gates: WorkunitCandidateRiskGate[];
+  candidate_ready_count: number;
+  blocked_count: number;
+  requires_review_count: number;
+  bounded_queue_preview_only: true;
+  apply_available: false;
+  execution_disabled: true;
+  next_safe_action: string;
+  token_printed: false;
+}
+
 export interface BoundedQueuePolicy {
   schema: "skybridge.bounded_queue_policy.v1";
   max_steps: number;
@@ -1505,6 +1605,8 @@ export interface BoundedQueuePlan {
   project_id: string;
   policy: BoundedQueuePolicy;
   workunits: Workunit[];
+  workunit_candidate_pack?: WorkunitCandidatePack;
+  candidate_preview_count?: number;
   would_create_tasks: false;
   would_claim_tasks: false;
   would_execute_tasks: false;
@@ -1612,6 +1714,7 @@ export interface BoincManagerState {
   workunit_preview_plan: BoundedQueuePlan;
   bounded_queue_readiness: BoundedQueueReadiness;
   active_holds: BoincReviewHold[];
+  workunit_candidate_count?: number;
   next_safe_action: string;
   token_printed: false;
 }
@@ -1934,6 +2037,10 @@ export type AttentionEventType =
   | "proposed_goal_rejected"
   | "proposed_goal_import_preview_ready"
   | "proposed_goal_imported"
+  | "workunit_candidates_available"
+  | "workunit_candidate_blocked"
+  | "workunit_candidate_requires_review"
+  | "candidate_execution_disabled"
   | "imported_goal_requires_execution_review"
   | "unsafe_import_blocked"
   | "unsafe_goal_draft_detected"
@@ -2808,6 +2915,134 @@ export const fixtureBootstrapTrialWorkunitState: WorkunitStateEnvelope = {
   token_printed: false,
 };
 
+export const fixtureProposedGoalWorkunitCandidate: ProposedGoalWorkunitCandidate = {
+  schema: "skybridge.proposed_goal_workunit_candidate.v1",
+  candidate_id: "candidate-proposed-goal-201-local-readme-refresh",
+  source_proposed_goal_id: "proposed-goal-201-local-readme-refresh",
+  source_goal_path: "goals/proposed/proposed-goal-201-local-readme-refresh.md",
+  reviewed_goal_path: "goals/reviewed/proposed-goal-201-local-readme-refresh.md",
+  project_id: "skybridge-agent-hub",
+  campaign_id: "bootstrap-trial-201",
+  candidate_pack_id: "candidate-pack-proposed-goals-preview",
+  suggested_workunit_id: "workunit-candidate-proposed-goal-201-local-readme-refresh",
+  suggested_task_type: "docs",
+  risk: "low",
+  allowed_paths: ["docs/**", "scripts/powershell/smoke-*.ps1"],
+  blocked_paths: [".env*", "deploy/**", "docs/operations/openresty-*", "config/hermes*", ".github/**"],
+  required_capabilities: ["codex", "repo_local_docs"],
+  estimated_runtime_minutes: 20,
+  max_prs: 0,
+  requires_human_review: true,
+  conversion_status: "candidate_ready",
+  blockers: [],
+  warnings: ["preview_only_execution_disabled", "bounded_queue_apply_disabled", "execution_review_required"],
+  content_hash: "a80296ad3f06fd009c1c82a8caa68e337821bc538040fb01141eff47ae6785fb",
+  manifest_hash: "manifest-preview-201-local-readme-refresh",
+  token_printed: false,
+};
+
+export const fixtureBlockedWorkunitCandidate: ProposedGoalWorkunitCandidate = {
+  schema: "skybridge.proposed_goal_workunit_candidate.v1",
+  candidate_id: "candidate-proposed-unsafe-production-deploy",
+  source_proposed_goal_id: "proposed-unsafe-production-deploy",
+  source_goal_path: "goals/proposed/proposed-unsafe-production-deploy.md",
+  reviewed_goal_path: null,
+  project_id: "skybridge-agent-hub",
+  campaign_id: null,
+  candidate_pack_id: "candidate-pack-proposed-goals-preview",
+  suggested_workunit_id: "blocked-workunit-proposed-unsafe-production-deploy",
+  suggested_task_type: "production_deploy",
+  risk: "blocked",
+  allowed_paths: [],
+  blocked_paths: ["deploy/**", ".env*", ".github/**", "docs/operations/**", "config/hermes*"],
+  required_capabilities: [],
+  estimated_runtime_minutes: 0,
+  max_prs: 0,
+  requires_human_review: true,
+  conversion_status: "blocked",
+  blockers: ["production_deploy", "secret_rotation", "github_settings", "branch_protection", "auto_execution"],
+  warnings: ["blocked_high_risk_surface"],
+  content_hash: "5314ffd66b9f4013ff44822c2fced00ddfc4784b98210903c65efd60d4a09111",
+  manifest_hash: "manifest-blocked-production-deploy",
+  token_printed: false,
+};
+
+export const fixtureWorkunitCandidateRiskGate: WorkunitCandidateRiskGate = {
+  schema: "skybridge.workunit_candidate_risk_gate.v1",
+  candidate_id: fixtureProposedGoalWorkunitCandidate.candidate_id,
+  decision: "allow_candidate_ready",
+  reasons: ["low_risk_docs_or_local_smoke", "reviewed_goal_preview_ready", "execution_disabled"],
+  blocked_terms: [],
+  generated_goal_self_approved: false,
+  token_printed: false,
+};
+
+export const fixtureBlockedWorkunitCandidateRiskGate: WorkunitCandidateRiskGate = {
+  schema: "skybridge.workunit_candidate_risk_gate.v1",
+  candidate_id: fixtureBlockedWorkunitCandidate.candidate_id,
+  decision: "blocked",
+  reasons: fixtureBlockedWorkunitCandidate.blockers,
+  blocked_terms: ["production deploy", "secret rotation", "GitHub settings", "branch protection", "auto-execution"],
+  generated_goal_self_approved: false,
+  token_printed: false,
+};
+
+export const fixtureGoalToWorkunitConversion: GoalToWorkunitConversion = {
+  schema: "skybridge.goal_to_workunit_conversion.v1",
+  conversion_id: "conversion-proposed-goals-to-workunit-candidates-preview",
+  mode: "preview",
+  candidate_count: 2,
+  candidate_ready_count: 1,
+  blocked_count: 1,
+  execution_review_required: true,
+  task_created: false,
+  task_claimed: false,
+  task_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureWorkunitCandidateReview: WorkunitCandidateReview = {
+  schema: "skybridge.workunit_candidate_review.v1",
+  candidate_id: fixtureProposedGoalWorkunitCandidate.candidate_id,
+  review_status: "requires_human_review",
+  reviewer: "operator_required",
+  execution_review_required: true,
+  token_printed: false,
+};
+
+export const fixtureWorkunitCandidateManifest: WorkunitCandidateManifest = {
+  schema: "skybridge.workunit_candidate_manifest.v1",
+  manifest_id: "manifest-proposed-goal-workunit-candidates-preview",
+  candidate_pack_id: "candidate-pack-proposed-goals-preview",
+  manifest_path: ".agent/tmp/workunit-candidates/candidate-pack-proposed-goals-preview.json",
+  manifest_hash: "manifest-preview-proposed-goal-workunit-candidates",
+  candidates: [fixtureProposedGoalWorkunitCandidate, fixtureBlockedWorkunitCandidate],
+  execution_review_required: true,
+  apply_available: false,
+  task_created: false,
+  task_claimed: false,
+  task_executed: false,
+  token_printed: false,
+};
+
+export const fixtureWorkunitCandidatePack: WorkunitCandidatePack = {
+  schema: "skybridge.workunit_candidate_pack.v1",
+  candidate_pack_id: "candidate-pack-proposed-goals-preview",
+  project_id: "skybridge-agent-hub",
+  campaign_id: "bootstrap-trial-201",
+  candidates: [fixtureProposedGoalWorkunitCandidate, fixtureBlockedWorkunitCandidate],
+  risk_gates: [fixtureWorkunitCandidateRiskGate, fixtureBlockedWorkunitCandidateRiskGate],
+  candidate_ready_count: 1,
+  blocked_count: 1,
+  requires_review_count: 1,
+  bounded_queue_preview_only: true,
+  apply_available: false,
+  execution_disabled: true,
+  next_safe_action: "Review candidate pack and keep execution disabled until a future explicit bounded-queue apply goal authorizes it.",
+  token_printed: false,
+};
+
 export const fixtureBoundedQueuePlan: BoundedQueuePlan = {
   schema: "skybridge.bounded_queue_plan.v1",
   plan_id: "bounded-queue-preview-bootstrap-trial-201",
@@ -2816,6 +3051,8 @@ export const fixtureBoundedQueuePlan: BoundedQueuePlan = {
   project_id: "skybridge-agent-hub",
   policy: fixtureBoundedQueuePolicy,
   workunits: [fixtureBootstrapTrialWorkunit],
+  workunit_candidate_pack: fixtureWorkunitCandidatePack,
+  candidate_preview_count: fixtureWorkunitCandidatePack.candidates.length,
   would_create_tasks: false,
   would_claim_tasks: false,
   would_execute_tasks: false,
@@ -3045,6 +3282,7 @@ export const fixtureBoincManagerState: BoincManagerState = {
   bounded_queue_readiness: fixtureBoundedQueueReadiness,
   active_holds: fixtureBoincReviewHolds.filter((hold) => hold.status === "active"),
   next_safe_action: fixtureBoincModes[0].next_safe_action,
+  workunit_candidate_count: fixtureWorkunitCandidatePack.candidates.length,
   token_printed: false,
 };
 

@@ -36,6 +36,7 @@ import {
   fixtureRepoExclusiveLock,
   fixtureSchedulingPreview,
   fixtureStaleCampaignLock,
+  fixtureWorkunitCandidatePack,
   queueControlActionMatrix,
   routeAttentionEvent,
   summarizeCampaignEvidence,
@@ -60,6 +61,7 @@ import {
   type WorkerRecord,
   type WorkerSummary,
   type ProposedGoalReviewSummary,
+  type WorkunitCandidatePack,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -354,6 +356,7 @@ function CampaignQueuePage() {
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
           <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
+          <ProposedGoalWorkunitPanel pack={fixtureWorkunitCandidatePack} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <WebLocalWorkerPolicyPanel
             supervisor={report.local_worker_supervisor_state ?? fixtureLocalWorkerSupervisorState}
@@ -683,6 +686,65 @@ function ProposedGoalReviewPanel({
       />
       <p className="skybridge-state-note">No import or execute controls: no execute button, no start queue button and no imported-goal execution controls are exposed on proposed-goal review.</p>
       <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function ProposedGoalWorkunitPanel({ pack }: { pack: WorkunitCandidatePack }) {
+  return (
+    <section className="skybridge-panel proposed-goal-workunit-panel" aria-label="Proposed Goal Workunit Candidate panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Goal to Workunit</p>
+          <h2>Candidate Pipeline</h2>
+        </div>
+        <span className={badgeClass(pack.apply_available ? "ok" : "bad")}>execution disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Candidate pack</dt>
+          <dd>{pack.candidate_pack_id}</dd>
+        </div>
+        <div>
+          <dt>Candidates</dt>
+          <dd>{`${pack.candidates.length}; ready=${pack.candidate_ready_count}; blocked=${pack.blocked_count}`}</dd>
+        </div>
+        <div>
+          <dt>Risk gate</dt>
+          <dd>{pack.risk_gates.map((gate) => `${gate.candidate_id}:${gate.decision}`).join("; ")}</dd>
+        </div>
+        <div>
+          <dt>Bounded queue state</dt>
+          <dd>{`preview_only=${String(pack.bounded_queue_preview_only)}; apply=${String(pack.apply_available)}`}</dd>
+        </div>
+        <div>
+          <dt>Next safe action</dt>
+          <dd>{pack.next_safe_action}</dd>
+        </div>
+        <div>
+          <dt>token_printed</dt>
+          <dd>{String(pack.token_printed)}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Candidate list"
+        items={pack.candidates.map(
+          (candidate) =>
+            `${candidate.candidate_id}: ${candidate.conversion_status}; risk=${candidate.risk}; workunit=${candidate.suggested_workunit_id}; source=${candidate.source_goal_path}; blockers=${candidate.blockers.join(", ") || "none"}`,
+        )}
+        fallback="No candidates."
+      />
+      <QueueList
+        title="Disabled execution"
+        items={[
+          "candidate_execution_disabled",
+          "no task creation",
+          "no worker claim",
+          "bounded queue apply disabled",
+          "execution review required",
+        ]}
+        fallback="Execution controls unavailable."
+      />
     </section>
   );
 }
