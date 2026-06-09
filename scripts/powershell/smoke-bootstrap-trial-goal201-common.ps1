@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets", "sanitized-executor-contract", "no-raw-prompt-persistence", "no-raw-transcript-persistence", "no-raw-stdout-stderr", "redaction", "executor-fails-closed-if-raw-logs", "executor-one-task-only", "task-pr-open-only", "task-pr-path-allowlist", "evidence-safe")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets", "sanitized-executor-contract", "no-raw-prompt-persistence", "no-raw-transcript-persistence", "no-raw-stdout-stderr", "redaction", "executor-fails-closed-if-raw-logs", "executor-one-task-only", "task-pr-open-only", "task-pr-path-allowlist", "evidence-safe", "gates-are-side-effect-free", "start-one-apply-creates-one-claim", "owned-claim-resumable", "second-foreign-claim-refused", "malformed-claim-refused", "executor-resumes-owned-claim", "executor-refuses-existing-pr", "executor-refuses-existing-executor-evidence", "claim-state-safe-evidence", "no-secret-in-claim-evidence")]
   [string]$Scenario,
   [switch]$Json
 )
@@ -30,6 +30,32 @@ function Assert-SafeJson {
   if ($jsonText -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript|token_printed"\s*:\s*true') {
     throw "Secret-looking or raw-log output detected."
   }
+}
+
+function New-SmokeStateDir {
+  Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-goal201d-" + [Guid]::NewGuid().ToString("n"))
+}
+
+function Write-OwnedClaimEvidence {
+  param([Parameter(Mandatory = $true)][string]$StateDir)
+  New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+  [pscustomobject]@{
+    schema = "skybridge.bootstrap_trial_goal201_safe_claim_evidence.v1"
+    campaign_id = "bootstrap-trial-201"
+    goal_id = "goal-201-controlled-start-one-bootstrap-trial"
+    task_id = "bootstrap-trial-201-task-001"
+    worker_id = "laptop-zenbookduo"
+    lease_id = "bootstrap-trial-201-lease-001"
+    allowed_paths = @("README.md", "docs/**")
+    claim_state = "claimed"
+    claim_created_at = (Get-Date).ToUniversalTime().ToString("o")
+    executor_evidence_path = $null
+    pr_url = $null
+    prompt_included = $false
+    raw_transcript_included = $false
+    raw_logs_included = $false
+    token_printed = $false
+  } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $StateDir "claim-evidence.json") -Encoding UTF8
 }
 
 $result = switch ($Scenario) {
@@ -82,8 +108,9 @@ $result = switch ($Scenario) {
     $stateDir = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-goal201b-" + [Guid]::NewGuid().ToString("n"))
     $first = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
     if (-not $first.ok -or -not $first.task_claimed -or -not $first.lease_created) { throw "First one-shot claim apply did not create safe claim evidence." }
-    $second = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
-    if (@($second.blockers) -notcontains "second_claim_refused") { throw "Second claim was not refused." }
+    $second = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+    if (-not $second.ok -or $second.claim_state -ne "resumable_owned_claim") { throw "Owned second claim did not resume safely." }
+    if ($second.task_created -ne $false -or $second.task_claimed -ne $true) { throw "Second claim created a duplicate task instead of resuming." }
     Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
     $second
   }
@@ -181,6 +208,144 @@ $result = switch ($Scenario) {
     $contract = Invoke-Trial -Command sanitized-executor-contract
     foreach ($flag in @("prompt_persisted", "transcript_persisted", "stdout_persisted", "stderr_persisted", "auto_merge_enabled")) { Assert-FalseFlag $contract $flag }
     $contract
+  }
+  "gates-are-side-effect-free" {
+    $stateDir = New-SmokeStateDir
+    try {
+      $claimPath = Join-Path $stateDir "claim-evidence.json"
+      $beforeExists = Test-Path -LiteralPath $claimPath -PathType Leaf
+      $preview = Invoke-Trial -Command start-one-preview -Extra @("-StateDir", $stateDir)
+      $gates = Invoke-Trial -Command start-one-gates -Extra @("-StateDir", $stateDir, "-Reason", "side effect free smoke")
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
+      $afterExists = Test-Path -LiteralPath $claimPath -PathType Leaf
+      if ($beforeExists -or $afterExists) { throw "Preview/gate path wrote claim evidence." }
+      foreach ($item in @($preview, $gates, $claim)) {
+        if ($item.mutates -eq $true -or $item.task_created -eq $true -or $item.task_claimed -eq $true -or $item.lease_created -eq $true) {
+          throw "Preview/gate path reported mutation."
+        }
+      }
+      [pscustomobject]@{ ok = $true; scenario = "gates-are-side-effect-free"; token_printed = $false }
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "start-one-apply-creates-one-claim" {
+    $stateDir = New-SmokeStateDir
+    try {
+      $first = Invoke-Trial -Command start-one-apply -Extra @("-Apply", "-StateDir", $stateDir, "-Reason", "smoke authorized one claim")
+      if (-not $first.ok -or -not $first.task_claimed) { throw "start-one apply did not create the first owned claim." }
+      $claimPath = Join-Path $stateDir "claim-evidence.json"
+      if (-not (Test-Path -LiteralPath $claimPath -PathType Leaf)) { throw "Claim evidence missing." }
+      $before = Get-Content -Raw -LiteralPath $claimPath
+      $second = Invoke-Trial -Command start-one-apply -Extra @("-Apply", "-StateDir", $stateDir, "-Reason", "smoke resume owned claim")
+      $after = Get-Content -Raw -LiteralPath $claimPath
+      if (-not $second.ok -or $second.task_created -ne $false -or $second.task_claimed -ne $true) { throw "Second start-one apply did not resume the owned claim." }
+      if (($after | ConvertFrom-Json).claim_state -ne "resumable_owned_claim") { throw "Owned claim was not marked resumable." }
+      if (($before | ConvertFrom-Json).task_id -ne "bootstrap-trial-201-task-001") { throw "Unexpected first claim task id." }
+      $second
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "owned-claim-resumable" {
+    $stateDir = New-SmokeStateDir
+    try {
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
+      if (-not $claim.ok -or $claim.claim_state -ne "resumable_owned_claim") { throw "Owned claim was not resumable." }
+      if (@($claim.blockers).Count -ne 0) { throw "Owned resumable claim had blockers: $(@($claim.blockers) -join '; ')" }
+      $claim
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "second-foreign-claim-refused" {
+    $stateDir = New-SmokeStateDir
+    try {
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $claimPath = Join-Path $stateDir "claim-evidence.json"
+      $foreign = Get-Content -Raw -LiteralPath $claimPath | ConvertFrom-Json
+      $foreign.worker_id = "foreign-worker"
+      $foreign | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $claimPath -Encoding UTF8
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      if ($claim.ok -or @($claim.blockers) -notcontains "foreign_claim_refused") { throw "Foreign claim was not refused." }
+      $claim
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "malformed-claim-refused" {
+    $stateDir = New-SmokeStateDir
+    try {
+      New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+      Set-Content -LiteralPath (Join-Path $stateDir "claim-evidence.json") -Value "{ not-json" -Encoding UTF8
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      if ($claim.ok -or @($claim.blockers) -notcontains "malformed_claim_refused") { throw "Malformed claim was not refused." }
+      $claim
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "executor-resumes-owned-claim" {
+    $stateDir = New-SmokeStateDir
+    try {
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $executor = Invoke-Trial -Command run-sanitized-executor -Extra @("-StateDir", $stateDir)
+      if (-not $executor.ok -or $executor.mode -ne "preview" -or $executor.would_run_codex -ne $true) { throw "Executor preview did not accept valid owned claim." }
+      $executor
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "executor-refuses-existing-pr" {
+    $stateDir = New-SmokeStateDir
+    try {
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $executor = Invoke-Trial -Command run-sanitized-executor -Extra @("-Apply", "-StateDir", $stateDir, "-SimulateExistingOpenTaskPr")
+      if ($executor.ok -or @($executor.blockers) -notcontains "existing_open_task_pr_for_bootstrap_trial") { throw "Executor did not refuse existing PR." }
+      $executor
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "executor-refuses-existing-executor-evidence" {
+    $stateDir = New-SmokeStateDir
+    try {
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      [pscustomobject]@{ schema = "fixture"; token_printed = $false } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stateDir "sanitized-executor-evidence.json") -Encoding UTF8
+      $executor = Invoke-Trial -Command run-sanitized-executor -Extra @("-Apply", "-StateDir", $stateDir)
+      if ($executor.ok -or @($executor.blockers) -notcontains "existing_executor_evidence_for_bootstrap_trial") { throw "Executor did not refuse existing executor evidence." }
+      $executor
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "claim-state-safe-evidence" {
+    $stateDir = New-SmokeStateDir
+    try {
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      $evidence = Get-Content -Raw -LiteralPath (Join-Path $stateDir "claim-evidence.json") | ConvertFrom-Json
+      foreach ($field in @("claim_state", "claim_created_at", "executor_evidence_path", "pr_url", "token_printed")) {
+        if (-not $evidence.PSObject.Properties[$field]) { throw "Missing safe evidence field: $field" }
+      }
+      if ($evidence.claim_state -ne "claimed" -or $evidence.token_printed -ne $false) { throw "Unexpected safe evidence state." }
+      $claim
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "no-secret-in-claim-evidence" {
+    $stateDir = New-SmokeStateDir
+    try {
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      $raw = Get-Content -Raw -LiteralPath (Join-Path $stateDir "claim-evidence.json")
+      if ($raw -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript|token_printed"\s*:\s*true') {
+        throw "Claim evidence contains secret-looking or raw-log content."
+      }
+      $claim
+    } finally {
+      Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
   }
   "no-secrets" {
     $claim = Invoke-Trial -Command one-shot-claim-gate
