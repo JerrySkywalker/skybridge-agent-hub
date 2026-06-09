@@ -15,6 +15,7 @@ param(
   [int]$MaxRuntimeMinutes = 30,
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$StateDir = ".agent/tmp/managed-mode-pilot-208",
+  [switch]$SimulateApply,
   [switch]$Json
 )
 
@@ -44,6 +45,111 @@ function Test-SecretLookingText {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
   return $Text -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript|token_printed"\s*:\s*true'
+}
+
+function Get-Sha256Text {
+  param([string]$Text)
+  $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
+  } finally {
+    $sha.Dispose()
+  }
+}
+
+function Invoke-SilentProcess {
+  param(
+    [Parameter(Mandatory = $true)][string]$FilePath,
+    [Parameter(Mandatory = $true)][string[]]$ArgumentList,
+    [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+    [Parameter(Mandatory = $true)][string]$StandardInputText,
+    [int]$TimeoutMinutes = 30
+  )
+  $psi = [System.Diagnostics.ProcessStartInfo]::new()
+  $psi.FileName = $FilePath
+  foreach ($arg in $ArgumentList) { [void]$psi.ArgumentList.Add($arg) }
+  $psi.WorkingDirectory = $WorkingDirectory
+  $psi.RedirectStandardInput = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $psi
+  [void]$process.Start()
+  $process.StandardInput.Write($StandardInputText)
+  $process.StandardInput.Close()
+  $timedOut = -not $process.WaitForExit($TimeoutMinutes * 60 * 1000)
+  if ($timedOut) {
+    try { $process.Kill($true) } catch {}
+  }
+  [pscustomobject]@{
+    ok = (-not $timedOut -and $process.ExitCode -eq 0)
+    exit_code = if ($timedOut) { $null } else { $process.ExitCode }
+    timed_out = $timedOut
+    stdout_persisted = $false
+    stderr_persisted = $false
+    token_printed = $false
+  }
+}
+
+function Get-CodexCommand {
+  $cmd = Get-Command "codex" -ErrorAction SilentlyContinue
+  if (-not $cmd) { return $null }
+  [pscustomobject]@{
+    file_path = $cmd.Source
+    argument_list = @("exec", "--ephemeral", "--cd", (Get-RepoRoot), "-")
+    token_printed = $false
+  }
+}
+
+function Get-StateDirPath {
+  Resolve-RepoPath $StateDir
+}
+
+function Get-PilotEvidencePath {
+  Join-Path (Get-StateDirPath) "pilot-evidence.json"
+}
+
+function Get-PilotResultPath {
+  Join-Path (Get-StateDirPath) "pilot-result.json"
+}
+
+function Test-PathAllowedForPilot {
+  param([string]$Path)
+  $normalized = $Path.Replace("\", "/")
+  return ($normalized -eq "README.md" -or $normalized -like "docs/*")
+}
+
+function Get-ChangedFiles {
+  $files = @()
+  $raw = git diff --name-only
+  if (-not [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { $files += @($raw) }
+  $staged = git diff --cached --name-only
+  if (-not [string]::IsNullOrWhiteSpace(($staged | Out-String).Trim())) { $files += @($staged) }
+  @($files | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+
+function New-PilotPrompt {
+@"
+Execute exactly one SkyBridge managed-mode pilot workunit.
+
+Task id: managed-mode-pilot-208-task-001
+Workunit id: managed-mode-pilot-208-workunit-001
+Pilot id: managed-mode-pilot-208
+Worker: laptop-zenbookduo
+Task type: docs/local-smoke
+
+Make one small documentation-only update under docs/ that helps operators understand local managed-mode pilot smoke orientation. Prefer creating or updating docs/local-smoke-managed-mode-pilot-208.md.
+
+Hard limits:
+- modify only README.md or docs/**;
+- do not touch secrets, .env files, production config, GitHub settings, branch protection, server-root config, OpenResty, Hermes config, or any repository outside this one;
+- do not run git commit, git push, gh pr create, start-all, start-queue, resume -Apply, or any worker loop;
+- do not persist raw prompts, transcripts, stdout, stderr or logs;
+- keep the change small and reviewable.
+"@
 }
 
 function Get-RunnerLockState {
@@ -319,19 +425,211 @@ function Invoke-PilotApply {
       token_printed = $false
     }
   }
-  return [pscustomobject]@{
-    ok = $false
-    schema = "skybridge.bounded_queue_apply_result.v1"
+  if ($SimulateApply) {
+    return [pscustomobject]@{
+      ok = $true
+      schema = "skybridge.bounded_queue_apply_result.v1"
+      pilot_id = $PilotId
+      mode = "simulated_pilot_apply_no_mutation"
+      final_state = "held_waiting_human_pr_review"
+      task_id = "managed-mode-pilot-208-task-001"
+      workunit_id = "managed-mode-pilot-208-workunit-001"
+      worker_id = "laptop-zenbookduo"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = $true
+      pr_count = 1
+      auto_merge_enabled = $false
+      no_mutation = $true
+      token_printed = $false
+    }
+  }
+
+  $git = Get-GitState
+  if ($git.branch -ne "main" -or -not $git.clean) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bounded_queue_apply_result.v1"
+      pilot_id = $PilotId
+      mode = "pilot_apply_blocked"
+      final_state = "pilot_gate_blocked"
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("pilot_apply_requires_clean_main")
+      token_printed = $false
+    }
+  }
+  if (Test-Path -LiteralPath (Get-PilotEvidencePath) -PathType Leaf) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bounded_queue_apply_result.v1"
+      pilot_id = $PilotId
+      mode = "pilot_apply_blocked"
+      final_state = "held_waiting_human_pr_review"
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("existing_pilot_executor_evidence")
+      token_printed = $false
+    }
+  }
+  $codex = Get-CodexCommand
+  if (-not $codex) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bounded_queue_apply_result.v1"
+      pilot_id = $PilotId
+      mode = "pilot_apply_blocked"
+      final_state = "pilot_gate_blocked"
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("codex_cli_missing")
+      token_printed = $false
+    }
+  }
+
+  $branch = "ai/managed-mode-pilot/managed-mode-pilot-208-workunit-001"
+  $stateDirPath = Get-StateDirPath
+  New-Item -ItemType Directory -Path $stateDirPath -Force | Out-Null
+  git fetch origin main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed." }
+  git switch -C $branch origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git switch pilot branch failed." }
+
+  $prompt = New-PilotPrompt
+  $promptHash = Get-Sha256Text -Text $prompt
+  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  if (-not $execution.ok) {
+    git switch main *> $null
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.bounded_queue_apply_result.v1"
+      pilot_id = $PilotId
+      mode = "controlled_failure"
+      final_state = "held_no_execution_executor_failed"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      pr_created = $false
+      exit_code = $execution.exit_code
+      timed_out = $execution.timed_out
+      stdout_persisted = $false
+      stderr_persisted = $false
+      prompt_persisted = $false
+      transcript_persisted = $false
+      token_printed = $false
+    }
+  }
+
+  $changedFiles = @(Get-ChangedFiles)
+  if ($changedFiles.Count -lt 1) {
+    git switch main *> $null
+    throw "Managed mode pilot produced no changed files."
+  }
+  foreach ($file in $changedFiles) {
+    if (-not (Test-PathAllowedForPilot -Path $file)) {
+      git switch main *> $null
+      throw "Managed mode pilot changed disallowed path: $file"
+    }
+  }
+  foreach ($file in $changedFiles) {
+    git add -- $file *> $null
+    if ($LASTEXITCODE -ne 0) { throw "git add failed for $file" }
+  }
+  git commit -m "docs: add managed mode pilot smoke orientation" *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
+  git push -u origin $branch *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git push failed." }
+
+  $bodyPath = Join-Path $stateDirPath "task-pr-body.md"
+  $body = @"
+## Summary
+
+Managed Mode Pilot 208 one-workunit docs/local-smoke task.
+
+## Safety
+
+- Pilot id: `managed-mode-pilot-208`
+- Workunit id: `managed-mode-pilot-208-workunit-001`
+- Task id: `managed-mode-pilot-208-task-001`
+- Worker: `laptop-zenbookduo`
+- Changed files: $($changedFiles -join ", ")
+- No raw prompt, transcript, stdout, stderr, worker log or CI log is included.
+- No auto-merge requested.
+- token_printed=false
+"@
+  if (Test-SecretLookingText $body) { throw "Secret-looking PR body detected." }
+  Set-Content -LiteralPath $bodyPath -Value $body -Encoding UTF8
+  $prOutput = gh pr create --title "Task managed-mode-pilot-208-workunit-001: Managed Mode Pilot 208 docs/local-smoke" --body-file $bodyPath --base main --head $branch
+  if ($LASTEXITCODE -ne 0) { throw "gh pr create failed." }
+  $prUrl = (($prOutput | Out-String).Trim() -split "\r?\n" | Select-Object -Last 1)
+
+  $fileEvidence = @($changedFiles | ForEach-Object {
+    [pscustomobject]@{
+      path = $_
+      sha256 = Get-Sha256Text -Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $_))
+      token_printed = $false
+    }
+  })
+  $evidence = [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_executor_evidence.v1"
     pilot_id = $PilotId
-    mode = "pilot_apply_not_implemented_in_readiness_gate"
-    final_state = "held_before_execution"
-    task_created = $false
-    task_claimed = $false
-    codex_execution_started = $false
-    pr_created = $false
-    blockers = @("pilot_executor_requires_goal_208b_actual_apply")
+    mode = "managed_mode_v1_pilot"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    changed_files = @($changedFiles)
+    file_evidence = @($fileEvidence)
+    prompt_sha256 = $promptHash
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    output_persisted = $false
+    task_created = $true
+    task_claimed = $true
+    codex_execution_count = 1
+    pr_url = $prUrl
+    pr_count = 1
+    auto_merge_enabled = $false
+    final_state = "held_waiting_human_pr_review"
     token_printed = $false
   }
+  $evidenceJson = $evidence | ConvertTo-Json -Depth 60
+  if (Test-SecretLookingText $evidenceJson) { throw "Secret-looking pilot evidence detected." }
+  Set-Content -LiteralPath (Get-PilotEvidencePath) -Value $evidenceJson -Encoding UTF8
+  $result = [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.bounded_queue_apply_result.v1"
+    pilot_id = $PilotId
+    mode = "pilot_apply"
+    final_state = "held_waiting_human_pr_review"
+    task_id = "managed-mode-pilot-208-task-001"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    worker_id = "laptop-zenbookduo"
+    changed_files = @($changedFiles)
+    pr_url = $prUrl
+    task_created = $true
+    task_claimed = $true
+    codex_execution_started = $true
+    codex_execution_count = 1
+    pr_created = $true
+    pr_count = 1
+    evidence_path = ConvertTo-ShortPath (Get-PilotEvidencePath)
+    auto_merge_enabled = $false
+    token_printed = $false
+  }
+  $result | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Get-PilotResultPath) -Encoding UTF8
+  git switch main *> $null
+  return $result
 }
 
 function New-SchemaSummary {
