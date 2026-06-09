@@ -23,6 +23,7 @@ import {
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureSchedulingPreview,
+  fixtureWorkunitCandidatePack,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
   fixtureWorkerServiceState,
@@ -39,6 +40,7 @@ import {
   type LocalWorkerSupervisorState,
   type MultiWorkerReadiness,
   type SchedulingPreview,
+  type WorkunitCandidatePack,
   type WorkerServiceState,
   type ProposedGoalReviewSummary,
 } from "@skybridge-agent-hub/client";
@@ -520,6 +522,7 @@ function App() {
       <ProjectProfileReviewPanel />
       <GoalQueueReviewPanel />
       <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
+      <WorkunitCandidateReviewPanel pack={fixtureWorkunitCandidatePack} />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
       <WorkerPoolPreviewPanel preview={fixtureSchedulingPreview} readiness={fixtureMultiWorkerReadiness} />
       <WorkerRoutingPanel report={report} />
@@ -793,6 +796,41 @@ function ProposedGoalReviewPanel({ review }: { review: ProposedGoalReviewSummary
         <button type="button" disabled aria-disabled="true">Import apply disabled</button>
         <button type="button" disabled aria-disabled="true">Import disabled</button>
         <button type="button" disabled aria-disabled="true">Execute disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function WorkunitCandidateReviewPanel({ pack }: { pack: WorkunitCandidatePack }) {
+  const lowRisk = pack.candidates.filter((candidate) => candidate.risk === "low").length;
+  return (
+    <section className="panel workunit-candidate-review" aria-label="Workunit Candidate Review">
+      <h2>Workunit Candidate Review</h2>
+      <dl>
+        <StatusValue label="Candidate pack" value={pack.candidate_pack_id} />
+        <StatusValue label="Candidates" value={pack.candidates.length} />
+        <StatusValue label="Low-risk candidates" value={lowRisk} />
+        <StatusValue label="Candidate ready" value={pack.candidate_ready_count} />
+        <StatusValue label="Blocked" value={pack.blocked_count} />
+        <StatusValue label="Requires review" value={pack.requires_review_count} />
+        <StatusValue label="Bounded queue preview only" value={String(pack.bounded_queue_preview_only)} />
+        <StatusValue label="Execution disabled" value={String(pack.execution_disabled)} />
+        <StatusValue label="Apply available" value={String(pack.apply_available)} />
+        <StatusValue label="Next safe action" value={pack.next_safe_action} />
+        <StatusValue label="token_printed" value={String(pack.token_printed)} />
+      </dl>
+      <ul>
+        {pack.candidates.map((candidate) => (
+          <li key={candidate.candidate_id}>
+            <strong>{candidate.candidate_id}</strong> {candidate.conversion_status} risk={candidate.risk} workunit={candidate.suggested_workunit_id} blockers={candidate.blockers.join(", ") || "none"} warnings={candidate.warnings.join(", ")}
+          </li>
+        ))}
+      </ul>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Candidate execution disabled</button>
+        <button type="button" disabled aria-disabled="true">Task creation disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker claim disabled</button>
+        <button type="button" disabled aria-disabled="true">Bounded queue apply disabled</button>
       </div>
     </section>
   );

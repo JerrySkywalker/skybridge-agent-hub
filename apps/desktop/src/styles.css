@@ -280,6 +280,10 @@ dd {
   margin: 6px 0;
 }
 
+.workunit-candidate-review {
+  border-left: 4px solid #8b5cf6;
+}
+
 @media (max-width: 820px) {
   body {
     min-width: 0;

@@ -708,6 +708,10 @@ h2 {
   font-size: 13px;
 }
 
+.proposed-goal-workunit-panel {
+  border-left: 4px solid #8b5cf6;
+}
+
 .embed-page {
   margin: 0 auto;
   max-width: 420px;
