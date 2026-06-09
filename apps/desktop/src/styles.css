@@ -130,7 +130,8 @@ p {
 .local-worker-supervisor-card,
 .local-resource-policy-card,
 .workunit-preview-card,
-.boinc-manager-panel {
+.boinc-manager-panel,
+.worker-pool-preview-card {
   border-color: #adc2b3;
 }
 

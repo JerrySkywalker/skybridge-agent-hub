@@ -18,9 +18,11 @@ import {
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
+  fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
+  fixtureSchedulingPreview,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
   fixtureWorkerServiceState,
@@ -35,6 +37,8 @@ import {
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerSupervisorState,
+  type MultiWorkerReadiness,
+  type SchedulingPreview,
   type WorkerServiceState,
   type ProposedGoalReviewSummary,
 } from "@skybridge-agent-hub/client";
@@ -517,6 +521,7 @@ function App() {
       <GoalQueueReviewPanel />
       <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
       <WorkerServicePanel service={workerService} readiness={workerReadiness} />
+      <WorkerPoolPreviewPanel preview={fixtureSchedulingPreview} readiness={fixtureMultiWorkerReadiness} />
       <WorkerRoutingPanel report={report} />
 
       <section className="panel queue-panel">
@@ -654,6 +659,37 @@ function App() {
         </section>
       ) : null}
     </main>
+  );
+}
+
+function WorkerPoolPreviewPanel({
+  preview,
+  readiness,
+}: {
+  preview: SchedulingPreview;
+  readiness: MultiWorkerReadiness;
+}) {
+  return (
+    <section className="panel worker-pool-preview-card" aria-label="Worker Pool Preview card">
+      <h2>Worker Pool Preview</h2>
+      <dl>
+        <StatusValue label="Workers" value={`total=${readiness.worker_pool_count}; ready_preview_only=${readiness.ready_preview_only_count}; stale=${readiness.stale_count}; disabled=${readiness.disabled_count}`} />
+        <StatusValue label="Groups" value={preview.worker_pool.groups.join("; ")} />
+        <StatusValue label="Route plan" value={`${preview.route_plan.plan_id}; routes=${preview.route_plan.selected_routes.length}`} />
+        <StatusValue label="Selected route" value={preview.route_plan.selected_routes.map((route) => `${route.workunit_id}->${route.selected_worker_id ?? "none"}`).join("; ")} />
+        <StatusValue label="Repo parallelism" value={`max_parallel_per_repo=${preview.repo_parallelism_policy.max_parallel_per_repo}; mutating_serialized=${String(preview.repo_parallelism_policy.mutating_work_serialized)}`} />
+        <StatusValue label="Apply disabled" value={String(!preview.apply_available)} />
+        <StatusValue label="No claim/lease/execution" value={`task_claimed=${String(preview.task_claimed)}; lease_created=${String(preview.lease_created)}; task_executed=${String(preview.task_executed)}`} />
+        <StatusValue label="Attention" value={readiness.attention_events.join("; ")} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Scheduling apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Create claim disabled</button>
+        <button type="button" disabled aria-disabled="true">Create lease disabled</button>
+        <button type="button" disabled aria-disabled="true">Execute workunit disabled</button>
+      </div>
+    </section>
   );
 }
 
