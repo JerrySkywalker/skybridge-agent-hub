@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets", "sanitized-executor-contract", "no-raw-prompt-persistence", "no-raw-transcript-persistence", "no-raw-stdout-stderr", "redaction", "executor-fails-closed-if-raw-logs", "executor-one-task-only", "task-pr-open-only", "task-pr-path-allowlist", "evidence-safe", "gates-are-side-effect-free", "start-one-apply-creates-one-claim", "owned-claim-resumable", "second-foreign-claim-refused", "malformed-claim-refused", "executor-resumes-owned-claim", "executor-refuses-existing-pr", "executor-refuses-existing-executor-evidence", "claim-state-safe-evidence", "no-secret-in-claim-evidence")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "single-task-limit", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree", "one-shot-claim-gate", "one-shot-executor-gate", "claim-refuses-second-task", "claim-refuses-wrong-campaign", "claim-refuses-wrong-task-type", "executor-path-allowlist", "pr-limit", "no-auto-merge", "lease-release", "no-raw-transcript", "no-secrets", "sanitized-executor-contract", "no-raw-prompt-persistence", "no-raw-transcript-persistence", "no-raw-stdout-stderr", "redaction", "executor-fails-closed-if-raw-logs", "executor-one-task-only", "task-pr-open-only", "task-pr-path-allowlist", "evidence-safe", "gates-are-side-effect-free", "start-one-apply-creates-one-claim", "owned-claim-resumable", "second-foreign-claim-refused", "malformed-claim-refused", "executor-resumes-owned-claim", "executor-refuses-existing-pr", "executor-refuses-existing-executor-evidence", "claim-state-safe-evidence", "no-secret-in-claim-evidence", "codex-launcher-resolves-ps1", "codex-launcher-resolves-cmd", "codex-launcher-resolves-exe", "codex-launcher-rejects-unknown", "codex-launcher-does-not-persist-raw-command", "codex-launcher-preserves-stdin", "codex-launcher-token-printed-false")]
   [string]$Scenario,
   [switch]$Json
 )
@@ -56,6 +56,55 @@ function Write-OwnedClaimEvidence {
     raw_logs_included = $false
     token_printed = $false
   } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $StateDir "claim-evidence.json") -Encoding UTF8
+}
+
+function New-LauncherFixture {
+  param(
+    [Parameter(Mandatory = $true)][string]$Extension,
+    [switch]$ReadsStdin
+  )
+  $stateDir = New-SmokeStateDir
+  New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+  $name = if ([string]::IsNullOrWhiteSpace($Extension)) { "codex" } else { "codex$Extension" }
+  $path = Join-Path $stateDir $name
+  if ($ReadsStdin -or $Extension -eq ".ps1") {
+    $markerPath = Join-Path $stateDir "stdin-marker.txt"
+@'
+$stdinText = [Console]::In.ReadToEnd()
+[System.IO.File]::WriteAllText($env:SKYBRIDGE_STDIN_MARKER, $stdinText, [System.Text.Encoding]::UTF8)
+exit 0
+'@ | Set-Content -LiteralPath $path -Encoding UTF8
+  } elseif ($Extension -eq ".cmd" -or $Extension -eq ".bat") {
+    "@echo off`r`nexit /b 0`r`n" | Set-Content -LiteralPath $path -Encoding ASCII
+    $markerPath = $null
+  } elseif ($Extension -eq ".exe") {
+    New-Item -ItemType File -Path $path -Force | Out-Null
+    $markerPath = $null
+  } else {
+    New-Item -ItemType File -Path $path -Force | Out-Null
+    $markerPath = $null
+  }
+  [pscustomobject]@{ state_dir = $stateDir; path = $path; marker_path = $markerPath; token_printed = $false }
+}
+
+function Assert-LauncherContract {
+  param(
+    [Parameter(Mandatory = $true)][string]$Extension,
+    [Parameter(Mandatory = $true)][string]$ExpectedKind
+  )
+  $fixture = New-LauncherFixture -Extension $Extension
+  try {
+    $contract = Invoke-Trial -Command sanitized-executor-contract -Extra @("-MockCodexPath", $fixture.path)
+    if (-not $contract.ok) { throw "Launcher contract blocked: $(@($contract.blockers) -join '; ')" }
+    if ($contract.launcher_metadata.launcher_kind -ne $ExpectedKind) { throw "Unexpected launcher kind." }
+    if ($contract.launcher_metadata.command_class -ne "codex_exec_sanitized_stdin_discard_output") { throw "Unexpected command class." }
+    foreach ($flag in @("prompt_persisted", "transcript_persisted", "stdout_persisted", "stderr_persisted", "token_printed")) {
+      if ($contract.launcher_metadata.$flag -ne $false) { throw "Expected launcher metadata $flag=false." }
+    }
+    $contract
+  } finally {
+    Remove-Item -LiteralPath $fixture.state_dir -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
 
 $result = switch ($Scenario) {
@@ -346,6 +395,58 @@ $result = switch ($Scenario) {
     } finally {
       Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
     }
+  }
+  "codex-launcher-resolves-ps1" {
+    $contract = Assert-LauncherContract -Extension ".ps1" -ExpectedKind "ps1"
+    if ($contract.launcher_metadata.host_executable_name -notin @("pwsh.exe", "pwsh", "powershell.exe")) { throw "Unexpected PowerShell host." }
+    $contract
+  }
+  "codex-launcher-resolves-cmd" {
+    $contract = Assert-LauncherContract -Extension ".cmd" -ExpectedKind "cmd"
+    if ($contract.launcher_metadata.host_executable_name -ne "cmd.exe") { throw "Expected cmd.exe host." }
+    $contract
+  }
+  "codex-launcher-resolves-exe" {
+    Assert-LauncherContract -Extension ".exe" -ExpectedKind "codex.exe"
+  }
+  "codex-launcher-rejects-unknown" {
+    $fixture = New-LauncherFixture -Extension ".txt"
+    try {
+      $contract = Invoke-Trial -Command sanitized-executor-contract -Extra @("-MockCodexPath", $fixture.path)
+      if ($contract.ok -or @($contract.blockers) -notcontains "codex_launcher_unclassified_or_missing") { throw "Unknown launcher was not refused." }
+      $contract
+    } finally {
+      Remove-Item -LiteralPath $fixture.state_dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "codex-launcher-does-not-persist-raw-command" {
+    $fixture = New-LauncherFixture -Extension ".ps1"
+    try {
+      $contract = Invoke-Trial -Command sanitized-executor-contract -Extra @("-MockCodexPath", $fixture.path)
+      $contractJsonText = $contract | ConvertTo-Json -Depth 100 -Compress
+      if ($contractJsonText -match [regex]::Escape($fixture.path)) { throw "Raw launcher path leaked into safe metadata." }
+      if ($contract.launcher_metadata.PSObject.Properties["file_path"] -or $contract.launcher_metadata.PSObject.Properties["argument_list"]) { throw "Raw command fields leaked into launcher metadata." }
+      $contract
+    } finally {
+      Remove-Item -LiteralPath $fixture.state_dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "codex-launcher-preserves-stdin" {
+    $fixture = New-LauncherFixture -Extension ".ps1" -ReadsStdin
+    try {
+      $env:SKYBRIDGE_STDIN_MARKER = $fixture.marker_path
+      $stdinResult = Invoke-Trial -Command codex-launcher-stdin-test -Extra @("-MockCodexPath", $fixture.path)
+      if (-not $stdinResult.ok -or $stdinResult.stdin_preserved -ne $true) { throw "stdin was not preserved through launcher." }
+      $stdinResult
+    } finally {
+      Remove-Item Env:\SKYBRIDGE_STDIN_MARKER -ErrorAction SilentlyContinue
+      Remove-Item -LiteralPath $fixture.state_dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  }
+  "codex-launcher-token-printed-false" {
+    $contract = Assert-LauncherContract -Extension ".ps1" -ExpectedKind "ps1"
+    if ($contract.token_printed -ne $false -or $contract.launcher_metadata.token_printed -ne $false) { throw "Expected token_printed=false." }
+    $contract
   }
   "no-secrets" {
     $claim = Invoke-Trial -Command one-shot-claim-gate
