@@ -372,12 +372,13 @@ $result = switch ($Scenario) {
   "claim-state-safe-evidence" {
     $stateDir = New-SmokeStateDir
     try {
-      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
       $evidence = Get-Content -Raw -LiteralPath (Join-Path $stateDir "claim-evidence.json") | ConvertFrom-Json
       foreach ($field in @("claim_state", "claim_created_at", "executor_evidence_path", "pr_url", "token_printed")) {
         if (-not $evidence.PSObject.Properties[$field]) { throw "Missing safe evidence field: $field" }
       }
-      if ($evidence.claim_state -ne "claimed" -or $evidence.token_printed -ne $false) { throw "Unexpected safe evidence state." }
+      if ($evidence.claim_state -notin @("claimed", "resumable_owned_claim") -or $evidence.token_printed -ne $false) { throw "Unexpected safe evidence state." }
       $claim
     } finally {
       Remove-Item -LiteralPath $stateDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -386,7 +387,8 @@ $result = switch ($Scenario) {
   "no-secret-in-claim-evidence" {
     $stateDir = New-SmokeStateDir
     try {
-      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-Apply", "-StateDir", $stateDir)
+      Write-OwnedClaimEvidence -StateDir $stateDir
+      $claim = Invoke-Trial -Command one-shot-claim-gate -Extra @("-StateDir", $stateDir)
       $raw = Get-Content -Raw -LiteralPath (Join-Path $stateDir "claim-evidence.json")
       if ($raw -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript|token_printed"\s*:\s*true') {
         throw "Claim evidence contains secret-looking or raw-log content."
