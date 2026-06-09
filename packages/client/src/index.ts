@@ -1739,6 +1739,102 @@ export interface ManagedModePilotState {
   token_printed: false;
 }
 
+export interface ManagedModePilotFinalizerPrSnapshot {
+  exists: boolean;
+  number: number | null;
+  url: string | null;
+  title: string | null;
+  state: string;
+  merged: boolean;
+  base_ref: string | null;
+  head_ref: string | null;
+  changed_files: string[];
+  token_printed: false;
+}
+
+export interface ManagedModePilotFinalizerState {
+  schema: "skybridge.managed_mode_pilot_finalizer_state.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  state: "held_waiting_human_pr_review" | "ready_to_finalize" | "managed_mode_pilot_completed";
+  final_state: "held_waiting_human_pr_review" | "managed_mode_pilot_completed";
+  executor_evidence_path: string | null;
+  finalizer_evidence_path: string | null;
+  task_pr: ManagedModePilotFinalizerPrSnapshot;
+  changed_files: string[];
+  workunits_executed: number;
+  task_count: number;
+  claim_count: number;
+  codex_execution_count: number;
+  pr_count: number;
+  no_second_workunit: boolean;
+  no_second_task_pr: boolean;
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  no_raw_artifacts: boolean;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModePilotFinalizerEvidence {
+  schema: "skybridge.managed_mode_pilot_finalizer_evidence.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  final_state: "managed_mode_pilot_completed";
+  workunit_id: "managed-mode-pilot-208-workunit-001";
+  task_id: "managed-mode-pilot-208-task-001";
+  worker_id: "laptop-zenbookduo";
+  task_pr: ManagedModePilotFinalizerPrSnapshot;
+  changed_files: string[];
+  workunits_executed: 1;
+  task_count: 1;
+  claim_count: 1;
+  codex_execution_count: 1;
+  pr_count: 1;
+  no_second_workunit: true;
+  no_second_task_pr: true;
+  active_tasks: 0;
+  stale_leases: 0;
+  runner_lock: "none";
+  no_raw_artifacts: true;
+  executor_evidence_path: string;
+  prompt_persisted: false;
+  transcript_persisted: false;
+  stdout_persisted: false;
+  stderr_persisted: false;
+  raw_logs_persisted: false;
+  token_printed: false;
+}
+
+export interface ManagedModePilotFinalizerReport {
+  schema: "skybridge.managed_mode_pilot_finalizer_report.v1";
+  pilot_id: string;
+  final_state: "managed_mode_pilot_completed";
+  dashboard: {
+    managed_mode_pilot_completed: true;
+    no_next_execution_authorized: true;
+    require_human_review: true;
+    token_printed: false;
+  };
+  evidence_path: string;
+  token_printed: false;
+}
+
+export interface ManagedModePilotFinalizerResult {
+  schema: "skybridge.managed_mode_pilot_finalizer_result.v1";
+  pilot_id: string;
+  mode: "finalizer_preview" | "finalizer_apply" | "finalizer_apply_blocked";
+  final_state: "held_waiting_human_pr_review" | "managed_mode_pilot_completed";
+  state?: ManagedModePilotFinalizerState;
+  evidence?: ManagedModePilotFinalizerEvidence;
+  report?: ManagedModePilotFinalizerReport;
+  evidence_path?: string | null;
+  blockers?: string[];
+  no_mutation?: boolean;
+  token_printed: false;
+}
+
 export type BoincModeId =
   | "standby"
   | "armed_preview"

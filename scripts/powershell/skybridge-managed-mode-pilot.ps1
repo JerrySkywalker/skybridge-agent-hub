@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "evidence", "safe-summary")]
+  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
   [string]$Command,
 
   [string]$PilotId = "managed-mode-pilot-208",
@@ -16,6 +16,8 @@ param(
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$StateDir = ".agent/tmp/managed-mode-pilot-208",
   [switch]$SimulateApply,
+  [switch]$SimulateFinalizerMergedPr,
+  [switch]$SimulateFinalizerSecondWorkunit,
   [switch]$Json
 )
 
@@ -193,6 +195,14 @@ function Get-PilotResultPath {
   Join-Path (Get-StateDirPath) "pilot-result.json"
 }
 
+function Get-PilotFinalizerEvidencePath {
+  Join-Path (Get-StateDirPath) "finalizer-evidence.json"
+}
+
+function Get-PilotFinalizerReportPath {
+  Join-Path (Get-StateDirPath) "finalizer-report.json"
+}
+
 function Test-PathAllowedForPilot {
   param([string]$Path)
   $normalized = $Path.Replace("\", "/")
@@ -265,6 +275,107 @@ function Get-OpenPilotPrs {
     })
   } catch {
     return @()
+  }
+}
+
+function Get-PilotPrNumberFromUrl {
+  param([string]$Url)
+  if ([string]::IsNullOrWhiteSpace($Url)) { return $null }
+  if ($Url -match '/pull/(\d+)(?:$|[/?#])') { return [int]$Matches[1] }
+  return $null
+}
+
+function Read-PilotExecutorEvidence {
+  $path = Get-PilotEvidencePath
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+  $text = Get-Content -Raw -LiteralPath $path
+  if (Test-SecretLookingText $text) { throw "Secret-looking pilot executor evidence detected." }
+  $text | ConvertFrom-Json
+}
+
+function Test-SafeJsonObject {
+  param($Object)
+  $json = $Object | ConvertTo-Json -Depth 100 -Compress
+  if (Test-SecretLookingText $json) { return $false }
+  return ($json -match '"token_printed"\s*:\s*false' -and $json -notmatch '"token_printed"\s*:\s*true')
+}
+
+function Get-PilotTaskPrSnapshot {
+  param($ExecutorEvidence)
+  if ($SimulateFinalizerMergedPr) {
+    return [pscustomobject]@{
+      exists = $true
+      number = 208
+      url = if ($ExecutorEvidence -and $ExecutorEvidence.pr_url) { [string]$ExecutorEvidence.pr_url } else { "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/208" }
+      title = "Task managed-mode-pilot-208-workunit-001: Managed Mode Pilot 208 docs/local-smoke"
+      state = "MERGED"
+      merged = $true
+      base_ref = "main"
+      head_ref = "ai/managed-mode-pilot/managed-mode-pilot-208-workunit-001"
+      changed_files = @($ExecutorEvidence.changed_files)
+      token_printed = $false
+    }
+  }
+
+  $number = if ($ExecutorEvidence) { Get-PilotPrNumberFromUrl -Url ([string]$ExecutorEvidence.pr_url) } else { $null }
+  if (-not $number) {
+    try {
+      $search = gh pr list --state all --search "$PilotId in:title,body" --json number,url,title,headRefName,baseRefName,state,mergedAt --limit 20 2>$null
+      if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace(($search | Out-String).Trim())) {
+        $candidate = @($search | ConvertFrom-Json | Where-Object {
+          [string]$_.title -like "*Managed Mode Pilot 208*" -or
+          [string]$_.title -like "*Task managed-mode-pilot-208-workunit-001*" -or
+          [string]$_.headRefName -like "ai/managed-mode-pilot/*"
+        } | Select-Object -First 1)
+        if ($candidate.Count -gt 0) { $number = [int]$candidate[0].number }
+      }
+    } catch {
+      $number = $null
+    }
+  }
+  if (-not $number) {
+    return [pscustomobject]@{
+      exists = $false
+      number = $null
+      url = if ($ExecutorEvidence) { [string]$ExecutorEvidence.pr_url } else { $null }
+      title = $null
+      state = "missing"
+      merged = $false
+      base_ref = $null
+      head_ref = $null
+      changed_files = @()
+      token_printed = $false
+    }
+  }
+  try {
+    $raw = gh pr view $number --json number,url,title,state,merged,baseRefName,headRefName,files 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { throw "gh pr view failed" }
+    $pr = $raw | ConvertFrom-Json
+    [pscustomobject]@{
+      exists = $true
+      number = [int]$pr.number
+      url = [string]$pr.url
+      title = [string]$pr.title
+      state = [string]$pr.state
+      merged = [bool]$pr.merged
+      base_ref = [string]$pr.baseRefName
+      head_ref = [string]$pr.headRefName
+      changed_files = @($pr.files | ForEach-Object { [string]$_.path })
+      token_printed = $false
+    }
+  } catch {
+    [pscustomobject]@{
+      exists = $false
+      number = $number
+      url = if ($ExecutorEvidence) { [string]$ExecutorEvidence.pr_url } else { $null }
+      title = $null
+      state = "unavailable"
+      merged = $false
+      base_ref = $null
+      head_ref = $null
+      changed_files = @()
+      token_printed = $false
+    }
   }
 }
 
@@ -472,18 +583,197 @@ function New-Readiness {
 function New-PilotState {
   $gate = New-ApplyGate
   $statePath = Resolve-RepoPath (Join-Path $StateDir "pilot-evidence.json")
+  $finalizerPath = Get-PilotFinalizerEvidencePath
+  $completed = Test-Path -LiteralPath $finalizerPath -PathType Leaf
   $existing = Test-Path -LiteralPath $statePath -PathType Leaf
   [pscustomobject]@{
     schema = "skybridge.managed_mode_pilot_state.v1"
     pilot_id = $PilotId
     mode = "managed_mode_v1_pilot"
-    state = if ($existing) { "held_waiting_human_pr_review" } elseif ($gate.can_run_pilot) { "ready_for_one_workunit_pilot" } else { "pilot_gate_blocked" }
+    state = if ($completed) { "managed_mode_pilot_completed" } elseif ($existing) { "held_waiting_human_pr_review" } elseif ($gate.can_run_pilot) { "ready_for_one_workunit_pilot" } else { "pilot_gate_blocked" }
     workunits_executed = if ($existing) { 1 } else { 0 }
     task_count = if ($existing) { 1 } else { 0 }
     claim_count = if ($existing) { 1 } else { 0 }
     codex_execution_count = if ($existing) { 1 } else { 0 }
     pr_count = if ($existing) { 1 } else { 0 }
     evidence_path = if ($existing) { ConvertTo-ShortPath $statePath } else { $null }
+    finalizer_evidence_path = if ($completed) { ConvertTo-ShortPath $finalizerPath } else { $null }
+    token_printed = $false
+  }
+}
+
+function New-PilotFinalizerState {
+  $executorEvidencePath = Get-PilotEvidencePath
+  $finalizerEvidencePath = Get-PilotFinalizerEvidencePath
+  $finalizerExists = Test-Path -LiteralPath $finalizerEvidencePath -PathType Leaf
+  $executorEvidence = Read-PilotExecutorEvidence
+  $prSnapshot = Get-PilotTaskPrSnapshot -ExecutorEvidence $executorEvidence
+  $runner = Get-RunnerLockState
+  $blockers = New-Object System.Collections.Generic.List[string]
+  $changedFiles = @()
+  $noRawArtifacts = $true
+  $workunitCount = 0
+  $taskCount = 0
+  $claimCount = 0
+  $codexExecutionCount = 0
+  $prCount = 0
+
+  if (-not $executorEvidence) {
+    $blockers.Add("pilot_executor_evidence_missing") | Out-Null
+  } else {
+    $safe = Test-SafeJsonObject $executorEvidence
+    if (-not $safe) {
+      $blockers.Add("pilot_executor_evidence_unsafe") | Out-Null
+      $noRawArtifacts = $false
+    }
+    $changedFiles = @($executorEvidence.changed_files | ForEach-Object { [string]$_ })
+    $workunitCount = if ([string]$executorEvidence.workunit_id -eq "managed-mode-pilot-208-workunit-001") { 1 } else { 0 }
+    $taskCount = if ([string]$executorEvidence.task_id -eq "managed-mode-pilot-208-task-001" -and $executorEvidence.task_created -eq $true) { 1 } else { 0 }
+    $claimCount = if ($executorEvidence.task_claimed -eq $true) { 1 } else { 0 }
+    $codexExecutionCount = [int]$executorEvidence.codex_execution_count
+    $prCount = [int]$executorEvidence.pr_count
+    if ($SimulateFinalizerSecondWorkunit) { $workunitCount = 2 }
+
+    if ($workunitCount -ne 1) { $blockers.Add("expected_exactly_one_pilot_workunit") | Out-Null }
+    if ($taskCount -ne 1) { $blockers.Add("expected_exactly_one_pilot_task") | Out-Null }
+    if ($claimCount -ne 1) { $blockers.Add("expected_exactly_one_pilot_claim") | Out-Null }
+    if ($codexExecutionCount -ne 1) { $blockers.Add("expected_exactly_one_codex_execution") | Out-Null }
+    if ($prCount -ne 1) { $blockers.Add("expected_exactly_one_task_pr") | Out-Null }
+    if ($executorEvidence.auto_merge_enabled -ne $false) { $blockers.Add("auto_merge_forbidden") | Out-Null }
+    foreach ($file in $changedFiles) {
+      if (-not (Test-PathAllowedForPilot -Path $file)) { $blockers.Add("path_allowlist_violation:$file") | Out-Null }
+      if (-not (Test-Path -LiteralPath (Resolve-RepoPath $file) -PathType Leaf)) { $blockers.Add("changed_file_missing_on_main:$file") | Out-Null }
+    }
+  }
+
+  if (-not $prSnapshot.exists) { $blockers.Add("pilot_task_pr_missing") | Out-Null }
+  if ($prSnapshot.exists -and -not $prSnapshot.merged) { $blockers.Add("pilot_task_pr_not_merged") | Out-Null }
+  if ($prSnapshot.base_ref -and $prSnapshot.base_ref -ne "main") { $blockers.Add("pilot_task_pr_base_not_main") | Out-Null }
+  if ($runner.runner_lock_status -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
+
+  $completed = ($finalizerExists -or ($blockers.Count -eq 0))
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_finalizer_state.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    state = if ($finalizerExists) { "managed_mode_pilot_completed" } elseif ($blockers.Count -eq 0) { "ready_to_finalize" } else { "held_waiting_human_pr_review" }
+    final_state = if ($completed) { "managed_mode_pilot_completed" } else { "held_waiting_human_pr_review" }
+    executor_evidence_path = if (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) { ConvertTo-ShortPath $executorEvidencePath } else { $null }
+    finalizer_evidence_path = if ($finalizerExists) { ConvertTo-ShortPath $finalizerEvidencePath } else { $null }
+    task_pr = $prSnapshot
+    changed_files = @($changedFiles)
+    workunits_executed = $workunitCount
+    task_count = $taskCount
+    claim_count = $claimCount
+    codex_execution_count = $codexExecutionCount
+    pr_count = $prCount
+    no_second_workunit = ($workunitCount -eq 1)
+    no_second_task_pr = ($prCount -eq 1)
+    active_tasks = 0
+    stale_leases = 0
+    runner_lock = $runner.runner_lock_status
+    no_raw_artifacts = $noRawArtifacts
+    blockers = @($blockers | Select-Object -Unique)
+    token_printed = $false
+  }
+}
+
+function New-PilotFinalizerEvidence {
+  param([Parameter(Mandatory = $true)]$State)
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_finalizer_evidence.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    final_state = "managed_mode_pilot_completed"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    task_pr = $State.task_pr
+    changed_files = @($State.changed_files)
+    workunits_executed = $State.workunits_executed
+    task_count = $State.task_count
+    claim_count = $State.claim_count
+    codex_execution_count = $State.codex_execution_count
+    pr_count = $State.pr_count
+    no_second_workunit = $State.no_second_workunit
+    no_second_task_pr = $State.no_second_task_pr
+    active_tasks = $State.active_tasks
+    stale_leases = $State.stale_leases
+    runner_lock = $State.runner_lock
+    no_raw_artifacts = $State.no_raw_artifacts
+    executor_evidence_path = $State.executor_evidence_path
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    raw_logs_persisted = $false
+    token_printed = $false
+  }
+}
+
+function Invoke-PilotFinalizer {
+  param([switch]$Mutate)
+  $finalizerEvidencePath = Get-PilotFinalizerEvidencePath
+  if ($Mutate -and (Test-Path -LiteralPath $finalizerEvidencePath -PathType Leaf)) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_finalizer_result.v1"
+      pilot_id = $PilotId
+      mode = "finalizer_apply"
+      final_state = "managed_mode_pilot_completed"
+      blockers = @("managed_mode_pilot_already_completed")
+      token_printed = $false
+    }
+  }
+
+  $state = New-PilotFinalizerState
+  if (@($state.blockers).Count -gt 0) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_finalizer_result.v1"
+      pilot_id = $PilotId
+      mode = if ($Mutate) { "finalizer_apply_blocked" } else { "finalizer_preview" }
+      final_state = "held_waiting_human_pr_review"
+      state = $state
+      blockers = @($state.blockers)
+      no_mutation = (-not $Mutate)
+      token_printed = $false
+    }
+  }
+
+  $evidence = New-PilotFinalizerEvidence -State $state
+  $report = [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_finalizer_report.v1"
+    pilot_id = $PilotId
+    final_state = "managed_mode_pilot_completed"
+    dashboard = [pscustomobject]@{
+      managed_mode_pilot_completed = $true
+      no_next_execution_authorized = $true
+      require_human_review = $true
+      token_printed = $false
+    }
+    evidence_path = ConvertTo-ShortPath $finalizerEvidencePath
+    token_printed = $false
+  }
+  if (-not (Test-SafeJsonObject $evidence) -or -not (Test-SafeJsonObject $report)) { throw "Secret-looking finalizer evidence detected." }
+
+  if ($Mutate) {
+    New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
+    $evidence | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $finalizerEvidencePath -Encoding UTF8
+    $report | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath (Get-PilotFinalizerReportPath) -Encoding UTF8
+  }
+
+  [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.managed_mode_pilot_finalizer_result.v1"
+    pilot_id = $PilotId
+    mode = if ($Mutate) { "finalizer_apply" } else { "finalizer_preview" }
+    final_state = "managed_mode_pilot_completed"
+    state = $state
+    evidence = $evidence
+    report = $report
+    evidence_path = if ($Mutate) { ConvertTo-ShortPath $finalizerEvidencePath } else { $null }
+    no_mutation = (-not $Mutate)
     token_printed = $false
   }
 }
@@ -724,7 +1014,10 @@ function New-SchemaSummary {
       "skybridge.bounded_queue_apply_request.v1",
       "skybridge.bounded_queue_apply_result.v1",
       "skybridge.managed_mode_pilot_policy.v1",
-      "skybridge.managed_mode_pilot_state.v1"
+      "skybridge.managed_mode_pilot_state.v1",
+      "skybridge.managed_mode_pilot_finalizer_state.v1",
+      "skybridge.managed_mode_pilot_finalizer_evidence.v1",
+      "skybridge.managed_mode_pilot_finalizer_report.v1"
     )
     can_start_managed_mode = $false
     general_bounded_queue_apply_enabled = $false
@@ -766,6 +1059,10 @@ $result = switch ($Command) {
   "apply-gate" { New-ApplyGate }
   "pilot-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_preview.v1"; request = New-PilotPlan; gate = New-ApplyGate; state = New-PilotState; no_mutation = $true; token_printed = $false } }
   "pilot-apply" { Invoke-PilotApply }
+  "finalizer-preview" { Invoke-PilotFinalizer }
+  "finalizer-apply" { Invoke-PilotFinalizer -Mutate }
+  "finalizer-evidence" { New-PilotFinalizerState }
+  "finalizer-report" { Invoke-PilotFinalizer }
   "evidence" { New-PilotState }
   "safe-summary" { New-SafeSummary }
 }
