@@ -10,7 +10,11 @@ import {
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
+  fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
+  fixtureLocalExecutionGuard,
+  fixtureLocalResourcePolicy,
+  fixtureLocalWorkerSupervisorState,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
@@ -21,6 +25,10 @@ import {
   routeAttentionEvent,
   summarizeCampaignEvidence,
   type AttentionEvent,
+  type DesktopResidentState,
+  type LocalExecutionGuard,
+  type LocalResourcePolicy,
+  type LocalWorkerSupervisorState,
   type WorkerServiceState,
   type ProposedGoalReviewSummary,
 } from "@skybridge-agent-hub/client";
@@ -59,6 +67,10 @@ type DesktopStatus = {
   };
   campaign_report: CampaignRunReport | null;
   worker_service_state: WorkerServiceState | null;
+  desktop_resident_state: DesktopResidentState | null;
+  local_worker_supervisor_state: LocalWorkerSupervisorState | null;
+  local_resource_policy: LocalResourcePolicy | null;
+  local_execution_guard: LocalExecutionGuard | null;
   safe_summary: CampaignSafeSummary | null;
   bridge_outcomes: Array<{
     name: string;
@@ -116,6 +128,10 @@ const emptyStatus: DesktopStatus = {
   },
   campaign_report: null,
   worker_service_state: null,
+  desktop_resident_state: null,
+  local_worker_supervisor_state: null,
+  local_resource_policy: null,
+  local_execution_guard: null,
   safe_summary: null,
   bridge_outcomes: [],
   report_cached: false,
@@ -160,6 +176,10 @@ const fixtureStatus: DesktopStatus = {
   },
   campaign_report: fixtureCampaignRunReport,
   worker_service_state: fixtureWorkerServiceState,
+  desktop_resident_state: fixtureDesktopResidentState,
+  local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
+  local_resource_policy: fixtureLocalResourcePolicy,
+  local_execution_guard: fixtureLocalExecutionGuard,
   safe_summary: createCampaignSafeSummary(fixtureCampaignRunReport),
   bridge_outcomes: [
     { name: "campaign_report", ok: true, warning: null },
@@ -180,6 +200,84 @@ function StatusValue({ label, value }: { label: string; value: React.ReactNode }
       <dt>{label}</dt>
       <dd>{value}</dd>
     </div>
+  );
+}
+
+function ExecutionDisabledBanner({ guard }: { guard: LocalExecutionGuard }) {
+  return (
+    <section className="mode-strip execution-disabled-banner" aria-label="Execution disabled guard">
+      <span>EXECUTION DISABLED</span>
+      <span>Start One {guard.start_one_enabled ? "enabled" : "disabled"}</span>
+      <span>{`start_all_present=${String(guard.start_all_present)}; ${guard.next_safe_action}`}</span>
+    </section>
+  );
+}
+
+function ResidentStatusPanel({ resident }: { resident: DesktopResidentState }) {
+  return (
+    <section className="panel resident-status-card" aria-label="Resident status card">
+      <h2>Resident Status</h2>
+      <dl>
+        <StatusValue label="Tray available" value={String(resident.tray_available)} />
+        <StatusValue label="Window visible" value={String(resident.window_visible)} />
+        <StatusValue label="Close to tray" value={resident.close_to_tray_supported ? "supported" : "disabled pending safe window-close handler"} />
+        <StatusValue label="Autostart" value={`${String(resident.autostart_supported)} / enabled=${String(resident.autostart_enabled)}`} />
+        <StatusValue label="Resident mode" value={resident.resident_mode} />
+        <StatusValue label="Last refresh" value={resident.last_refresh_at} />
+        <StatusValue label="token_printed" value={String(resident.token_printed)} />
+      </dl>
+    </section>
+  );
+}
+
+function LocalWorkerSupervisorPanel({ supervisor }: { supervisor: LocalWorkerSupervisorState }) {
+  return (
+    <section className="panel local-worker-supervisor-card" aria-label="Local worker supervisor card">
+      <h2>Worker Supervisor</h2>
+      <dl>
+        <StatusValue label="Worker id" value={supervisor.worker_id} />
+        <StatusValue label="Service mode" value={supervisor.worker_service_mode} />
+        <StatusValue label="Heartbeat age" value={supervisor.heartbeat_age_seconds === null ? "none" : `${supervisor.heartbeat_age_seconds}s`} />
+        <StatusValue label="Current task" value={supervisor.current_task_id ?? "none"} />
+        <StatusValue label="Can claim tasks" value={String(supervisor.can_claim_tasks)} />
+        <StatusValue label="Can execute tasks" value={String(supervisor.can_execute_tasks)} />
+        <StatusValue label="Pause requested" value={String(supervisor.pause_requested)} />
+        <StatusValue label="Stop requested" value={String(supervisor.stop_requested)} />
+        <StatusValue label="Last local evidence" value={supervisor.last_local_evidence_at ?? "none"} />
+        <StatusValue label="Readiness blockers" value={supervisor.readiness_blockers.join("; ") || "none"} />
+        <StatusValue label="token_printed" value={String(supervisor.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Start standby metadata only</button>
+        <button type="button" disabled aria-disabled="true">Pause metadata only</button>
+        <button type="button" disabled aria-disabled="true">Stop standby metadata only</button>
+        <button type="button" disabled aria-disabled="true">Resume execution disabled</button>
+        <button type="button" disabled aria-disabled="true">Start One disabled</button>
+        <button type="button" disabled aria-disabled="true">Start Queue disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function LocalResourcePolicyPanel({ policy }: { policy: LocalResourcePolicy }) {
+  return (
+    <section className="panel local-resource-policy-card" aria-label="Local resource policy card">
+      <h2>Resource Policy</h2>
+      <dl>
+        <StatusValue label="AC required" value={String(policy.require_ac_power)} />
+        <StatusValue label="Battery pause" value={`${String(policy.pause_on_battery)} below ${policy.pause_below_battery_percent}%`} />
+        <StatusValue label="Idle required" value={String(policy.require_idle)} />
+        <StatusValue label="CPU / memory caps" value={`${policy.max_cpu_percent}% / ${policy.max_memory_percent}%`} />
+        <StatusValue label="Network required" value={String(policy.network_required)} />
+        <StatusValue label="Allowed hours" value={policy.allowed_hours} />
+        <StatusValue label="Battery state" value={`${policy.battery_state}; ${policy.battery_percent ?? "unknown"}%`} />
+        <StatusValue label="Memory used" value={policy.memory_used_percent === null ? "unknown" : `${policy.memory_used_percent}%`} />
+        <StatusValue label="CPU summary" value={policy.cpu_summary} />
+        <StatusValue label="Enforcement" value={`${policy.enforcement_status}; source=${policy.policy_source}`} />
+        <StatusValue label="Sleep/lid note" value={policy.sleep_lid_behavior_note} />
+        <StatusValue label="token_printed" value={String(policy.token_printed)} />
+      </dl>
+    </section>
   );
 }
 
@@ -273,6 +371,10 @@ function App() {
   const attention = createAttentionModel(report);
   const workerService = status.worker_service_state ?? report.worker_service_state ?? fixtureWorkerServiceState;
   const workerReadiness = createWorkerServiceReadiness(workerService);
+  const residentState = status.desktop_resident_state ?? report.desktop_resident_state ?? fixtureDesktopResidentState;
+  const supervisorState = status.local_worker_supervisor_state ?? report.local_worker_supervisor_state ?? fixtureLocalWorkerSupervisorState;
+  const resourcePolicy = status.local_resource_policy ?? report.local_resource_policy ?? fixtureLocalResourcePolicy;
+  const executionGuard = status.local_execution_guard ?? report.local_execution_guard ?? fixtureLocalExecutionGuard;
   const remainingSteps = report.step_ledger.filter((step) => step.status === "pending");
   const goal190IsCurrent = report.current_goal_id === "super-190-campaign-run-report-evidence-ledger";
   const previewActions = queueControlActionMatrix.filter((entry) => entry.class === "preview");
@@ -324,6 +426,10 @@ function App() {
       </section>
 
       <AttentionPanel events={attention.attention_events} />
+      <ExecutionDisabledBanner guard={executionGuard} />
+      <ResidentStatusPanel resident={residentState} />
+      <LocalWorkerSupervisorPanel supervisor={supervisorState} />
+      <LocalResourcePolicyPanel policy={resourcePolicy} />
       <CampaignLockPanel />
       <CampaignPriorityQueuePanel />
       <ProjectProfileReviewPanel />

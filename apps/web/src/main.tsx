@@ -22,6 +22,9 @@ import {
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
+  fixtureLocalExecutionGuard,
+  fixtureLocalResourcePolicy,
+  fixtureLocalWorkerSupervisorState,
   fixtureGoalQueueReviewSummary,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
@@ -32,6 +35,9 @@ import {
   routeAttentionEvent,
   summarizeCampaignEvidence,
   type AttentionEvent,
+  type LocalExecutionGuard,
+  type LocalResourcePolicy,
+  type LocalWorkerSupervisorState,
   type HermesSummary,
   type IterationsSummary,
   type NotificationsSummary,
@@ -336,6 +342,11 @@ function CampaignQueuePage() {
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
+          <WebLocalWorkerPolicyPanel
+            supervisor={report.local_worker_supervisor_state ?? fixtureLocalWorkerSupervisorState}
+            policy={report.local_resource_policy ?? fixtureLocalResourcePolicy}
+            guard={report.local_execution_guard ?? fixtureLocalExecutionGuard}
+          />
           <WorkerRoutingPanel report={report} />
           <QueueReadinessPanel readiness={readiness} />
           <QueueSafeActionsPanel readiness={readiness} />
@@ -788,6 +799,53 @@ function WorkerReadinessPanel({
       />
       <QueueList title="Readiness blockers" items={readiness.blockers} fallback="No worker service blockers." />
       <p className="skybridge-state-note">Web has no direct local process control; Start One remains disabled until a later reviewed execution gate.</p>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebLocalWorkerPolicyPanel({
+  supervisor,
+  policy,
+  guard,
+}: {
+  supervisor: LocalWorkerSupervisorState;
+  policy: LocalResourcePolicy;
+  guard: LocalExecutionGuard;
+}) {
+  return (
+    <section className="skybridge-panel web-local-worker-policy" aria-label="Web local worker policy panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Local Worker</p>
+          <h2>Resident Policy</h2>
+        </div>
+        <span className={badgeClass(guard.execution_disabled ? "bad" : "ok")}>preview only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Supervisor</dt>
+          <dd>{`${supervisor.worker_id}; ${supervisor.worker_service_mode}`}</dd>
+        </div>
+        <div>
+          <dt>Claim / execute</dt>
+          <dd>{`${String(supervisor.can_claim_tasks)} / ${String(supervisor.can_execute_tasks)}`}</dd>
+        </div>
+        <div>
+          <dt>Policy</dt>
+          <dd>{`${policy.enforcement_status}; ac=${String(policy.require_ac_power)}; battery=${String(policy.pause_on_battery)}`}</dd>
+        </div>
+        <div>
+          <dt>Limits</dt>
+          <dd>{`cpu=${policy.max_cpu_percent}%; memory=${policy.max_memory_percent}%; hours=${policy.allowed_hours}`}</dd>
+        </div>
+        <div>
+          <dt>Execution guard</dt>
+          <dd>{guard.next_safe_action}</dd>
+        </div>
+      </dl>
+      <QueueList title="Readiness blockers" items={supervisor.readiness_blockers} fallback="No local worker blockers." />
+      <p className="skybridge-state-note">Web policy summary is read-only; local execution controls remain disabled.</p>
       <span>token_printed=false</span>
     </section>
   );

@@ -46,6 +46,10 @@ struct DesktopStatus {
     operator_readiness: Pre190Readiness,
     campaign_report: Value,
     worker_service_state: Value,
+    desktop_resident_state: Value,
+    local_worker_supervisor_state: Value,
+    local_resource_policy: Value,
+    local_execution_guard: Value,
     safe_summary: Value,
     bridge_outcomes: Vec<BridgeOutcome>,
     report_cached: bool,
@@ -281,6 +285,10 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         .get("worker_service_state")
         .cloned()
         .unwrap_or_else(|| fixture_worker_service_state(&worker_json));
+    let desktop_resident_state = fixture_desktop_resident_state();
+    let local_worker_supervisor_state = fixture_local_worker_supervisor_state(&worker_service_state);
+    let local_resource_policy = fixture_local_resource_policy();
+    let local_execution_guard = fixture_local_execution_guard();
     let pre190_readiness = evaluate_pre190_readiness(
         active_tasks,
         stale_leases,
@@ -323,6 +331,10 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         operator_readiness,
         campaign_report,
         worker_service_state,
+        desktop_resident_state,
+        local_worker_supervisor_state,
+        local_resource_policy,
+        local_execution_guard,
         safe_summary,
         bridge_outcomes,
         report_cached,
@@ -922,6 +934,75 @@ fn fixture_worker_service_state(worker_json: &Value) -> Value {
         },
         "readiness_blockers": [first_blocker, "execution_disabled_until_goal_195"],
         "token_available": false,
+        "token_printed": false
+    })
+}
+
+fn fixture_desktop_resident_state() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.desktop_resident_state.v1",
+        "tray_available": true,
+        "window_visible": true,
+        "close_to_tray_supported": false,
+        "autostart_supported": false,
+        "autostart_enabled": false,
+        "resident_mode": "tray_resident_preview",
+        "last_refresh_at": chrono_like_now(),
+        "token_printed": false
+    })
+}
+
+fn fixture_local_worker_supervisor_state(worker_service: &Value) -> Value {
+    serde_json::json!({
+        "schema": "skybridge.local_worker_supervisor_state.v1",
+        "worker_id": WORKER_ID,
+        "worker_service_mode": get_string(worker_service, &["mode"]).unwrap_or_else(|| "offline".into()),
+        "heartbeat_age_seconds": null,
+        "current_task_id": get_string(worker_service, &["current_task_id"]),
+        "can_claim_tasks": false,
+        "can_execute_tasks": false,
+        "readiness_blockers": get_string_array(worker_service, &["readiness_blockers"]),
+        "pause_requested": worker_service.get("pause_requested").and_then(Value::as_bool).unwrap_or(false),
+        "stop_requested": worker_service.get("stop_requested").and_then(Value::as_bool).unwrap_or(false),
+        "last_local_evidence_at": null,
+        "token_printed": false
+    })
+}
+
+fn fixture_local_resource_policy() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.local_resource_policy.v1",
+        "require_ac_power": true,
+        "pause_on_battery": true,
+        "pause_below_battery_percent": 40,
+        "require_idle": false,
+        "max_cpu_percent": 65,
+        "max_memory_percent": 75,
+        "network_required": true,
+        "allowed_hours": "00:00-23:59 local",
+        "sleep_lid_behavior_note": "No powercfg mutation; operator-managed Windows sleep/lid behavior.",
+        "policy_source": "desktop_metadata",
+        "enforcement_status": "preview_only",
+        "battery_state": "unknown",
+        "battery_percent": null,
+        "memory_used_percent": null,
+        "cpu_summary": "preview only",
+        "token_printed": false
+    })
+}
+
+fn fixture_local_execution_guard() -> Value {
+    serde_json::json!({
+        "schema": "skybridge.local_execution_guard.v1",
+        "execution_disabled": true,
+        "start_one_enabled": false,
+        "start_queue_enabled": false,
+        "start_all_present": false,
+        "resume_execution_enabled": false,
+        "arbitrary_shell_available": false,
+        "bounded_queue_execution_enabled": false,
+        "reason": "Goal 203A is resident supervisor and policy visibility only.",
+        "next_safe_action": "Standby worker may be observed or heartbeated; execution remains disabled until bounded queue/workunit goals authorize it.",
         "token_printed": false
     })
 }

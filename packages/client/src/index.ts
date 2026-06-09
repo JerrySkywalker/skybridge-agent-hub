@@ -1236,6 +1236,67 @@ export interface WorkerServiceReadiness {
   token_printed: false;
 }
 
+export interface DesktopResidentState {
+  schema: "skybridge.desktop_resident_state.v1";
+  tray_available: boolean;
+  window_visible: boolean;
+  close_to_tray_supported: boolean;
+  autostart_supported: boolean;
+  autostart_enabled: boolean;
+  resident_mode: "disabled" | "tray_resident_preview" | "resident_standby";
+  last_refresh_at: string;
+  token_printed: false;
+}
+
+export interface LocalWorkerSupervisorState {
+  schema: "skybridge.local_worker_supervisor_state.v1";
+  worker_id: string;
+  worker_service_mode: WorkerServiceMode;
+  heartbeat_age_seconds: number | null;
+  current_task_id: string | null;
+  can_claim_tasks: false;
+  can_execute_tasks: false;
+  readiness_blockers: string[];
+  pause_requested: boolean;
+  stop_requested: boolean;
+  last_local_evidence_at: string | null;
+  token_printed: false;
+}
+
+export interface LocalResourcePolicy {
+  schema: "skybridge.local_resource_policy.v1";
+  require_ac_power: boolean;
+  pause_on_battery: boolean;
+  pause_below_battery_percent: number;
+  require_idle: boolean;
+  max_cpu_percent: number;
+  max_memory_percent: number;
+  network_required: boolean;
+  allowed_hours: string;
+  sleep_lid_behavior_note: string;
+  policy_source: "fixture" | "local_script" | "desktop_metadata";
+  enforcement_status: "preview_only" | "metadata_only" | "enforced";
+  battery_state: "unknown" | "ac_power" | "battery" | "no_battery";
+  battery_percent: number | null;
+  memory_used_percent: number | null;
+  cpu_summary: string;
+  token_printed: false;
+}
+
+export interface LocalExecutionGuard {
+  schema: "skybridge.local_execution_guard.v1";
+  execution_disabled: true;
+  start_one_enabled: false;
+  start_queue_enabled: false;
+  start_all_present: false;
+  resume_execution_enabled: false;
+  arbitrary_shell_available: false;
+  bounded_queue_execution_enabled: false;
+  reason: string;
+  next_safe_action: string;
+  token_printed: false;
+}
+
 export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
 
 export interface LockOwner {
@@ -2138,6 +2199,71 @@ export const fixtureWorkerServiceState: WorkerServiceState = {
   token_printed: false,
 };
 
+export const fixtureDesktopResidentState: DesktopResidentState = {
+  schema: "skybridge.desktop_resident_state.v1",
+  tray_available: true,
+  window_visible: true,
+  close_to_tray_supported: false,
+  autostart_supported: false,
+  autostart_enabled: false,
+  resident_mode: "tray_resident_preview",
+  last_refresh_at: "2026-06-09T00:00:00.000Z",
+  token_printed: false,
+};
+
+export const fixtureLocalWorkerSupervisorState: LocalWorkerSupervisorState = {
+  schema: "skybridge.local_worker_supervisor_state.v1",
+  worker_id: "laptop-zenbookduo",
+  worker_service_mode: "offline",
+  heartbeat_age_seconds: null,
+  current_task_id: null,
+  can_claim_tasks: false,
+  can_execute_tasks: false,
+  readiness_blockers: [
+    "standby_metadata_only",
+    "task_claim_disabled",
+    "execution_disabled_until_bounded_queue_authorization",
+  ],
+  pause_requested: false,
+  stop_requested: false,
+  last_local_evidence_at: null,
+  token_printed: false,
+};
+
+export const fixtureLocalResourcePolicy: LocalResourcePolicy = {
+  schema: "skybridge.local_resource_policy.v1",
+  require_ac_power: true,
+  pause_on_battery: true,
+  pause_below_battery_percent: 40,
+  require_idle: false,
+  max_cpu_percent: 65,
+  max_memory_percent: 75,
+  network_required: true,
+  allowed_hours: "00:00-23:59 local",
+  sleep_lid_behavior_note: "No powercfg mutation; operator-managed Windows sleep/lid behavior.",
+  policy_source: "fixture",
+  enforcement_status: "preview_only",
+  battery_state: "unknown",
+  battery_percent: null,
+  memory_used_percent: null,
+  cpu_summary: "preview only",
+  token_printed: false,
+};
+
+export const fixtureLocalExecutionGuard: LocalExecutionGuard = {
+  schema: "skybridge.local_execution_guard.v1",
+  execution_disabled: true,
+  start_one_enabled: false,
+  start_queue_enabled: false,
+  start_all_present: false,
+  resume_execution_enabled: false,
+  arbitrary_shell_available: false,
+  bounded_queue_execution_enabled: false,
+  reason: "Goal 203A is resident supervisor and policy visibility only.",
+  next_safe_action: "Standby worker may be observed or heartbeated; execution remains disabled until bounded queue/workunit goals authorize it.",
+  token_printed: false,
+};
+
 export const fixtureLockOwner: LockOwner = {
   owner_id: "runner-dev-queue-189-200",
   owner_kind: "campaign",
@@ -2336,6 +2462,10 @@ export interface CampaignRunReport {
   warnings: string[];
   queue_control_readiness: CampaignQueueControlReadiness;
   worker_service_state: WorkerServiceState;
+  desktop_resident_state?: DesktopResidentState;
+  local_worker_supervisor_state?: LocalWorkerSupervisorState;
+  local_resource_policy?: LocalResourcePolicy;
+  local_execution_guard?: LocalExecutionGuard;
   token_printed: false;
 }
 
@@ -3510,6 +3640,10 @@ export const fixtureCampaignRunReport: CampaignRunReport = {
     proposed_goal_summary: fixtureProposedGoalReviewSummary,
   },
   worker_service_state: fixtureWorkerServiceState,
+  desktop_resident_state: fixtureDesktopResidentState,
+  local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
+  local_resource_policy: fixtureLocalResourcePolicy,
+  local_execution_guard: fixtureLocalExecutionGuard,
   token_printed: false,
 };
 

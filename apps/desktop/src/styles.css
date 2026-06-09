@@ -126,6 +126,20 @@ p {
   border-color: #9eb8c6;
 }
 
+.resident-status-card,
+.local-worker-supervisor-card,
+.local-resource-policy-card {
+  border-color: #adc2b3;
+}
+
+.execution-disabled-banner {
+  grid-template-columns: 180px 180px minmax(0, 1fr);
+}
+
+.execution-disabled-banner span:last-child {
+  text-align: left;
+}
+
 .capability-grid {
   display: grid;
   gap: 8px;
