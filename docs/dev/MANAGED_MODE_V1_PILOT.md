@@ -34,6 +34,31 @@ The pilot may create at most one task PR. That PR must remain open for human rev
 
 Goal 208C finalization is separate and may complete only after the human operator manually merges the task PR.
 
+## Finalizer
+
+The finalizer is infrastructure-only until the pilot task PR exists and is manually merged. It must not create work, rerun the pilot, merge the task PR, or continue the queue.
+
+Read-only finalizer commands:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command finalizer-preview -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command finalizer-evidence -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command finalizer-report -Json
+```
+
+`finalizer-apply` is the only finalizer command that can write files, and it writes only ignored safe evidence under `.agent/tmp/managed-mode-pilot-208/`. It refuses unless all of these are true:
+
+- pilot executor evidence exists and is safe;
+- the pilot task PR is merged;
+- changed files exist on `main` and stay within `README.md` or `docs/**`;
+- exactly one workunit, task, claim, Codex execution and PR were recorded;
+- no second workunit or task PR is present;
+- `active_tasks=0`, `stale_leases=0` and `runner_lock=none`;
+- no raw prompt, transcript, stdout, stderr, worker log, CI log or secret-bearing value is persisted;
+- no previous finalizer evidence already completed the pilot.
+
+If the task PR is missing or still open, finalizer preview and apply report `held_waiting_human_pr_review` and do not complete the pilot.
+
 ## Validation
 
 Preview and readiness commands are read-only:
@@ -61,6 +86,12 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-v1-pi
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-v1-no-start-all.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-v1-no-unbounded-queue.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-v1-token-printed-false.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-preview.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-requires-merged-pr.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-evidence-safe.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-refuses-rerun.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-no-second-workunit.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-token-printed-false.ps1
 ```
 
 Every JSON result must keep `token_printed=false` and must not persist raw prompts, transcripts, stdout, stderr, raw worker logs or secrets.
