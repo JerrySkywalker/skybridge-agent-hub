@@ -129,7 +129,8 @@ p {
 .resident-status-card,
 .local-worker-supervisor-card,
 .local-resource-policy-card,
-.workunit-preview-card {
+.workunit-preview-card,
+.boinc-manager-panel {
   border-color: #adc2b3;
 }
 

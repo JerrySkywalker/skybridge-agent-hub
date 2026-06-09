@@ -12,6 +12,7 @@ import {
   fixtureCampaignPriorityQueue,
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
+  fixtureBoincManagerState,
   fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
   fixtureLocalExecutionGuard,
@@ -29,6 +30,7 @@ import {
   type AttentionEvent,
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
+  type BoincManagerState,
   type DesktopResidentState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
@@ -328,6 +330,34 @@ function WorkunitPreviewPanel({
   );
 }
 
+function BoincManagerPanel({ state }: { state: BoincManagerState }) {
+  const surface = state.control_surface;
+  return (
+    <section className="panel boinc-manager-panel" aria-label="BOINC manager control plane">
+      <h2>BOINC Manager Control Plane</h2>
+      <dl>
+        <StatusValue label="Mode" value={`${surface.current_mode.display_name}; enabled=${String(surface.current_mode.enabled)}`} />
+        <StatusValue label="Description" value={surface.current_mode.description} />
+        <StatusValue label="Resident worker" value={`${state.local_worker_supervisor_state.worker_id}; claim=${String(state.local_worker_supervisor_state.can_claim_tasks)}; execute=${String(state.local_worker_supervisor_state.can_execute_tasks)}`} />
+        <StatusValue label="Resource policy" value={`${state.local_resource_policy.enforcement_status}; AC required=${String(state.local_resource_policy.require_ac_power)}`} />
+        <StatusValue label="Workunit preview" value={`${state.workunit_preview_plan.workunits.length} workunit; would_execute=${String(state.workunit_preview_plan.would_execute_tasks)}`} />
+        <StatusValue label="Bounded queue readiness" value={`can_start_bounded_queue=${String(state.bounded_queue_readiness.can_start_bounded_queue)}; apply=${String(state.bounded_queue_readiness.start_bounded_queue_apply_available)}`} />
+        <StatusValue label="Active holds" value={state.active_holds.map((hold) => `${hold.hold_id}:${hold.reason}`).join("; ") || "none"} />
+        <StatusValue label="Completed bootstrap trial" value={`${surface.completed_bootstrap_trial.final_state}; ${surface.completed_bootstrap_trial.task_pr_url}`} />
+        <StatusValue label="Next safe action" value={state.next_safe_action} />
+        <StatusValue label="token_printed" value={String(state.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        {surface.action_matrix.disabled.slice(0, 6).map((action) => (
+          <button key={action.action} type="button" disabled aria-disabled="true" title={action.reason_disabled ?? "disabled"}>
+            {action.display_name} disabled
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -476,6 +506,7 @@ function App() {
 
       <AttentionPanel events={attention.attention_events} />
       <ExecutionDisabledBanner guard={executionGuard} />
+      <BoincManagerPanel state={fixtureBoincManagerState} />
       <ResidentStatusPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />

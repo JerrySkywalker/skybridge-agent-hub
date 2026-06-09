@@ -24,6 +24,7 @@ import {
   fixtureCampaignPriorityQueue,
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
+  fixtureBoincManagerState,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
@@ -39,6 +40,7 @@ import {
   type AttentionEvent,
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
+  type BoincManagerState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerSupervisorState,
@@ -346,6 +348,7 @@ function CampaignQueuePage() {
           <CampaignPriorityQueuePanel />
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
+          <BoincControlPlanePanel state={fixtureBoincManagerState} />
           <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
           <WebLocalWorkerPolicyPanel
@@ -385,6 +388,67 @@ function CampaignQueuePage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function BoincControlPlanePanel({ state }: { state: BoincManagerState }) {
+  const surface = state.control_surface;
+  return (
+    <section className="skybridge-panel boinc-control-plane-panel" aria-label="BOINC control plane manager">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">BOINC Manager</p>
+          <h2>Control Plane Preview</h2>
+        </div>
+        <span className={badgeClass(surface.current_mode.enabled ? "ok" : "bad")}>
+          {surface.current_mode.display_name}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Worker pool</dt>
+          <dd>{`${state.local_worker_supervisor_state.worker_id}; claim=${String(state.local_worker_supervisor_state.can_claim_tasks)}; execute=${String(state.local_worker_supervisor_state.can_execute_tasks)}`}</dd>
+        </div>
+        <div>
+          <dt>Workunit preview</dt>
+          <dd>{`${state.workunit_preview_plan.workunits.length} workunit; would_execute=${String(state.workunit_preview_plan.would_execute_tasks)}`}</dd>
+        </div>
+        <div>
+          <dt>Bounded queue readiness</dt>
+          <dd>{`can_start_bounded_queue=${String(state.bounded_queue_readiness.can_start_bounded_queue)}; apply=${String(state.bounded_queue_readiness.start_bounded_queue_apply_available)}`}</dd>
+        </div>
+        <div>
+          <dt>Review holds</dt>
+          <dd>{state.active_holds.map((hold) => hold.title).join("; ") || "none"}</dd>
+        </div>
+        <div>
+          <dt>Task PR / finalizer</dt>
+          <dd>{`${surface.completed_bootstrap_trial.task_pr_url}; ${surface.completed_bootstrap_trial.final_state}`}</dd>
+        </div>
+        <div>
+          <dt>Next safe action</dt>
+          <dd>{state.next_safe_action}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Allowed actions"
+        items={surface.action_matrix.allowed.map((action) => action.action)}
+        fallback="No allowed actions."
+      />
+      <QueueList
+        title="Disabled execution actions"
+        items={surface.action_matrix.disabled.map((action) => `${action.action}: ${action.reason_disabled}`)}
+        fallback="No disabled actions."
+      />
+      <div className="queue-placeholder-controls">
+        {surface.action_matrix.disabled.slice(0, 4).map((action) => (
+          <button key={action.action} type="button" disabled aria-disabled="true" title={action.reason_disabled ?? "disabled"}>
+            {action.display_name} disabled
+          </button>
+        ))}
+      </div>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 

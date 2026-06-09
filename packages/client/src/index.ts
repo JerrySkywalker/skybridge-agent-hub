@@ -1408,6 +1408,114 @@ export interface BoundedQueueReadiness {
   token_printed: false;
 }
 
+export type BoincModeId =
+  | "standby"
+  | "armed_preview"
+  | "start_one_review"
+  | "bounded_queue_preview"
+  | "bounded_queue_apply_disabled"
+  | "managed_mode_disabled"
+  | "emergency_stop"
+  | "completed_bootstrap_trial";
+
+export interface BoincMode {
+  schema: "skybridge.boinc_mode.v1";
+  mode_id: BoincModeId;
+  display_name: string;
+  description: string;
+  enabled: boolean;
+  reason_disabled: string | null;
+  required_human_action: string[];
+  allowed_actions: string[];
+  blocked_actions: string[];
+  next_safe_action: string;
+  token_printed: false;
+}
+
+export interface BoincOperatorAction {
+  action: string;
+  display_name: string;
+  enabled: boolean;
+  reason_disabled: string | null;
+  category: "allowed" | "disabled";
+  token_printed: false;
+}
+
+export interface BoincOperatorActionMatrix {
+  schema: "skybridge.boinc_operator_action_matrix.v1";
+  allowed: BoincOperatorAction[];
+  disabled: BoincOperatorAction[];
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface BoincReviewHold {
+  schema: "skybridge.boinc_review_hold.v1";
+  hold_id: string;
+  hold_type: "human_review" | "execution_disabled" | "bootstrap_completed";
+  title: string;
+  status: "active" | "completed";
+  reason: string;
+  next_safe_action: string;
+  token_printed: false;
+}
+
+export interface BoincControlSurface {
+  schema: "skybridge.boinc_control_surface.v1";
+  project_id: string;
+  current_mode: BoincMode;
+  modes: BoincMode[];
+  action_matrix: BoincOperatorActionMatrix;
+  review_holds: BoincReviewHold[];
+  bounded_queue_readiness: BoundedQueueReadiness;
+  workunit_preview_plan: BoundedQueuePlan;
+  completed_bootstrap_trial: {
+    campaign_id: "bootstrap-trial-201";
+    final_state: "bootstrap_trial_completed";
+    task_pr_url: string;
+    finalizer_report: string;
+    token_printed: false;
+  };
+  token_printed: false;
+}
+
+export interface BoincManagerState {
+  schema: "skybridge.boinc_manager_state.v1";
+  project_id: string;
+  product_name: "SkyBridge Agent Hub";
+  control_surface: BoincControlSurface;
+  local_resident_state: DesktopResidentState;
+  local_worker_supervisor_state: LocalWorkerSupervisorState;
+  local_resource_policy: LocalResourcePolicy;
+  workunit_preview_plan: BoundedQueuePlan;
+  bounded_queue_readiness: BoundedQueueReadiness;
+  active_holds: BoincReviewHold[];
+  next_safe_action: string;
+  token_printed: false;
+}
+
+export interface BoincManagerSafeSummary {
+  schema: "skybridge.boinc_manager_safe_summary.v1";
+  project_id: string;
+  mode_id: BoincModeId;
+  mode_display_name: string;
+  enabled: boolean;
+  bounded_queue_apply_available: false;
+  can_start_bounded_queue: false;
+  active_hold_count: number;
+  completed_bootstrap_trial: true;
+  disabled_execution_actions: string[];
+  allowed_operator_actions: string[];
+  task_created: false;
+  task_claimed: false;
+  task_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
 export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
 
 export interface LockOwner {
@@ -2476,6 +2584,232 @@ export const fixtureBoundedQueueReadiness: BoundedQueueReadiness = {
   ],
   warnings: ["preview_only_no_task_creation_no_claim_no_execution_no_pr"],
   next_safe_action: "Review the workunit preview and keep bounded queue apply disabled until a future explicit goal authorizes execution.",
+  token_printed: false,
+};
+
+export const fixtureBoincModes: BoincMode[] = [
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "standby",
+    display_name: "Standby",
+    description: "Read-only operator view with local resident worker visibility.",
+    enabled: true,
+    reason_disabled: null,
+    required_human_action: [],
+    allowed_actions: ["refresh", "open_logs", "view_worker", "view_workunits"],
+    blocked_actions: ["start_all", "worker_claim", "task_execution"],
+    next_safe_action: "Refresh status or inspect the completed bootstrap trial evidence.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "armed_preview",
+    display_name: "Armed Preview",
+    description: "Preview-only planning state; no claims, tasks, runners or execution are created.",
+    enabled: true,
+    reason_disabled: null,
+    required_human_action: ["review_action_matrix"],
+    allowed_actions: ["refresh", "view_workunits", "view_finalizer_report"],
+    blocked_actions: ["start_one_apply", "start_queue_apply", "bounded_queue_apply"],
+    next_safe_action: "Review the action matrix and keep apply paths disabled.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "start_one_review",
+    display_name: "Start-One Review",
+    description: "Historical review of the completed one-shot bootstrap task.",
+    enabled: false,
+    reason_disabled: "bootstrap_trial_completed_no_second_task_authorized",
+    required_human_action: ["review_pr_124_and_finalizer_report"],
+    allowed_actions: ["view_task_pr", "view_finalizer_report"],
+    blocked_actions: ["create_task_pr", "auto_merge", "task_execution"],
+    next_safe_action: "Use the finalizer evidence as read-only history.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "bounded_queue_preview",
+    display_name: "Bounded Queue Preview",
+    description: "Shows the workunit queue plan while apply remains unavailable.",
+    enabled: true,
+    reason_disabled: null,
+    required_human_action: ["review_bounded_queue_readiness"],
+    allowed_actions: ["view_workunits", "refresh"],
+    blocked_actions: ["bounded_queue_apply", "worker_claim", "task_execution"],
+    next_safe_action: fixtureBoundedQueueReadiness.next_safe_action,
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "bounded_queue_apply_disabled",
+    display_name: "Bounded Queue Apply Disabled",
+    description: "The apply path is intentionally absent for Goal 205A.",
+    enabled: false,
+    reason_disabled: "bounded_queue_apply_not_yet_enabled",
+    required_human_action: ["future_goal_must_authorize_apply"],
+    allowed_actions: ["view_workunits"],
+    blocked_actions: ["start_queue_apply", "bounded_queue_apply", "resume_execution"],
+    next_safe_action: "Keep using preview-only queue state.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "managed_mode_disabled",
+    display_name: "Managed Mode Disabled",
+    description: "BOINC-like managed execution is not yet authorized.",
+    enabled: false,
+    reason_disabled: "managed_execution_requires_future_explicit_goal",
+    required_human_action: ["authorize_future_managed_mode_goal"],
+    allowed_actions: ["refresh", "view_worker"],
+    blocked_actions: ["worker_claim", "task_execution", "start_all"],
+    next_safe_action: "Use the manager as a read-only control plane.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "emergency_stop",
+    display_name: "Emergency Stop",
+    description: "Metadata-only stop state for already-supported safe stop surfaces.",
+    enabled: false,
+    reason_disabled: "no_active_execution_to_stop",
+    required_human_action: ["use_existing_queue_control_if_a_future_run_is_active"],
+    allowed_actions: ["safe_stop_metadata"],
+    blocked_actions: ["start_all", "resume_execution"],
+    next_safe_action: "No active task is running; remain in Standby.",
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_mode.v1",
+    mode_id: "completed_bootstrap_trial",
+    display_name: "Completed Bootstrap Trial",
+    description: "Goal 201/202B finalizer evidence shows bootstrap-trial-201 is complete.",
+    enabled: true,
+    reason_disabled: null,
+    required_human_action: [],
+    allowed_actions: ["view_task_pr", "view_finalizer_report"],
+    blocked_actions: ["create_task_pr", "auto_merge", "second_task"],
+    next_safe_action: "Use the completed trial as the reference workunit history.",
+    token_printed: false,
+  },
+];
+
+export const fixtureBoincOperatorActionMatrix: BoincOperatorActionMatrix = {
+  schema: "skybridge.boinc_operator_action_matrix.v1",
+  allowed: [
+    "refresh",
+    "open_logs",
+    "view_worker",
+    "view_workunits",
+    "view_task_pr",
+    "view_finalizer_report",
+    "safe_pause_metadata",
+    "safe_stop_metadata",
+  ].map((action) => ({
+    action,
+    display_name: action.replaceAll("_", " "),
+    enabled: true,
+    reason_disabled: null,
+    category: "allowed",
+    token_printed: false,
+  })),
+  disabled: [
+    "start_one_apply",
+    "start_queue_apply",
+    "bounded_queue_apply",
+    "start_all",
+    "resume_execution",
+    "worker_claim",
+    "task_execution",
+    "auto_merge",
+  ].map((action) => ({
+    action,
+    display_name: action.replaceAll("_", " "),
+    enabled: false,
+    reason_disabled: "execution_disabled_in_goal_205a_preview_only",
+    category: "disabled",
+    token_printed: false,
+  })),
+  task_created: false,
+  task_claimed: false,
+  task_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureBoincReviewHolds: BoincReviewHold[] = [
+  {
+    schema: "skybridge.boinc_review_hold.v1",
+    hold_id: "bounded-queue-apply-disabled",
+    hold_type: "execution_disabled",
+    title: "Bounded queue apply disabled",
+    status: "active",
+    reason: "Goal 205A exposes manager controls but does not authorize apply.",
+    next_safe_action: fixtureBoundedQueueReadiness.next_safe_action,
+    token_printed: false,
+  },
+  {
+    schema: "skybridge.boinc_review_hold.v1",
+    hold_id: "bootstrap-trial-201-completed",
+    hold_type: "bootstrap_completed",
+    title: "bootstrap-trial-201 completed",
+    status: "completed",
+    reason: "Goal 202B finalizer recorded bootstrap_trial_completed after PR #124 merged.",
+    next_safe_action: "Reference the finalizer report; do not create another task.",
+    token_printed: false,
+  },
+];
+
+export const fixtureBoincControlSurface: BoincControlSurface = {
+  schema: "skybridge.boinc_control_surface.v1",
+  project_id: "skybridge-agent-hub",
+  current_mode: fixtureBoincModes[0],
+  modes: fixtureBoincModes,
+  action_matrix: fixtureBoincOperatorActionMatrix,
+  review_holds: fixtureBoincReviewHolds,
+  bounded_queue_readiness: fixtureBoundedQueueReadiness,
+  workunit_preview_plan: fixtureBoundedQueuePlan,
+  completed_bootstrap_trial: {
+    campaign_id: "bootstrap-trial-201",
+    final_state: "bootstrap_trial_completed",
+    task_pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/124",
+    finalizer_report: ".agent/tmp/bootstrap-trial-201-one-shot/finalizer-evidence.json",
+    token_printed: false,
+  },
+  token_printed: false,
+};
+
+export const fixtureBoincManagerState: BoincManagerState = {
+  schema: "skybridge.boinc_manager_state.v1",
+  project_id: "skybridge-agent-hub",
+  product_name: "SkyBridge Agent Hub",
+  control_surface: fixtureBoincControlSurface,
+  local_resident_state: fixtureDesktopResidentState,
+  local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
+  local_resource_policy: fixtureLocalResourcePolicy,
+  workunit_preview_plan: fixtureBoundedQueuePlan,
+  bounded_queue_readiness: fixtureBoundedQueueReadiness,
+  active_holds: fixtureBoincReviewHolds.filter((hold) => hold.status === "active"),
+  next_safe_action: fixtureBoincModes[0].next_safe_action,
+  token_printed: false,
+};
+
+export const fixtureBoincManagerSafeSummary: BoincManagerSafeSummary = {
+  schema: "skybridge.boinc_manager_safe_summary.v1",
+  project_id: "skybridge-agent-hub",
+  mode_id: fixtureBoincManagerState.control_surface.current_mode.mode_id,
+  mode_display_name: fixtureBoincManagerState.control_surface.current_mode.display_name,
+  enabled: fixtureBoincManagerState.control_surface.current_mode.enabled,
+  bounded_queue_apply_available: false,
+  can_start_bounded_queue: false,
+  active_hold_count: fixtureBoincManagerState.active_holds.length,
+  completed_bootstrap_trial: true,
+  disabled_execution_actions: fixtureBoincOperatorActionMatrix.disabled.map((item) => item.action),
+  allowed_operator_actions: fixtureBoincOperatorActionMatrix.allowed.map((item) => item.action),
+  task_created: false,
+  task_claimed: false,
+  task_executed: false,
+  pr_created: false,
   token_printed: false,
 };
 
