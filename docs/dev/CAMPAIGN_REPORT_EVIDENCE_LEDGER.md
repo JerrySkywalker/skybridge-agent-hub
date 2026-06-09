@@ -94,18 +94,18 @@ Start controls must also require worker readiness. When `worker_required=true`, 
 
 Goal 191D adds the first shared dashboard consumer for this contract. Web and Desktop use the same typed model, evidence count helper and safe summary builder from `@skybridge-agent-hub/client`. Dashboard rendering is read-only: `queue_control_readiness` may be displayed, but active queue mutations are deferred to Goal 192A/192B.
 
-## Current Goal 190 State
+## Current Dev Queue State
 
-During Goal 190 implementation, the campaign remains:
+The historical Goal 190 implementation state was `ready` and unexecuted while the report feature was being introduced. The current checked-in `dev-queue-189-200` state has advanced through the full reviewed queue:
 
-- current step: `dev-queue-189-200:super-190-campaign-run-report-evidence-ledger`;
-- current goal: `super-190-campaign-run-report-evidence-ledger`;
-- current goal status: `ready`;
-- current goal unexecuted: `true`;
+- current step: `dev-queue-189-200:super-200-controlled-goal-draft-review-import`;
+- current goal: `super-200-controlled-goal-draft-review-import`;
+- current goal status: `completed`;
+- current goal unexecuted: `false`;
 - linked task ids: empty;
-- linked PR URLs: empty.
+- linked PR URLs: the Goal 200 PR evidence URL.
 
-This is intentional. The implementation creates a normal repository PR only. It does not attach campaign evidence, complete Goal 190, start Goal 191, create a campaign-step-derived task, run `start-one`, run `start-all`, run `resume -Apply` or start a worker loop.
+This remains a read-only report state. Generating the report does not create campaign-step-derived tasks, run `start-one`, run `start-all`, run `resume -Apply` or start a worker loop.
 
 After the Goal 190 PR merges, the next recommended operator action is to generate the report again from clean latest `main`, review the artifacts, then separately decide whether to attach the Goal 190 PR/report evidence and complete the Goal 190 campaign step. Goal 191 must not start as a side effect of report generation.
 
