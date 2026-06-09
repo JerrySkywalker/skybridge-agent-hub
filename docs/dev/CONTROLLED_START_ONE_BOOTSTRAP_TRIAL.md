@@ -39,6 +39,8 @@ The one-shot executor gate uses a sanitized Codex boundary for Goal 201C. It inv
 
 The executor records task id, worker id, command class, changed files, PR URL and evidence hashes. It does not persist the prompt, Codex transcript, stdout, stderr or raw shell session logs. It fails closed if raw log persistence is requested or if any task, campaign, path, PR or worker gate is outside the one-shot contract.
 
+On Windows, the sanitized executor resolves the Codex launcher before starting the process. Direct `codex.exe` and Unix-style extensionless launchers run directly; `codex.cmd` and `codex.bat` run through `cmd.exe`; `codex.ps1` runs through `pwsh` when available or Windows PowerShell as a fallback. The safe resolver metadata records only launcher kind, command class, host executable name and redaction flags. It does not persist raw command lines, raw paths, stdout, stderr, prompts or transcripts, and it refuses unclassified launcher shapes.
+
 ## Current Hold
 
 This infrastructure pass stages the reviewed trial and proves the claim gate plus sanitized executor stop condition. Actual execution is allowed only after the infrastructure PR is merged, local `main` is clean and latest, and the final preflight confirms every one-shot gate.

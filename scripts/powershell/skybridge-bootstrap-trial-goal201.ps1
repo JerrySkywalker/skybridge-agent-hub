@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
+  [ValidateSet("contract", "import-reviewed-goal", "start-one-preview", "start-one-gates", "start-one-apply", "one-shot-claim-gate", "one-shot-executor-gate", "sanitized-executor-contract", "sanitized-executor-gate", "sanitized-redaction-test", "codex-launcher-stdin-test", "run-sanitized-executor", "worker-route", "no-start-all", "no-second-task", "pr-safety", "evidence", "clean-worktree")]
   [string]$Command = "contract",
   [string]$CampaignDir = "goals/bootstrap-trial-201",
   [string]$CampaignId = "bootstrap-trial-201",
@@ -13,6 +13,7 @@ param(
   [string]$StateDir = ".agent/tmp/bootstrap-trial-201-one-shot",
   [string]$ProposedPath = "goals/proposed/proposed-goal-201-local-readme-refresh.md",
   [string]$Reason,
+  [string]$MockCodexPath,
   [switch]$SimulateRawLogPersistence,
   [switch]$SimulateExistingOpenTaskPr,
   [switch]$Apply,
@@ -262,6 +263,96 @@ function Test-ChangedFilesAllowed {
   return $true
 }
 
+function ConvertTo-WindowsCommandLineArgument {
+  param([Parameter(Mandatory = $true)][string]$Value)
+  if ($Value -notmatch '[\s"]') { return $Value }
+  return '"' + ($Value -replace '"', '\"') + '"'
+}
+
+function New-CodexLauncherMetadata {
+  param(
+    [Parameter(Mandatory = $true)][string]$LauncherKind,
+    [Parameter(Mandatory = $true)][string]$HostExecutableName
+  )
+  [pscustomobject]@{
+    launcher_kind = $LauncherKind
+    command_class = "codex_exec_sanitized_stdin_discard_output"
+    host_executable_name = $HostExecutableName
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    token_printed = $false
+  }
+}
+
+function Resolve-CodexLauncher {
+  param(
+    [string]$CandidatePath,
+    [string[]]$CodexArguments = @("exec", "--sandbox", "workspace-write", "-")
+  )
+
+  $resolvedPath = $null
+  if (-not [string]::IsNullOrWhiteSpace($CandidatePath)) {
+    if (-not (Test-Path -LiteralPath $CandidatePath -PathType Leaf)) { throw "Configured Codex launcher was not found." }
+    $resolvedPath = (Resolve-Path -LiteralPath $CandidatePath).Path
+  } else {
+    $command = Get-Command "codex" -ErrorAction SilentlyContinue
+    if (-not $command) { throw "Codex CLI was not found on PATH." }
+    $resolvedPath = [string]$command.Source
+  }
+
+  $extension = [System.IO.Path]::GetExtension($resolvedPath).ToLowerInvariant()
+  $fileName = [System.IO.Path]::GetFileName($resolvedPath)
+
+  if ($extension -eq ".exe") {
+    return [pscustomobject]@{
+      file_path = $resolvedPath
+      argument_list = @($CodexArguments)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "codex.exe" -HostExecutableName $fileName)
+      token_printed = $false
+    }
+  }
+
+  if ($extension -eq ".cmd" -or $extension -eq ".bat") {
+    $cmd = Get-Command "cmd.exe" -ErrorAction SilentlyContinue
+    if (-not $cmd) { throw "cmd.exe host for Codex launcher was not found." }
+    $commandLine = @(
+      (ConvertTo-WindowsCommandLineArgument -Value $resolvedPath)
+      @($CodexArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Value ([string]$_) })
+    ) -join " "
+    return [pscustomobject]@{
+      file_path = [string]$cmd.Source
+      argument_list = @("/d", "/s", "/c", $commandLine)
+      metadata = (New-CodexLauncherMetadata -LauncherKind $extension.TrimStart(".") -HostExecutableName "cmd.exe")
+      token_printed = $false
+    }
+  }
+
+  if ($extension -eq ".ps1") {
+    $hostCommand = Get-Command "pwsh" -ErrorAction SilentlyContinue
+    if (-not $hostCommand) { $hostCommand = Get-Command "powershell.exe" -ErrorAction SilentlyContinue }
+    if (-not $hostCommand) { throw "PowerShell host for Codex launcher was not found." }
+    return [pscustomobject]@{
+      file_path = [string]$hostCommand.Source
+      argument_list = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $resolvedPath) + @($CodexArguments)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "ps1" -HostExecutableName ([System.IO.Path]::GetFileName([string]$hostCommand.Source)))
+      token_printed = $false
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($extension)) {
+    return [pscustomobject]@{
+      file_path = $resolvedPath
+      argument_list = @($CodexArguments)
+      metadata = (New-CodexLauncherMetadata -LauncherKind "extensionless" -HostExecutableName $fileName)
+      token_printed = $false
+    }
+  }
+
+  throw "Unclassified Codex launcher extension refused."
+}
+
 function Invoke-SilentProcess {
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
@@ -283,22 +374,10 @@ function Invoke-SilentProcess {
 
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $startInfo
-  $stdoutChars = 0
-  $stderrChars = 0
-  $process.add_OutputDataReceived({
-    param($sender, $eventArgs)
-    if ($null -ne $eventArgs.Data) { $script:goal201cStdoutChars += ([string]$eventArgs.Data).Length }
-  })
-  $process.add_ErrorDataReceived({
-    param($sender, $eventArgs)
-    if ($null -ne $eventArgs.Data) { $script:goal201cStderrChars += ([string]$eventArgs.Data).Length }
-  })
-  $script:goal201cStdoutChars = 0
-  $script:goal201cStderrChars = 0
 
   [void]$process.Start()
-  $process.BeginOutputReadLine()
-  $process.BeginErrorReadLine()
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
   if ($startInfo.RedirectStandardInput) {
     $process.StandardInput.Write($StandardInputText)
     $process.StandardInput.Close()
@@ -306,10 +385,15 @@ function Invoke-SilentProcess {
   $timeoutMs = [Math]::Max(1, $TimeoutMinutes) * 60 * 1000
   if (-not $process.WaitForExit($timeoutMs)) {
     try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
-    return [pscustomobject]@{ ok = $false; exit_code = 124; timed_out = $true; stdout_chars_discarded = $script:goal201cStdoutChars; stderr_chars_discarded = $script:goal201cStderrChars; output_persisted = $false; token_printed = $false }
+    $stdoutCharsTimedOut = if ($stdoutTask.IsCompletedSuccessfully) { ([string]$stdoutTask.Result).Length } else { 0 }
+    $stderrCharsTimedOut = if ($stderrTask.IsCompletedSuccessfully) { ([string]$stderrTask.Result).Length } else { 0 }
+    $process.Dispose()
+    return [pscustomobject]@{ ok = $false; exit_code = 124; timed_out = $true; stdout_chars_discarded = $stdoutCharsTimedOut; stderr_chars_discarded = $stderrCharsTimedOut; output_persisted = $false; token_printed = $false }
   }
-  $stdoutChars = $script:goal201cStdoutChars
-  $stderrChars = $script:goal201cStderrChars
+  $stdout = [string]$stdoutTask.GetAwaiter().GetResult()
+  $stderr = [string]$stderrTask.GetAwaiter().GetResult()
+  $stdoutChars = $stdout.Length
+  $stderrChars = $stderr.Length
   $exitCode = $process.ExitCode
   $process.Dispose()
   [pscustomobject]@{ ok = ($exitCode -eq 0); exit_code = $exitCode; timed_out = $false; stdout_chars_discarded = $stdoutChars; stderr_chars_discarded = $stderrChars; output_persisted = $false; token_printed = $false }
@@ -758,6 +842,7 @@ function Get-OneShotExecutorGate {
     allowed_paths = @($AllowedPaths)
     would_run_codex = ($blockers.Count -eq 0)
     command_class = "codex_exec_sanitized_stdin_discard_output"
+    launcher_metadata = $contract.launcher_metadata
     task_claimed = $false
     task_executed = $false
     codex_worker_execution_started = $false
@@ -778,10 +863,15 @@ function Get-OneShotExecutorGate {
 
 function Get-SanitizedExecutorContract {
   $blockers = New-Object System.Collections.Generic.List[string]
-  $codex = Get-Command "codex" -ErrorAction SilentlyContinue
+  $launcher = $null
+  try {
+    $launcher = Resolve-CodexLauncher -CandidatePath $MockCodexPath
+  } catch {
+    $blockers.Add("codex_launcher_unclassified_or_missing") | Out-Null
+  }
   $gh = Get-Command "gh" -ErrorAction SilentlyContinue
-  if (-not $codex) { $blockers.Add("codex_cli_missing") | Out-Null }
   if (-not $gh) { $blockers.Add("github_cli_missing") | Out-Null }
+  $launcherMetadata = if ($launcher) { $launcher.metadata } else { $null }
   [pscustomobject]@{
     ok = ($blockers.Count -eq 0)
     schema = "skybridge.bootstrap_trial_goal201_sanitized_executor_contract.v1"
@@ -797,6 +887,8 @@ function Get-SanitizedExecutorContract {
     stdout_persisted = $false
     stderr_persisted = $false
     command_class = "codex_exec_sanitized_stdin_discard_output"
+    launcher_kind = if ($launcherMetadata) { $launcherMetadata.launcher_kind } else { $null }
+    launcher_metadata = $launcherMetadata
     saved_metadata = @("task_id", "worker_id", "command_class", "changed_files", "pr_url", "evidence_hashes", "token_printed")
     artifacts_under_ignored_path = ".agent/tmp/bootstrap-trial-201-one-shot/"
     raw_log_persistence_allowed = $false
@@ -825,6 +917,30 @@ Hard limits:
 - do not run git commit, git push, gh pr create, start-all, start-queue, resume -Apply, or any worker loop;
 - keep the change small and reviewable.
 "@
+}
+
+function Invoke-CodexLauncherStdinTest {
+  if ([string]::IsNullOrWhiteSpace($MockCodexPath)) { throw "codex-launcher-stdin-test requires -MockCodexPath." }
+  $stdinText = "skybridge-stdin-fixture-" + [Guid]::NewGuid().ToString("n")
+  $launcher = Resolve-CodexLauncher -CandidatePath $MockCodexPath
+  $execution = Invoke-SilentProcess -FilePath ([string]$launcher.file_path) -ArgumentList ([string[]]$launcher.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $stdinText -TimeoutMinutes 1
+  $markerPath = $env:SKYBRIDGE_STDIN_MARKER
+  $markerText = if (-not [string]::IsNullOrWhiteSpace($markerPath) -and (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
+    Get-Content -Raw -LiteralPath $markerPath
+  } else {
+    $null
+  }
+  [pscustomobject]@{
+    ok = ($execution.ok -and $markerText -eq $stdinText)
+    schema = "skybridge.bootstrap_trial_goal201_codex_launcher_stdin_test.v1"
+    launcher_metadata = $launcher.metadata
+    stdin_preserved = ($markerText -eq $stdinText)
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    token_printed = $false
+  }
 }
 
 function Invoke-SanitizedOneShotExecutor {
@@ -879,8 +995,8 @@ function Invoke-SanitizedOneShotExecutor {
 
   $prompt = New-SanitizedTaskPrompt
   $promptHash = Get-Sha256Text -Text $prompt
-  $codex = Get-Command "codex" -ErrorAction Stop
-  $execution = Invoke-SilentProcess -FilePath $codex.Source -ArgumentList @("exec", "--sandbox", "workspace-write", "-") -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $launcher = Resolve-CodexLauncher -CandidatePath $MockCodexPath
+  $execution = Invoke-SilentProcess -FilePath ([string]$launcher.file_path) -ArgumentList ([string[]]$launcher.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
   $changedFiles = @(Get-SafeChangedFiles)
   if (-not $execution.ok) {
     git switch main *> $null
@@ -892,6 +1008,7 @@ function Invoke-SanitizedOneShotExecutor {
       task_id = $taskId
       worker_id = $workerId
       command_class = "codex_exec_sanitized_stdin_discard_output"
+      launcher_metadata = $launcher.metadata
       task_executed = $true
       pr_created = $false
       final_state = "held_no_execution_executor_failed"
@@ -945,6 +1062,7 @@ Controlled one-shot bootstrap trial for `bootstrap-trial-201`.
     task_id = $taskId
     worker_id = $workerId
     command_class = "codex_exec_sanitized_stdin_discard_output"
+    launcher_metadata = $launcher.metadata
     changed_files = @($changedFiles)
     file_evidence = @($fileSummary)
     prompt_sha256 = $promptHash
@@ -977,6 +1095,7 @@ Controlled one-shot bootstrap trial for `bootstrap-trial-201`.
     task_id = $taskId
     worker_id = $workerId
     command_class = "codex_exec_sanitized_stdin_discard_output"
+    launcher_metadata = $launcher.metadata
     changed_files = @($changedFiles)
     pr_url = $prUrl
     pr_created = $true
@@ -1013,6 +1132,7 @@ $result = switch ($Command) {
       token_printed = $false
     }
   }
+  "codex-launcher-stdin-test" { Invoke-CodexLauncherStdinTest }
   "run-sanitized-executor" { Invoke-SanitizedOneShotExecutor }
   "worker-route" { Get-RoutePreview }
   "no-start-all" { [pscustomobject]@{ ok = $true; schema = "skybridge.bootstrap_trial_goal201_no_start_all.v1"; start_all_allowed = $false; blocker = "start_all_forbidden_for_bootstrap_trial_201"; task_created = $false; token_printed = $false } }
