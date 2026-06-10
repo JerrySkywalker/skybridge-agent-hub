@@ -58,6 +58,28 @@ function Write-ManagedModePilotFixtureEvidence {
   } | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $StateDir "pilot-evidence.json") -Encoding UTF8
 }
 
+function Write-ManagedModePilotAmbiguousResult {
+  param([Parameter(Mandatory = $true)][string]$StateDir)
+  New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+  [pscustomobject]@{
+    schema = "skybridge.bounded_queue_apply_result.v1"
+    pilot_id = "managed-mode-pilot-208"
+    mode = "fixture_ambiguous_partial_result"
+    final_state = "unknown"
+    task_created = $false
+    task_claimed = $false
+    codex_execution_started = $false
+    pr_created = $false
+    token_printed = $false
+  } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $StateDir "pilot-result.json") -Encoding UTF8
+}
+
+function Write-ManagedModePilotRawArtifact {
+  param([Parameter(Mandatory = $true)][string]$StateDir)
+  New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+  "redacted fixture raw stdout placeholder" | Set-Content -LiteralPath (Join-Path $StateDir "raw-stdout.log") -Encoding UTF8
+}
+
 function Assert-ManagedModeSafeJson {
   param($Object)
   $raw = $Object | ConvertTo-Json -Depth 100 -Compress

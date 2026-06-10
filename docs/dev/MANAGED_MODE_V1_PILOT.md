@@ -59,6 +59,20 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-p
 
 If the task PR is missing or still open, finalizer preview and apply report `held_waiting_human_pr_review` and do not complete the pilot.
 
+## Renewed Apply After Launcher Repair
+
+Goal 208D authorizes one renewed `pilot-apply` only because the first apply attempt failed before Codex execution when the Windows Codex launcher shim was not hosted correctly. The renewed path is not a general retry mechanism.
+
+The renewed apply must pass the normal one-workunit pilot gate and must also classify the prior attempt as `prior_attempt_failed_before_execution`. It fails closed if any pilot task PR, executor evidence, finalizer evidence, ambiguous partial result, unknown artifact, raw prompt, transcript, stdout, stderr, worker log, CI log or secret-looking content exists.
+
+The renewed apply must be invoked with an explicit reason:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command pilot-apply -RenewedAuthorization -RequireRenewedAuthorization -RenewedAuthorizationReason "Renewed operator authorization after prior launcher failure before execution; launcher repair merged; no prior task PR or executor evidence exists." -Json
+```
+
+The resulting safe evidence distinguishes the prior failed-before-execution state from the renewed authorized attempt and keeps `token_printed=false`.
+
 ## Validation
 
 Preview and readiness commands are read-only:
@@ -92,6 +106,13 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-refuses-rerun.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-no-second-workunit.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-finalizer-token-printed-false.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-authorization-contract.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-prior-failed-before-execution-resumable.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-prior-success-refuses-renewal.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-prior-ambiguous-refuses-renewal.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-one-shot-only.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-no-raw-artifacts.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-token-printed-false.ps1
 ```
 
 Every JSON result must keep `token_printed=false` and must not persist raw prompts, transcripts, stdout, stderr, raw worker logs or secrets.

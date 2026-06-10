@@ -16,6 +16,9 @@ param(
   [string]$WorkerId = "laptop-zenbookduo",
   [string]$StateDir = ".agent/tmp/managed-mode-pilot-208",
   [switch]$SimulateApply,
+  [switch]$RenewedAuthorization,
+  [string]$RenewedAuthorizationReason = "",
+  [switch]$RequireRenewedAuthorization,
   [switch]$SimulateFinalizerMergedPr,
   [switch]$SimulateFinalizerSecondWorkunit,
   [switch]$Json
@@ -201,6 +204,100 @@ function Get-PilotFinalizerEvidencePath {
 
 function Get-PilotFinalizerReportPath {
   Join-Path (Get-StateDirPath) "finalizer-report.json"
+}
+
+function Get-PilotTaskPrBodyPath {
+  Join-Path (Get-StateDirPath) "task-pr-body.md"
+}
+
+function Test-SafeStateDirFiles {
+  $stateDirPath = Get-StateDirPath
+  if (-not (Test-Path -LiteralPath $stateDirPath -PathType Container)) {
+    return [pscustomobject]@{
+      safe = $true
+      file_count = 0
+      unsafe_files = @()
+      unknown_files = @()
+      token_printed = $false
+    }
+  }
+
+  $allowedFileNames = @(
+    "pilot-evidence.json",
+    "pilot-result.json",
+    "finalizer-evidence.json",
+    "finalizer-report.json",
+    "task-pr-body.md"
+  )
+  $unsafe = New-Object System.Collections.Generic.List[string]
+  $unknown = New-Object System.Collections.Generic.List[string]
+  $files = @(Get-ChildItem -LiteralPath $stateDirPath -File -Recurse -ErrorAction SilentlyContinue)
+  foreach ($file in $files) {
+    $short = ConvertTo-ShortPath $file.FullName
+    if ($allowedFileNames -notcontains $file.Name) { $unknown.Add($short) | Out-Null }
+    if ($file.Name -match '(?i)raw|transcript|stdout|stderr|worker-log|ci-log|prompt') { $unsafe.Add($short) | Out-Null; continue }
+    $text = Get-Content -Raw -LiteralPath $file.FullName -ErrorAction SilentlyContinue
+    if (Test-SecretLookingText $text) { $unsafe.Add($short) | Out-Null }
+  }
+
+  [pscustomobject]@{
+    safe = ($unsafe.Count -eq 0)
+    file_count = $files.Count
+    unsafe_files = @($unsafe)
+    unknown_files = @($unknown)
+    token_printed = $false
+  }
+}
+
+function New-RenewedAuthorizationState {
+  $openPrs = @(Get-OpenPilotPrs)
+  $fileScan = Test-SafeStateDirFiles
+  $executorEvidenceExists = Test-Path -LiteralPath (Get-PilotEvidencePath) -PathType Leaf
+  $resultExists = Test-Path -LiteralPath (Get-PilotResultPath) -PathType Leaf
+  $finalizerEvidenceExists = Test-Path -LiteralPath (Get-PilotFinalizerEvidencePath) -PathType Leaf
+  $taskPrBodyExists = Test-Path -LiteralPath (Get-PilotTaskPrBodyPath) -PathType Leaf
+  $blockers = New-Object System.Collections.Generic.List[string]
+
+  if (-not $fileScan.safe) { $blockers.Add("prior_attempt_had_raw_or_secret_artifacts") | Out-Null }
+  if ($executorEvidenceExists -or $openPrs.Count -gt 0 -or $finalizerEvidenceExists) { $blockers.Add("prior_attempt_already_produced_task_pr_or_evidence") | Out-Null }
+  if ((-not $executorEvidenceExists) -and ($resultExists -or $taskPrBodyExists -or @($fileScan.unknown_files).Count -gt 0)) { $blockers.Add("prior_attempt_state_ambiguous") | Out-Null }
+
+  $priorState = if (@($blockers | Where-Object { $_ -eq "prior_attempt_had_raw_or_secret_artifacts" }).Count -gt 0) {
+    "prior_attempt_unsafe_raw_artifacts"
+  } elseif (@($blockers | Where-Object { $_ -eq "prior_attempt_already_produced_task_pr_or_evidence" }).Count -gt 0) {
+    "prior_attempt_produced_task_pr_or_evidence"
+  } elseif (@($blockers | Where-Object { $_ -eq "prior_attempt_state_ambiguous" }).Count -gt 0) {
+    "prior_attempt_ambiguous"
+  } else {
+    "prior_attempt_failed_before_execution"
+  }
+
+  if ($RequireRenewedAuthorization -or $RenewedAuthorization) {
+    if (-not $RenewedAuthorization) { $blockers.Add("renewed_authorization_required") | Out-Null }
+    if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $blockers.Add("renewed_authorization_reason_required") | Out-Null }
+    if ($priorState -ne "prior_attempt_failed_before_execution") { $blockers.Add("renewed_authorization_requires_prior_failed_before_execution") | Out-Null }
+  }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_renewed_authorization_state.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    renewed_authorization = [bool]$RenewedAuthorization
+    renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+    prior_attempt_state = $priorState
+    prior_attempt_had_task_pr = ($openPrs.Count -gt 0)
+    prior_attempt_open_task_pr_count = $openPrs.Count
+    prior_attempt_had_executor_evidence = $executorEvidenceExists
+    prior_attempt_had_result_artifact = $resultExists
+    prior_attempt_had_finalizer_evidence = $finalizerEvidenceExists
+    prior_attempt_had_raw_artifacts = (-not $fileScan.safe)
+    prior_attempt_artifact_count = $fileScan.file_count
+    prior_attempt_unknown_artifacts = @($fileScan.unknown_files)
+    renewed_attempt_count = if ($RenewedAuthorization) { 1 } else { 0 }
+    can_run_renewed_apply = ($blockers.Count -eq 0 -and $RenewedAuthorization -and -not [string]::IsNullOrWhiteSpace($RenewedAuthorizationReason))
+    blockers = @($blockers | Select-Object -Unique)
+    token_printed = $false
+  }
 }
 
 function Test-PathAllowedForPilot {
@@ -795,13 +892,45 @@ function Invoke-PilotApply {
       token_printed = $false
     }
   }
+  $renewal = New-RenewedAuthorizationState
+  if ($RenewedAuthorization -or $RequireRenewedAuthorization) {
+    if (-not $renewal.can_run_renewed_apply) {
+      return [pscustomobject]@{
+        ok = $false
+        schema = "skybridge.bounded_queue_apply_result.v1"
+        pilot_id = $PilotId
+        mode = "renewed_pilot_apply_blocked"
+        final_state = "pilot_gate_blocked"
+        renewed_authorization = [bool]$RenewedAuthorization
+        renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+        prior_attempt_state = $renewal.prior_attempt_state
+        prior_attempt_had_task_pr = $renewal.prior_attempt_had_task_pr
+        prior_attempt_had_executor_evidence = $renewal.prior_attempt_had_executor_evidence
+        prior_attempt_had_raw_artifacts = $renewal.prior_attempt_had_raw_artifacts
+        renewed_attempt_count = $renewal.renewed_attempt_count
+        task_created = $false
+        task_claimed = $false
+        codex_execution_started = $false
+        pr_created = $false
+        blockers = @($renewal.blockers)
+        token_printed = $false
+      }
+    }
+  }
   if ($SimulateApply) {
     return [pscustomobject]@{
       ok = $true
       schema = "skybridge.bounded_queue_apply_result.v1"
       pilot_id = $PilotId
-      mode = "simulated_pilot_apply_no_mutation"
+      mode = if ($RenewedAuthorization) { "simulated_renewed_pilot_apply_no_mutation" } else { "simulated_pilot_apply_no_mutation" }
       final_state = "held_waiting_human_pr_review"
+      renewed_authorization = [bool]$RenewedAuthorization
+      renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+      prior_attempt_state = $renewal.prior_attempt_state
+      prior_attempt_had_task_pr = $renewal.prior_attempt_had_task_pr
+      prior_attempt_had_executor_evidence = $renewal.prior_attempt_had_executor_evidence
+      prior_attempt_had_raw_artifacts = $renewal.prior_attempt_had_raw_artifacts
+      renewed_attempt_count = $renewal.renewed_attempt_count
       task_id = "managed-mode-pilot-208-task-001"
       workunit_id = "managed-mode-pilot-208-workunit-001"
       worker_id = "laptop-zenbookduo"
@@ -878,12 +1007,19 @@ function Invoke-PilotApply {
   $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
   if (-not $execution.ok) {
     git switch main *> $null
-    return [pscustomobject]@{
+    $failure = [pscustomobject]@{
       ok = $false
       schema = "skybridge.bounded_queue_apply_result.v1"
       pilot_id = $PilotId
-      mode = "controlled_failure"
+      mode = if ($RenewedAuthorization) { "renewed_controlled_failure" } else { "controlled_failure" }
       final_state = "held_no_execution_executor_failed"
+      renewed_authorization = [bool]$RenewedAuthorization
+      renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+      prior_attempt_state = $renewal.prior_attempt_state
+      prior_attempt_had_task_pr = $renewal.prior_attempt_had_task_pr
+      prior_attempt_had_executor_evidence = $renewal.prior_attempt_had_executor_evidence
+      prior_attempt_had_raw_artifacts = $renewal.prior_attempt_had_raw_artifacts
+      renewed_attempt_count = $renewal.renewed_attempt_count
       task_created = $true
       task_claimed = $true
       codex_execution_started = $true
@@ -897,6 +1033,10 @@ function Invoke-PilotApply {
       transcript_persisted = $false
       token_printed = $false
     }
+    $failureJson = $failure | ConvertTo-Json -Depth 60
+    if (Test-SecretLookingText $failureJson) { throw "Secret-looking pilot failure result detected." }
+    $failureJson | Set-Content -LiteralPath (Get-PilotResultPath) -Encoding UTF8
+    return $failure
   }
 
   $changedFiles = @(Get-ChangedFiles)
@@ -961,6 +1101,13 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
     changed_files = @($changedFiles)
     file_evidence = @($fileEvidence)
     prompt_sha256 = $promptHash
+    renewed_authorization = [bool]$RenewedAuthorization
+    renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+    prior_attempt_state = $renewal.prior_attempt_state
+    prior_attempt_had_task_pr = $renewal.prior_attempt_had_task_pr
+    prior_attempt_had_executor_evidence = $renewal.prior_attempt_had_executor_evidence
+    prior_attempt_had_raw_artifacts = $renewal.prior_attempt_had_raw_artifacts
+    renewed_attempt_count = $renewal.renewed_attempt_count
     prompt_persisted = $false
     transcript_persisted = $false
     stdout_persisted = $false
@@ -990,6 +1137,13 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
     launcher_metadata = $codex.metadata
     changed_files = @($changedFiles)
     pr_url = $prUrl
+    renewed_authorization = [bool]$RenewedAuthorization
+    renewed_authorization_reason = if ([string]::IsNullOrWhiteSpace($RenewedAuthorizationReason)) { $null } else { $RenewedAuthorizationReason }
+    prior_attempt_state = $renewal.prior_attempt_state
+    prior_attempt_had_task_pr = $renewal.prior_attempt_had_task_pr
+    prior_attempt_had_executor_evidence = $renewal.prior_attempt_had_executor_evidence
+    prior_attempt_had_raw_artifacts = $renewal.prior_attempt_had_raw_artifacts
+    renewed_attempt_count = $renewal.renewed_attempt_count
     task_created = $true
     task_claimed = $true
     codex_execution_started = $true
@@ -1015,6 +1169,7 @@ function New-SchemaSummary {
       "skybridge.bounded_queue_apply_result.v1",
       "skybridge.managed_mode_pilot_policy.v1",
       "skybridge.managed_mode_pilot_state.v1",
+      "skybridge.managed_mode_pilot_renewed_authorization_state.v1",
       "skybridge.managed_mode_pilot_finalizer_state.v1",
       "skybridge.managed_mode_pilot_finalizer_evidence.v1",
       "skybridge.managed_mode_pilot_finalizer_report.v1"
