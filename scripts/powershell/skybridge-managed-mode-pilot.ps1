@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "timeout-state", "retry-readiness", "retry-preview", "retry-apply", "codex-invocation-diagnostics", "codex-invocation-profile", "codex-invocation-compatibility", "codex-invocation-safe-summary", "replacement-retry-readiness", "replacement-retry-preview", "replacement-retry-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
+  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "timeout-state", "changed-files-preview", "retry-readiness", "retry-preview", "retry-apply", "codex-invocation-diagnostics", "codex-invocation-profile", "codex-invocation-compatibility", "codex-invocation-safe-summary", "replacement-retry-readiness", "replacement-retry-preview", "replacement-retry-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
   [string]$Command,
 
   [string]$PilotId = "managed-mode-pilot-208",
@@ -320,6 +320,10 @@ function Get-PilotTaskPrBodyPath {
   Join-Path (Get-StateDirPath) "task-pr-body.md"
 }
 
+function Get-PilotExpectedChangedFiles {
+  @("docs/managed-mode-pilot-orientation.md")
+}
+
 function Test-SafeStateDirFiles {
   $stateDirPath = Get-StateDirPath
   if (-not (Test-Path -LiteralPath $stateDirPath -PathType Container)) {
@@ -581,13 +585,42 @@ function Test-PathAllowedForPilot {
   return ($normalized -eq "README.md" -or $normalized -like "docs/*")
 }
 
+function ConvertTo-NormalizedGitPath {
+  param([string]$Path)
+  if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
+  $normalized = ([string]$Path).Trim().Replace("\", "/")
+  if ([string]::IsNullOrWhiteSpace($normalized)) { return $null }
+  return $normalized
+}
+
 function Get-ChangedFiles {
   $files = @()
-  $raw = git diff --name-only
-  if (-not [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { $files += @($raw) }
-  $staged = git diff --cached --name-only
-  if (-not [string]::IsNullOrWhiteSpace(($staged | Out-String).Trim())) { $files += @($staged) }
-  @($files | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+  $unstaged = @(git diff --name-only)
+  if ($LASTEXITCODE -eq 0) { $files += $unstaged }
+  $staged = @(git diff --cached --name-only)
+  if ($LASTEXITCODE -eq 0) { $files += $staged }
+  $untracked = @(git ls-files --others --exclude-standard)
+  if ($LASTEXITCODE -eq 0) { $files += $untracked }
+
+  @($files |
+    ForEach-Object { ConvertTo-NormalizedGitPath -Path ([string]$_) } |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Select-Object -Unique)
+}
+
+function New-ChangedFilesPreview {
+  $changedFiles = @(Get-ChangedFiles)
+  $disallowed = @($changedFiles | Where-Object { -not (Test-PathAllowedForPilot -Path $_) })
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_changed_files_preview.v1"
+    pilot_id = $PilotId
+    changed_files = @($changedFiles)
+    changed_file_count = $changedFiles.Count
+    allowed_paths = @("README.md", "docs/**")
+    allowed = ($disallowed.Count -eq 0)
+    disallowed_files = @($disallowed)
+    token_printed = $false
+  }
 }
 
 function New-PilotPrompt {
@@ -892,11 +925,13 @@ function Get-PilotTaskPrSnapshot {
   if ($SimulateFinalizerMergedPr) {
     return [pscustomobject]@{
       exists = $true
-      number = 208
-      url = if ($ExecutorEvidence -and $ExecutorEvidence.pr_url) { [string]$ExecutorEvidence.pr_url } else { "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/208" }
+      number = 140
+      url = if ($ExecutorEvidence -and $ExecutorEvidence.pr_url) { [string]$ExecutorEvidence.pr_url } else { "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/140" }
       title = "Task managed-mode-pilot-208-workunit-001: Managed Mode Pilot 208 docs/local-smoke"
       state = "MERGED"
       merged = $true
+      merged_at = "2026-06-10T06:49:02Z"
+      merge_commit = "347f38d2e630a44390957827bbda2f94e529f2a5"
       base_ref = "main"
       head_ref = "ai/managed-mode-pilot/managed-mode-pilot-208-workunit-001"
       changed_files = @($ExecutorEvidence.changed_files)
@@ -935,7 +970,7 @@ function Get-PilotTaskPrSnapshot {
     }
   }
   try {
-    $raw = gh pr view $number --json number,url,title,state,merged,baseRefName,headRefName,files 2>$null
+    $raw = gh pr view $number --json number,url,title,state,mergedAt,mergeCommit,baseRefName,headRefName,files 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { throw "gh pr view failed" }
     $pr = $raw | ConvertFrom-Json
     [pscustomobject]@{
@@ -944,7 +979,9 @@ function Get-PilotTaskPrSnapshot {
       url = [string]$pr.url
       title = [string]$pr.title
       state = [string]$pr.state
-      merged = [bool]$pr.merged
+      merged = (-not [string]::IsNullOrWhiteSpace([string]$pr.mergedAt))
+      merged_at = if ([string]::IsNullOrWhiteSpace([string]$pr.mergedAt)) { $null } else { [string]$pr.mergedAt }
+      merge_commit = if ($pr.mergeCommit -and $pr.mergeCommit.oid) { [string]$pr.mergeCommit.oid } else { $null }
       base_ref = [string]$pr.baseRefName
       head_ref = [string]$pr.headRefName
       changed_files = @($pr.files | ForEach-Object { [string]$_.path })
@@ -1098,9 +1135,11 @@ function New-ApplyGate {
   $runner = Get-RunnerLockState
   $codex = Get-CodexCommand
   $openPrs = @(Get-OpenPilotPrs)
+  $finalizerEvidenceExists = Test-Path -LiteralPath (Get-PilotFinalizerEvidencePath) -PathType Leaf
   $blockers = New-Object System.Collections.Generic.List[string]
 
   if ($PilotId -ne "managed-mode-pilot-208") { $blockers.Add("pilot_id_not_explicitly_authorized") | Out-Null }
+  if ($finalizerEvidenceExists) { $blockers.Add("managed_mode_pilot_already_completed") | Out-Null }
   if ($policy.max_workunits -ne 1 -or @($plan.workunits).Count -ne 1) { $blockers.Add("max_workunits_must_equal_1") | Out-Null }
   if ($policy.max_tasks -ne 1) { $blockers.Add("max_tasks_must_equal_1") | Out-Null }
   if ($policy.max_claims -ne 1) { $blockers.Add("max_claims_must_equal_1") | Out-Null }
@@ -1191,13 +1230,17 @@ function New-PilotState {
 
 function New-PilotFinalizerState {
   $executorEvidencePath = Get-PilotEvidencePath
+  $replacementRetryPath = Get-PilotReplacementRetryResultPath
   $finalizerEvidencePath = Get-PilotFinalizerEvidencePath
   $finalizerExists = Test-Path -LiteralPath $finalizerEvidencePath -PathType Leaf
   $executorEvidence = Read-PilotExecutorEvidence
+  $replacementRetry = Read-SafeJsonFile -Path $replacementRetryPath
   $prSnapshot = Get-PilotTaskPrSnapshot -ExecutorEvidence $executorEvidence
   $runner = Get-RunnerLockState
+  $fileScan = Test-SafeStateDirFiles
   $blockers = New-Object System.Collections.Generic.List[string]
   $changedFiles = @()
+  $replacementRetryChangedFiles = @()
   $noRawArtifacts = $true
   $workunitCount = 0
   $taskCount = 0
@@ -1233,10 +1276,47 @@ function New-PilotFinalizerState {
     }
   }
 
+  if (-not $replacementRetry) {
+    $blockers.Add("replacement_retry_result_missing") | Out-Null
+  } else {
+    if (-not (Test-SafeJsonObject $replacementRetry)) {
+      $blockers.Add("replacement_retry_result_unsafe") | Out-Null
+      $noRawArtifacts = $false
+    }
+    $replacementRetryChangedFiles = @(Get-ObjectStringArray -Object $replacementRetry -Name "changed_files" | ForEach-Object { ConvertTo-NormalizedGitPath -Path $_ })
+    if ([string]$replacementRetry.final_state -ne "held_waiting_human_pr_review") { $blockers.Add("replacement_retry_final_state_mismatch") | Out-Null }
+    if ([string]$replacementRetry.pr_url -ne "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/140") { $blockers.Add("replacement_retry_pr_url_mismatch") | Out-Null }
+    if ($replacementRetry.token_printed -ne $false) { $blockers.Add("replacement_retry_token_printed_not_false") | Out-Null }
+  }
+
+  $expectedChangedFiles = @(Get-PilotExpectedChangedFiles)
+  $normalizedChangedFiles = @($changedFiles | ForEach-Object { ConvertTo-NormalizedGitPath -Path $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+  $normalizedReplacementChangedFiles = @($replacementRetryChangedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+  if ($normalizedChangedFiles.Count -ne $expectedChangedFiles.Count -or @($normalizedChangedFiles | Where-Object { $expectedChangedFiles -notcontains $_ }).Count -gt 0) {
+    $blockers.Add("pilot_changed_files_mismatch") | Out-Null
+  }
+  if ($normalizedReplacementChangedFiles.Count -gt 0 -and ($normalizedReplacementChangedFiles.Count -ne $expectedChangedFiles.Count -or @($normalizedReplacementChangedFiles | Where-Object { $expectedChangedFiles -notcontains $_ }).Count -gt 0)) {
+    $blockers.Add("replacement_retry_changed_files_mismatch") | Out-Null
+  }
+
   if (-not $prSnapshot.exists) { $blockers.Add("pilot_task_pr_missing") | Out-Null }
   if ($prSnapshot.exists -and -not $prSnapshot.merged) { $blockers.Add("pilot_task_pr_not_merged") | Out-Null }
   if ($prSnapshot.base_ref -and $prSnapshot.base_ref -ne "main") { $blockers.Add("pilot_task_pr_base_not_main") | Out-Null }
+  if ($prSnapshot.exists -and $prSnapshot.number -ne 140 -and -not $SimulateFinalizerMergedPr) { $blockers.Add("pilot_task_pr_number_mismatch") | Out-Null }
+  if ($prSnapshot.exists) {
+    $prChangedFiles = @($prSnapshot.changed_files | ForEach-Object { ConvertTo-NormalizedGitPath -Path $_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    foreach ($file in $prChangedFiles) {
+      if (-not (Test-PathAllowedForPilot -Path $file)) { $blockers.Add("task_pr_path_allowlist_violation:$file") | Out-Null }
+    }
+    if ($prChangedFiles.Count -ne $expectedChangedFiles.Count -or @($prChangedFiles | Where-Object { $expectedChangedFiles -notcontains $_ }).Count -gt 0) {
+      $blockers.Add("task_pr_changed_files_mismatch") | Out-Null
+    }
+  }
   if ($runner.runner_lock_status -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
+  if (-not $fileScan.safe) {
+    $blockers.Add("raw_or_secret_artifacts_present") | Out-Null
+    $noRawArtifacts = $false
+  }
 
   $completed = ($finalizerExists -or ($blockers.Count -eq 0))
   [pscustomobject]@{
@@ -1246,9 +1326,11 @@ function New-PilotFinalizerState {
     state = if ($finalizerExists) { "managed_mode_pilot_completed" } elseif ($blockers.Count -eq 0) { "ready_to_finalize" } else { "held_waiting_human_pr_review" }
     final_state = if ($completed) { "managed_mode_pilot_completed" } else { "held_waiting_human_pr_review" }
     executor_evidence_path = if (Test-Path -LiteralPath $executorEvidencePath -PathType Leaf) { ConvertTo-ShortPath $executorEvidencePath } else { $null }
+    replacement_retry_result_path = if (Test-Path -LiteralPath $replacementRetryPath -PathType Leaf) { ConvertTo-ShortPath $replacementRetryPath } else { $null }
     finalizer_evidence_path = if ($finalizerExists) { ConvertTo-ShortPath $finalizerEvidencePath } else { $null }
     task_pr = $prSnapshot
-    changed_files = @($changedFiles)
+    changed_files = @($normalizedChangedFiles)
+    replacement_retry_changed_files = @($normalizedReplacementChangedFiles)
     workunits_executed = $workunitCount
     task_count = $taskCount
     claim_count = $claimCount
@@ -1289,6 +1371,7 @@ function New-PilotFinalizerEvidence {
     runner_lock = $State.runner_lock
     no_raw_artifacts = $State.no_raw_artifacts
     executor_evidence_path = $State.executor_evidence_path
+    replacement_retry_result_path = $State.replacement_retry_result_path
     prompt_persisted = $false
     transcript_persisted = $false
     stdout_persisted = $false
@@ -1337,9 +1420,12 @@ function Invoke-PilotFinalizer {
       managed_mode_pilot_completed = $true
       no_next_execution_authorized = $true
       require_human_review = $true
+      next_safe_action = "plan next managed-mode repeatability goal"
       token_printed = $false
     }
     evidence_path = ConvertTo-ShortPath $finalizerEvidencePath
+    report_path = ConvertTo-ShortPath (Get-PilotFinalizerReportPath)
+    next_safe_action = "plan next managed-mode repeatability goal"
     token_printed = $false
   }
   if (-not (Test-SafeJsonObject $evidence) -or -not (Test-SafeJsonObject $report)) { throw "Secret-looking finalizer evidence detected." }
@@ -2314,6 +2400,7 @@ function New-SchemaSummary {
       "skybridge.managed_mode_codex_invocation_classification.v1",
       "skybridge.managed_mode_replacement_retry_readiness.v1",
       "skybridge.managed_mode_replacement_retry_result.v1",
+      "skybridge.managed_mode_changed_files_preview.v1",
       "skybridge.managed_mode_pilot_finalizer_state.v1",
       "skybridge.managed_mode_pilot_finalizer_evidence.v1",
       "skybridge.managed_mode_pilot_finalizer_report.v1"
@@ -2327,10 +2414,13 @@ function New-SchemaSummary {
 function New-SafeSummary {
   $readiness = New-Readiness
   $gate = New-ApplyGate
+  $finalizerPath = Get-PilotFinalizerEvidencePath
+  $finalizerCompleted = Test-Path -LiteralPath $finalizerPath -PathType Leaf
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v1_safe_summary.v1"
     pilot_id = $PilotId
     managed_mode_v1 = "pilot only"
+    managed_mode_pilot_state = if ($finalizerCompleted) { "managed_mode_pilot_completed" } else { (New-PilotState).state }
     general_apply = "disabled"
     one_workunit_pilot_possible_only_after_gate = $true
     can_start_managed_mode = $false
@@ -2348,6 +2438,8 @@ function New-SafeSummary {
     task_claimed = $false
     task_executed = $false
     pr_created = $false
+    no_next_execution_authorized = $finalizerCompleted
+    next_safe_action = if ($finalizerCompleted) { "plan next managed-mode repeatability goal" } else { "complete managed-mode pilot finalizer after human PR review" }
     token_printed = $false
   }
 }
@@ -2360,6 +2452,7 @@ $result = switch ($Command) {
   "pilot-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_preview.v1"; request = New-PilotPlan; gate = New-ApplyGate; state = New-PilotState; no_mutation = $true; token_printed = $false } }
   "pilot-apply" { Invoke-PilotApply }
   "timeout-state" { New-TimeoutState }
+  "changed-files-preview" { New-ChangedFilesPreview }
   "retry-readiness" { New-RetryReadiness }
   "retry-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_retry_preview.v1"; readiness = New-RetryReadiness; request = New-PilotPlan; retry_target_path = "docs/managed-mode-pilot-orientation.md"; no_mutation = $true; token_printed = $false } }
   "retry-apply" { Invoke-RetryApply }

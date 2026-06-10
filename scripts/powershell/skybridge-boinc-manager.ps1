@@ -214,7 +214,8 @@ function New-SafeSummary {
     mode_id = $state.control_surface.current_mode.mode_id
     mode_display_name = $state.control_surface.current_mode.display_name
     managed_mode_v1 = "pilot only"
-    managed_mode_v1_summary = "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate"
+    managed_mode_v1_summary = if ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "Managed Mode Pilot 208 completed; no next execution authorized." } else { "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate" }
+    managed_mode_pilot_state = if ($managedMode) { $managedMode.managed_mode_pilot_state } else { "unknown" }
     general_apply = "disabled"
     general_bounded_queue_apply_enabled = $false
     pilot_bounded_queue_apply_enabled = if ($managedMode) { [bool]$managedMode.pilot_bounded_queue_apply_enabled } else { $false }
@@ -230,6 +231,8 @@ function New-SafeSummary {
     task_claimed = $false
     task_executed = $false
     pr_created = $false
+    no_next_execution_authorized = if ($managedMode) { [bool]$managedMode.no_next_execution_authorized } else { $false }
+    next_safe_action = if ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "plan next managed-mode repeatability goal" } else { $state.next_safe_action }
     token_printed = $false
   }
 }

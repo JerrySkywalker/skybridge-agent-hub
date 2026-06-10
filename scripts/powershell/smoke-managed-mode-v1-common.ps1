@@ -33,10 +33,10 @@ function Write-ManagedModePilotFixtureEvidence {
     task_id = "managed-mode-pilot-208-task-001"
     worker_id = "laptop-zenbookduo"
     command_class = "codex_exec_ephemeral_stdin_discard_output"
-    changed_files = @("docs/dev/MANAGED_MODE_V1_PILOT.md")
+    changed_files = @("docs/managed-mode-pilot-orientation.md")
     file_evidence = @(
       [pscustomobject]@{
-        path = "docs/dev/MANAGED_MODE_V1_PILOT.md"
+        path = "docs/managed-mode-pilot-orientation.md"
         sha256 = "fixture-doc-sha"
         token_printed = $false
       }
@@ -50,12 +50,28 @@ function Write-ManagedModePilotFixtureEvidence {
     task_created = $true
     task_claimed = $true
     codex_execution_count = $CodexExecutionCount
-    pr_url = "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/208"
+    pr_url = "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/140"
     pr_count = $PrCount
     auto_merge_enabled = $false
     final_state = "held_waiting_human_pr_review"
     token_printed = $false
   } | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $StateDir "pilot-evidence.json") -Encoding UTF8
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_replacement_retry_result.v1"
+    pilot_id = "managed-mode-pilot-208"
+    mode = "replacement_retry_apply"
+    final_state = "held_waiting_human_pr_review"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    changed_files = @("docs/managed-mode-pilot-orientation.md")
+    pr_url = "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/140"
+    codex_execution_count = $CodexExecutionCount
+    pr_count = $PrCount
+    auto_merge_enabled = $false
+    token_printed = $false
+  } | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $StateDir "replacement-retry-result.json") -Encoding UTF8
 }
 
 function Write-ManagedModePilotAmbiguousResult {
