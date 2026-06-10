@@ -17,7 +17,7 @@ function Assert-TokenPrintedFalse {
 }
 
 function Assert-CleanGitStatus {
-  param([Parameter(Mandatory = $true)][string]$Before)
+  param([AllowEmptyString()][Parameter(Mandatory = $true)][string]$Before)
   $after = (git status --short | Out-String).Trim()
   if ($after -ne $Before) { throw "Command mutated git worktree. Before=[$Before] After=[$after]" }
 }
