@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
+  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "timeout-state", "retry-readiness", "retry-preview", "retry-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
   [string]$Command,
 
   [string]$PilotId = "managed-mode-pilot-208",
@@ -19,6 +19,11 @@ param(
   [switch]$RenewedAuthorization,
   [string]$RenewedAuthorizationReason = "",
   [switch]$RequireRenewedAuthorization,
+  [switch]$RetryAuthorization,
+  [string]$RetryAuthorizationReason = "",
+  [switch]$SimulateRetryApply,
+  [ValidateSet("success", "timeout", "no-changes", "bad-path")]
+  [string]$SimulateRetryOutcome = "success",
   [switch]$SimulateFinalizerMergedPr,
   [switch]$SimulateFinalizerSecondWorkunit,
   [switch]$Json
@@ -105,17 +110,45 @@ function Invoke-SilentProcess {
   $psi.CreateNoWindow = $true
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $psi
+  $stdoutChars = 0
+  $stderrChars = 0
+  $outputHandler = [System.Diagnostics.DataReceivedEventHandler]{
+    param($sender, $eventArgs)
+    if ($null -ne $eventArgs.Data) { $script:__managedModeStdoutChars += $eventArgs.Data.Length }
+  }
+  $errorHandler = [System.Diagnostics.DataReceivedEventHandler]{
+    param($sender, $eventArgs)
+    if ($null -ne $eventArgs.Data) { $script:__managedModeStderrChars += $eventArgs.Data.Length }
+  }
+  $script:__managedModeStdoutChars = 0
+  $script:__managedModeStderrChars = 0
+  $startedAt = Get-Date
+  $process.add_OutputDataReceived($outputHandler)
+  $process.add_ErrorDataReceived($errorHandler)
   [void]$process.Start()
+  $process.BeginOutputReadLine()
+  $process.BeginErrorReadLine()
   $process.StandardInput.Write($StandardInputText)
   $process.StandardInput.Close()
   $timedOut = -not $process.WaitForExit($TimeoutMinutes * 60 * 1000)
   if ($timedOut) {
     try { $process.Kill($true) } catch {}
+  } else {
+    $process.WaitForExit()
   }
+  $completedAt = Get-Date
+  $stdoutChars = $script:__managedModeStdoutChars
+  $stderrChars = $script:__managedModeStderrChars
+  $process.remove_OutputDataReceived($outputHandler)
+  $process.remove_ErrorDataReceived($errorHandler)
   [pscustomobject]@{
     ok = (-not $timedOut -and $process.ExitCode -eq 0)
     exit_code = if ($timedOut) { $null } else { $process.ExitCode }
     timed_out = $timedOut
+    elapsed_seconds = [math]::Round(($completedAt - $startedAt).TotalSeconds, 3)
+    timeout_minutes = $TimeoutMinutes
+    stdout_chars_discarded = $stdoutChars
+    stderr_chars_discarded = $stderrChars
     stdout_persisted = $false
     stderr_persisted = $false
     token_printed = $false
@@ -198,6 +231,16 @@ function Get-PilotResultPath {
   Join-Path (Get-StateDirPath) "pilot-result.json"
 }
 
+function Get-PilotRetryResultPath {
+  Join-Path (Get-StateDirPath) "retry-result.json"
+}
+
+function Test-DefaultPilotStateDir {
+  $actual = [System.IO.Path]::GetFullPath((Get-StateDirPath)).TrimEnd("\", "/")
+  $default = [System.IO.Path]::GetFullPath((Join-Path (Get-RepoRoot) ".agent/tmp/managed-mode-pilot-208")).TrimEnd("\", "/")
+  $actual.Equals($default, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-PilotFinalizerEvidencePath {
   Join-Path (Get-StateDirPath) "finalizer-evidence.json"
 }
@@ -225,6 +268,7 @@ function Test-SafeStateDirFiles {
   $allowedFileNames = @(
     "pilot-evidence.json",
     "pilot-result.json",
+    "retry-result.json",
     "finalizer-evidence.json",
     "finalizer-report.json",
     "task-pr-body.md"
@@ -245,6 +289,169 @@ function Test-SafeStateDirFiles {
     file_count = $files.Count
     unsafe_files = @($unsafe)
     unknown_files = @($unknown)
+    token_printed = $false
+  }
+}
+
+function Read-SafeJsonFile {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  $text = Get-Content -Raw -LiteralPath $Path
+  if (Test-SecretLookingText $text) { throw "Secret-looking state file detected: $(ConvertTo-ShortPath $Path)" }
+  $text | ConvertFrom-Json
+}
+
+function Get-ObjectStringArray {
+  param($Object, [string]$Name)
+  if (-not $Object) { return @() }
+  if (-not ($Object.PSObject.Properties.Name -contains $Name)) { return @() }
+  @($Object.$Name | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+}
+
+function New-TimeoutState {
+  $openPrs = @(Get-OpenPilotPrs)
+  $fileScan = Test-SafeStateDirFiles
+  $resultPath = Get-PilotResultPath
+  $retryPath = Get-PilotRetryResultPath
+  $result = Read-SafeJsonFile -Path $resultPath
+  $retryResult = Read-SafeJsonFile -Path $retryPath
+  $executorEvidenceExists = Test-Path -LiteralPath (Get-PilotEvidencePath) -PathType Leaf
+  $finalizerEvidenceExists = Test-Path -LiteralPath (Get-PilotFinalizerEvidencePath) -PathType Leaf
+  $worktreeChangedFiles = if (Test-DefaultPilotStateDir) { @(Get-ChangedFiles) } else { @() }
+  $resultChangedFiles = Get-ObjectStringArray -Object $result -Name "changed_files"
+  $retryChangedFiles = Get-ObjectStringArray -Object $retryResult -Name "changed_files"
+  $allChangedFiles = @($worktreeChangedFiles + $resultChangedFiles + $retryChangedFiles | Select-Object -Unique)
+  $resultPrUrl = if ($result -and ($result.PSObject.Properties.Name -contains "pr_url")) { [string]$result.pr_url } else { "" }
+  $retryPrUrl = if ($retryResult -and ($retryResult.PSObject.Properties.Name -contains "pr_url")) { [string]$retryResult.pr_url } else { "" }
+  $resultPrCreated = ($result -and ($result.PSObject.Properties.Name -contains "pr_created") -and $result.pr_created -eq $true)
+  $retryPrCreated = ($retryResult -and ($retryResult.PSObject.Properties.Name -contains "pr_created") -and $retryResult.pr_created -eq $true)
+  $retryExists = Test-Path -LiteralPath $retryPath -PathType Leaf
+  $resultExists = Test-Path -LiteralPath $resultPath -PathType Leaf
+  $timedOut = ($result -and ($result.PSObject.Properties.Name -contains "timed_out") -and $result.timed_out -eq $true)
+  $retryTimedOut = ($retryResult -and ($retryResult.PSObject.Properties.Name -contains "timed_out") -and $retryResult.timed_out -eq $true)
+  $resultMode = if ($result -and ($result.PSObject.Properties.Name -contains "mode")) { [string]$result.mode } else { "" }
+  $resultFinalState = if ($result -and ($result.PSObject.Properties.Name -contains "final_state")) { [string]$result.final_state } else { "" }
+  $retryCount = if ($retryExists) { 1 } else { 0 }
+  $blockers = New-Object System.Collections.Generic.List[string]
+
+  if (-not $fileScan.safe) { $blockers.Add("prior_attempt_had_raw_or_secret_artifacts") | Out-Null }
+  if ($executorEvidenceExists) { $blockers.Add("prior_attempt_executor_evidence_exists") | Out-Null }
+  if ($finalizerEvidenceExists) { $blockers.Add("prior_attempt_finalizer_evidence_exists") | Out-Null }
+  if ($openPrs.Count -gt 0 -or $resultPrCreated -or $retryPrCreated -or -not [string]::IsNullOrWhiteSpace($resultPrUrl) -or -not [string]::IsNullOrWhiteSpace($retryPrUrl)) { $blockers.Add("prior_attempt_created_pr") | Out-Null }
+  if ($allChangedFiles.Count -gt 0) { $blockers.Add("prior_attempt_partial_worktree_dirty") | Out-Null }
+  if ($retryExists) { $blockers.Add("retry_exhausted") | Out-Null }
+
+  $priorState = "prior_attempt_ambiguous"
+  if ($retryExists) {
+    $priorState = "retry_exhausted"
+  } elseif (-not $resultExists -and $openPrs.Count -eq 0 -and -not $executorEvidenceExists -and -not $finalizerEvidenceExists -and $fileScan.safe -and $allChangedFiles.Count -eq 0) {
+    $priorState = "no_prior_attempt"
+  } elseif (-not $fileScan.safe) {
+    $priorState = "prior_attempt_unsafe_raw_artifacts"
+  } elseif ($executorEvidenceExists) {
+    $priorState = "prior_attempt_executor_evidence_exists"
+  } elseif ($finalizerEvidenceExists) {
+    $priorState = "prior_attempt_finalizer_evidence_exists"
+  } elseif (@($blockers | Where-Object { $_ -eq "prior_attempt_created_pr" }).Count -gt 0) {
+    $priorState = "prior_attempt_created_pr"
+  } elseif ($allChangedFiles.Count -gt 0) {
+    $priorState = "prior_attempt_partial_worktree_dirty"
+  } elseif ($resultExists -and $timedOut -and ($result.token_printed -eq $false)) {
+    $priorState = "prior_attempt_timed_out_no_mutation"
+  } elseif ($resultExists -and -not $timedOut -and ($result.ok -eq $false) -and ($result.token_printed -eq $false)) {
+    $priorState = "prior_attempt_failed_with_no_mutation"
+  } elseif ($resultExists -and ($result.codex_execution_started -ne $true) -and ($result.token_printed -eq $false) -and ($resultMode -in @("controlled_failure", "renewed_controlled_failure") -or $resultFinalState -eq "held_no_execution_executor_failed")) {
+    $priorState = "prior_attempt_failed_before_execution"
+  }
+
+  $timeoutDiagnostics = [pscustomobject]@{
+    timeout = [bool]$timedOut
+    retry_timeout = [bool]$retryTimedOut
+    elapsed_seconds = if ($result -and ($result.PSObject.Properties.Name -contains "elapsed_seconds")) { $result.elapsed_seconds } else { $null }
+    timeout_minutes = if ($result -and ($result.PSObject.Properties.Name -contains "timeout_minutes")) { $result.timeout_minutes } else { $MaxRuntimeMinutes }
+    launcher_kind = if ($result -and $result.launcher_metadata) { [string]$result.launcher_metadata.launcher_kind } else { $null }
+    host_executable_name = if ($result -and $result.launcher_metadata) { [string]$result.launcher_metadata.host_executable_name } else { $null }
+    stdout_chars_discarded = if ($result -and ($result.PSObject.Properties.Name -contains "stdout_chars_discarded")) { $result.stdout_chars_discarded } else { $null }
+    stderr_chars_discarded = if ($result -and ($result.PSObject.Properties.Name -contains "stderr_chars_discarded")) { $result.stderr_chars_discarded } else { $null }
+    changed_file_count = $allChangedFiles.Count
+    open_pr_count = $openPrs.Count
+    executor_evidence_exists = $executorEvidenceExists
+    finalizer_evidence_exists = $finalizerEvidenceExists
+    retry_count = $retryCount
+    token_printed = $false
+  }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_timeout_state.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    prior_state = $priorState
+    result_path = if ($resultExists) { ConvertTo-ShortPath $resultPath } else { $null }
+    retry_result_path = if ($retryExists) { ConvertTo-ShortPath $retryPath } else { $null }
+    timed_out = [bool]$timedOut
+    changed_files = @($allChangedFiles)
+    open_pilot_pr_count = $openPrs.Count
+    executor_evidence_exists = $executorEvidenceExists
+    finalizer_evidence_exists = $finalizerEvidenceExists
+    raw_or_secret_artifacts_present = (-not $fileScan.safe)
+    retry_count = $retryCount
+    max_retries = 1
+    retry_exhausted = ($retryCount -ge 1)
+    diagnostics = $timeoutDiagnostics
+    blockers = @($blockers | Select-Object -Unique)
+    token_printed = $false
+  }
+}
+
+function New-RetryPolicy {
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_retry_policy.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    max_retries = 1
+    retry_count = (New-TimeoutState).retry_count
+    retry_reason_required = $true
+    retry_allowed_only_after_timeout_no_mutation = $true
+    retry_disallowed_after_pr = $true
+    retry_disallowed_after_executor_evidence = $true
+    retry_disallowed_after_partial_changes = $true
+    retry_disallowed_after_unsafe_artifacts = $true
+    token_printed = $false
+  }
+}
+
+function New-RetryReadiness {
+  $timeout = New-TimeoutState
+  $gate = New-ApplyGate
+  $policy = New-RetryPolicy
+  $blockers = New-Object System.Collections.Generic.List[string]
+  foreach ($item in @($gate.blockers)) { $blockers.Add([string]$item) | Out-Null }
+  if (-not $gate.can_run_pilot) { $blockers.Add("pilot_gate_blocked") | Out-Null }
+  if ($timeout.prior_state -ne "prior_attempt_timed_out_no_mutation") { $blockers.Add("prior_state_not_timeout_no_mutation") | Out-Null }
+  if ($timeout.retry_count -ne 0) { $blockers.Add("retry_budget_exhausted") | Out-Null }
+  if ($timeout.changed_files.Count -ne 0) { $blockers.Add("prior_attempt_changed_files_present") | Out-Null }
+  if ($timeout.open_pilot_pr_count -ne 0) { $blockers.Add("prior_attempt_open_pr_present") | Out-Null }
+  if ($timeout.executor_evidence_exists) { $blockers.Add("prior_executor_evidence_present") | Out-Null }
+  if ($timeout.finalizer_evidence_exists) { $blockers.Add("prior_finalizer_evidence_present") | Out-Null }
+  if ($timeout.raw_or_secret_artifacts_present) { $blockers.Add("prior_raw_or_secret_artifacts_present") | Out-Null }
+  if ($gate.selected_workunit_count -ne 1) { $blockers.Add("exactly_one_workunit_required") | Out-Null }
+  if ($gate.selected_worker_count -ne 1) { $blockers.Add("exactly_one_worker_required") | Out-Null }
+  if (-not $RetryAuthorization -and $Command -eq "retry-apply") { $blockers.Add("retry_authorization_required") | Out-Null }
+  if ($Command -eq "retry-apply" -and [string]::IsNullOrWhiteSpace($RetryAuthorizationReason)) { $blockers.Add("retry_authorization_reason_required") | Out-Null }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_retry_readiness.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot"
+    can_retry = ($blockers.Count -eq 0)
+    prior_state = $timeout.prior_state
+    retry_count = $timeout.retry_count
+    remaining_retry_count = [Math]::Max(0, 1 - [int]$timeout.retry_count)
+    max_retries = 1
+    policy = $policy
+    gate = $gate
+    timeout_state = $timeout
+    blockers = @($blockers | Select-Object -Unique)
     token_printed = $false
   }
 }
@@ -333,6 +540,38 @@ Hard limits:
 - do not run git commit, git push, gh pr create, start-all, start-queue, resume -Apply, or any worker loop;
 - do not persist raw prompts, transcripts, stdout, stderr or logs;
 - keep the change small and reviewable.
+"@
+}
+
+function New-RetryPilotPrompt {
+@"
+Execute exactly one SkyBridge managed-mode pilot retry workunit.
+
+Pilot id: managed-mode-pilot-208
+Workunit id: managed-mode-pilot-208-workunit-001
+Task id: managed-mode-pilot-208-task-001
+Worker: laptop-zenbookduo
+Retry attempt: 1 of 1
+Task type: docs/local-smoke
+
+Make one tiny documentation-only change by creating or updating exactly this file:
+docs/managed-mode-pilot-orientation.md
+
+Required content:
+- a short title;
+- 3 to 6 concise bullet points explaining that Managed Mode Pilot 208 is a one-workunit docs/local-smoke pilot;
+- mention that the pilot task PR remains open for human review;
+- mention token_printed=false as a safety invariant.
+
+Hard limits:
+- modify only docs/managed-mode-pilot-orientation.md;
+- do not change code, package metadata, configuration, tests, scripts, README.md, .env files, secrets, production config, GitHub settings, branch protection, server-root config, OpenResty, Hermes config or any repository outside this one;
+- do not run broad validation, tests, build, git commit, git push, gh pr create, start-all, start-queue, resume -Apply or any worker loop;
+- do not wait for user input;
+- do not use interactive actions;
+- do not perform long exploration;
+- do not persist raw prompts, transcripts, stdout, stderr or logs;
+- finish immediately after writing the file.
 "@
 }
 
@@ -1027,6 +1266,10 @@ function Invoke-PilotApply {
       pr_created = $false
       exit_code = $execution.exit_code
       timed_out = $execution.timed_out
+      elapsed_seconds = $execution.elapsed_seconds
+      timeout_minutes = $execution.timeout_minutes
+      stdout_chars_discarded = $execution.stdout_chars_discarded
+      stderr_chars_discarded = $execution.stderr_chars_discarded
       stdout_persisted = $false
       stderr_persisted = $false
       prompt_persisted = $false
@@ -1159,6 +1402,319 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
   return $result
 }
 
+function Write-SafeRetryResult {
+  param($Result)
+  $json = $Result | ConvertTo-Json -Depth 80
+  if (Test-SecretLookingText $json) { throw "Secret-looking retry result detected." }
+  New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
+  $json | Set-Content -LiteralPath (Get-PilotRetryResultPath) -Encoding UTF8
+}
+
+function Invoke-RetryApply {
+  $readiness = New-RetryReadiness
+  if (-not $readiness.can_retry) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "retry_apply_blocked"
+      final_state = "retry_blocked"
+      prior_state = $readiness.prior_state
+      retry_attempt = 0
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @($readiness.blockers)
+      token_printed = $false
+    }
+  }
+
+  if ($SimulateRetryApply) {
+    $finalState = switch ($SimulateRetryOutcome) {
+      "success" { "held_waiting_human_pr_review" }
+      "timeout" { "pilot_failed_timeout_retry_exhausted" }
+      "no-changes" { "pilot_failed_retry_exhausted" }
+      "bad-path" { "pilot_failed_retry_exhausted" }
+    }
+    return [pscustomobject]@{
+      ok = ($SimulateRetryOutcome -eq "success")
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "simulated_retry_apply_no_mutation"
+      final_state = $finalState
+      prior_state = $readiness.prior_state
+      retry_authorization = [bool]$RetryAuthorization
+      retry_authorization_reason = if ([string]::IsNullOrWhiteSpace($RetryAuthorizationReason)) { $null } else { $RetryAuthorizationReason }
+      retry_attempt = 1
+      retry_count = 1
+      max_retries = 1
+      workunit_id = "managed-mode-pilot-208-workunit-001"
+      task_id = "managed-mode-pilot-208-task-001"
+      worker_id = "laptop-zenbookduo"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = ($SimulateRetryOutcome -eq "success")
+      pr_count = if ($SimulateRetryOutcome -eq "success") { 1 } else { 0 }
+      changed_files = if ($SimulateRetryOutcome -eq "success") { @("docs/managed-mode-pilot-orientation.md") } elseif ($SimulateRetryOutcome -eq "bad-path") { @("apps/server/src/index.ts") } else { @() }
+      timed_out = ($SimulateRetryOutcome -eq "timeout")
+      auto_merge_enabled = $false
+      no_mutation = $true
+      token_printed = $false
+    }
+  }
+
+  $git = Get-GitState
+  if ($git.branch -ne "main" -or -not $git.clean) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "retry_apply_blocked"
+      final_state = "retry_blocked"
+      prior_state = $readiness.prior_state
+      retry_attempt = 0
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("retry_requires_clean_main")
+      token_printed = $false
+    }
+  }
+
+  $codex = Get-CodexCommand
+  if (-not $codex) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "retry_apply_blocked"
+      final_state = "retry_blocked"
+      prior_state = $readiness.prior_state
+      retry_attempt = 0
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("codex_cli_missing")
+      token_printed = $false
+    }
+  }
+
+  $branch = "ai/managed-mode-pilot/managed-mode-pilot-208-retry-001"
+  New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
+  git fetch origin main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed." }
+  git switch -C $branch origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git switch retry branch failed." }
+
+  $prompt = New-RetryPilotPrompt
+  $promptHash = Get-Sha256Text -Text $prompt
+  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $changedFilesAfterExecution = @(Get-ChangedFiles)
+  if (-not $execution.ok) {
+    if ($changedFilesAfterExecution.Count -eq 0) { git switch main *> $null }
+    $result = [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = if ($execution.timed_out) { "retry_timeout" } else { "retry_controlled_failure" }
+      final_state = if ($execution.timed_out) { "pilot_failed_timeout_retry_exhausted" } else { "pilot_failed_retry_exhausted" }
+      prior_state = $readiness.prior_state
+      retry_authorization = [bool]$RetryAuthorization
+      retry_authorization_reason = $RetryAuthorizationReason
+      retry_attempt = 1
+      retry_count = 1
+      max_retries = 1
+      workunit_id = "managed-mode-pilot-208-workunit-001"
+      task_id = "managed-mode-pilot-208-task-001"
+      worker_id = "laptop-zenbookduo"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = $false
+      pr_count = 0
+      changed_files = @($changedFilesAfterExecution)
+      timed_out = $execution.timed_out
+      exit_code = $execution.exit_code
+      elapsed_seconds = $execution.elapsed_seconds
+      timeout_minutes = $execution.timeout_minutes
+      launcher_metadata = $codex.metadata
+      stdout_chars_discarded = $execution.stdout_chars_discarded
+      stderr_chars_discarded = $execution.stderr_chars_discarded
+      stdout_persisted = $false
+      stderr_persisted = $false
+      prompt_persisted = $false
+      transcript_persisted = $false
+      token_printed = $false
+    }
+    Write-SafeRetryResult -Result $result
+    return $result
+  }
+
+  $changedFiles = @(Get-ChangedFiles)
+  if ($changedFiles.Count -lt 1) {
+    git switch main *> $null
+    $result = [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_pilot_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "retry_no_changes"
+      final_state = "pilot_failed_retry_exhausted"
+      prior_state = $readiness.prior_state
+      retry_authorization = [bool]$RetryAuthorization
+      retry_authorization_reason = $RetryAuthorizationReason
+      retry_attempt = 1
+      retry_count = 1
+      max_retries = 1
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = $false
+      changed_files = @()
+      token_printed = $false
+    }
+    Write-SafeRetryResult -Result $result
+    return $result
+  }
+  foreach ($file in $changedFiles) {
+    if (-not (Test-PathAllowedForPilot -Path $file)) {
+      $result = [pscustomobject]@{
+        ok = $false
+        schema = "skybridge.managed_mode_pilot_retry_result.v1"
+        pilot_id = $PilotId
+        mode = "retry_disallowed_path"
+        final_state = "pilot_failed_retry_exhausted"
+        prior_state = $readiness.prior_state
+        retry_authorization = [bool]$RetryAuthorization
+        retry_authorization_reason = $RetryAuthorizationReason
+        retry_attempt = 1
+        retry_count = 1
+        max_retries = 1
+        task_created = $true
+        task_claimed = $true
+        codex_execution_started = $true
+        codex_execution_count = 1
+        pr_created = $false
+        changed_files = @($changedFiles)
+        blockers = @("disallowed_retry_changed_path:$file")
+        token_printed = $false
+      }
+      Write-SafeRetryResult -Result $result
+      return $result
+    }
+  }
+  foreach ($file in $changedFiles) {
+    git add -- $file *> $null
+    if ($LASTEXITCODE -ne 0) { throw "git add failed for $file" }
+  }
+  git commit -m "docs: add managed mode pilot retry orientation" *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
+  git push -u origin $branch *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git push failed." }
+
+  $bodyPath = Join-Path (Get-StateDirPath) "task-pr-body.md"
+  $body = @"
+## Summary
+
+Managed Mode Pilot 208 Retry docs/local-smoke task.
+
+## Safety
+
+- Pilot id: `managed-mode-pilot-208`
+- Workunit id: `managed-mode-pilot-208-workunit-001`
+- Task id: `managed-mode-pilot-208-task-001`
+- Worker: `laptop-zenbookduo`
+- Retry attempt: `1`
+- Task type: `docs/local-smoke`
+- Changed files: $($changedFiles -join ", ")
+- No raw prompt, transcript, stdout, stderr, worker log or CI log is included.
+- No auto-merge requested.
+- token_printed=false
+"@
+  if (Test-SecretLookingText $body) { throw "Secret-looking retry PR body detected." }
+  Set-Content -LiteralPath $bodyPath -Value $body -Encoding UTF8
+  $prOutput = gh pr create --title "Task managed-mode-pilot-208-workunit-001: Managed Mode Pilot 208 Retry docs/local-smoke" --body-file $bodyPath --base main --head $branch
+  if ($LASTEXITCODE -ne 0) { throw "gh pr create failed." }
+  $prUrl = (($prOutput | Out-String).Trim() -split "\r?\n" | Select-Object -Last 1)
+
+  $fileEvidence = @($changedFiles | ForEach-Object {
+    [pscustomobject]@{
+      path = $_
+      sha256 = Get-Sha256Text -Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $_))
+      token_printed = $false
+    }
+  })
+  $evidence = [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_executor_evidence.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot_retry"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    launcher_metadata = $codex.metadata
+    changed_files = @($changedFiles)
+    file_evidence = @($fileEvidence)
+    prompt_sha256 = $promptHash
+    retry_attempt = 1
+    retry_count = 1
+    max_retries = 1
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    output_persisted = $false
+    task_created = $true
+    task_claimed = $true
+    codex_execution_count = 1
+    pr_url = $prUrl
+    pr_count = 1
+    auto_merge_enabled = $false
+    final_state = "held_waiting_human_pr_review"
+    token_printed = $false
+  }
+  $evidenceJson = $evidence | ConvertTo-Json -Depth 80
+  if (Test-SecretLookingText $evidenceJson) { throw "Secret-looking retry evidence detected." }
+  $evidenceJson | Set-Content -LiteralPath (Get-PilotEvidencePath) -Encoding UTF8
+  $result = [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.managed_mode_pilot_retry_result.v1"
+    pilot_id = $PilotId
+    mode = "retry_apply"
+    final_state = "held_waiting_human_pr_review"
+    prior_state = $readiness.prior_state
+    retry_authorization = [bool]$RetryAuthorization
+    retry_authorization_reason = $RetryAuthorizationReason
+    retry_attempt = 1
+    retry_count = 1
+    max_retries = 1
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    launcher_metadata = $codex.metadata
+    changed_files = @($changedFiles)
+    pr_url = $prUrl
+    task_created = $true
+    task_claimed = $true
+    codex_execution_started = $true
+    codex_execution_count = 1
+    pr_created = $true
+    pr_count = 1
+    evidence_path = ConvertTo-ShortPath (Get-PilotEvidencePath)
+    auto_merge_enabled = $false
+    token_printed = $false
+  }
+  Write-SafeRetryResult -Result $result
+  git switch main *> $null
+  return $result
+}
+
 function New-SchemaSummary {
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v1_schema_summary.v1"
@@ -1170,6 +1726,10 @@ function New-SchemaSummary {
       "skybridge.managed_mode_pilot_policy.v1",
       "skybridge.managed_mode_pilot_state.v1",
       "skybridge.managed_mode_pilot_renewed_authorization_state.v1",
+      "skybridge.managed_mode_pilot_timeout_state.v1",
+      "skybridge.managed_mode_pilot_retry_policy.v1",
+      "skybridge.managed_mode_pilot_retry_readiness.v1",
+      "skybridge.managed_mode_pilot_retry_result.v1",
       "skybridge.managed_mode_pilot_finalizer_state.v1",
       "skybridge.managed_mode_pilot_finalizer_evidence.v1",
       "skybridge.managed_mode_pilot_finalizer_report.v1"
@@ -1214,6 +1774,10 @@ $result = switch ($Command) {
   "apply-gate" { New-ApplyGate }
   "pilot-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_preview.v1"; request = New-PilotPlan; gate = New-ApplyGate; state = New-PilotState; no_mutation = $true; token_printed = $false } }
   "pilot-apply" { Invoke-PilotApply }
+  "timeout-state" { New-TimeoutState }
+  "retry-readiness" { New-RetryReadiness }
+  "retry-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_retry_preview.v1"; readiness = New-RetryReadiness; request = New-PilotPlan; retry_target_path = "docs/managed-mode-pilot-orientation.md"; no_mutation = $true; token_printed = $false } }
+  "retry-apply" { Invoke-RetryApply }
   "finalizer-preview" { Invoke-PilotFinalizer }
   "finalizer-apply" { Invoke-PilotFinalizer -Mutate }
   "finalizer-evidence" { New-PilotFinalizerState }

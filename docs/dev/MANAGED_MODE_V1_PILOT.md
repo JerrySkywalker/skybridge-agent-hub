@@ -73,6 +73,45 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-p
 
 The resulting safe evidence distinguishes the prior failed-before-execution state from the renewed authorized attempt and keeps `token_printed=false`.
 
+## Timeout Recovery and Single Retry
+
+Goal 208E adds timeout classification for the renewed pilot attempt. A timeout is retryable only when it is classified as `prior_attempt_timed_out_no_mutation`.
+
+That classification requires all of these facts to be true:
+
+- `pilot-result.json` exists and records `timed_out=true`;
+- no pilot task PR was created or left open;
+- `changed_files` is empty;
+- pilot executor evidence is absent;
+- finalizer evidence is absent;
+- the pilot state directory contains no raw prompt, transcript, stdout, stderr, worker log, CI log or secret-looking artifact;
+- `token_printed=false`;
+- the normal pilot gate still reports one workunit, one worker, no active tasks, no stale leases and no runner lock.
+
+The retry policy is intentionally one-shot:
+
+- `max_retries=1`;
+- `retry_reason_required=true`;
+- retry is allowed only after timeout-without-mutation;
+- retry is refused after any PR, executor evidence, finalizer evidence, partial changes, raw artifacts or ambiguous result;
+- a second timeout or controlled retry failure marks the retry budget exhausted.
+
+Read-only timeout and retry commands:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command timeout-state -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command retry-readiness -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command retry-preview -Json
+```
+
+`retry-apply` is mutating and is authorized only by a future operator goal after the timeout recovery infrastructure is merged:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-mode-pilot.ps1 -Command retry-apply -RetryAuthorization -RetryAuthorizationReason "Operator-authorized one-time retry after prior Codex timeout without mutation; timeout recovery policy merged; prompt narrowed; no prior PR or executor evidence exists." -Json
+```
+
+The retry prompt is narrowed to one tiny documentation-only change, currently `docs/managed-mode-pilot-orientation.md`. It forbids broad exploration, broad validation, interactive actions, user input waits, code changes and paths outside `docs/**`.
+
 ## Validation
 
 Preview and readiness commands are read-only:
@@ -113,6 +152,24 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-one-shot-only.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-no-raw-artifacts.ps1
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-renewed-apply-token-printed-false.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-timeout-state-contract.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-classifies-timeout-no-mutation.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-timeout-ambiguous-refused.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-timeout-with-changes-refused.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-timeout-with-pr-refused.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-timeout-with-raw-artifacts-refused.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-policy-contract.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-readiness.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-preview-no-mutation.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-exhaustion.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-token-printed-false.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-apply-one-shot.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-creates-one-pr.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-refuses-second-retry.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-timeout-exhausts-budget.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-no-auto-merge.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-no-raw-artifacts.ps1
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-managed-mode-pilot-retry-clean-worktree.ps1
 ```
 
 Every JSON result must keep `token_printed=false` and must not persist raw prompts, transcripts, stdout, stderr, raw worker logs or secrets.

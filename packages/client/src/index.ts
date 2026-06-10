@@ -1771,6 +1771,124 @@ export interface ManagedModePilotRenewedAuthorizationState {
   token_printed: false;
 }
 
+export type ManagedModePilotPriorAttemptState =
+  | "no_prior_attempt"
+  | "prior_attempt_failed_before_execution"
+  | "prior_attempt_timed_out_no_mutation"
+  | "prior_attempt_failed_with_no_mutation"
+  | "prior_attempt_partial_worktree_dirty"
+  | "prior_attempt_created_pr"
+  | "prior_attempt_executor_evidence_exists"
+  | "prior_attempt_finalizer_evidence_exists"
+  | "prior_attempt_ambiguous"
+  | "prior_attempt_unsafe_raw_artifacts"
+  | "retry_exhausted";
+
+export interface ManagedModePilotTimeoutDiagnostics {
+  timeout: boolean;
+  retry_timeout: boolean;
+  elapsed_seconds: number | null;
+  timeout_minutes: number | null;
+  launcher_kind: string | null;
+  host_executable_name: string | null;
+  stdout_chars_discarded: number | null;
+  stderr_chars_discarded: number | null;
+  changed_file_count: number;
+  open_pr_count: number;
+  executor_evidence_exists: boolean;
+  finalizer_evidence_exists: boolean;
+  retry_count: number;
+  token_printed: false;
+}
+
+export interface ManagedModePilotTimeoutState {
+  schema: "skybridge.managed_mode_pilot_timeout_state.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  prior_state: ManagedModePilotPriorAttemptState;
+  result_path: string | null;
+  retry_result_path: string | null;
+  timed_out: boolean;
+  changed_files: string[];
+  open_pilot_pr_count: number;
+  executor_evidence_exists: boolean;
+  finalizer_evidence_exists: boolean;
+  raw_or_secret_artifacts_present: boolean;
+  retry_count: number;
+  max_retries: 1;
+  retry_exhausted: boolean;
+  diagnostics: ManagedModePilotTimeoutDiagnostics;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModePilotRetryPolicy {
+  schema: "skybridge.managed_mode_pilot_retry_policy.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  max_retries: 1;
+  retry_count: number;
+  retry_reason_required: true;
+  retry_allowed_only_after_timeout_no_mutation: true;
+  retry_disallowed_after_pr: true;
+  retry_disallowed_after_executor_evidence: true;
+  retry_disallowed_after_partial_changes: true;
+  retry_disallowed_after_unsafe_artifacts: true;
+  token_printed: false;
+}
+
+export interface ManagedModePilotRetryReadiness {
+  schema: "skybridge.managed_mode_pilot_retry_readiness.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  can_retry: boolean;
+  prior_state: ManagedModePilotPriorAttemptState;
+  retry_count: number;
+  remaining_retry_count: 0 | 1;
+  max_retries: 1;
+  policy: ManagedModePilotRetryPolicy;
+  gate: BoundedQueueApplyGate;
+  timeout_state: ManagedModePilotTimeoutState;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModePilotRetryPreview {
+  schema: "skybridge.managed_mode_pilot_retry_preview.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  can_retry: boolean;
+  retry_target_path: string;
+  readiness: ManagedModePilotRetryReadiness;
+  request: BoundedQueueApplyRequest;
+  no_mutation: true;
+  token_printed: false;
+}
+
+export interface ManagedModePilotRetryResult {
+  schema: "skybridge.managed_mode_pilot_retry_result.v1";
+  pilot_id: string;
+  mode: string;
+  final_state: "held_waiting_human_pr_review" | "pilot_failed_timeout_retry_exhausted" | "pilot_failed_retry_exhausted";
+  retry_authorization: boolean;
+  retry_authorization_reason: string;
+  retry_attempt_count: 1;
+  max_retries: 1;
+  task_created: boolean;
+  task_claimed: boolean;
+  codex_execution_started: boolean;
+  timed_out: boolean;
+  pr_created: boolean;
+  pr_url: string | null;
+  changed_files: string[];
+  elapsed_seconds?: number | null;
+  timeout_minutes?: number | null;
+  stdout_chars_discarded?: number | null;
+  stderr_chars_discarded?: number | null;
+  blockers: string[];
+  token_printed: false;
+}
+
 export interface ManagedModePilotFinalizerPrSnapshot {
   exists: boolean;
   number: number | null;
