@@ -74,6 +74,77 @@ function Write-ManagedModePilotAmbiguousResult {
   } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $StateDir "pilot-result.json") -Encoding UTF8
 }
 
+function Write-ManagedModePilotTimeoutResult {
+  param(
+    [Parameter(Mandatory = $true)][string]$StateDir,
+    [string[]]$ChangedFiles = @(),
+    [bool]$PrCreated = $false
+  )
+  New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+  [pscustomobject]@{
+    ok = $false
+    schema = "skybridge.bounded_queue_apply_result.v1"
+    pilot_id = "managed-mode-pilot-208"
+    mode = "renewed_controlled_failure"
+    final_state = "held_no_execution_executor_failed"
+    renewed_authorization = $true
+    prior_attempt_state = "prior_attempt_failed_before_execution"
+    task_created = $true
+    task_claimed = $true
+    codex_execution_started = $true
+    launcher_metadata = [pscustomobject]@{
+      launcher_kind = "cmd"
+      command_class = "codex_exec_ephemeral_stdin_discard_output"
+      host_executable_name = "cmd.exe"
+      prompt_persisted = $false
+      transcript_persisted = $false
+      stdout_persisted = $false
+      stderr_persisted = $false
+      token_printed = $false
+    }
+    pr_created = $PrCreated
+    pr_url = if ($PrCreated) { "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/208" } else { $null }
+    changed_files = @($ChangedFiles)
+    exit_code = $null
+    timed_out = $true
+    elapsed_seconds = 1800
+    timeout_minutes = 30
+    stdout_chars_discarded = 0
+    stderr_chars_discarded = 0
+    stdout_persisted = $false
+    stderr_persisted = $false
+    prompt_persisted = $false
+    transcript_persisted = $false
+    token_printed = $false
+  } | ConvertTo-Json -Depth 60 | Set-Content -LiteralPath (Join-Path $StateDir "pilot-result.json") -Encoding UTF8
+}
+
+function Write-ManagedModePilotRetryResult {
+  param(
+    [Parameter(Mandatory = $true)][string]$StateDir,
+    [bool]$TimedOut = $true
+  )
+  New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+  [pscustomobject]@{
+    ok = $false
+    schema = "skybridge.managed_mode_pilot_retry_result.v1"
+    pilot_id = "managed-mode-pilot-208"
+    mode = if ($TimedOut) { "retry_timeout" } else { "retry_controlled_failure" }
+    final_state = if ($TimedOut) { "pilot_failed_timeout_retry_exhausted" } else { "pilot_failed_retry_exhausted" }
+    prior_state = "prior_attempt_timed_out_no_mutation"
+    retry_attempt = 1
+    retry_count = 1
+    max_retries = 1
+    task_created = $true
+    task_claimed = $true
+    codex_execution_started = $true
+    pr_created = $false
+    changed_files = @()
+    timed_out = $TimedOut
+    token_printed = $false
+  } | ConvertTo-Json -Depth 40 | Set-Content -LiteralPath (Join-Path $StateDir "retry-result.json") -Encoding UTF8
+}
+
 function Write-ManagedModePilotRawArtifact {
   param([Parameter(Mandatory = $true)][string]$StateDir)
   New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
