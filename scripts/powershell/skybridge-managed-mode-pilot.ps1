@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "timeout-state", "retry-readiness", "retry-preview", "retry-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
+  [ValidateSet("schema", "readiness", "plan-preview", "apply-gate", "pilot-preview", "pilot-apply", "timeout-state", "retry-readiness", "retry-preview", "retry-apply", "codex-invocation-diagnostics", "codex-invocation-profile", "codex-invocation-compatibility", "codex-invocation-safe-summary", "replacement-retry-readiness", "replacement-retry-preview", "replacement-retry-apply", "finalizer-preview", "finalizer-apply", "finalizer-evidence", "finalizer-report", "evidence", "safe-summary")]
   [string]$Command,
 
   [string]$PilotId = "managed-mode-pilot-208",
@@ -24,6 +24,11 @@ param(
   [switch]$SimulateRetryApply,
   [ValidateSet("success", "timeout", "no-changes", "bad-path")]
   [string]$SimulateRetryOutcome = "success",
+  [switch]$ReplacementRetryAuthorization,
+  [string]$ReplacementRetryAuthorizationReason = "",
+  [switch]$SimulateReplacementRetryApply,
+  [ValidateSet("success", "timeout", "no-changes", "bad-path", "nonzero")]
+  [string]$SimulateReplacementRetryOutcome = "success",
   [switch]$SimulateFinalizerMergedPr,
   [switch]$SimulateFinalizerSecondWorkunit,
   [switch]$Json
@@ -77,11 +82,14 @@ function ConvertTo-WindowsCommandLineArgument {
 function New-CodexLauncherMetadata {
   param(
     [Parameter(Mandatory = $true)][string]$LauncherKind,
-    [Parameter(Mandatory = $true)][string]$HostExecutableName
+    [Parameter(Mandatory = $true)][string]$HostExecutableName,
+    [string]$CommandProfileId = "profile_ephemeral_cd",
+    [string]$CommandClass = "codex_exec_ephemeral_cd_stdin_discard_output"
   )
   [pscustomobject]@{
     launcher_kind = $LauncherKind
-    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    command_profile_id = $CommandProfileId
+    command_class = $CommandClass
     host_executable_name = $HostExecutableName
     prompt_persisted = $false
     transcript_persisted = $false
@@ -91,12 +99,63 @@ function New-CodexLauncherMetadata {
   }
 }
 
+function New-CodexInvocationProfile {
+  param([string]$ProfileId = "profile_workspace_write_workdir")
+  $repo = Get-RepoRoot
+  switch ($ProfileId) {
+    "profile_ephemeral_cd" {
+      [pscustomobject]@{
+        profile_id = "profile_ephemeral_cd"
+        command_class = "codex_exec_ephemeral_cd_stdin_discard_output"
+        arguments = @("exec", "--ephemeral", "--cd", $repo, "-")
+        working_directory = $repo
+        mutating = $true
+        selected_for_managed_mode = $false
+        token_printed = $false
+      }
+    }
+    "profile_workspace_write_workdir" {
+      [pscustomobject]@{
+        profile_id = "profile_workspace_write_workdir"
+        command_class = "codex_exec_workspace_write_workdir_stdin_discard_output"
+        arguments = @("exec", "--sandbox", "workspace-write", "-")
+        working_directory = $repo
+        mutating = $true
+        selected_for_managed_mode = $true
+        token_printed = $false
+      }
+    }
+    "profile_readonly_smoke" {
+      [pscustomobject]@{
+        profile_id = "profile_readonly_smoke"
+        command_class = "codex_readonly_help_version_discard_output"
+        arguments = @("--version")
+        working_directory = $repo
+        mutating = $false
+        selected_for_managed_mode = $false
+        token_printed = $false
+      }
+    }
+    default {
+      [pscustomobject]@{
+        profile_id = "profile_disabled_unknown"
+        command_class = "codex_profile_disabled_unknown"
+        arguments = @()
+        working_directory = $repo
+        mutating = $false
+        selected_for_managed_mode = $false
+        token_printed = $false
+      }
+    }
+  }
+}
+
 function Invoke-SilentProcess {
   param(
     [Parameter(Mandatory = $true)][string]$FilePath,
     [Parameter(Mandatory = $true)][string[]]$ArgumentList,
     [Parameter(Mandatory = $true)][string]$WorkingDirectory,
-    [Parameter(Mandatory = $true)][string]$StandardInputText,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$StandardInputText,
     [int]$TimeoutMinutes = 30
   )
   $psi = [System.Diagnostics.ProcessStartInfo]::new()
@@ -110,24 +169,10 @@ function Invoke-SilentProcess {
   $psi.CreateNoWindow = $true
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $psi
-  $stdoutChars = 0
-  $stderrChars = 0
-  $outputHandler = [System.Diagnostics.DataReceivedEventHandler]{
-    param($sender, $eventArgs)
-    if ($null -ne $eventArgs.Data) { $script:__managedModeStdoutChars += $eventArgs.Data.Length }
-  }
-  $errorHandler = [System.Diagnostics.DataReceivedEventHandler]{
-    param($sender, $eventArgs)
-    if ($null -ne $eventArgs.Data) { $script:__managedModeStderrChars += $eventArgs.Data.Length }
-  }
-  $script:__managedModeStdoutChars = 0
-  $script:__managedModeStderrChars = 0
   $startedAt = Get-Date
-  $process.add_OutputDataReceived($outputHandler)
-  $process.add_ErrorDataReceived($errorHandler)
   [void]$process.Start()
-  $process.BeginOutputReadLine()
-  $process.BeginErrorReadLine()
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
   $process.StandardInput.Write($StandardInputText)
   $process.StandardInput.Close()
   $timedOut = -not $process.WaitForExit($TimeoutMinutes * 60 * 1000)
@@ -137,10 +182,14 @@ function Invoke-SilentProcess {
     $process.WaitForExit()
   }
   $completedAt = Get-Date
-  $stdoutChars = $script:__managedModeStdoutChars
-  $stderrChars = $script:__managedModeStderrChars
-  $process.remove_OutputDataReceived($outputHandler)
-  $process.remove_ErrorDataReceived($errorHandler)
+  $stdoutText = ""
+  $stderrText = ""
+  try { $stdoutText = [string]$stdoutTask.GetAwaiter().GetResult() } catch {}
+  try { $stderrText = [string]$stderrTask.GetAwaiter().GetResult() } catch {}
+  $stdoutChars = $stdoutText.Length
+  $stderrChars = $stderrText.Length
+  $stdoutText = $null
+  $stderrText = $null
   [pscustomobject]@{
     ok = (-not $timedOut -and $process.ExitCode -eq 0)
     exit_code = if ($timedOut) { $null } else { $process.ExitCode }
@@ -156,6 +205,12 @@ function Invoke-SilentProcess {
 }
 
 function Get-CodexCommand {
+  param(
+    [string]$ProfileId = "profile_workspace_write_workdir",
+    [string[]]$OverrideArguments = @()
+  )
+  $profile = New-CodexInvocationProfile -ProfileId $ProfileId
+  if ($profile.profile_id -eq "profile_disabled_unknown") { return $null }
   $commands = @(Get-Command "codex" -All -ErrorAction SilentlyContinue)
   if ($commands.Count -eq 0) { return $null }
   $preferred = @(
@@ -169,13 +224,15 @@ function Get-CodexCommand {
   $resolvedPath = [string]$preferred.Source
   $extension = [System.IO.Path]::GetExtension($resolvedPath).ToLowerInvariant()
   $fileName = [System.IO.Path]::GetFileName($resolvedPath)
-  $codexArgs = @("exec", "--ephemeral", "--cd", (Get-RepoRoot), "-")
+  $codexArgs = if ($OverrideArguments.Count -gt 0) { @($OverrideArguments) } else { @($profile.arguments | ForEach-Object { [string]$_ }) }
 
   if ($extension -eq ".exe") {
     return [pscustomobject]@{
       file_path = $resolvedPath
       argument_list = @($codexArgs)
-      metadata = (New-CodexLauncherMetadata -LauncherKind "codex.exe" -HostExecutableName $fileName)
+      working_directory = $profile.working_directory
+      profile = $profile
+      metadata = (New-CodexLauncherMetadata -LauncherKind "codex.exe" -HostExecutableName $fileName -CommandProfileId $profile.profile_id -CommandClass $profile.command_class)
       token_printed = $false
     }
   }
@@ -190,7 +247,9 @@ function Get-CodexCommand {
     return [pscustomobject]@{
       file_path = [string]$cmdHost.Source
       argument_list = @("/d", "/s", "/c", $commandLine)
-      metadata = (New-CodexLauncherMetadata -LauncherKind $extension.TrimStart(".") -HostExecutableName "cmd.exe")
+      working_directory = $profile.working_directory
+      profile = $profile
+      metadata = (New-CodexLauncherMetadata -LauncherKind $extension.TrimStart(".") -HostExecutableName "cmd.exe" -CommandProfileId $profile.profile_id -CommandClass $profile.command_class)
       token_printed = $false
     }
   }
@@ -202,7 +261,9 @@ function Get-CodexCommand {
     return [pscustomobject]@{
       file_path = [string]$pwsh.Source
       argument_list = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $resolvedPath) + @($codexArgs)
-      metadata = (New-CodexLauncherMetadata -LauncherKind "ps1" -HostExecutableName ([System.IO.Path]::GetFileName([string]$pwsh.Source)))
+      working_directory = $profile.working_directory
+      profile = $profile
+      metadata = (New-CodexLauncherMetadata -LauncherKind "ps1" -HostExecutableName ([System.IO.Path]::GetFileName([string]$pwsh.Source)) -CommandProfileId $profile.profile_id -CommandClass $profile.command_class)
       token_printed = $false
     }
   }
@@ -211,7 +272,9 @@ function Get-CodexCommand {
     return [pscustomobject]@{
       file_path = $resolvedPath
       argument_list = @($codexArgs)
-      metadata = (New-CodexLauncherMetadata -LauncherKind "extensionless" -HostExecutableName $fileName)
+      working_directory = $profile.working_directory
+      profile = $profile
+      metadata = (New-CodexLauncherMetadata -LauncherKind "extensionless" -HostExecutableName $fileName -CommandProfileId $profile.profile_id -CommandClass $profile.command_class)
       token_printed = $false
     }
   }
@@ -233,6 +296,10 @@ function Get-PilotResultPath {
 
 function Get-PilotRetryResultPath {
   Join-Path (Get-StateDirPath) "retry-result.json"
+}
+
+function Get-PilotReplacementRetryResultPath {
+  Join-Path (Get-StateDirPath) "replacement-retry-result.json"
 }
 
 function Test-DefaultPilotStateDir {
@@ -269,6 +336,7 @@ function Test-SafeStateDirFiles {
     "pilot-evidence.json",
     "pilot-result.json",
     "retry-result.json",
+    "replacement-retry-result.json",
     "finalizer-evidence.json",
     "finalizer-report.json",
     "task-pr-body.md"
@@ -634,6 +702,189 @@ function Test-SafeJsonObject {
   $json = $Object | ConvertTo-Json -Depth 100 -Compress
   if (Test-SecretLookingText $json) { return $false }
   return ($json -match '"token_printed"\s*:\s*false' -and $json -notmatch '"token_printed"\s*:\s*true')
+}
+
+function New-CodexInvocationDiagnostics {
+  $versionCommand = Get-CodexCommand -ProfileId "profile_readonly_smoke" -OverrideArguments @("--version")
+  $helpCommand = Get-CodexCommand -ProfileId "profile_readonly_smoke" -OverrideArguments @("exec", "--help")
+  $selected = Get-CodexCommand -ProfileId "profile_workspace_write_workdir"
+  $ephemeral = Get-CodexCommand -ProfileId "profile_ephemeral_cd"
+  $unknown = Get-CodexCommand -ProfileId "profile_disabled_unknown"
+
+  $version = if ($versionCommand) {
+    Invoke-SilentProcess -FilePath $versionCommand.file_path -ArgumentList ([string[]]$versionCommand.argument_list) -WorkingDirectory $versionCommand.working_directory -StandardInputText "" -TimeoutMinutes 1
+  } else { $null }
+  $help = if ($helpCommand) {
+    Invoke-SilentProcess -FilePath $helpCommand.file_path -ArgumentList ([string[]]$helpCommand.argument_list) -WorkingDirectory $helpCommand.working_directory -StandardInputText "" -TimeoutMinutes 1
+  } else { $null }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_codex_invocation_diagnostics.v1"
+    pilot_id = $PilotId
+    mode = "safe_readonly_codex_invocation_diagnostics"
+    launcher_kind = if ($selected) { [string]$selected.metadata.launcher_kind } else { $null }
+    host_executable_name = if ($selected) { [string]$selected.metadata.host_executable_name } else { $null }
+    command_profile_id = if ($selected) { [string]$selected.metadata.command_profile_id } else { "profile_disabled_unknown" }
+    selected_invocation_profile = if ($selected) { [string]$selected.metadata.command_profile_id } else { "profile_disabled_unknown" }
+    supports_ephemeral = if ($ephemeral) { "unknown" } else { "false" }
+    supports_cd_flag = if ($ephemeral) { "unknown" } else { "false" }
+    supports_sandbox_workspace_write = if ($selected) { "true" } else { "unknown" }
+    supports_stdin_prompt = if ($selected) { "true" } else { "unknown" }
+    version_exit_code = if ($version) { $version.exit_code } else { $null }
+    help_exit_code = if ($help) { $help.exit_code } else { $null }
+    version_output_chars_discarded = if ($version) { [int]$version.stdout_chars_discarded + [int]$version.stderr_chars_discarded } else { 0 }
+    help_output_chars_discarded = if ($help) { [int]$help.stdout_chars_discarded + [int]$help.stderr_chars_discarded } else { 0 }
+    version_output_persisted = $false
+    help_output_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    prompt_persisted = $false
+    transcript_persisted = $false
+    raw_logs_persisted = $false
+    disabled_unknown_profile_available = ($null -ne $unknown)
+    token_printed = $false
+  }
+}
+
+function New-CodexInvocationProfileSummary {
+  $selected = Get-CodexCommand -ProfileId "profile_workspace_write_workdir"
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_codex_invocation_profile.v1"
+    pilot_id = $PilotId
+    selected_invocation_profile = if ($selected) { "profile_workspace_write_workdir" } else { "profile_disabled_unknown" }
+    selected_for_managed_mode = ($null -ne $selected)
+    selected_reason = "Matches the previously successful bootstrap one-shot Codex executor profile: codex exec --sandbox workspace-write - with WorkingDirectory set to the repository root."
+    profile_ephemeral_cd = New-CodexInvocationProfile -ProfileId "profile_ephemeral_cd"
+    profile_workspace_write_workdir = New-CodexInvocationProfile -ProfileId "profile_workspace_write_workdir"
+    profile_readonly_smoke = New-CodexInvocationProfile -ProfileId "profile_readonly_smoke"
+    profile_disabled_unknown = New-CodexInvocationProfile -ProfileId "profile_disabled_unknown"
+    token_printed = $false
+  }
+}
+
+function Get-PreviousRetryClassification {
+  $retryPath = Get-PilotRetryResultPath
+  $replacementPath = Get-PilotReplacementRetryResultPath
+  $retry = Read-SafeJsonFile -Path $retryPath
+  $fileScan = Test-SafeStateDirFiles
+  $openPrs = @(Get-OpenPilotPrs)
+  $executorEvidenceExists = Test-Path -LiteralPath (Get-PilotEvidencePath) -PathType Leaf
+  $finalizerEvidenceExists = Test-Path -LiteralPath (Get-PilotFinalizerEvidencePath) -PathType Leaf
+  $worktreeChangedFiles = if (Test-DefaultPilotStateDir) { @(Get-ChangedFiles) } else { @() }
+  $retryChangedFiles = Get-ObjectStringArray -Object $retry -Name "changed_files"
+  $changedFiles = @($worktreeChangedFiles + $retryChangedFiles | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
+  $retryExists = Test-Path -LiteralPath $retryPath -PathType Leaf
+  $replacementExists = Test-Path -LiteralPath $replacementPath -PathType Leaf
+  $retryOk = ($retry -and ($retry.PSObject.Properties.Name -contains "ok") -and $retry.ok -eq $true)
+  $retryTimedOut = ($retry -and ($retry.PSObject.Properties.Name -contains "timed_out") -and $retry.timed_out -eq $true)
+  $retryPrCreated = ($retry -and ($retry.PSObject.Properties.Name -contains "pr_created") -and $retry.pr_created -eq $true)
+  $retryPrUrl = if ($retry -and ($retry.PSObject.Properties.Name -contains "pr_url")) { [string]$retry.pr_url } else { "" }
+  $tokenPrinted = ($retry -and ($retry.PSObject.Properties.Name -contains "token_printed") -and $retry.token_printed -eq $true)
+  $controlledFailure = ($retry -and (-not $retryOk) -and (($retry.PSObject.Properties.Name -contains "final_state") -or ($retry.PSObject.Properties.Name -contains "failure_class")))
+
+  $classification = "invocation_failed_unknown"
+  if (-not $retryExists) {
+    $classification = "invocation_failed_unknown"
+  } elseif ($retryPrCreated -or -not [string]::IsNullOrWhiteSpace($retryPrUrl) -or $openPrs.Count -gt 0) {
+    $classification = "invocation_failed_with_pr"
+  } elseif (-not $fileScan.safe) {
+    $classification = "invocation_failed_with_raw_artifacts"
+  } elseif ($changedFiles.Count -gt 0) {
+    $classification = "invocation_failed_with_changes"
+  } elseif ($retryTimedOut) {
+    $classification = "invocation_timed_out_no_mutation"
+  } elseif ($retryOk -and ($retryPrCreated -or -not [string]::IsNullOrWhiteSpace($retryPrUrl))) {
+    $classification = "invocation_succeeded_created_pr"
+  } elseif ($controlledFailure -and -not $executorEvidenceExists -and -not $finalizerEvidenceExists -and -not $tokenPrinted) {
+    $classification = "invocation_failed_no_mutation"
+  }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_codex_invocation_classification.v1"
+    pilot_id = $PilotId
+    previous_retry_result_exists = $retryExists
+    previous_retry_result_path = if ($retryExists) { ConvertTo-ShortPath $retryPath } else { $null }
+    classification = $classification
+    failure_class = if ($retry -and ($retry.PSObject.Properties.Name -contains "failure_class")) { [string]$retry.failure_class } else { $null }
+    timed_out = [bool]$retryTimedOut
+    changed_files = @($changedFiles)
+    pr_created = [bool]$retryPrCreated
+    pr_url_present = -not [string]::IsNullOrWhiteSpace($retryPrUrl)
+    open_pilot_pr_count = $openPrs.Count
+    executor_evidence_exists = $executorEvidenceExists
+    finalizer_evidence_exists = $finalizerEvidenceExists
+    raw_or_secret_artifacts_present = (-not $fileScan.safe)
+    replacement_retry_count = if ($replacementExists) { 1 } else { 0 }
+    max_replacement_retries = 1
+    prompt_persisted = if ($retry -and ($retry.PSObject.Properties.Name -contains "prompt_persisted")) { [bool]$retry.prompt_persisted } else { $false }
+    transcript_persisted = if ($retry -and ($retry.PSObject.Properties.Name -contains "transcript_persisted")) { [bool]$retry.transcript_persisted } else { $false }
+    stdout_persisted = if ($retry -and ($retry.PSObject.Properties.Name -contains "stdout_persisted")) { [bool]$retry.stdout_persisted } else { $false }
+    stderr_persisted = if ($retry -and ($retry.PSObject.Properties.Name -contains "stderr_persisted")) { [bool]$retry.stderr_persisted } else { $false }
+    raw_logs_persisted = if ($retry -and ($retry.PSObject.Properties.Name -contains "raw_logs_persisted")) { [bool]$retry.raw_logs_persisted } else { $false }
+    token_printed = $false
+  }
+}
+
+function New-CodexInvocationCompatibility {
+  $diagnostics = New-CodexInvocationDiagnostics
+  $profile = New-CodexInvocationProfileSummary
+  $classification = Get-PreviousRetryClassification
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_codex_invocation_compatibility.v1"
+    pilot_id = $PilotId
+    diagnostics = $diagnostics
+    profile = $profile
+    previous_retry_classification = $classification
+    compatible = ($profile.selected_invocation_profile -eq "profile_workspace_write_workdir")
+    token_printed = $false
+  }
+}
+
+function New-ReplacementRetryReadiness {
+  $classification = Get-PreviousRetryClassification
+  $profile = New-CodexInvocationProfileSummary
+  $gate = New-ApplyGate
+  $runner = Get-RunnerLockState
+  $git = Get-GitState
+  $blockers = New-Object System.Collections.Generic.List[string]
+  if ($classification.classification -ne "invocation_failed_no_mutation") { $blockers.Add("previous_retry_not_invocation_failed_no_mutation") | Out-Null }
+  if ($classification.replacement_retry_count -ne 0) { $blockers.Add("replacement_retry_budget_exhausted") | Out-Null }
+  if ($profile.selected_invocation_profile -ne "profile_workspace_write_workdir") { $blockers.Add("workspace_write_profile_not_selected") | Out-Null }
+  if ($classification.changed_files.Count -ne 0) { $blockers.Add("prior_retry_changed_files_present") | Out-Null }
+  if ($classification.open_pilot_pr_count -ne 0 -or $classification.pr_created -or $classification.pr_url_present) { $blockers.Add("prior_retry_pr_present") | Out-Null }
+  if ($classification.executor_evidence_exists) { $blockers.Add("prior_executor_evidence_present") | Out-Null }
+  if ($classification.finalizer_evidence_exists) { $blockers.Add("prior_finalizer_evidence_present") | Out-Null }
+  if ($classification.raw_or_secret_artifacts_present) { $blockers.Add("prior_raw_or_secret_artifacts_present") | Out-Null }
+  if ($classification.prompt_persisted -or $classification.transcript_persisted -or $classification.stdout_persisted -or $classification.stderr_persisted -or $classification.raw_logs_persisted) { $blockers.Add("prior_raw_artifact_flags_present") | Out-Null }
+  if ($runner.runner_lock_status -ne "none") { $blockers.Add("runner_lock_present") | Out-Null }
+  if ($gate.active_tasks -ne 0) { $blockers.Add("active_tasks_present") | Out-Null }
+  if ($gate.stale_leases -ne 0) { $blockers.Add("stale_leases_present") | Out-Null }
+  if ($git.branch -ne "main" -or -not $git.clean) { $blockers.Add("replacement_retry_requires_clean_main") | Out-Null }
+
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_replacement_retry_readiness.v1"
+    pilot_id = $PilotId
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = $WorkerId
+    task_type = "docs/local-smoke"
+    risk = "low"
+    target_path = "docs/managed-mode-pilot-orientation.md"
+    previous_retry_classification = $classification.classification
+    selected_invocation_profile = $profile.selected_invocation_profile
+    can_run_replacement_retry = ($blockers.Count -eq 0)
+    replacement_retry_count = $classification.replacement_retry_count
+    max_replacement_retries = 1
+    active_tasks = $gate.active_tasks
+    stale_leases = $gate.stale_leases
+    runner_lock = $runner.runner_lock_status
+    open_pilot_pr_count = $classification.open_pilot_pr_count
+    executor_evidence_exists = $classification.executor_evidence_exists
+    finalizer_evidence_exists = $classification.finalizer_evidence_exists
+    general_bounded_queue_apply_enabled = $false
+    blockers = @($blockers | Select-Object -Unique)
+    token_printed = $false
+  }
 }
 
 function Get-PilotTaskPrSnapshot {
@@ -1243,7 +1494,7 @@ function Invoke-PilotApply {
 
   $prompt = New-PilotPrompt
   $promptHash = Get-Sha256Text -Text $prompt
-  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory $codex.working_directory -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
   if (-not $execution.ok) {
     git switch main *> $null
     $failure = [pscustomobject]@{
@@ -1339,7 +1590,7 @@ Managed Mode Pilot 208 one-workunit docs/local-smoke task.
     workunit_id = "managed-mode-pilot-208-workunit-001"
     task_id = "managed-mode-pilot-208-task-001"
     worker_id = "laptop-zenbookduo"
-    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    command_class = $codex.metadata.command_class
     launcher_metadata = $codex.metadata
     changed_files = @($changedFiles)
     file_evidence = @($fileEvidence)
@@ -1408,6 +1659,14 @@ function Write-SafeRetryResult {
   if (Test-SecretLookingText $json) { throw "Secret-looking retry result detected." }
   New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
   $json | Set-Content -LiteralPath (Get-PilotRetryResultPath) -Encoding UTF8
+}
+
+function Write-SafeReplacementRetryResult {
+  param($Result)
+  $json = $Result | ConvertTo-Json -Depth 100
+  if (Test-SecretLookingText $json) { throw "Secret-looking replacement retry result detected." }
+  New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
+  $json | Set-Content -LiteralPath (Get-PilotReplacementRetryResultPath) -Encoding UTF8
 }
 
 function Invoke-RetryApply {
@@ -1513,7 +1772,7 @@ function Invoke-RetryApply {
 
   $prompt = New-RetryPilotPrompt
   $promptHash = Get-Sha256Text -Text $prompt
-  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory (Get-RepoRoot) -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory $codex.working_directory -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
   $changedFilesAfterExecution = @(Get-ChangedFiles)
   if (-not $execution.ok) {
     if ($changedFilesAfterExecution.Count -eq 0) { git switch main *> $null }
@@ -1657,7 +1916,7 @@ Managed Mode Pilot 208 Retry docs/local-smoke task.
     workunit_id = "managed-mode-pilot-208-workunit-001"
     task_id = "managed-mode-pilot-208-task-001"
     worker_id = "laptop-zenbookduo"
-    command_class = "codex_exec_ephemeral_stdin_discard_output"
+    command_class = $codex.metadata.command_class
     launcher_metadata = $codex.metadata
     changed_files = @($changedFiles)
     file_evidence = @($fileEvidence)
@@ -1715,6 +1974,326 @@ Managed Mode Pilot 208 Retry docs/local-smoke task.
   return $result
 }
 
+function Test-PathAllowedForReplacementRetry {
+  param([string]$Path)
+  $normalized = $Path.Replace("\", "/")
+  return ($normalized -eq "docs/managed-mode-pilot-orientation.md")
+}
+
+function Invoke-ReplacementRetryApply {
+  $readiness = New-ReplacementRetryReadiness
+  if (-not $readiness.can_run_replacement_retry -or -not $ReplacementRetryAuthorization -or [string]::IsNullOrWhiteSpace($ReplacementRetryAuthorizationReason)) {
+    $blockers = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($readiness.blockers)) { $blockers.Add([string]$item) | Out-Null }
+    if (-not $ReplacementRetryAuthorization) { $blockers.Add("replacement_retry_authorization_required") | Out-Null }
+    if ([string]::IsNullOrWhiteSpace($ReplacementRetryAuthorizationReason)) { $blockers.Add("replacement_retry_authorization_reason_required") | Out-Null }
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_replacement_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "replacement_retry_blocked"
+      final_state = "replacement_retry_blocked"
+      previous_retry_classification = $readiness.previous_retry_classification
+      selected_invocation_profile = $readiness.selected_invocation_profile
+      replacement_retry_attempt = 0
+      replacement_retry_count = $readiness.replacement_retry_count
+      max_replacement_retries = 1
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @($blockers | Select-Object -Unique)
+      token_printed = $false
+    }
+  }
+
+  if ($SimulateReplacementRetryApply) {
+    $changed = if ($SimulateReplacementRetryOutcome -eq "success") { @("docs/managed-mode-pilot-orientation.md") } elseif ($SimulateReplacementRetryOutcome -eq "bad-path") { @("apps/server/src/index.ts") } else { @() }
+    $result = [pscustomobject]@{
+      ok = ($SimulateReplacementRetryOutcome -eq "success")
+      schema = "skybridge.managed_mode_replacement_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "simulated_replacement_retry_no_mutation"
+      final_state = switch ($SimulateReplacementRetryOutcome) {
+        "success" { "held_waiting_human_pr_review" }
+        "timeout" { "pilot_failed_replacement_retry_timeout" }
+        default { "pilot_failed_replacement_retry_failed" }
+      }
+      previous_retry_classification = $readiness.previous_retry_classification
+      selected_invocation_profile = $readiness.selected_invocation_profile
+      replacement_retry_authorization = [bool]$ReplacementRetryAuthorization
+      replacement_retry_authorization_reason = $ReplacementRetryAuthorizationReason
+      replacement_retry_attempt = 1
+      replacement_retry_count = 1
+      max_replacement_retries = 1
+      workunit_id = "managed-mode-pilot-208-workunit-001"
+      task_id = "managed-mode-pilot-208-task-001"
+      worker_id = "laptop-zenbookduo"
+      task_type = "docs/local-smoke"
+      target_path = "docs/managed-mode-pilot-orientation.md"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = ($SimulateReplacementRetryOutcome -eq "success")
+      pr_count = if ($SimulateReplacementRetryOutcome -eq "success") { 1 } else { 0 }
+      changed_files = @($changed)
+      timed_out = ($SimulateReplacementRetryOutcome -eq "timeout")
+      prompt_persisted = $false
+      transcript_persisted = $false
+      stdout_persisted = $false
+      stderr_persisted = $false
+      raw_logs_persisted = $false
+      auto_merge_enabled = $false
+      no_mutation = $true
+      token_printed = $false
+    }
+    Write-SafeReplacementRetryResult -Result $result
+    return $result
+  }
+
+  $codex = Get-CodexCommand -ProfileId "profile_workspace_write_workdir"
+  if (-not $codex) {
+    return [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_replacement_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "replacement_retry_blocked"
+      final_state = "replacement_retry_blocked"
+      previous_retry_classification = $readiness.previous_retry_classification
+      selected_invocation_profile = "profile_disabled_unknown"
+      replacement_retry_attempt = 0
+      task_created = $false
+      task_claimed = $false
+      codex_execution_started = $false
+      pr_created = $false
+      blockers = @("codex_cli_missing")
+      token_printed = $false
+    }
+  }
+
+  $branch = "ai/managed-mode-pilot/managed-mode-pilot-208-replacement-retry-001"
+  New-Item -ItemType Directory -Path (Get-StateDirPath) -Force | Out-Null
+  git fetch origin main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed." }
+  git switch -C $branch origin/main *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git switch replacement retry branch failed." }
+
+  $prompt = New-RetryPilotPrompt
+  $promptHash = Get-Sha256Text -Text $prompt
+  $execution = Invoke-SilentProcess -FilePath $codex.file_path -ArgumentList ([string[]]$codex.argument_list) -WorkingDirectory $codex.working_directory -StandardInputText $prompt -TimeoutMinutes $MaxRuntimeMinutes
+  $changedFilesAfterExecution = @(Get-ChangedFiles)
+  if (-not $execution.ok) {
+    if ($changedFilesAfterExecution.Count -eq 0) { git switch main *> $null }
+    $result = [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_replacement_retry_result.v1"
+      pilot_id = $PilotId
+      mode = if ($execution.timed_out) { "replacement_retry_timeout" } else { "replacement_retry_controlled_failure" }
+      final_state = if ($execution.timed_out) { "pilot_failed_replacement_retry_timeout" } else { "pilot_failed_replacement_retry_failed" }
+      previous_retry_classification = $readiness.previous_retry_classification
+      selected_invocation_profile = $codex.metadata.command_profile_id
+      replacement_retry_authorization = [bool]$ReplacementRetryAuthorization
+      replacement_retry_authorization_reason = $ReplacementRetryAuthorizationReason
+      replacement_retry_attempt = 1
+      replacement_retry_count = 1
+      max_replacement_retries = 1
+      workunit_id = "managed-mode-pilot-208-workunit-001"
+      task_id = "managed-mode-pilot-208-task-001"
+      worker_id = "laptop-zenbookduo"
+      task_type = "docs/local-smoke"
+      target_path = "docs/managed-mode-pilot-orientation.md"
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = $false
+      pr_count = 0
+      changed_files = @($changedFilesAfterExecution)
+      timed_out = $execution.timed_out
+      exit_code = $execution.exit_code
+      elapsed_seconds = $execution.elapsed_seconds
+      timeout_minutes = $execution.timeout_minutes
+      launcher_metadata = $codex.metadata
+      stdout_chars_discarded = $execution.stdout_chars_discarded
+      stderr_chars_discarded = $execution.stderr_chars_discarded
+      stdout_persisted = $false
+      stderr_persisted = $false
+      prompt_persisted = $false
+      transcript_persisted = $false
+      raw_logs_persisted = $false
+      auto_merge_enabled = $false
+      token_printed = $false
+    }
+    Write-SafeReplacementRetryResult -Result $result
+    return $result
+  }
+
+  $changedFiles = @(Get-ChangedFiles)
+  if ($changedFiles.Count -lt 1) {
+    git switch main *> $null
+    $result = [pscustomobject]@{
+      ok = $false
+      schema = "skybridge.managed_mode_replacement_retry_result.v1"
+      pilot_id = $PilotId
+      mode = "replacement_retry_no_changes"
+      final_state = "pilot_failed_replacement_retry_failed"
+      previous_retry_classification = $readiness.previous_retry_classification
+      selected_invocation_profile = $codex.metadata.command_profile_id
+      replacement_retry_authorization = [bool]$ReplacementRetryAuthorization
+      replacement_retry_authorization_reason = $ReplacementRetryAuthorizationReason
+      replacement_retry_attempt = 1
+      replacement_retry_count = 1
+      max_replacement_retries = 1
+      task_created = $true
+      task_claimed = $true
+      codex_execution_started = $true
+      codex_execution_count = 1
+      pr_created = $false
+      changed_files = @()
+      token_printed = $false
+    }
+    Write-SafeReplacementRetryResult -Result $result
+    return $result
+  }
+  foreach ($file in $changedFiles) {
+    if (-not (Test-PathAllowedForReplacementRetry -Path $file)) {
+      $result = [pscustomobject]@{
+        ok = $false
+        schema = "skybridge.managed_mode_replacement_retry_result.v1"
+        pilot_id = $PilotId
+        mode = "replacement_retry_disallowed_path"
+        final_state = "pilot_failed_replacement_retry_failed"
+        previous_retry_classification = $readiness.previous_retry_classification
+        selected_invocation_profile = $codex.metadata.command_profile_id
+        replacement_retry_authorization = [bool]$ReplacementRetryAuthorization
+        replacement_retry_authorization_reason = $ReplacementRetryAuthorizationReason
+        replacement_retry_attempt = 1
+        replacement_retry_count = 1
+        max_replacement_retries = 1
+        task_created = $true
+        task_claimed = $true
+        codex_execution_started = $true
+        codex_execution_count = 1
+        pr_created = $false
+        changed_files = @($changedFiles)
+        blockers = @("disallowed_replacement_retry_changed_path:$file")
+        token_printed = $false
+      }
+      Write-SafeReplacementRetryResult -Result $result
+      return $result
+    }
+  }
+  foreach ($file in $changedFiles) {
+    git add -- $file *> $null
+    if ($LASTEXITCODE -ne 0) { throw "git add failed for $file" }
+  }
+  git commit -m "docs: add managed mode pilot replacement orientation" *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
+  git push -u origin $branch *> $null
+  if ($LASTEXITCODE -ne 0) { throw "git push failed." }
+
+  $bodyPath = Join-Path (Get-StateDirPath) "task-pr-body.md"
+  $body = @"
+## Summary
+
+Managed Mode Pilot 208 Replacement Retry docs/local-smoke task.
+
+## Safety
+
+- Pilot id: `managed-mode-pilot-208`
+- Workunit id: `managed-mode-pilot-208-workunit-001`
+- Task id: `managed-mode-pilot-208-task-001`
+- Worker: `laptop-zenbookduo`
+- Replacement retry attempt: `1`
+- Task type: `docs/local-smoke`
+- Changed files: $($changedFiles -join ", ")
+- No raw prompt, transcript, stdout, stderr, worker log or CI log is included.
+- No auto-merge requested.
+- token_printed=false
+"@
+  if (Test-SecretLookingText $body) { throw "Secret-looking replacement retry PR body detected." }
+  Set-Content -LiteralPath $bodyPath -Value $body -Encoding UTF8
+  $prOutput = gh pr create --title "Managed Mode Pilot 208 Replacement Retry: Task managed-mode-pilot-208-workunit-001" --body-file $bodyPath --base main --head $branch
+  if ($LASTEXITCODE -ne 0) { throw "gh pr create failed." }
+  $prUrl = (($prOutput | Out-String).Trim() -split "\r?\n" | Select-Object -Last 1)
+
+  $fileEvidence = @($changedFiles | ForEach-Object {
+    [pscustomobject]@{
+      path = $_
+      sha256 = Get-Sha256Text -Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $_))
+      token_printed = $false
+    }
+  })
+  $evidence = [pscustomobject]@{
+    schema = "skybridge.managed_mode_pilot_executor_evidence.v1"
+    pilot_id = $PilotId
+    mode = "managed_mode_v1_pilot_replacement_retry"
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    task_type = "docs/local-smoke"
+    command_class = $codex.metadata.command_class
+    launcher_metadata = $codex.metadata
+    changed_files = @($changedFiles)
+    file_evidence = @($fileEvidence)
+    prompt_sha256 = $promptHash
+    replacement_retry_attempt = 1
+    replacement_retry_count = 1
+    max_replacement_retries = 1
+    prompt_persisted = $false
+    transcript_persisted = $false
+    stdout_persisted = $false
+    stderr_persisted = $false
+    raw_logs_persisted = $false
+    task_created = $true
+    task_claimed = $true
+    codex_execution_count = 1
+    pr_url = $prUrl
+    pr_count = 1
+    auto_merge_enabled = $false
+    final_state = "held_waiting_human_pr_review"
+    token_printed = $false
+  }
+  $evidenceJson = $evidence | ConvertTo-Json -Depth 100
+  if (Test-SecretLookingText $evidenceJson) { throw "Secret-looking replacement retry evidence detected." }
+  $evidenceJson | Set-Content -LiteralPath (Get-PilotEvidencePath) -Encoding UTF8
+  $result = [pscustomobject]@{
+    ok = $true
+    schema = "skybridge.managed_mode_replacement_retry_result.v1"
+    pilot_id = $PilotId
+    mode = "replacement_retry_apply"
+    final_state = "held_waiting_human_pr_review"
+    previous_retry_classification = $readiness.previous_retry_classification
+    selected_invocation_profile = $codex.metadata.command_profile_id
+    replacement_retry_authorization = [bool]$ReplacementRetryAuthorization
+    replacement_retry_authorization_reason = $ReplacementRetryAuthorizationReason
+    replacement_retry_attempt = 1
+    replacement_retry_count = 1
+    max_replacement_retries = 1
+    workunit_id = "managed-mode-pilot-208-workunit-001"
+    task_id = "managed-mode-pilot-208-task-001"
+    worker_id = "laptop-zenbookduo"
+    task_type = "docs/local-smoke"
+    launcher_metadata = $codex.metadata
+    changed_files = @($changedFiles)
+    pr_url = $prUrl
+    task_created = $true
+    task_claimed = $true
+    codex_execution_started = $true
+    codex_execution_count = 1
+    pr_created = $true
+    pr_count = 1
+    evidence_path = ConvertTo-ShortPath (Get-PilotEvidencePath)
+    result_path = ConvertTo-ShortPath (Get-PilotReplacementRetryResultPath)
+    auto_merge_enabled = $false
+    token_printed = $false
+  }
+  Write-SafeReplacementRetryResult -Result $result
+  git switch main *> $null
+  return $result
+}
+
 function New-SchemaSummary {
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v1_schema_summary.v1"
@@ -1730,6 +2309,11 @@ function New-SchemaSummary {
       "skybridge.managed_mode_pilot_retry_policy.v1",
       "skybridge.managed_mode_pilot_retry_readiness.v1",
       "skybridge.managed_mode_pilot_retry_result.v1",
+      "skybridge.managed_mode_codex_invocation_diagnostics.v1",
+      "skybridge.managed_mode_codex_invocation_profile.v1",
+      "skybridge.managed_mode_codex_invocation_classification.v1",
+      "skybridge.managed_mode_replacement_retry_readiness.v1",
+      "skybridge.managed_mode_replacement_retry_result.v1",
       "skybridge.managed_mode_pilot_finalizer_state.v1",
       "skybridge.managed_mode_pilot_finalizer_evidence.v1",
       "skybridge.managed_mode_pilot_finalizer_report.v1"
@@ -1754,6 +2338,7 @@ function New-SafeSummary {
     general_bounded_queue_apply_enabled = $false
     pilot_bounded_queue_apply_enabled = $gate.pilot_bounded_queue_apply_enabled
     launcher_metadata = $gate.launcher_metadata
+    selected_invocation_profile = if ($gate.launcher_metadata) { $gate.launcher_metadata.command_profile_id } else { "profile_disabled_unknown" }
     max_workunits = $MaxWorkunits
     max_tasks = $MaxTasks
     max_claims = $MaxClaims
@@ -1778,6 +2363,13 @@ $result = switch ($Command) {
   "retry-readiness" { New-RetryReadiness }
   "retry-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_pilot_retry_preview.v1"; readiness = New-RetryReadiness; request = New-PilotPlan; retry_target_path = "docs/managed-mode-pilot-orientation.md"; no_mutation = $true; token_printed = $false } }
   "retry-apply" { Invoke-RetryApply }
+  "codex-invocation-diagnostics" { New-CodexInvocationDiagnostics }
+  "codex-invocation-profile" { New-CodexInvocationProfileSummary }
+  "codex-invocation-compatibility" { New-CodexInvocationCompatibility }
+  "codex-invocation-safe-summary" { [pscustomobject]@{ schema = "skybridge.managed_mode_codex_invocation_safe_summary.v1"; diagnostics = New-CodexInvocationDiagnostics; profile = New-CodexInvocationProfileSummary; previous_retry_classification = Get-PreviousRetryClassification; general_bounded_queue_apply_enabled = $false; token_printed = $false } }
+  "replacement-retry-readiness" { New-ReplacementRetryReadiness }
+  "replacement-retry-preview" { [pscustomobject]@{ schema = "skybridge.managed_mode_replacement_retry_preview.v1"; readiness = New-ReplacementRetryReadiness; request = New-PilotPlan; target_path = "docs/managed-mode-pilot-orientation.md"; would_execute_codex = $true; would_create_pr_on_success = $true; no_mutation = $true; token_printed = $false } }
+  "replacement-retry-apply" { Invoke-ReplacementRetryApply }
   "finalizer-preview" { Invoke-PilotFinalizer }
   "finalizer-apply" { Invoke-PilotFinalizer -Mutate }
   "finalizer-evidence" { New-PilotFinalizerState }
