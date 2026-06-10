@@ -1701,6 +1701,13 @@ export interface BoundedQueueApplyResult {
   pilot_id: string;
   mode: string;
   final_state: string;
+  renewed_authorization?: boolean;
+  renewed_authorization_reason?: string | null;
+  prior_attempt_state?: string;
+  prior_attempt_had_task_pr?: boolean;
+  prior_attempt_had_executor_evidence?: boolean;
+  prior_attempt_had_raw_artifacts?: boolean;
+  renewed_attempt_count?: number;
   task_created: boolean;
   task_claimed: boolean;
   codex_execution_started: boolean;
@@ -1736,6 +1743,31 @@ export interface ManagedModePilotState {
   codex_execution_count: number;
   pr_count: number;
   evidence_path: string | null;
+  token_printed: false;
+}
+
+export interface ManagedModePilotRenewedAuthorizationState {
+  schema: "skybridge.managed_mode_pilot_renewed_authorization_state.v1";
+  pilot_id: string;
+  mode: "managed_mode_v1_pilot";
+  renewed_authorization: boolean;
+  renewed_authorization_reason: string | null;
+  prior_attempt_state:
+    | "prior_attempt_failed_before_execution"
+    | "prior_attempt_produced_task_pr_or_evidence"
+    | "prior_attempt_ambiguous"
+    | "prior_attempt_unsafe_raw_artifacts";
+  prior_attempt_had_task_pr: boolean;
+  prior_attempt_open_task_pr_count: number;
+  prior_attempt_had_executor_evidence: boolean;
+  prior_attempt_had_result_artifact: boolean;
+  prior_attempt_had_finalizer_evidence: boolean;
+  prior_attempt_had_raw_artifacts: boolean;
+  prior_attempt_artifact_count: number;
+  prior_attempt_unknown_artifacts: string[];
+  renewed_attempt_count: 0 | 1;
+  can_run_renewed_apply: boolean;
+  blockers: string[];
   token_printed: false;
 }
 
