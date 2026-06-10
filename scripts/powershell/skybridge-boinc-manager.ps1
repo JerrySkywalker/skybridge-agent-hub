@@ -61,6 +61,13 @@ function Get-ManagedModeSummary {
   $raw | ConvertFrom-Json
 }
 
+function Get-ManagedModeRunSummary {
+  $scriptPath = Join-Path $PSScriptRoot "skybridge-managed-mode-run.ps1"
+  if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return $null }
+  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Command safe-summary -Json
+  $raw | ConvertFrom-Json
+}
+
 function Get-LocalPolicy {
   $scriptPath = Join-Path $PSScriptRoot "skybridge-local-resource-policy.ps1"
   $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $scriptPath -Command safe-summary -Json
@@ -208,16 +215,23 @@ function New-ManagerState {
 function New-SafeSummary {
   $state = New-ManagerState
   $managedMode = Get-ManagedModeSummary
+  $managedModeRun = Get-ManagedModeRunSummary
   [pscustomobject]@{
     schema = "skybridge.boinc_manager_safe_summary.v1"
     project_id = $state.project_id
     mode_id = $state.control_surface.current_mode.mode_id
     mode_display_name = $state.control_surface.current_mode.display_name
     managed_mode_v1 = "pilot only"
-    managed_mode_v1_summary = if ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "Managed Mode Pilot 208 completed; no next execution authorized." } else { "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate" }
+    managed_mode_v1_summary = if ($managedModeRun) { "Managed Mode Pilot 208 completed; next mode repeatable one-at-a-time preview; general bounded queue disabled." } elseif ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "Managed Mode Pilot 208 completed; no next execution authorized." } else { "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate" }
     managed_mode_pilot_state = if ($managedMode) { $managedMode.managed_mode_pilot_state } else { "unknown" }
+    managed_mode_pilot_208 = if ($managedModeRun) { $managedModeRun.managed_mode_pilot_208 } else { "unknown" }
+    next_mode = if ($managedModeRun) { $managedModeRun.next_mode } else { "preview unavailable" }
+    next_run_id = if ($managedModeRun) { $managedModeRun.next_run_id } else { $null }
     general_apply = "disabled"
     general_bounded_queue_apply_enabled = $false
+    general_bounded_queue = "disabled"
+    one_at_a_time_run_apply_enabled = $false
+    apply_disabled_reason = if ($managedModeRun) { $managedModeRun.apply_disabled_reason } else { "one_at_a_time_run_apply_disabled_by_default" }
     pilot_bounded_queue_apply_enabled = if ($managedMode) { [bool]$managedMode.pilot_bounded_queue_apply_enabled } else { $false }
     one_workunit_pilot_possible_only_after_gate = $true
     enabled = $state.control_surface.current_mode.enabled
@@ -232,7 +246,7 @@ function New-SafeSummary {
     task_executed = $false
     pr_created = $false
     no_next_execution_authorized = if ($managedMode) { [bool]$managedMode.no_next_execution_authorized } else { $false }
-    next_safe_action = if ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "plan next managed-mode repeatability goal" } else { $state.next_safe_action }
+    next_safe_action = if ($managedModeRun) { $managedModeRun.next_safe_action } elseif ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "plan next managed-mode repeatability goal" } else { $state.next_safe_action }
     token_printed = $false
   }
 }

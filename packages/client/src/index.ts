@@ -1985,6 +1985,118 @@ export interface ManagedModePilotFinalizerResult {
   token_printed: false;
 }
 
+export interface ManagedModeSequencePolicy {
+  schema: "skybridge.managed_mode_sequence_policy.v1";
+  max_open_runs: 1;
+  max_workunits_per_run: 1;
+  max_tasks_per_run: 1;
+  max_claims_per_run: 1;
+  max_codex_executions_per_run: 1;
+  max_prs_per_run: 1;
+  require_human_review: true;
+  stop_on_pr_created: true;
+  stop_on_ci_failure: true;
+  stop_on_warning: true;
+  general_bounded_queue_apply_enabled: false;
+  one_at_a_time_run_apply_enabled: false;
+  token_printed: false;
+}
+
+export interface ManagedModeRunRecord {
+  schema:
+    | "skybridge.managed_mode_run_record.v1"
+    | "skybridge.managed_mode_completed_workunit_archive.v1";
+  run_id: string;
+  pilot_id?: string;
+  managed_mode_run_id: string;
+  sequence_number: number;
+  source_workunit_id: string;
+  task_id: string;
+  worker_id: string;
+  task_type: string;
+  risk: "low" | "medium" | "high";
+  allowed_paths: string[];
+  state: "completed" | "held_waiting_human_pr_review" | "failed" | "blocked" | "ready";
+  pr_url: string | null;
+  pr_state: string;
+  finalizer_evidence_path: string | null;
+  evidence_hash: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  token_printed: false;
+}
+
+export interface ManagedModeRunRegistry {
+  schema: "skybridge.managed_mode_run_registry.v1";
+  project_id: string;
+  registry_id: string;
+  sequence_policy: ManagedModeSequencePolicy;
+  records: ManagedModeRunRecord[];
+  completed_runs: ManagedModeRunRecord[];
+  open_runs: ManagedModeRunRecord[];
+  general_bounded_queue_apply_enabled: false;
+  max_workunits: 1;
+  token_printed: false;
+}
+
+export interface OneAtATimeManagedModeGate {
+  schema: "skybridge.one_at_a_time_managed_mode_gate.v1";
+  run_id: string;
+  managed_mode_run_id: string;
+  sequence_number: number;
+  can_run_one_at_a_time?: boolean;
+  explicit_209b_authorization_present?: boolean;
+  run_apply_enabled?: false;
+  apply_disabled_reason?: string;
+  previous_run_208_completed?: boolean;
+  completed_run_ids?: string[];
+  open_run_count?: number;
+  open_managed_mode_pr_count?: number;
+  active_tasks?: number;
+  stale_leases?: number;
+  runner_lock?: string;
+  general_bounded_queue_apply_enabled?: false;
+  max_workunits?: 1;
+  blockers?: string[];
+  source_workunit_id?: string;
+  task_id?: string;
+  worker_id?: string;
+  task_type?: string;
+  risk?: "low" | "medium" | "high";
+  allowed_paths?: string[];
+  target_path?: string;
+  selected_workunit_count?: 1;
+  selected_worker_count?: 1;
+  selected_worker_id?: string;
+  would_create_task?: true;
+  would_create_claim?: true;
+  would_execute_codex?: true;
+  would_create_pr?: true;
+  no_mutation?: true;
+  token_printed: false;
+}
+
+export interface ManagedModeRepeatabilitySummary {
+  schema: "skybridge.managed_mode_repeatability_summary.v1";
+  managed_mode_pilot_208: "completed";
+  next_mode: "repeatable one-at-a-time preview";
+  next_run_id: string;
+  next_sequence_number: number;
+  general_bounded_queue: "disabled";
+  general_bounded_queue_apply_enabled: false;
+  one_at_a_time_run_apply_enabled: false;
+  can_run_one_at_a_time: boolean;
+  apply_disabled_reason: string;
+  completed_run_count: number;
+  open_run_count: number;
+  open_managed_mode_pr_count: number;
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  next_safe_action: string;
+  token_printed: false;
+}
+
 export type BoincModeId =
   | "standby"
   | "armed_preview"
@@ -2082,8 +2194,15 @@ export interface BoincManagerSafeSummary {
   mode_display_name: string;
   managed_mode_v1?: "pilot only";
   managed_mode_v1_summary?: string;
+  managed_mode_pilot_state?: string;
+  managed_mode_pilot_208?: string;
+  next_mode?: string;
+  next_run_id?: string | null;
   general_apply?: "disabled";
+  general_bounded_queue?: "disabled";
   general_bounded_queue_apply_enabled?: false;
+  one_at_a_time_run_apply_enabled?: false;
+  apply_disabled_reason?: string;
   pilot_bounded_queue_apply_enabled?: boolean;
   one_workunit_pilot_possible_only_after_gate?: true;
   enabled: boolean;
@@ -3664,6 +3783,116 @@ export const fixtureBoincManagerSafeSummary: BoincManagerSafeSummary = {
   task_claimed: false,
   task_executed: false,
   pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureManagedModeSequencePolicy: ManagedModeSequencePolicy = {
+  schema: "skybridge.managed_mode_sequence_policy.v1",
+  max_open_runs: 1,
+  max_workunits_per_run: 1,
+  max_tasks_per_run: 1,
+  max_claims_per_run: 1,
+  max_codex_executions_per_run: 1,
+  max_prs_per_run: 1,
+  require_human_review: true,
+  stop_on_pr_created: true,
+  stop_on_ci_failure: true,
+  stop_on_warning: true,
+  general_bounded_queue_apply_enabled: false,
+  one_at_a_time_run_apply_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureManagedModeCompleted208Archive: ManagedModeRunRecord = {
+  schema: "skybridge.managed_mode_completed_workunit_archive.v1",
+  run_id: "managed-mode-pilot-208",
+  pilot_id: "managed-mode-pilot-208",
+  managed_mode_run_id: "managed-mode-pilot-208",
+  sequence_number: 1,
+  source_workunit_id: "managed-mode-pilot-208-workunit-001",
+  task_id: "managed-mode-pilot-208-task-001",
+  worker_id: "laptop-zenbookduo",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  allowed_paths: ["docs/managed-mode-pilot-orientation.md"],
+  state: "completed",
+  pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/140",
+  pr_state: "merged",
+  finalizer_evidence_path: ".agent/tmp/managed-mode-pilot-208/finalizer-evidence.json",
+  evidence_hash: "fixture-managed-mode-pilot-208-finalizer-hash",
+  created_at: "2026-06-10T00:00:00.000Z",
+  completed_at: "2026-06-10T00:00:00.000Z",
+  token_printed: false,
+};
+
+export const fixtureManagedModeRunRegistry: ManagedModeRunRegistry = {
+  schema: "skybridge.managed_mode_run_registry.v1",
+  project_id: "skybridge-agent-hub",
+  registry_id: "skybridge-managed-mode-run-registry",
+  sequence_policy: fixtureManagedModeSequencePolicy,
+  records: [fixtureManagedModeCompleted208Archive],
+  completed_runs: [fixtureManagedModeCompleted208Archive],
+  open_runs: [],
+  general_bounded_queue_apply_enabled: false,
+  max_workunits: 1,
+  token_printed: false,
+};
+
+export const fixtureOneAtATimeManagedModeGate: OneAtATimeManagedModeGate = {
+  schema: "skybridge.one_at_a_time_managed_mode_gate.v1",
+  run_id: "managed-mode-run-209",
+  managed_mode_run_id: "managed-mode-run-209",
+  sequence_number: 2,
+  can_run_one_at_a_time: true,
+  explicit_209b_authorization_present: false,
+  run_apply_enabled: false,
+  apply_disabled_reason: "one_at_a_time_run_apply_disabled_by_default",
+  previous_run_208_completed: true,
+  completed_run_ids: ["managed-mode-pilot-208"],
+  open_run_count: 0,
+  open_managed_mode_pr_count: 0,
+  active_tasks: 0,
+  stale_leases: 0,
+  runner_lock: "none",
+  general_bounded_queue_apply_enabled: false,
+  max_workunits: 1,
+  blockers: [],
+  source_workunit_id: "managed-mode-run-209-workunit-001",
+  task_id: "managed-mode-run-209-task-001",
+  worker_id: "laptop-zenbookduo",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  allowed_paths: ["README.md", "docs/**"],
+  target_path: "docs/managed-mode-repeatability-orientation.md",
+  selected_workunit_count: 1,
+  selected_worker_count: 1,
+  selected_worker_id: "laptop-zenbookduo",
+  would_create_task: true,
+  would_create_claim: true,
+  would_execute_codex: true,
+  would_create_pr: true,
+  no_mutation: true,
+  token_printed: false,
+};
+
+export const fixtureManagedModeRepeatabilitySummary: ManagedModeRepeatabilitySummary = {
+  schema: "skybridge.managed_mode_repeatability_summary.v1",
+  managed_mode_pilot_208: "completed",
+  next_mode: "repeatable one-at-a-time preview",
+  next_run_id: "managed-mode-run-209",
+  next_sequence_number: 2,
+  general_bounded_queue: "disabled",
+  general_bounded_queue_apply_enabled: false,
+  one_at_a_time_run_apply_enabled: false,
+  can_run_one_at_a_time: true,
+  apply_disabled_reason: "one_at_a_time_run_apply_disabled_by_default",
+  completed_run_count: 1,
+  open_run_count: 0,
+  open_managed_mode_pr_count: 0,
+  active_tasks: 0,
+  stale_leases: 0,
+  runner_lock: "none",
+  next_safe_action: "run one explicitly authorized low-risk docs/local-smoke workunit",
   token_printed: false,
 };
 
