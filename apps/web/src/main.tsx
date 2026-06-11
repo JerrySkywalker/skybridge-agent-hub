@@ -25,6 +25,9 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureManagedModeRepeatabilitySummary,
+  fixtureManagedModeRunRegistry,
+  fixtureOneAtATimeManagedModeGate,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
@@ -44,6 +47,9 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type ManagedModeRepeatabilitySummary,
+  type ManagedModeRunRegistry,
+  type OneAtATimeManagedModeGate,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerSupervisorState,
@@ -355,6 +361,11 @@ function CampaignQueuePage() {
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
+          <ManagedModeRunRegistryPanel
+            registry={fixtureManagedModeRunRegistry}
+            gate={fixtureOneAtATimeManagedModeGate}
+            summary={fixtureManagedModeRepeatabilitySummary}
+          />
           <ProposedGoalReviewPanel review={fixtureProposedGoalReviewSummary} />
           <ProposedGoalWorkunitPanel pack={fixtureWorkunitCandidatePack} />
           <WorkerReadinessPanel report={report} readiness={workerReadiness} />
@@ -456,6 +467,67 @@ function BoincControlPlanePanel({ state }: { state: BoincManagerState }) {
         ))}
       </div>
       <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function ManagedModeRunRegistryPanel({
+  registry,
+  gate,
+  summary,
+}: {
+  registry: ManagedModeRunRegistry;
+  gate: OneAtATimeManagedModeGate;
+  summary: ManagedModeRepeatabilitySummary;
+}) {
+  return (
+    <section className="skybridge-panel managed-mode-run-registry-panel" aria-label="Repeatable Managed Mode run registry">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Repeatable Managed Mode</p>
+          <h2>Run Registry</h2>
+        </div>
+        <span className={badgeClass(summary.open_run_count > 0 ? "bad" : "ok")}>
+          {summary.next_mode}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>completed runs</dt>
+          <dd>{registry.completed_runs.map((run) => `${run.run_id}:${run.state}`).join("; ") || "none"}</dd>
+        </div>
+        <div>
+          <dt>Next run preview</dt>
+          <dd>{`${gate.run_id}; workunits=${String(gate.selected_workunit_count ?? 0)}; worker=${gate.selected_worker_id ?? "none"}`}</dd>
+        </div>
+        <div>
+          <dt>Open hold status</dt>
+          <dd>{`open_runs=${summary.open_run_count}; open_prs=${summary.open_managed_mode_pr_count}; active_tasks=${summary.active_tasks}; stale_leases=${summary.stale_leases}; runner_lock=${summary.runner_lock}`}</dd>
+        </div>
+        <div>
+          <dt>Apply disabled reason</dt>
+          <dd>{summary.apply_disabled_reason}</dd>
+        </div>
+        <div>
+          <dt>Next safe action</dt>
+          <dd>{summary.next_safe_action}</dd>
+        </div>
+      </dl>
+      <QueueList
+        title="Sequence policy"
+        items={[
+          `max_open_runs=${registry.sequence_policy.max_open_runs}`,
+          `max_workunits_per_run=${registry.sequence_policy.max_workunits_per_run}`,
+          `max_tasks_per_run=${registry.sequence_policy.max_tasks_per_run}`,
+          `max_claims_per_run=${registry.sequence_policy.max_claims_per_run}`,
+          `max_codex_executions_per_run=${registry.sequence_policy.max_codex_executions_per_run}`,
+          `max_prs_per_run=${registry.sequence_policy.max_prs_per_run}`,
+          `general_bounded_queue_apply_enabled=${String(registry.sequence_policy.general_bounded_queue_apply_enabled)}`,
+          `one_at_a_time_run_apply_enabled=${String(registry.sequence_policy.one_at_a_time_run_apply_enabled)}`,
+        ]}
+        fallback="No sequence policy."
+      />
+      <p className="skybridge-state-note">Read-only registry panel: no active execution buttons are exposed. token_printed=false</p>
     </section>
   );
 }

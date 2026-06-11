@@ -13,6 +13,9 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureManagedModeRepeatabilitySummary,
+  fixtureManagedModeRunRegistry,
+  fixtureOneAtATimeManagedModeGate,
   fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
   fixtureLocalExecutionGuard,
@@ -34,6 +37,9 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type ManagedModeRepeatabilitySummary,
+  type ManagedModeRunRegistry,
+  type OneAtATimeManagedModeGate,
   type DesktopResidentState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
@@ -364,6 +370,37 @@ function BoincManagerPanel({ state }: { state: BoincManagerState }) {
   );
 }
 
+function ManagedModeRunRegistryPanel({
+  registry,
+  gate,
+  summary,
+}: {
+  registry: ManagedModeRunRegistry;
+  gate: OneAtATimeManagedModeGate;
+  summary: ManagedModeRepeatabilitySummary;
+}) {
+  return (
+    <section className="panel managed-mode-run-registry-panel" aria-label="Repeatable Managed Mode run registry">
+      <h2>Repeatable Managed Mode</h2>
+      <dl>
+        <StatusValue label="completed runs" value={registry.completed_runs.map((run) => `${run.run_id}:${run.state}`).join("; ") || "none"} />
+        <StatusValue label="Next run preview" value={`${gate.run_id}; workunits=${String(gate.selected_workunit_count ?? 0)}; worker=${gate.selected_worker_id ?? "none"}`} />
+        <StatusValue label="Open hold status" value={`open_runs=${summary.open_run_count}; open_prs=${summary.open_managed_mode_pr_count}; active_tasks=${summary.active_tasks}; stale_leases=${summary.stale_leases}; runner_lock=${summary.runner_lock}`} />
+        <StatusValue label="Apply disabled reason" value={summary.apply_disabled_reason} />
+        <StatusValue label="Next safe action" value={summary.next_safe_action} />
+        <StatusValue label="Sequence policy" value={`max_open_runs=${registry.sequence_policy.max_open_runs}; max_workunits=${registry.sequence_policy.max_workunits_per_run}; max_tasks=${registry.sequence_policy.max_tasks_per_run}; max_claims=${registry.sequence_policy.max_claims_per_run}; max_codex=${registry.sequence_policy.max_codex_executions_per_run}; max_prs=${registry.sequence_policy.max_prs_per_run}`} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Run apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No bounded queue apply</button>
+        <button type="button" disabled aria-disabled="true">Human review required</button>
+      </div>
+      <p>Read-only registry panel: no active execution buttons are exposed. token_printed=false</p>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -513,6 +550,11 @@ function App() {
       <AttentionPanel events={attention.attention_events} />
       <ExecutionDisabledBanner guard={executionGuard} />
       <BoincManagerPanel state={fixtureBoincManagerState} />
+      <ManagedModeRunRegistryPanel
+        registry={fixtureManagedModeRunRegistry}
+        gate={fixtureOneAtATimeManagedModeGate}
+        summary={fixtureManagedModeRepeatabilitySummary}
+      />
       <ResidentStatusPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />
