@@ -1,0 +1,4 @@
+- Repeatable managed mode runs one bounded workunit at a time so each task can be reviewed independently.
+- Each workunit creates one PR, then stops for human review before any follow-up work begins.
+- General bounded queue apply remains disabled; do not use broad queue application or worker loops.
+- Keep run output orientation explicit with `token_printed=false`.
