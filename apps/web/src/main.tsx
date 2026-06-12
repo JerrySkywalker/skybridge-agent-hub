@@ -550,6 +550,10 @@ function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
       </div>
       <dl className="queue-definition-list">
         <div>
+          <dt>Readiness id</dt>
+          <dd>{status.release_readiness.readiness_id ?? status.operator_guidance.current_state}</dd>
+        </div>
+        <div>
           <dt>Completed runs</dt>
           <dd>{status.completed_runs.completed_run_ids.join("; ")}</dd>
         </div>
@@ -560,6 +564,10 @@ function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
         <div>
           <dt>No next execution authorized</dt>
           <dd>{String(status.release_readiness.no_next_execution_authorized)}</dd>
+        </div>
+        <div>
+          <dt>Resource gate integrated</dt>
+          <dd>{String(status.release_readiness.resource_gate_integrated ?? false)}</dd>
         </div>
         <div>
           <dt>General bounded queue apply</dt>

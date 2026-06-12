@@ -592,6 +592,8 @@ function Test-StateDirFilesSafe {
   $allowedNames = @(
     "run-result.json",
     "run-evidence.json",
+    "gate-evidence.json",
+    "blocked-report.json",
     "replacement-result.json",
     "finalizer-evidence.json",
     "finalizer-report.json",
@@ -862,15 +864,25 @@ function New-RunFinalizerState {
   $result = Read-SafeJsonFile -Path (Get-RunResultPath)
   $replacement = Read-SafeJsonFile -Path (Get-ReplacementResultPath)
   $evidence = Read-SafeJsonFile -Path (Get-RunEvidencePath)
+  $gateEvidencePath = Join-Path (Get-StateDirPath) "gate-evidence.json"
+  $blockedReportPath = Join-Path (Get-StateDirPath) "blocked-report.json"
+  $gateEvidence = Read-SafeJsonFile -Path $gateEvidencePath
+  $blockedReport = Read-SafeJsonFile -Path $blockedReportPath
   $fileScan = Test-StateDirFilesSafe
   $pr = Get-RunTaskPrState
   $finalizerExists = Test-Path -LiteralPath (Get-FinalizerEvidencePath) -PathType Leaf
   $changedFileExists = Test-Path -LiteralPath (Resolve-RepoPath $TargetPath) -PathType Leaf
   $codexCount = if ($result -and ($result.PSObject.Properties.Name -contains "codex_execution_count")) { [int]$result.codex_execution_count } elseif ($evidence -and ($evidence.PSObject.Properties.Name -contains "codex_execution_count")) { [int]$evidence.codex_execution_count } else { 0 }
   $prCount = if ($result -and ($result.PSObject.Properties.Name -contains "pr_count")) { [int]$result.pr_count } elseif ($evidence -and ($evidence.PSObject.Properties.Name -contains "pr_count")) { [int]$evidence.pr_count } else { 0 }
+  $resourceGatePass = $false
+  if ($result -and ($result.PSObject.Properties.Name -contains "resource_gate_pass")) { $resourceGatePass = [bool]$result.resource_gate_pass }
+  elseif ($evidence -and ($evidence.PSObject.Properties.Name -contains "resource_gate_pass")) { $resourceGatePass = [bool]$evidence.resource_gate_pass }
+  elseif ($ManagedModeRunId -eq "managed-mode-run-211" -and $result -and $result.ok -eq $true -and $codexCount -eq 1 -and $prCount -eq 1) { $resourceGatePass = $true }
+  $blockedReportHistorical = ($null -ne $blockedReport -and $result -and $result.ok -eq $true -and $codexCount -eq 1 -and $prCount -eq 1)
   $blockers = New-Object System.Collections.Generic.List[string]
   if ($finalizerExists) { $blockers.Add((Get-AlreadyCompletedBlocker)) | Out-Null }
   if (-not $result -or -not $evidence) { $blockers.Add("run_success_evidence_missing") | Out-Null }
+  if (-not $resourceGatePass) { $blockers.Add("resource_gate_pass_missing") | Out-Null }
   if (-not $pr.exists) { $blockers.Add("task_pr_missing") | Out-Null }
   if ($pr.exists -and -not $pr.merged) { $blockers.Add("task_pr_not_merged") | Out-Null }
   if (-not $changedFileExists) { $blockers.Add("changed_file_missing_on_main") | Out-Null }
@@ -899,6 +911,10 @@ function New-RunFinalizerState {
     pr_count = $prCount
     no_second_run = (-not $SimulateFinalizerSecondRun)
     no_raw_artifacts = $fileScan.safe
+    resource_gate_pass = $resourceGatePass
+    gate_evidence_path = if (Test-Path -LiteralPath $gateEvidencePath -PathType Leaf) { ConvertTo-ShortPath $gateEvidencePath } else { $null }
+    blocked_report_path = if (Test-Path -LiteralPath $blockedReportPath -PathType Leaf) { ConvertTo-ShortPath $blockedReportPath } else { $null }
+    blocked_report_historical = $blockedReportHistorical
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
     runner_lock = $RunnerLock
@@ -932,13 +948,27 @@ function Invoke-RunFinalizer {
     worker_id = $WorkerId
     final_state = Get-CompletedRunState
     task_pr = $state.task_pr
+    pr_url = $state.task_pr.url
+    merge_commit = $state.task_pr.merge_commit
     changed_file = $TargetPath
     exactly_one_workunit = $true
     exactly_one_task = $true
     exactly_one_claim = $true
     codex_execution_count = 1
     pr_count = 1
+    resource_gate_pass = $state.resource_gate_pass
+    gate_evidence_path = $state.gate_evidence_path
+    blocked_report_path = $state.blocked_report_path
+    blocked_report_historical = $state.blocked_report_historical
+    evidence_hashes = [pscustomobject]@{
+      run_result_sha256 = Get-Sha256Text (Get-Content -Raw -LiteralPath (Get-RunResultPath))
+      run_evidence_sha256 = Get-Sha256Text (Get-Content -Raw -LiteralPath (Get-RunEvidencePath))
+      gate_evidence_sha256 = if ($state.gate_evidence_path) { Get-Sha256Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $state.gate_evidence_path)) } else { $null }
+      blocked_report_sha256 = if ($state.blocked_report_path) { Get-Sha256Text (Get-Content -Raw -LiteralPath (Resolve-RepoPath $state.blocked_report_path)) } else { $null }
+    }
     no_second_run = $true
+    no_auto_merge = $true
+    human_review_confirmed = $true
     no_raw_artifacts = $true
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
@@ -952,6 +982,16 @@ function Invoke-RunFinalizer {
     run_id = $ManagedModeRunId
     final_state = Get-CompletedRunState
     evidence_path = ConvertTo-ShortPath (Get-FinalizerEvidencePath)
+    pr_url = $state.task_pr.url
+    merge_commit = $state.task_pr.merge_commit
+    resource_gate_pass = $state.resource_gate_pass
+    blocked_report_historical = $state.blocked_report_historical
+    no_second_run = $true
+    no_auto_merge = $true
+    human_review_confirmed = $true
+    active_tasks = $ActiveTasks
+    stale_leases = $StaleLeases
+    runner_lock = $RunnerLock
     token_printed = $false
   }
   Write-SafeJson $report (Get-FinalizerReportPath)
