@@ -100,9 +100,9 @@ function Write-SafeMarkdown {
 }
 
 function Get-GitScalar {
-  param([string[]]$Args, [string]$Fallback)
+  param([string[]]$GitArgs, [string]$Fallback)
   try {
-    $Output = & git @Args 2>$null
+    $Output = & git @GitArgs 2>$null
     if ($LASTEXITCODE -eq 0 -and $Output) {
       return (($Output | Select-Object -First 1) -as [string]).Trim()
     }
@@ -241,8 +241,8 @@ function New-Status {
     worker_id = $WorkerId
     device_id_hash = $DeviceId
     repo = "skybridge-agent-hub"
-    branch = Get-GitScalar -Args @("rev-parse", "--abbrev-ref", "HEAD") -Fallback "unknown"
-    commit = Get-GitScalar -Args @("rev-parse", "--short", "HEAD") -Fallback "unknown"
+    branch = Get-GitScalar -GitArgs @("rev-parse", "--abbrev-ref", "HEAD") -Fallback "unknown"
+    commit = Get-GitScalar -GitArgs @("rev-parse", "--short", "HEAD") -Fallback "unknown"
     resident_enabled = $false
     execution_enabled = $false
     poll_enabled = $false
