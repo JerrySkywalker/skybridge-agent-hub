@@ -621,6 +621,10 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
           <dd>{String(status.no_next_execution_authorized)}</dd>
         </div>
         <div>
+          <dt>Next safe action</dt>
+          <dd>{status.next_safe_action}</dd>
+        </div>
+        <div>
           <dt>Resource gate</dt>
           <dd>{status.resource_gate_status}</dd>
         </div>
@@ -630,11 +634,11 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
         </div>
       </dl>
       <div className="queue-placeholder-controls">
-        <button type="button" disabled aria-disabled="true">Workunit B review only</button>
+        <button type="button" disabled aria-disabled="true">Alpha completed</button>
         <button type="button" disabled aria-disabled="true">General apply disabled</button>
         <button type="button" disabled aria-disabled="true">Workunit C absent</button>
       </div>
-      <span>Workunit B pending or held; Workunit C absent. token_printed=false</span>
+      <span>BOINC v1 alpha completed; Workunit C absent. token_printed=false</span>
     </section>
   );
 }

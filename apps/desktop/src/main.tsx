@@ -463,6 +463,7 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
         <StatusValue label="Readiness" value={status.readiness_state} />
         <StatusValue label="Workunit C present" value={String(status.workunit_c_present)} />
         <StatusValue label="No next execution authorized" value={String(status.no_next_execution_authorized)} />
+        <StatusValue label="Next safe action" value={status.next_safe_action} />
         <StatusValue label="Open review hold" value={String(status.open_review_hold)} />
         <StatusValue label="Apply disabled" value={String(status.apply_disabled)} />
         <StatusValue label="Resource gate" value={status.resource_gate_status} />
@@ -470,11 +471,11 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
         <StatusValue label="token_printed" value={String(status.token_printed)} />
       </dl>
       <div className="queue-action-grid">
-        <button type="button" disabled aria-disabled="true">Workunit B review only</button>
+        <button type="button" disabled aria-disabled="true">Alpha completed</button>
         <button type="button" disabled aria-disabled="true">General apply disabled</button>
         <button type="button" disabled aria-disabled="true">Workunit C absent</button>
       </div>
-      <p>Workunit B is pending or held for human review; Workunit C is absent. token_printed=false</p>
+      <p>BOINC v1 alpha completed; Workunit C is absent. token_printed=false</p>
     </section>
   );
 }
