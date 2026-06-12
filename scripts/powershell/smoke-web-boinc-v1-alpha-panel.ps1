@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $text = Get-Content -Raw -LiteralPath (Join-Path $repo "apps/web/src/main.tsx")
-foreach ($required in @("BoincV1AlphaPanel", "BOINC v1 Alpha", "blocked_by_unfinalized_workunit_a", "token_printed=false")) {
+foreach ($required in @("BoincV1AlphaPanel", "BOINC v1 Alpha", "Workunit C absent", "token_printed=false")) {
   if ($text -notlike "*$required*") { throw "missing web alpha marker: $required" }
 }
 [pscustomobject]@{ ok = $true; scenario = "web-boinc-v1-alpha-panel"; token_printed = $false } | ConvertTo-Json -Compress

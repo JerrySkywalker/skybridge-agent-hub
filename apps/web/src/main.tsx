@@ -605,6 +605,22 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
           <dd>{status.workunit_b_blocked_reason}</dd>
         </div>
         <div>
+          <dt>Workunit B PR</dt>
+          <dd>{status.workunit_b_pr_url ?? "none"}</dd>
+        </div>
+        <div>
+          <dt>Readiness</dt>
+          <dd>{status.readiness_state}</dd>
+        </div>
+        <div>
+          <dt>Workunit C present</dt>
+          <dd>{String(status.workunit_c_present)}</dd>
+        </div>
+        <div>
+          <dt>No next execution authorized</dt>
+          <dd>{String(status.no_next_execution_authorized)}</dd>
+        </div>
+        <div>
           <dt>Resource gate</dt>
           <dd>{status.resource_gate_status}</dd>
         </div>
@@ -614,11 +630,11 @@ function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
         </div>
       </dl>
       <div className="queue-placeholder-controls">
-        <button type="button" disabled aria-disabled="true">Workunit B blocked</button>
+        <button type="button" disabled aria-disabled="true">Workunit B review only</button>
         <button type="button" disabled aria-disabled="true">General apply disabled</button>
-        <button type="button" disabled aria-disabled="true">No raw logs</button>
+        <button type="button" disabled aria-disabled="true">Workunit C absent</button>
       </div>
-      <span>blocked_by_unfinalized_workunit_a token_printed=false</span>
+      <span>Workunit B pending or held; Workunit C absent. token_printed=false</span>
     </section>
   );
 }
