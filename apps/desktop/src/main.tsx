@@ -13,6 +13,7 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureBoincV1Status,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
@@ -39,6 +40,7 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type BoincV1Status,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
   type OneAtATimeManagedModeGate,
@@ -394,6 +396,32 @@ function BoincManagerPanel({ state }: { state: BoincManagerState }) {
   );
 }
 
+function BoincV1PreviewPanel({ status }: { status: BoincV1Status }) {
+  const resourceGate = status.apply_gate.resource_gate as { can_run_one_at_a_time?: boolean; blockers?: string[] };
+  return (
+    <section className="panel boinc-v1-preview-panel" aria-label="BOINC-like v1 two-workunit preview panel">
+      <h2>BOINC-like v1 Preview</h2>
+      <dl>
+        <StatusValue label="Readiness" value={status.readiness.readiness_id} />
+        <StatusValue label="Preview workunits" value={status.preview.workunits.map((workunit) => `${workunit.queue_order}:${workunit.target_path}`).join("; ")} />
+        <StatusValue label="Apply disabled" value={String(!status.preview.apply_enabled && status.readiness.apply_disabled)} />
+        <StatusValue label="Blocked reason" value={status.preview.blocked_reason} />
+        <StatusValue label="Open review hold" value={String(status.preview.blocked_by_open_review)} />
+        <StatusValue label="Resource gate state" value={`can_run_one_at_a_time=${String(resourceGate.can_run_one_at_a_time ?? false)}; blockers=${(resourceGate.blockers ?? []).join("; ") || "none"}`} />
+        <StatusValue label="Drain / pause" value={`drain_after_current=${String(status.drain_pause_policy.drain_after_current)}; pause_new_claims=${String(status.drain_pause_policy.pause_new_claims)}`} />
+        <StatusValue label="Next safe action" value={status.readiness.next_safe_action} />
+        <StatusValue label="token_printed" value={String(status.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No task creation</button>
+        <button type="button" disabled aria-disabled="true">No task claim</button>
+        <button type="button" disabled aria-disabled="true">No execution</button>
+      </div>
+    </section>
+  );
+}
+
 function ManagedModeRunRegistryPanel({
   registry,
   gate,
@@ -599,6 +627,7 @@ function App() {
       <AttentionPanel events={attention.attention_events} />
       <ExecutionDisabledBanner guard={executionGuard} />
       <BoincManagerPanel state={fixtureBoincManagerState} />
+      <BoincV1PreviewPanel status={fixtureBoincV1Status} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <ManagedModeRunRegistryPanel
         registry={fixtureManagedModeRunRegistry}

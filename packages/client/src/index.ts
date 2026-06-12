@@ -2335,6 +2335,174 @@ export interface BoincManagerSafeSummary {
   token_printed: false;
 }
 
+export interface BoincV1PreviewPolicy {
+  schema: "skybridge.boinc_v1_preview_policy.v1";
+  max_workunits_preview: 2;
+  max_apply_workunits: 0;
+  apply_enabled: false;
+  run_apply_enabled: false;
+  multi_workunit_apply_enabled: false;
+  require_resource_gate: true;
+  require_human_review: true;
+  stop_on_pr_created: true;
+  stop_on_ci_failure: true;
+  stop_on_warning: true;
+  token_printed: false;
+}
+
+export interface BoincV1PreviewWorkunit {
+  schema: "skybridge.boinc_v1_preview_workunit.v1";
+  workunit_id: string;
+  task_id: null;
+  project_id: "skybridge-agent-hub";
+  task_type: "docs/local-smoke";
+  risk: "low";
+  queue_order: 1 | 2;
+  target_path: string;
+  allowed_paths: string[];
+  requires_human_review: true;
+  repo_mutating: true;
+  serialization_group: "repo:skybridge-agent-hub";
+  waits_for_workunit_id: string;
+  state: "preview_only_not_created";
+  task_created: false;
+  task_claimed: false;
+  codex_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface BoincV1TwoWorkunitPreview {
+  schema: "skybridge.boinc_v1_two_workunit_preview.v1";
+  preview_id: "boinc-like-v1-two-workunit-preview";
+  mode: "preview";
+  policy: BoincV1PreviewPolicy;
+  workunits: BoincV1PreviewWorkunit[];
+  preview_workunit_count: 2;
+  max_workunits_preview: 2;
+  max_apply_workunits: 0;
+  serializes_repo_mutating_work: true;
+  no_parallel_mutation_in_one_repo: true;
+  workunit_b_waits_for_a_finalized: true;
+  open_review_count: number;
+  blocked_by_open_review: boolean;
+  blocked_reason: "none" | "blocked_by_open_review";
+  apply_enabled: false;
+  task_created: false;
+  task_claimed: false;
+  codex_executed: false;
+  pr_created: false;
+  no_mutation: true;
+  token_printed: false;
+}
+
+export interface BoincV1ApplyGate {
+  schema: "skybridge.boinc_v1_apply_gate.v1";
+  can_apply: false;
+  apply_enabled: false;
+  run_apply_enabled: false;
+  multi_workunit_apply_enabled: false;
+  max_apply_workunits: 0;
+  require_resource_gate: true;
+  resource_gate: Record<string, unknown>;
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  open_review_count: number;
+  blockers: string[];
+  task_created: false;
+  task_claimed: false;
+  codex_executed: false;
+  pr_created: false;
+  token_printed: false;
+}
+
+export interface BoincV1DrainPausePolicy {
+  schema: "skybridge.boinc_v1_drain_pause_policy.v1";
+  drain_after_current: true;
+  pause_after_current: true;
+  pause_new_claims: true;
+  stop_on_pr_created: true;
+  stop_on_ci_failure: true;
+  stop_on_warning: true;
+  emergency_stop: "preview_only";
+  operator_hold: "preview_only";
+  resource_gate_hold: "preview_only";
+  review_hold: "preview_only";
+  worker_started: false;
+  worker_stopped: false;
+  task_created: false;
+  task_claimed: false;
+  queue_apply_enabled: false;
+  token_printed: false;
+}
+
+export interface BoincV1Action {
+  action: "preview" | "pause" | "drain" | "resume_preview_only" | "emergency_stop_preview" | "apply_disabled";
+  kind: string;
+  enabled: false;
+  preview_only: true;
+  apply_enabled: false;
+  reason_disabled: "boinc_v1_preview_only_no_execution_authorized";
+  task_created: false;
+  task_claimed: false;
+  worker_started: false;
+  worker_stopped: false;
+  token_printed: false;
+}
+
+export interface BoincV1ActionMatrix {
+  schema: "skybridge.boinc_v1_action_matrix.v1";
+  actions: BoincV1Action[];
+  all_actions_preview_only: true;
+  apply_enabled: false;
+  worker_started: false;
+  worker_stopped: false;
+  task_created: false;
+  task_claimed: false;
+  token_printed: false;
+}
+
+export interface BoincV1ReadinessReport {
+  schema: "skybridge.boinc_v1_readiness_report.v1";
+  readiness_id: "boinc_like_v1_readiness_preview";
+  completed_managed_mode_runs: string[];
+  resource_gate_state: Record<string, unknown>;
+  worker_readiness_summary: {
+    worker_id: "laptop-zenbookduo";
+    can_claim_tasks: false;
+    can_execute_tasks: false;
+    mode: "preview_only";
+    token_printed: false;
+  };
+  scheduler_preview: {
+    selected_workunit_count: 2;
+    max_parallel_per_repo: 1;
+    serializes_repo_mutating_work: true;
+    no_task_claim: true;
+    no_execution: true;
+    token_printed: false;
+  };
+  two_workunit_preview: BoincV1TwoWorkunitPreview;
+  drain_pause_policy: BoincV1DrainPausePolicy;
+  apply_disabled: true;
+  no_next_execution_authorized: true;
+  readiness_gaps_before_v1_apply: string[];
+  next_safe_action: string;
+  token_printed: false;
+}
+
+export interface BoincV1Status {
+  schema: "skybridge.boinc_v1_status.v1";
+  status: "preview_ready_apply_disabled";
+  preview: BoincV1TwoWorkunitPreview;
+  apply_gate: BoincV1ApplyGate;
+  drain_pause_policy: BoincV1DrainPausePolicy;
+  action_matrix: BoincV1ActionMatrix;
+  readiness: BoincV1ReadinessReport;
+  token_printed: false;
+}
+
 export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
 
 export interface LockOwner {
@@ -4172,6 +4340,215 @@ export const fixtureManagedModeV0Status: ManagedModeV0Status = {
   completed_runs: fixtureManagedModeV0CompletedRuns,
   release_readiness: fixtureManagedModeV0ReleaseReadiness,
   operator_guidance: fixtureManagedModeV0OperatorGuidance,
+  token_printed: false,
+};
+
+export const fixtureBoincV1PreviewPolicy: BoincV1PreviewPolicy = {
+  schema: "skybridge.boinc_v1_preview_policy.v1",
+  max_workunits_preview: 2,
+  max_apply_workunits: 0,
+  apply_enabled: false,
+  run_apply_enabled: false,
+  multi_workunit_apply_enabled: false,
+  require_resource_gate: true,
+  require_human_review: true,
+  stop_on_pr_created: true,
+  stop_on_ci_failure: true,
+  stop_on_warning: true,
+  token_printed: false,
+};
+
+export const fixtureBoincV1PreviewWorkunitA: BoincV1PreviewWorkunit = {
+  schema: "skybridge.boinc_v1_preview_workunit.v1",
+  workunit_id: "boinc-v1-preview-workunit-a",
+  task_id: null,
+  project_id: "skybridge-agent-hub",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  queue_order: 1,
+  target_path: "docs/boinc-v1-preview-workunit-a.md",
+  allowed_paths: ["docs/boinc-v1-preview-workunit-a.md"],
+  requires_human_review: true,
+  repo_mutating: true,
+  serialization_group: "repo:skybridge-agent-hub",
+  waits_for_workunit_id: "",
+  state: "preview_only_not_created",
+  task_created: false,
+  task_claimed: false,
+  codex_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1PreviewWorkunitB: BoincV1PreviewWorkunit = {
+  schema: "skybridge.boinc_v1_preview_workunit.v1",
+  workunit_id: "boinc-v1-preview-workunit-b",
+  task_id: null,
+  project_id: "skybridge-agent-hub",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  queue_order: 2,
+  target_path: "docs/boinc-v1-preview-workunit-b.md",
+  allowed_paths: ["docs/boinc-v1-preview-workunit-b.md"],
+  requires_human_review: true,
+  repo_mutating: true,
+  serialization_group: "repo:skybridge-agent-hub",
+  waits_for_workunit_id: "boinc-v1-preview-workunit-a",
+  state: "preview_only_not_created",
+  task_created: false,
+  task_claimed: false,
+  codex_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1TwoWorkunitPreview: BoincV1TwoWorkunitPreview = {
+  schema: "skybridge.boinc_v1_two_workunit_preview.v1",
+  preview_id: "boinc-like-v1-two-workunit-preview",
+  mode: "preview",
+  policy: fixtureBoincV1PreviewPolicy,
+  workunits: [fixtureBoincV1PreviewWorkunitA, fixtureBoincV1PreviewWorkunitB],
+  preview_workunit_count: 2,
+  max_workunits_preview: 2,
+  max_apply_workunits: 0,
+  serializes_repo_mutating_work: true,
+  no_parallel_mutation_in_one_repo: true,
+  workunit_b_waits_for_a_finalized: true,
+  open_review_count: 0,
+  blocked_by_open_review: false,
+  blocked_reason: "none",
+  apply_enabled: false,
+  task_created: false,
+  task_claimed: false,
+  codex_executed: false,
+  pr_created: false,
+  no_mutation: true,
+  token_printed: false,
+};
+
+export const fixtureBoincV1ApplyGate: BoincV1ApplyGate = {
+  schema: "skybridge.boinc_v1_apply_gate.v1",
+  can_apply: false,
+  apply_enabled: false,
+  run_apply_enabled: false,
+  multi_workunit_apply_enabled: false,
+  max_apply_workunits: 0,
+  require_resource_gate: true,
+  resource_gate: {
+    schema: "skybridge.local_run_allowance.v1",
+    can_run_one_at_a_time: true,
+    blockers: [],
+    token_printed: false,
+  },
+  active_tasks: 0,
+  stale_leases: 0,
+  runner_lock: "none",
+  open_review_count: 0,
+  blockers: ["apply_disabled", "multi_workunit_apply_disabled"],
+  task_created: false,
+  task_claimed: false,
+  codex_executed: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1DrainPausePolicy: BoincV1DrainPausePolicy = {
+  schema: "skybridge.boinc_v1_drain_pause_policy.v1",
+  drain_after_current: true,
+  pause_after_current: true,
+  pause_new_claims: true,
+  stop_on_pr_created: true,
+  stop_on_ci_failure: true,
+  stop_on_warning: true,
+  emergency_stop: "preview_only",
+  operator_hold: "preview_only",
+  resource_gate_hold: "preview_only",
+  review_hold: "preview_only",
+  worker_started: false,
+  worker_stopped: false,
+  task_created: false,
+  task_claimed: false,
+  queue_apply_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1ActionMatrix: BoincV1ActionMatrix = {
+  schema: "skybridge.boinc_v1_action_matrix.v1",
+  actions: [
+    "preview",
+    "pause",
+    "drain",
+    "resume_preview_only",
+    "emergency_stop_preview",
+    "apply_disabled",
+  ].map((action) => ({
+    action: action as BoincV1Action["action"],
+    kind: action === "apply_disabled" ? "disabled_apply" : `${action}_preview`,
+    enabled: false,
+    preview_only: true,
+    apply_enabled: false,
+    reason_disabled: "boinc_v1_preview_only_no_execution_authorized",
+    task_created: false,
+    task_claimed: false,
+    worker_started: false,
+    worker_stopped: false,
+    token_printed: false,
+  })),
+  all_actions_preview_only: true,
+  apply_enabled: false,
+  worker_started: false,
+  worker_stopped: false,
+  task_created: false,
+  task_claimed: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1ReadinessReport: BoincV1ReadinessReport = {
+  schema: "skybridge.boinc_v1_readiness_report.v1",
+  readiness_id: "boinc_like_v1_readiness_preview",
+  completed_managed_mode_runs: fixtureManagedModeV0CompletedRuns.completed_run_ids,
+  resource_gate_state: fixtureBoincV1ApplyGate.resource_gate,
+  worker_readiness_summary: {
+    worker_id: "laptop-zenbookduo",
+    can_claim_tasks: false,
+    can_execute_tasks: false,
+    mode: "preview_only",
+    token_printed: false,
+  },
+  scheduler_preview: {
+    selected_workunit_count: 2,
+    max_parallel_per_repo: 1,
+    serializes_repo_mutating_work: true,
+    no_task_claim: true,
+    no_execution: true,
+    token_printed: false,
+  },
+  two_workunit_preview: fixtureBoincV1TwoWorkunitPreview,
+  drain_pause_policy: fixtureBoincV1DrainPausePolicy,
+  apply_disabled: true,
+  no_next_execution_authorized: true,
+  readiness_gaps_before_v1_apply: [
+    "reliable two-workunit finalizer",
+    "desktop resident enforcement",
+    "failure budget policy",
+    "queue drain implementation",
+    "operator approval flow",
+    "release/audit docs",
+    "long-run evidence retention model",
+    "explicit v1 authorization goal",
+  ],
+  next_safe_action: "review two-workunit preview and drain policy; keep apply disabled",
+  token_printed: false,
+};
+
+export const fixtureBoincV1Status: BoincV1Status = {
+  schema: "skybridge.boinc_v1_status.v1",
+  status: "preview_ready_apply_disabled",
+  preview: fixtureBoincV1TwoWorkunitPreview,
+  apply_gate: fixtureBoincV1ApplyGate,
+  drain_pause_policy: fixtureBoincV1DrainPausePolicy,
+  action_matrix: fixtureBoincV1ActionMatrix,
+  readiness: fixtureBoincV1ReadinessReport,
   token_printed: false,
 };
 

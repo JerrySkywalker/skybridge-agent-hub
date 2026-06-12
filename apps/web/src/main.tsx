@@ -25,6 +25,7 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureBoincV1Status,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
@@ -49,6 +50,7 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type BoincV1Status,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
   type OneAtATimeManagedModeGate,
@@ -365,6 +367,7 @@ function CampaignQueuePage() {
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
+          <BoincV1PreviewPanel status={fixtureBoincV1Status} />
           <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
           <ManagedModeRunRegistryPanel
             registry={fixtureManagedModeRunRegistry}
@@ -471,6 +474,55 @@ function BoincControlPlanePanel({ state }: { state: BoincManagerState }) {
             {action.display_name} disabled
           </button>
         ))}
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function BoincV1PreviewPanel({ status }: { status: BoincV1Status }) {
+  const resourceGate = status.apply_gate.resource_gate as { can_run_one_at_a_time?: boolean; blockers?: string[] };
+  return (
+    <section className="skybridge-panel boinc-v1-preview-panel" aria-label="BOINC-like v1 two-workunit preview panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">BOINC-like v1</p>
+          <h2>Two-Workunit Preview</h2>
+        </div>
+        <span className={badgeClass(status.readiness.apply_disabled ? "bad" : "ok")}>apply disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Preview workunits</dt>
+          <dd>{status.preview.workunits.map((workunit) => `${workunit.queue_order}:${workunit.target_path}`).join("; ")}</dd>
+        </div>
+        <div>
+          <dt>Blocked reason</dt>
+          <dd>{status.preview.blocked_reason}</dd>
+        </div>
+        <div>
+          <dt>Open review hold</dt>
+          <dd>{String(status.preview.blocked_by_open_review)}</dd>
+        </div>
+        <div>
+          <dt>Resource gate state</dt>
+          <dd>{`can_run_one_at_a_time=${String(resourceGate.can_run_one_at_a_time ?? false)}; blockers=${(resourceGate.blockers ?? []).join("; ") || "none"}`}</dd>
+        </div>
+        <div>
+          <dt>Drain / pause</dt>
+          <dd>{`drain_after_current=${String(status.drain_pause_policy.drain_after_current)}; pause_new_claims=${String(status.drain_pause_policy.pause_new_claims)}`}</dd>
+        </div>
+        <div>
+          <dt>Next safe action</dt>
+          <dd>{status.readiness.next_safe_action}</dd>
+        </div>
+      </dl>
+      <QueueList title="Readiness gaps" items={status.readiness.readiness_gaps_before_v1_apply} fallback="No gaps." />
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No task creation</button>
+        <button type="button" disabled aria-disabled="true">No task claim</button>
+        <button type="button" disabled aria-disabled="true">No execution</button>
       </div>
       <span>token_printed=false</span>
     </section>

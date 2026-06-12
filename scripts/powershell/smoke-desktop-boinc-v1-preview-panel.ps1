@@ -1,0 +1,11 @@
+. "$PSScriptRoot/smoke-boinc-v1-common.ps1"
+$path = Join-Path (Split-Path $PSScriptRoot -Parent | Split-Path -Parent) "apps/desktop/src/main.tsx"
+$content = Get-Content -Raw $path
+Assert-True ($content.Contains("BoincV1PreviewPanel")) "Desktop BOINC v1 preview panel missing."
+Assert-True ($content.Contains("BOINC-like v1 Preview")) "Desktop BOINC v1 panel title missing."
+Assert-True ($content.Contains("Preview workunits")) "Desktop preview workunits field missing."
+Assert-True ($content.Contains("Apply disabled")) "Desktop apply-disabled field missing."
+Assert-True ($content.Contains("No task creation")) "Desktop no-task control missing."
+Assert-True ($content.Contains("No task claim")) "Desktop no-claim control missing."
+Assert-True ($content.Contains("No execution")) "Desktop no-execution control missing."
+Write-SmokeResult "desktop-boinc-v1-preview-panel"
