@@ -369,6 +369,10 @@ function Get-OpenManagedModePrs {
 function Get-Persisted209Record {
   $result = Read-SafeJsonFile -Path (Get-RunResultPath)
   if (-not $result) { return $null }
+  $finalizerEvidencePath = Get-FinalizerEvidencePath
+  $finalizer = Read-SafeJsonFile -Path $finalizerEvidencePath
+  $finalizerCompleted = ($finalizer -and ($finalizer.PSObject.Properties.Name -contains "final_state") -and [string]$finalizer.final_state -eq "managed_mode_run_209_completed")
+  $completedAt = if ($finalizerCompleted -and ($finalizer.PSObject.Properties.Name -contains "completed_at")) { [string]$finalizer.completed_at } elseif ($result.completed_at) { [string]$result.completed_at } else { $null }
   [pscustomobject]@{
     schema = "skybridge.managed_mode_run_record.v1"
     run_id = $ManagedModeRunId
@@ -380,13 +384,13 @@ function Get-Persisted209Record {
     task_type = $TaskType
     risk = $Risk
     allowed_paths = @($TargetPath)
-    state = if ($result.final_state) { [string]$result.final_state } else { "held_waiting_human_pr_review" }
+    state = if ($finalizerCompleted) { "completed" } elseif ($result.final_state) { [string]$result.final_state } else { "held_waiting_human_pr_review" }
     pr_url = if ($result.pr_url) { [string]$result.pr_url } else { $null }
-    pr_state = if ($result.pr_created) { "open" } else { "none" }
-    finalizer_evidence_path = $null
-    evidence_hash = if (Test-Path -LiteralPath (Get-RunEvidencePath)) { Get-Sha256Text (Get-Content -Raw -LiteralPath (Get-RunEvidencePath)) } else { $null }
+    pr_state = if ($finalizerCompleted) { "merged" } elseif ($result.pr_created) { "open" } else { "none" }
+    finalizer_evidence_path = if ($finalizerCompleted) { ConvertTo-ShortPath $finalizerEvidencePath } else { $null }
+    evidence_hash = if ($finalizerCompleted) { Get-Sha256Text (Get-Content -Raw -LiteralPath $finalizerEvidencePath) } elseif (Test-Path -LiteralPath (Get-RunEvidencePath)) { Get-Sha256Text (Get-Content -Raw -LiteralPath (Get-RunEvidencePath)) } else { $null }
     created_at = if ($result.created_at) { [string]$result.created_at } else { $null }
-    completed_at = if ($result.completed_at) { [string]$result.completed_at } else { $null }
+    completed_at = $completedAt
     token_printed = $false
   }
 }
@@ -515,7 +519,9 @@ function New-SafeSummary {
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
     runner_lock = $RunnerLock
-    next_safe_action = "run one explicitly authorized low-risk docs/local-smoke workunit"
+    managed_mode_run_209_state = if (@($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "managed_mode_run_209_completed" } elseif (@($registry.open_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "held_waiting_human_pr_review" } else { "not_started" }
+    no_next_execution_authorized = $true
+    next_safe_action = if (@($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "one-at-a-time mode ready for future explicit goal; no_next_execution_authorized" } else { "run one explicitly authorized low-risk docs/local-smoke workunit" }
     token_printed = $false
   }
 }
@@ -788,12 +794,13 @@ function Get-RunTaskPrState {
     return [pscustomobject]@{ exists = $false; url = $null; state = "missing"; merged = $false; token_printed = $false }
   }
   try {
-    $json = gh pr view $number --json number,url,state,merged 2>$null
+    $json = gh pr view $number --json number,url,state,mergedAt,mergeCommit 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($json | Out-String).Trim())) {
       return [pscustomobject]@{ exists = $true; url = $prUrl; state = "unknown"; merged = $false; token_printed = $false }
     }
     $pr = $json | ConvertFrom-Json
-    return [pscustomobject]@{ exists = $true; url = [string]$pr.url; state = [string]$pr.state; merged = [bool]$pr.merged; token_printed = $false }
+    $merged = (-not [string]::IsNullOrWhiteSpace([string]$pr.mergedAt))
+    return [pscustomobject]@{ exists = $true; url = [string]$pr.url; state = if ($merged) { "MERGED" } else { [string]$pr.state }; merged = $merged; merge_commit = if ($pr.mergeCommit) { [string]$pr.mergeCommit.oid } else { $null }; token_printed = $false }
   } catch {
     [pscustomobject]@{ exists = $true; url = $prUrl; state = "unknown"; merged = $false; token_printed = $false }
   }

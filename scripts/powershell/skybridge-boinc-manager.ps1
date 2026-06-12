@@ -222,11 +222,12 @@ function New-SafeSummary {
     mode_id = $state.control_surface.current_mode.mode_id
     mode_display_name = $state.control_surface.current_mode.display_name
     managed_mode_v1 = "pilot only"
-    managed_mode_v1_summary = if ($managedModeRun) { "Managed Mode Pilot 208 completed; next mode repeatable one-at-a-time preview; general bounded queue disabled." } elseif ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "Managed Mode Pilot 208 completed; no next execution authorized." } else { "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate" }
+    managed_mode_v1_summary = if ($managedModeRun -and $managedModeRun.managed_mode_run_209_state -eq "managed_mode_run_209_completed") { "managed_mode_run_209_completed; one-at-a-time mode ready for future explicit goal; general bounded queue apply disabled; no_next_execution_authorized." } elseif ($managedModeRun) { "Managed Mode Pilot 208 completed; next mode repeatable one-at-a-time preview; general bounded queue disabled." } elseif ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "Managed Mode Pilot 208 completed; no next execution authorized." } else { "Managed Mode v1: pilot only; general apply disabled; one-workunit pilot possible only after gate" }
     managed_mode_pilot_state = if ($managedMode) { $managedMode.managed_mode_pilot_state } else { "unknown" }
     managed_mode_pilot_208 = if ($managedModeRun) { $managedModeRun.managed_mode_pilot_208 } else { "unknown" }
     next_mode = if ($managedModeRun) { $managedModeRun.next_mode } else { "preview unavailable" }
     next_run_id = if ($managedModeRun) { $managedModeRun.next_run_id } else { $null }
+    managed_mode_run_209_state = if ($managedModeRun -and $managedModeRun.managed_mode_run_209_state) { $managedModeRun.managed_mode_run_209_state } else { "unknown" }
     general_apply = "disabled"
     general_bounded_queue_apply_enabled = $false
     general_bounded_queue = "disabled"
@@ -245,7 +246,7 @@ function New-SafeSummary {
     task_claimed = $false
     task_executed = $false
     pr_created = $false
-    no_next_execution_authorized = if ($managedMode) { [bool]$managedMode.no_next_execution_authorized } else { $false }
+    no_next_execution_authorized = if ($managedModeRun -and ($managedModeRun.PSObject.Properties.Name -contains "no_next_execution_authorized")) { [bool]$managedModeRun.no_next_execution_authorized } elseif ($managedMode) { [bool]$managedMode.no_next_execution_authorized } else { $false }
     next_safe_action = if ($managedModeRun) { $managedModeRun.next_safe_action } elseif ($managedMode -and $managedMode.managed_mode_pilot_state -eq "managed_mode_pilot_completed") { "plan next managed-mode repeatability goal" } else { $state.next_safe_action }
     token_printed = $false
   }
