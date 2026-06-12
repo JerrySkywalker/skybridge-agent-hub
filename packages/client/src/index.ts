@@ -2593,14 +2593,16 @@ export interface BoincV1AlphaStatus {
   workunit_b: BoincV1AlphaWorkunit;
   open_review_hold: boolean;
   apply_disabled: true;
-  workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a";
+  workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a" | "none_alpha_completed";
   workunit_b_pr_url: string | null;
   readiness_state:
     | "workunit_a_completed_workunit_b_pending"
     | "boinc_v1_alpha_waiting_for_workunit_b_human_review"
-    | "workunit_a_finalizer_pending";
+    | "workunit_a_finalizer_pending"
+    | "boinc_v1_alpha_two_workunit_completed";
   workunit_c_present: false;
   no_next_execution_authorized: true;
+  next_safe_action: string;
   resource_gate_status: "passed" | "blocked" | "not_evaluated";
   drain_pause_status: {
     drain_after_current: true;
@@ -4760,17 +4762,18 @@ export const fixtureBoincV1AlphaStatus: BoincV1AlphaStatus = {
     task_type: "docs/local-smoke",
     risk: "low",
     dependency: "Workunit A completed and finalized",
-    status: "pending_gates",
+    status: "completed",
     apply_enabled_for_this_goal: false,
     token_printed: false,
   },
   open_review_hold: false,
   apply_disabled: true,
-  workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a",
-  workunit_b_pr_url: null,
-  readiness_state: "workunit_a_completed_workunit_b_pending",
+  workunit_b_blocked_reason: "none_alpha_completed",
+  workunit_b_pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/159",
+  readiness_state: "boinc_v1_alpha_two_workunit_completed",
   workunit_c_present: false,
   no_next_execution_authorized: true,
+  next_safe_action: "plan Desktop resident worker v1",
   resource_gate_status: "passed",
   drain_pause_status: {
     drain_after_current: true,

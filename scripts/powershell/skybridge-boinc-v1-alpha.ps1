@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("status", "alpha-preview", "alpha-apply-gate", "alpha-workunit-a-preview", "alpha-workunit-b-preview", "alpha-workunit-a-apply", "alpha-safe-summary", "alpha-report", "alpha-hold-report", "evidence", "blocked-state", "workunit-a-finalizer-preview", "workunit-a-finalizer-apply", "workunit-a-finalizer-evidence", "workunit-a-finalizer-report", "workunit-b-apply-gate", "workunit-b-apply", "workunit-b-hold-report", "workunit-b-finalizer-preview", "workunit-b-finalizer-apply", "workunit-b-finalizer-evidence", "workunit-b-finalizer-report", "alpha-completion-readiness")]
+  [ValidateSet("status", "alpha-preview", "alpha-apply-gate", "alpha-workunit-a-preview", "alpha-workunit-b-preview", "alpha-workunit-a-apply", "alpha-safe-summary", "alpha-report", "alpha-hold-report", "evidence", "blocked-state", "workunit-a-finalizer-preview", "workunit-a-finalizer-apply", "workunit-a-finalizer-evidence", "workunit-a-finalizer-report", "workunit-b-apply-gate", "workunit-b-apply", "workunit-b-hold-report", "workunit-b-finalizer-preview", "workunit-b-finalizer-apply", "workunit-b-finalizer-evidence", "workunit-b-finalizer-report", "alpha-completion-readiness", "v1-alpha-release-report")]
   [string]$Command,
 
   [switch]$AuthorizeGoal215,
@@ -13,6 +13,7 @@ param(
   [switch]$SimulatePr157Merged,
   [switch]$SimulateWorkunitAFinalized,
   [switch]$SimulateWorkunitBExecuted,
+  [switch]$SimulateWorkunitBPrMissing,
   [switch]$SimulateWorkunitBPrMerged,
   [int]$ActiveTasks = 0,
   [int]$StaleLeases = 0,
@@ -44,6 +45,7 @@ $TargetB = "docs/boinc-v1-alpha-workunit-b.md"
 $TaskBranch = "ai/boinc-v1-alpha/boinc-v1-alpha-215-workunit-a"
 $TaskBranchB = "ai/boinc-v1-alpha/boinc-v1-alpha-215-workunit-b"
 $WorkunitAPrNumber = 157
+$WorkunitBPrNumber = 159
 
 function Get-AlphaRepoRoot {
   (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
@@ -381,26 +383,29 @@ function Test-WorkunitBExecuted {
 }
 
 function Get-WorkunitBPrStatus {
+  if ($SimulateWorkunitBPrMissing) {
+    return [pscustomobject]@{ exists = $false; number = $WorkunitBPrNumber; state = "none"; merged = $false; merge_commit = $null; url = $null; changed_files = @(); auto_merge_enabled = $false; token_printed = $false }
+  }
   if ($SimulateWorkunitBPrMerged) {
-    return [pscustomobject]@{ exists = $true; state = "MERGED"; merged = $true; url = "https://example.invalid/skybridge-agent-hub/pull/216"; changed_files = @($TargetB); auto_merge_enabled = $false; token_printed = $false }
+    return [pscustomobject]@{ exists = $true; number = $WorkunitBPrNumber; state = "MERGED"; merged = $true; merge_commit = "fixture-workunit-b-merge"; url = "https://example.invalid/skybridge-agent-hub/pull/159"; changed_files = @($TargetB); auto_merge_enabled = $false; token_printed = $false }
   }
   try {
-    $raw = gh pr list --state all --head $TaskBranchB --json number,url,state,mergedAt,files,autoMergeRequest 2>$null
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { throw "PR list failed." }
-    $items = @((($raw | Out-String).Trim() | ConvertFrom-Json))
-    if ($items.Count -eq 0) { throw "No Workunit B PR." }
-    $pr = $items[0]
+    $raw = gh pr view $WorkunitBPrNumber --json number,url,state,mergedAt,mergeCommit,files,autoMergeRequest 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { throw "PR view failed." }
+    $pr = ($raw | Out-String).Trim() | ConvertFrom-Json
     [pscustomobject]@{
       exists = $true
+      number = $pr.number
       state = $pr.state
       merged = ($pr.state -eq "MERGED" -and $null -ne $pr.mergedAt)
+      merge_commit = if ($pr.mergeCommit) { $pr.mergeCommit.oid } else { $null }
       url = $pr.url
       changed_files = @($pr.files | ForEach-Object { $_.path })
       auto_merge_enabled = ($null -ne $pr.autoMergeRequest)
       token_printed = $false
     }
   } catch {
-    [pscustomobject]@{ exists = $false; state = "none"; merged = $false; url = $null; changed_files = @(); auto_merge_enabled = $false; token_printed = $false }
+    [pscustomobject]@{ exists = $false; number = $WorkunitBPrNumber; state = "none"; merged = $false; merge_commit = $null; url = $null; changed_files = @(); auto_merge_enabled = $false; token_printed = $false }
   }
 }
 
@@ -705,17 +710,40 @@ function Invoke-WorkunitBApply {
 function New-WorkunitBFinalizerPreview {
   $pr = Get-WorkunitBPrStatus
   $result = Read-AlphaSafeJson -Path "$EvidenceDir/workunit-b-result.json"
+  $evidence = Read-AlphaSafeJson -Path "$EvidenceDir/workunit-b-evidence.json"
+  $aFinalizer = Read-AlphaSafeJson -Path "$EvidenceDir/workunit-a-finalizer-report.json"
   $blockers = @()
   if (-not (Test-WorkunitAFinalized)) { $blockers += "workunit_a_finalizer_required" }
   if (-not $pr.exists) { $blockers += "workunit_b_pr_missing" }
   if ($pr.exists -and $pr.merged -ne $true) { $blockers += "workunit_b_pr_not_merged" }
   if ($null -eq $result -and -not $SimulateWorkunitBExecuted) { $blockers += "workunit_b_result_missing" }
+  if ($null -ne $result) {
+    if ($result.alpha_id -ne $AlphaId -or $result.workunit_id -ne $WorkunitBId -or $result.task_id -ne $TaskBId) { $blockers += "workunit_b_result_identity_mismatch" }
+    if ([int]$result.codex_execution_count -ne 1) { $blockers += "workunit_b_codex_execution_count_not_one" }
+    if (@($result.changed_files).Count -ne 1 -or @($result.changed_files)[0] -ne $TargetB) { $blockers += "workunit_b_changed_files_unexpected" }
+  }
+  if ($null -eq $evidence -or $evidence.workunit_id -ne $WorkunitBId) { $blockers += "workunit_b_evidence_missing" }
+  if ($null -eq $aFinalizer -or $aFinalizer.workunit_a_completed -ne $true) { $blockers += "workunit_a_finalizer_evidence_missing" }
   if (-not (Test-AlphaEvidenceTreeSafe)) { $blockers += "alpha_evidence_tree_unsafe" }
+  if ($pr.auto_merge_enabled -eq $true) { $blockers += "workunit_b_auto_merge_enabled" }
+  if (@($pr.changed_files).Count -ne 1 -or @($pr.changed_files)[0] -ne $TargetB) { $blockers += "workunit_b_pr_changed_files_unexpected" }
   [pscustomobject]@{
     schema = "skybridge.boinc_v1_alpha_workunit_b_finalizer_preview.v1"
     alpha_id = $AlphaId
     workunit_id = $WorkunitBId
+    task_id = $TaskBId
+    pr_number = $WorkunitBPrNumber
     pr_state = $pr.state
+    pr_merged = $pr.merged
+    pr_url = $pr.url
+    merge_commit = $pr.merge_commit
+    changed_file = $TargetB
+    workunit_a_finalizer_completed_before_b_execution = ($aFinalizer -and $aFinalizer.workunit_a_completed -eq $true)
+    codex_execution_count = if ($result) { [int]$result.codex_execution_count } else { 0 }
+    task_pr_count = if ($pr.exists) { 1 } else { 0 }
+    no_workunit_c = $true
+    no_auto_merge = (-not $pr.auto_merge_enabled)
+    human_review_confirmed = $pr.merged
     status = if ($pr.exists -and $pr.merged -ne $true) { "held_waiting_human_pr_review_workunit_b" } elseif ($pr.merged) { "ready_to_finalize" } else { "not_started" }
     can_apply = (@($blockers).Count -eq 0)
     blockers = @($blockers | Select-Object -Unique)
@@ -729,14 +757,38 @@ function Invoke-WorkunitBFinalizerApply {
   $preview = New-WorkunitBFinalizerPreview
   if ($preview.can_apply -ne $true) { throw "Workunit B finalizer blocked: $($preview.blockers -join ', ')" }
   if (-not (Test-Path -LiteralPath (Resolve-AlphaPath $TargetB) -PathType Leaf)) { throw "Workunit B changed file missing on main." }
+  $aEvidencePath = "$EvidenceDir/workunit-a-finalizer-evidence.json"
+  $bEvidencePath = "$EvidenceDir/workunit-b-evidence.json"
+  $bResult = Read-AlphaSafeJson -Path "$EvidenceDir/workunit-b-result.json"
+  $pr = Get-WorkunitBPrStatus
   $evidencePath = "$EvidenceDir/workunit-b-finalizer-evidence.json"
   $reportPath = "$EvidenceDir/workunit-b-finalizer-report.json"
   $evidence = [pscustomobject]@{
     schema = "skybridge.boinc_v1_alpha_workunit_b_finalizer_evidence.v1"
     alpha_id = $AlphaId
+    workunit_a_id = $WorkunitAId
     workunit_id = $WorkunitBId
+    workunit_b_id = $WorkunitBId
+    task_id = $TaskBId
+    worker_id = $WorkerId
+    pr_number = $WorkunitBPrNumber
+    pr_url = $pr.url
+    merge_commit = $pr.merge_commit
     changed_file = $TargetB
+    workunit_a_finalizer_evidence_path = $aEvidencePath
+    workunit_a_finalizer_evidence_sha256 = Get-AlphaEvidenceHash $aEvidencePath
+    workunit_b_evidence_sha256 = Get-AlphaEvidenceHash $bEvidencePath
     result_sha256 = Get-AlphaEvidenceHash "$EvidenceDir/workunit-b-result.json"
+    codex_execution_count = [int]$bResult.codex_execution_count
+    task_pr_count = 1
+    active_tasks = $ActiveTasks
+    stale_leases = $StaleLeases
+    runner_lock = $RunnerLock
+    no_workunit_c = $true
+    no_auto_merge = $true
+    human_review_confirmed = $true
+    general_bounded_queue_apply_enabled = $false
+    no_next_execution_authorized = $true
     evidence_tree_safe = $true
     token_printed = $false
   }
@@ -747,6 +799,12 @@ function Invoke-WorkunitBFinalizerApply {
     workunit_b_completed = $true
     workunit_b_rerun_blocked = $true
     two_workunit_alpha_completed = $true
+    general_bounded_queue_apply_enabled = $false
+    no_next_execution_authorized = $true
+    no_workunit_c = $true
+    active_tasks = $ActiveTasks
+    stale_leases = $StaleLeases
+    runner_lock = $RunnerLock
     finalizer_evidence_path = $evidencePath
     finalizer_evidence_sha256 = Get-AlphaEvidenceHash $evidencePath
     token_printed = $false
@@ -764,12 +822,105 @@ function New-AlphaCompletionReadiness {
     alpha_id = $AlphaId
     readiness_state = if ($bFinalized -and $bFinalized.two_workunit_alpha_completed -eq $true) { "boinc_v1_alpha_two_workunit_completed" } elseif ($bResult -and $bResult.state -eq "held_waiting_human_pr_review_workunit_b") { "boinc_v1_alpha_waiting_for_workunit_b_human_review" } elseif ($aFinalized) { "workunit_a_completed_workunit_b_pending" } else { "workunit_a_finalizer_pending" }
     workunit_a_completed = $aFinalized
-    workunit_b_state = if ($bResult) { $bResult.state } else { "not_executed" }
+    workunit_b_completed = ($bFinalized -and $bFinalized.workunit_b_completed -eq $true)
+    workunit_b_state = if ($bFinalized -and $bFinalized.workunit_b_completed -eq $true) { "completed" } elseif ($bResult) { $bResult.state } else { "not_executed" }
+    two_workunit_alpha_completed = ($bFinalized -and $bFinalized.two_workunit_alpha_completed -eq $true)
     workunit_c_present = $false
     general_apply_enabled = $false
     no_next_execution_authorized = $true
     token_printed = $false
   }
+}
+
+function New-V1AlphaReleaseReport {
+  $aReportPath = "$EvidenceDir/workunit-a-finalizer-report.json"
+  $bReportPath = "$EvidenceDir/workunit-b-finalizer-report.json"
+  $aEvidencePath = "$EvidenceDir/workunit-a-finalizer-evidence.json"
+  $bEvidencePath = "$EvidenceDir/workunit-b-finalizer-evidence.json"
+  $aReport = Read-AlphaSafeJson -Path $aReportPath
+  $bReport = Read-AlphaSafeJson -Path $bReportPath
+  if ($null -eq $aReport -or $aReport.workunit_a_completed -ne $true) { throw "Workunit A finalizer report missing or incomplete." }
+  if ($null -eq $bReport -or $bReport.workunit_b_completed -ne $true -or $bReport.two_workunit_alpha_completed -ne $true) { throw "Workunit B finalizer report missing or incomplete." }
+  if (-not (Test-AlphaEvidenceTreeSafe)) { throw "Alpha evidence tree unsafe." }
+  $prA = Get-Pr157Status
+  $prB = Get-WorkunitBPrStatus
+  if ($prA.merged -ne $true -or $prB.merged -ne $true) { throw "Both workunit PRs must be merged before release report." }
+  $resourceGate = Get-ResourceGate
+  $reportJsonPath = "$EvidenceDir/v1-alpha-release-report.json"
+  $reportMdPath = "$EvidenceDir/v1-alpha-release-report.md"
+  $report = [pscustomobject]@{
+    schema = "skybridge.boinc_v1_alpha_release_candidate_report.v1"
+    alpha_id = $AlphaId
+    workunit_a = [pscustomobject]@{
+      workunit_id = $WorkunitAId
+      pr_number = $WorkunitAPrNumber
+      pr_url = $prA.url
+      merge_commit = $prA.merge_commit
+      finalizer_evidence_sha256 = Get-AlphaEvidenceHash $aEvidencePath
+      token_printed = $false
+    }
+    workunit_b = [pscustomobject]@{
+      workunit_id = $WorkunitBId
+      pr_number = $WorkunitBPrNumber
+      pr_url = $prB.url
+      merge_commit = $prB.merge_commit
+      finalizer_evidence_sha256 = Get-AlphaEvidenceHash $bEvidencePath
+      token_printed = $false
+    }
+    resource_gate_records = @($resourceGate)
+    drain_pause_policy_status = [pscustomobject]@{
+      drain_after_current = $true
+      pause_after_current = $true
+      pause_new_claims = $true
+      token_printed = $false
+    }
+    failure_budget_status = "policy_gap_remaining_for_v1"
+    evidence_retention_status = "safe_summary_artifacts_retained_under_agent_tmp"
+    audit_status = "release_candidate_safe_artifacts_only"
+    apply_boundary = [pscustomobject]@{
+      general_bounded_queue_apply_enabled = $false
+      no_next_execution_authorized = $true
+      token_printed = $false
+    }
+    remaining_gaps_to_v1 = @(
+      "desktop resident enforcement",
+      "server control plane",
+      "failure budget policy",
+      "audit retention",
+      "operator approval flow",
+      "packaging/installer"
+    )
+    active_tasks = $ActiveTasks
+    stale_leases = $StaleLeases
+    runner_lock = $RunnerLock
+    open_task_pr_count = Test-OpenAlphaPr
+    no_workunit_c = $true
+    two_workunit_alpha_completed = $true
+    ready_for_goal_217 = $true
+    token_printed = $false
+  }
+  Write-AlphaSafeJson -Path $reportJsonPath -Value $report
+  $md = @(
+    "# BOINC v1 Alpha Release Candidate",
+    "",
+    "- alpha id: $AlphaId",
+    "- Workunit A: PR #$WorkunitAPrNumber, merge commit $($prA.merge_commit)",
+    "- Workunit B: PR #$WorkunitBPrNumber, merge commit $($prB.merge_commit)",
+    "- Workunit A finalizer evidence hash: $(Get-AlphaEvidenceHash $aEvidencePath)",
+    "- Workunit B finalizer evidence hash: $(Get-AlphaEvidenceHash $bEvidencePath)",
+    "- resource gate: can_run_one_at_a_time=$($resourceGate.can_run_one_at_a_time)",
+    "- drain/pause: drain_after_current=true; pause_after_current=true; pause_new_claims=true",
+    "- failure budget: policy_gap_remaining_for_v1",
+    "- evidence retention: safe summary artifacts retained under .agent/tmp/boinc-v1-alpha-215",
+    "- audit: release candidate safe artifacts only",
+    "- apply boundary: general bounded queue apply disabled; no_next_execution_authorized=true",
+    "- remaining gaps to v1: desktop resident enforcement; server control plane; failure budget policy; audit retention; operator approval flow; packaging/installer",
+    "- token_printed=false"
+  ) -join "`n"
+  if (Test-AlphaUnsafeText $md) { throw "Unsafe release markdown." }
+  Set-Content -LiteralPath (Resolve-AlphaPath $reportMdPath) -Value $md -Encoding utf8
+  Set-Content -LiteralPath (Resolve-AlphaPath "docs/dev/BOINC_V1_ALPHA_RELEASE_CANDIDATE.md") -Value $md -Encoding utf8
+  $report
 }
 
 function Write-AlphaResult {
@@ -945,6 +1096,7 @@ $result = switch ($Command) {
     if ($existing) { $existing } else { [pscustomobject]@{ schema = "skybridge.boinc_v1_alpha_workunit_b_finalizer_report.v1"; alpha_id = $AlphaId; workunit_b_completed = $false; token_printed = $false } }
   }
   "alpha-completion-readiness" { New-AlphaCompletionReadiness }
+  "v1-alpha-release-report" { New-V1AlphaReleaseReport }
 }
 
 ConvertTo-JsonOut $result
