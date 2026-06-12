@@ -18,6 +18,10 @@ function Invoke-SkybridgeResourceGate {
   if ($obs.ac_power -ne $true) { $blockers += "ac_power_required" }
   if ($null -ne $obs.memory_used_percent -and $obs.memory_used_percent -gt 90) { $blockers += "memory_above_threshold" }
   if ($obs.network_available -eq $false) { $blockers += "network_unavailable" }
+  $warnings = @()
+  if ([string]::IsNullOrWhiteSpace($Fixture)) {
+    $warnings += "cpu usage is advisory; no sampling loop is used"
+  }
   [pscustomobject]@{
     schema = "skybridge.local_run_allowance.v1"
     run_id = $RunId
@@ -25,7 +29,7 @@ function Invoke-SkybridgeResourceGate {
     resource_gate_required = $true
     observation = $obs
     blockers = @($blockers)
-    warnings = @("cpu usage is advisory; no sampling loop is used")
+    warnings = @($warnings)
     can_run_one_at_a_time = (@($blockers).Count -eq 0)
     no_powercfg_mutation = $true
     no_registry_mutation = $true
