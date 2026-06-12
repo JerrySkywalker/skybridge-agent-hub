@@ -2150,7 +2150,7 @@ export interface ManagedModeRepeatabilitySummary {
 
 export interface ManagedModeV0CompletedRuns {
   schema: "skybridge.managed_mode_v0_completed_runs.v1";
-  completed_run_count: 2;
+  completed_run_count: number;
   completed_run_ids: string[];
   runs: ManagedModeRunRecord[];
   changed_files: string[];
@@ -2162,6 +2162,7 @@ export interface ManagedModeV0ReleaseReadiness {
   self_bootstrap_v0_complete: true;
   managed_mode_pilot_complete: true;
   repeatable_one_at_a_time_run_complete: true;
+  managed_mode_run_210_completed?: true;
   completed_runs: string[];
   active_tasks: number;
   stale_leases: number;
@@ -3996,13 +3997,34 @@ export const fixtureManagedModeCompleted209Archive: ManagedModeRunRecord = {
   token_printed: false,
 };
 
+export const fixtureManagedModeCompleted210Archive: ManagedModeRunRecord = {
+  schema: "skybridge.managed_mode_run_record.v1",
+  run_id: "managed-mode-run-210",
+  managed_mode_run_id: "managed-mode-run-210",
+  sequence_number: 3,
+  source_workunit_id: "managed-mode-run-210-workunit-001",
+  task_id: "managed-mode-run-210-task-001",
+  worker_id: "laptop-zenbookduo",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  allowed_paths: ["docs/managed-mode-v0-operator-checklist.md"],
+  state: "completed",
+  pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/148",
+  pr_state: "merged",
+  finalizer_evidence_path: ".agent/tmp/managed-mode-run-210/finalizer-evidence.json",
+  evidence_hash: "fixture-managed-mode-run-210-finalizer-hash",
+  created_at: "2026-06-12T01:08:07.000Z",
+  completed_at: "2026-06-12T01:23:28.6095154Z",
+  token_printed: false,
+};
+
 export const fixtureManagedModeRunRegistry: ManagedModeRunRegistry = {
   schema: "skybridge.managed_mode_run_registry.v1",
   project_id: "skybridge-agent-hub",
   registry_id: "skybridge-managed-mode-run-registry",
   sequence_policy: fixtureManagedModeSequencePolicy,
-  records: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
-  completed_runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
+  records: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive, fixtureManagedModeCompleted210Archive],
+  completed_runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive, fixtureManagedModeCompleted210Archive],
   open_runs: [],
   general_bounded_queue_apply_enabled: false,
   max_workunits: 1,
@@ -4011,15 +4033,15 @@ export const fixtureManagedModeRunRegistry: ManagedModeRunRegistry = {
 
 export const fixtureOneAtATimeManagedModeGate: OneAtATimeManagedModeGate = {
   schema: "skybridge.one_at_a_time_managed_mode_gate.v1",
-  run_id: "managed-mode-run-209",
-  managed_mode_run_id: "managed-mode-run-209",
-  sequence_number: 2,
+  run_id: "managed-mode-run-211",
+  managed_mode_run_id: "managed-mode-run-211",
+  sequence_number: 4,
   can_run_one_at_a_time: true,
   explicit_209b_authorization_present: false,
   run_apply_enabled: false,
   apply_disabled_reason: "one_at_a_time_run_apply_disabled_by_default",
   previous_run_208_completed: true,
-  completed_run_ids: ["managed-mode-pilot-208"],
+  completed_run_ids: ["managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210"],
   open_run_count: 0,
   open_managed_mode_pr_count: 0,
   active_tasks: 0,
@@ -4028,13 +4050,13 @@ export const fixtureOneAtATimeManagedModeGate: OneAtATimeManagedModeGate = {
   general_bounded_queue_apply_enabled: false,
   max_workunits: 1,
   blockers: [],
-  source_workunit_id: "managed-mode-run-209-workunit-001",
-  task_id: "managed-mode-run-209-task-001",
+  source_workunit_id: "managed-mode-run-211-workunit-001",
+  task_id: "managed-mode-run-211-task-001",
   worker_id: "laptop-zenbookduo",
   task_type: "docs/local-smoke",
   risk: "low",
   allowed_paths: ["README.md", "docs/**"],
-  target_path: "docs/managed-mode-repeatability-orientation.md",
+  target_path: "docs/managed-mode-v0-repeatability-check.md",
   selected_workunit_count: 1,
   selected_worker_count: 1,
   selected_worker_id: "laptop-zenbookduo",
@@ -4050,29 +4072,29 @@ export const fixtureManagedModeRepeatabilitySummary: ManagedModeRepeatabilitySum
   schema: "skybridge.managed_mode_repeatability_summary.v1",
   managed_mode_pilot_208: "completed",
   next_mode: "repeatable one-at-a-time preview",
-  next_run_id: "managed-mode-run-210",
-  next_sequence_number: 3,
+  next_run_id: "managed-mode-run-211",
+  next_sequence_number: 4,
   general_bounded_queue: "disabled",
   general_bounded_queue_apply_enabled: false,
   one_at_a_time_run_apply_enabled: false,
   can_run_one_at_a_time: true,
   apply_disabled_reason: "one_at_a_time_run_apply_disabled_by_default",
-  completed_run_count: 2,
+  completed_run_count: 3,
   open_run_count: 0,
   open_managed_mode_pr_count: 0,
   active_tasks: 0,
   stale_leases: 0,
   runner_lock: "none",
-  next_safe_action: "resource gate required before any explicit future one-at-a-time run",
+  next_safe_action: "managed_mode_v0_release_candidate_ready; no_next_execution_authorized",
   token_printed: false,
 };
 
 export const fixtureManagedModeV0CompletedRuns: ManagedModeV0CompletedRuns = {
   schema: "skybridge.managed_mode_v0_completed_runs.v1",
-  completed_run_count: 2,
-  completed_run_ids: ["managed-mode-pilot-208", "managed-mode-run-209"],
-  runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
-  changed_files: ["docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md"],
+  completed_run_count: 3,
+  completed_run_ids: ["managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210"],
+  runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive, fixtureManagedModeCompleted210Archive],
+  changed_files: ["docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md", "docs/managed-mode-v0-operator-checklist.md"],
   token_printed: false,
 };
 
@@ -4081,7 +4103,8 @@ export const fixtureManagedModeV0ReleaseReadiness: ManagedModeV0ReleaseReadiness
   self_bootstrap_v0_complete: true,
   managed_mode_pilot_complete: true,
   repeatable_one_at_a_time_run_complete: true,
-  completed_runs: ["managed-mode-pilot-208", "managed-mode-run-209"],
+  managed_mode_run_210_completed: true,
+  completed_runs: ["managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210"],
   active_tasks: 0,
   stale_leases: 0,
   runner_lock: "none",
@@ -4098,8 +4121,8 @@ export const fixtureManagedModeV0ReleaseReadiness: ManagedModeV0ReleaseReadiness
 
 export const fixtureManagedModeV0OperatorGuidance: ManagedModeV0OperatorGuidance = {
   schema: "skybridge.managed_mode_v0_operator_guidance.v1",
-  current_state: "managed_mode_v0_release_hardened",
-  next_safe_action: "Create an explicit future goal, pass the local resource gate, then run at most one one-at-a-time workunit.",
+  current_state: "managed_mode_v0_release_candidate_ready",
+  next_safe_action: "Stand by for explicit future goal; no next execution is authorized by this release candidate.",
   banners: ["Resource gate required before next run", "Execution disabled until explicit future goal", "General bounded queue apply disabled"],
   disabled_actions: ["start-all", "start-queue apply", "bounded queue apply", "resume -Apply", "unbounded worker loop"],
   token_printed: false,
