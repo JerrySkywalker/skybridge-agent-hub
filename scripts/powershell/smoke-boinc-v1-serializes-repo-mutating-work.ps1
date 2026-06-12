@@ -1,0 +1,7 @@
+. "$PSScriptRoot/smoke-boinc-v1-common.ps1"
+$preview = Invoke-BoincV1PreviewJson -Command "two-workunit-preview"
+Assert-True ([bool]$preview.serializes_repo_mutating_work) "Preview must serialize repo-mutating work."
+Assert-True ([bool]$preview.no_parallel_mutation_in_one_repo) "Preview must forbid parallel mutation in one repo."
+Assert-True ([bool]$preview.workunit_b_waits_for_a_finalized) "Workunit B must wait for A finalization."
+Assert-Equal $preview.workunits[1].waits_for_workunit_id $preview.workunits[0].workunit_id "Workunit B dependency mismatch."
+Write-SmokeResult "boinc-v1-serializes-repo-mutating-work"
