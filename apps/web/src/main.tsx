@@ -26,6 +26,7 @@ import {
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
   fixtureBoincV1Status,
+  fixtureBoincV1AlphaStatus,
   fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
@@ -52,6 +53,7 @@ import {
   type BoundedQueueReadiness,
   type BoincManagerState,
   type BoincV1Status,
+  type BoincV1AlphaStatus,
   type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
@@ -370,6 +372,7 @@ function CampaignQueuePage() {
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
           <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
+          <BoincV1AlphaPanel status={fixtureBoincV1AlphaStatus} />
           <BoincV1PreviewPanel status={fixtureBoincV1Status} />
           <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
           <ManagedModeRunRegistryPanel
@@ -570,6 +573,52 @@ function CoreEngineStatusPanel({ status }: { status: CoreEngineStatus }) {
         <button type="button" disabled aria-disabled="true">Worker execution disabled</button>
       </div>
       <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
+  return (
+    <section className="skybridge-panel boinc-v1-alpha-panel" aria-label="BOINC v1 alpha status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">BOINC v1 Alpha</p>
+          <h2>Workunit A Hold Path</h2>
+        </div>
+        <span className={badgeClass(status.apply_disabled ? "ok" : "bad")}>apply disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Alpha id</dt>
+          <dd>{status.alpha_id}</dd>
+        </div>
+        <div>
+          <dt>Workunit A state</dt>
+          <dd>{`${status.workunit_a.workunit_id}:${status.workunit_a.status}`}</dd>
+        </div>
+        <div>
+          <dt>Workunit B state</dt>
+          <dd>{`${status.workunit_b.workunit_id}:${status.workunit_b.status}`}</dd>
+        </div>
+        <div>
+          <dt>Workunit B blocked reason</dt>
+          <dd>{status.workunit_b_blocked_reason}</dd>
+        </div>
+        <div>
+          <dt>Resource gate</dt>
+          <dd>{status.resource_gate_status}</dd>
+        </div>
+        <div>
+          <dt>Drain / pause</dt>
+          <dd>{`drain=${String(status.drain_pause_status.drain_after_current)}; pause_new_claims=${String(status.drain_pause_status.pause_new_claims)}`}</dd>
+        </div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Workunit B blocked</button>
+        <button type="button" disabled aria-disabled="true">General apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No raw logs</button>
+      </div>
+      <span>blocked_by_unfinalized_workunit_a token_printed=false</span>
     </section>
   );
 }

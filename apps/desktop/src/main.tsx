@@ -14,6 +14,7 @@ import {
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
   fixtureBoincV1Status,
+  fixtureBoincV1AlphaStatus,
   fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
@@ -42,6 +43,7 @@ import {
   type BoundedQueueReadiness,
   type BoincManagerState,
   type BoincV1Status,
+  type BoincV1AlphaStatus,
   type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
@@ -448,6 +450,31 @@ function CoreEngineStatusPanel({ status }: { status: CoreEngineStatus }) {
   );
 }
 
+function BoincV1AlphaPanel({ status }: { status: BoincV1AlphaStatus }) {
+  return (
+    <section className="panel boinc-v1-alpha-panel" aria-label="BOINC v1 alpha status panel">
+      <h2>BOINC v1 Alpha</h2>
+      <dl>
+        <StatusValue label="Alpha id" value={status.alpha_id} />
+        <StatusValue label="Workunit A state" value={`${status.workunit_a.workunit_id}:${status.workunit_a.status}`} />
+        <StatusValue label="Workunit B state" value={`${status.workunit_b.workunit_id}:${status.workunit_b.status}`} />
+        <StatusValue label="Workunit B blocked reason" value={status.workunit_b_blocked_reason} />
+        <StatusValue label="Open review hold" value={String(status.open_review_hold)} />
+        <StatusValue label="Apply disabled" value={String(status.apply_disabled)} />
+        <StatusValue label="Resource gate" value={status.resource_gate_status} />
+        <StatusValue label="Drain / pause" value={`drain=${String(status.drain_pause_status.drain_after_current)}; pause_new_claims=${String(status.drain_pause_status.pause_new_claims)}`} />
+        <StatusValue label="token_printed" value={String(status.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Workunit B blocked</button>
+        <button type="button" disabled aria-disabled="true">General apply disabled</button>
+        <button type="button" disabled aria-disabled="true">No raw logs</button>
+      </div>
+      <p>Workunit B remains blocked_by_unfinalized_workunit_a. token_printed=false</p>
+    </section>
+  );
+}
+
 function ManagedModeRunRegistryPanel({
   registry,
   gate,
@@ -654,6 +681,7 @@ function App() {
       <ExecutionDisabledBanner guard={executionGuard} />
       <BoincManagerPanel state={fixtureBoincManagerState} />
       <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
+      <BoincV1AlphaPanel status={fixtureBoincV1AlphaStatus} />
       <BoincV1PreviewPanel status={fixtureBoincV1Status} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <ManagedModeRunRegistryPanel
