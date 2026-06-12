@@ -95,13 +95,16 @@ function New-RunArchive {
     New-CompletedRunArchiveItem -RunId "managed-mode-pilot-208" -EvidencePath ".agent/tmp/managed-mode-pilot-208/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-pilot-orientation.md")
     New-CompletedRunArchiveItem -RunId "managed-mode-run-209" -EvidencePath ".agent/tmp/managed-mode-run-209/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-repeatability-orientation.md")
     New-CompletedRunArchiveItem -RunId "managed-mode-run-210" -EvidencePath ".agent/tmp/managed-mode-run-210/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-v0-operator-checklist.md")
+    New-CompletedRunArchiveItem -RunId "managed-mode-run-211" -EvidencePath ".agent/tmp/managed-mode-run-211/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-v0-repeatability-check.md")
   )
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v0_completed_runs.v1"
-    completed_run_count = 3
-    completed_run_ids = @("managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210")
+    completed_run_count = 4
+    completed_run_ids = @("managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210", "managed-mode-run-211")
     runs = $runs
-    changed_files = @("docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md", "docs/managed-mode-v0-operator-checklist.md")
+    docs_local_smoke_runs_after_pilot = @("managed-mode-run-209", "managed-mode-run-210", "managed-mode-run-211")
+    docs_local_smoke_run_count_after_pilot = 3
+    changed_files = @("docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md", "docs/managed-mode-v0-operator-checklist.md", "docs/managed-mode-v0-repeatability-check.md")
     token_printed = $false
   }
 }
@@ -127,7 +130,7 @@ function New-ReleaseReadiness {
   $archive = New-RunArchive
   $openPrs = @(Get-OpenManagedModePrs)
   $blockers = New-Object System.Collections.Generic.List[string]
-  if ($archive.completed_run_count -ne 3) { $blockers.Add("completed_runs_missing") | Out-Null }
+  if ($archive.completed_run_count -ne 4) { $blockers.Add("completed_runs_missing") | Out-Null }
   if ($openPrs.Count -ne 0) { $blockers.Add("open_managed_mode_pr_present") | Out-Null }
   if ($ActiveTasks -ne 0) { $blockers.Add("active_tasks_present") | Out-Null }
   if ($StaleLeases -ne 0) { $blockers.Add("stale_leases_present") | Out-Null }
@@ -135,20 +138,26 @@ function New-ReleaseReadiness {
 
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v0_release_readiness.v1"
+    readiness_id = "managed_mode_v0_9_readiness"
     self_bootstrap_v0_complete = $true
     managed_mode_pilot_complete = $true
     repeatable_one_at_a_time_run_complete = $true
     managed_mode_run_210_completed = $true
+    managed_mode_run_211_completed = $true
     completed_runs = @($archive.completed_run_ids)
+    docs_local_smoke_runs_after_pilot = @($archive.docs_local_smoke_runs_after_pilot)
+    docs_local_smoke_run_count_after_pilot = $archive.docs_local_smoke_run_count_after_pilot
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
     runner_lock = $RunnerLock
     open_managed_mode_pr_count = $openPrs.Count
     general_bounded_queue_apply_enabled = $false
     multi_workunit_queue_enabled = $false
+    resource_gate_integrated = $true
     resource_gate_required_for_next_run = $true
     next_run_requires_explicit_future_goal = $true
     no_next_execution_authorized = $true
+    next_safe_action = "plan two-workunit preview only"
     release_ready = ($blockers.Count -eq 0)
     blockers = @($blockers)
     token_printed = $false
@@ -158,14 +167,15 @@ function New-ReleaseReadiness {
 function New-OperatorGuidance {
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v0_operator_guidance.v1"
-    current_state = "managed_mode_v0_release_candidate_ready"
-    next_safe_action = "Stand by for explicit future goal; no next execution is authorized by this release candidate."
+    current_state = "managed_mode_v0_9_readiness"
+    next_safe_action = "plan two-workunit preview only"
     banners = @(
+      "Managed Mode v0.9 readiness",
       "Resource gate required before next run",
-      "Execution disabled until explicit future goal",
+      "No next execution authorized",
       "General bounded queue apply disabled"
     )
-    disabled_actions = @("start-all", "start-queue apply", "bounded queue apply", "resume -Apply", "unbounded worker loop")
+    disabled_actions = @("start-all", "start-queue apply", "bounded queue apply", "multi-workunit apply", "resume -Apply", "unbounded worker loop")
     token_printed = $false
   }
 }

@@ -431,9 +431,11 @@ function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
       <h2>Managed Mode v0</h2>
       <dl>
         <StatusValue label="Release status" value={status.status} />
+        <StatusValue label="Readiness id" value={status.release_readiness.readiness_id ?? status.operator_guidance.current_state} />
         <StatusValue label="Completed runs" value={status.completed_runs.completed_run_ids.join("; ")} />
         <StatusValue label="Release readiness" value={String(status.release_readiness.release_ready)} />
         <StatusValue label="No next execution authorized" value={String(status.release_readiness.no_next_execution_authorized)} />
+        <StatusValue label="Resource gate integrated" value={String(status.release_readiness.resource_gate_integrated ?? false)} />
         <StatusValue label="Resource gate required" value={String(status.release_readiness.resource_gate_required_for_next_run)} />
         <StatusValue label="General bounded queue apply" value={String(status.release_readiness.general_bounded_queue_apply_enabled)} />
         <StatusValue label="Next safe action" value={status.operator_guidance.next_safe_action} />
