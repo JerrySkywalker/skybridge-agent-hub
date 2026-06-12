@@ -53,6 +53,30 @@ function Read-SafeJsonFile {
   $text | ConvertFrom-Json
 }
 
+function New-CompletedRunArchiveItem {
+  param(
+    [Parameter(Mandatory = $true)][string]$RunId,
+    [Parameter(Mandatory = $true)][string]$EvidencePath,
+    [Parameter(Mandatory = $true)][string[]]$ChangedFiles
+  )
+  $path = Resolve-RepoPath $EvidencePath
+  $evidence = Read-SafeJsonFile $path
+  if (-not $evidence) { throw "Missing $RunId finalizer evidence." }
+  if ($evidence.token_printed -ne $false) { throw "$RunId finalizer evidence must report token_printed=false." }
+  if ($evidence.no_raw_artifacts -ne $true) { throw "$RunId finalizer evidence must report no raw artifacts." }
+  [pscustomobject]@{
+    run_id = $RunId
+    state = "completed"
+    pr_url = [string]$evidence.task_pr.url
+    merge_commit = [string]$evidence.task_pr.merge_commit
+    finalizer_evidence_path = $EvidencePath
+    finalizer_report_path = $EvidencePath.Replace("finalizer-evidence.json", "finalizer-report.json")
+    finalizer_evidence_sha256 = Get-Sha256File $path
+    changed_files = @($ChangedFiles)
+    token_printed = $false
+  }
+}
+
 function Get-OpenManagedModePrs {
   if ($SimulateOpenManagedModePr) {
     return @([pscustomobject]@{ number = 210; url = "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/210"; title = "Managed Mode Run"; state = "OPEN"; token_printed = $false })
@@ -67,45 +91,17 @@ function Get-OpenManagedModePrs {
 }
 
 function New-RunArchive {
-  $pilotPath = Resolve-RepoPath ".agent/tmp/managed-mode-pilot-208/finalizer-evidence.json"
-  $runPath = Resolve-RepoPath ".agent/tmp/managed-mode-run-209/finalizer-evidence.json"
-  $pilot = Read-SafeJsonFile $pilotPath
-  $run = Read-SafeJsonFile $runPath
-  if (-not $pilot) { throw "Missing managed-mode-pilot-208 finalizer evidence." }
-  if (-not $run) { throw "Missing managed-mode-run-209 finalizer evidence." }
-  if ($pilot.token_printed -ne $false -or $run.token_printed -ne $false) { throw "Finalizer evidence must report token_printed=false." }
-  if ($pilot.no_raw_artifacts -ne $true -or $run.no_raw_artifacts -ne $true) { throw "Finalizer evidence must report no raw artifacts." }
-
   $runs = @(
-    [pscustomobject]@{
-      run_id = "managed-mode-pilot-208"
-      state = "completed"
-      pr_url = [string]$pilot.task_pr.url
-      merge_commit = [string]$pilot.task_pr.merge_commit
-      finalizer_evidence_path = ".agent/tmp/managed-mode-pilot-208/finalizer-evidence.json"
-      finalizer_report_path = ".agent/tmp/managed-mode-pilot-208/finalizer-report.json"
-      finalizer_evidence_sha256 = Get-Sha256File $pilotPath
-      changed_files = @($pilot.changed_files)
-      token_printed = $false
-    },
-    [pscustomobject]@{
-      run_id = "managed-mode-run-209"
-      state = "completed"
-      pr_url = [string]$run.task_pr.url
-      merge_commit = [string]$run.task_pr.merge_commit
-      finalizer_evidence_path = ".agent/tmp/managed-mode-run-209/finalizer-evidence.json"
-      finalizer_report_path = ".agent/tmp/managed-mode-run-209/finalizer-report.json"
-      finalizer_evidence_sha256 = Get-Sha256File $runPath
-      changed_files = @($run.changed_file)
-      token_printed = $false
-    }
+    New-CompletedRunArchiveItem -RunId "managed-mode-pilot-208" -EvidencePath ".agent/tmp/managed-mode-pilot-208/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-pilot-orientation.md")
+    New-CompletedRunArchiveItem -RunId "managed-mode-run-209" -EvidencePath ".agent/tmp/managed-mode-run-209/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-repeatability-orientation.md")
+    New-CompletedRunArchiveItem -RunId "managed-mode-run-210" -EvidencePath ".agent/tmp/managed-mode-run-210/finalizer-evidence.json" -ChangedFiles @("docs/managed-mode-v0-operator-checklist.md")
   )
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v0_completed_runs.v1"
-    completed_run_count = 2
-    completed_run_ids = @("managed-mode-pilot-208", "managed-mode-run-209")
+    completed_run_count = 3
+    completed_run_ids = @("managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210")
     runs = $runs
-    changed_files = @("docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md")
+    changed_files = @("docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md", "docs/managed-mode-v0-operator-checklist.md")
     token_printed = $false
   }
 }
@@ -131,7 +127,7 @@ function New-ReleaseReadiness {
   $archive = New-RunArchive
   $openPrs = @(Get-OpenManagedModePrs)
   $blockers = New-Object System.Collections.Generic.List[string]
-  if ($archive.completed_run_count -ne 2) { $blockers.Add("completed_runs_missing") | Out-Null }
+  if ($archive.completed_run_count -ne 3) { $blockers.Add("completed_runs_missing") | Out-Null }
   if ($openPrs.Count -ne 0) { $blockers.Add("open_managed_mode_pr_present") | Out-Null }
   if ($ActiveTasks -ne 0) { $blockers.Add("active_tasks_present") | Out-Null }
   if ($StaleLeases -ne 0) { $blockers.Add("stale_leases_present") | Out-Null }
@@ -142,6 +138,7 @@ function New-ReleaseReadiness {
     self_bootstrap_v0_complete = $true
     managed_mode_pilot_complete = $true
     repeatable_one_at_a_time_run_complete = $true
+    managed_mode_run_210_completed = $true
     completed_runs = @($archive.completed_run_ids)
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
@@ -161,8 +158,8 @@ function New-ReleaseReadiness {
 function New-OperatorGuidance {
   [pscustomobject]@{
     schema = "skybridge.managed_mode_v0_operator_guidance.v1"
-    current_state = "managed_mode_v0_release_hardened"
-    next_safe_action = "Create an explicit future goal, pass the local resource gate, then run at most one one-at-a-time workunit."
+    current_state = "managed_mode_v0_release_candidate_ready"
+    next_safe_action = "Stand by for explicit future goal; no next execution is authorized by this release candidate."
     banners = @(
       "Resource gate required before next run",
       "Execution disabled until explicit future goal",

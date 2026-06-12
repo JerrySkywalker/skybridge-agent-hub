@@ -57,7 +57,7 @@ function ConvertTo-ShortPath {
 function Test-SecretLookingText {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-  return $Text -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout|raw_stderr|raw_prompt|raw_worker_log|raw_codex_transcript|raw_ci_log|token_printed"\s*:\s*true'
+  return $Text -match '(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout(?!s?_persisted)|raw_stderr(?!s?_persisted)|raw_prompt(?!s?_persisted)|raw_worker_log(?!s?_persisted)|raw_codex_transcript(?!s?_persisted)|raw_ci_log(?!s?_persisted)|token_printed"\s*:\s*true'
 }
 
 function Get-Sha256Text {
@@ -76,6 +76,14 @@ function Get-FinalizerEvidencePath { Join-Path (Get-StateDirPath) "finalizer-evi
 function Get-FinalizerReportPath { Join-Path (Get-StateDirPath) "finalizer-report.json" }
 function Get-TaskPrBodyPath { Join-Path (Get-StateDirPath) "task-pr-body.md" }
 function Get-Archive208Path { Join-Path (Get-RegistryDirPath) "managed-mode-pilot-208-archive.json" }
+
+function Get-CompletedRunState {
+  "$($ManagedModeRunId.Replace("-", "_"))_completed"
+}
+
+function Get-AlreadyCompletedBlocker {
+  "$($ManagedModeRunId.Replace("-", "_"))_already_completed"
+}
 
 function Read-SafeJsonFile {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -371,7 +379,7 @@ function Get-Persisted209Record {
   if (-not $result) { return $null }
   $finalizerEvidencePath = Get-FinalizerEvidencePath
   $finalizer = Read-SafeJsonFile -Path $finalizerEvidencePath
-  $finalizerCompleted = ($finalizer -and ($finalizer.PSObject.Properties.Name -contains "final_state") -and [string]$finalizer.final_state -eq "managed_mode_run_209_completed")
+  $finalizerCompleted = ($finalizer -and ($finalizer.PSObject.Properties.Name -contains "final_state") -and [string]$finalizer.final_state -eq (Get-CompletedRunState))
   $completedAt = if ($finalizerCompleted -and ($finalizer.PSObject.Properties.Name -contains "completed_at")) { [string]$finalizer.completed_at } elseif ($result.completed_at) { [string]$result.completed_at } else { $null }
   [pscustomobject]@{
     schema = "skybridge.managed_mode_run_record.v1"
@@ -519,7 +527,8 @@ function New-SafeSummary {
     active_tasks = $ActiveTasks
     stale_leases = $StaleLeases
     runner_lock = $RunnerLock
-    managed_mode_run_209_state = if (@($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "managed_mode_run_209_completed" } elseif (@($registry.open_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "held_waiting_human_pr_review" } else { "not_started" }
+    managed_mode_run_state = if (@($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { Get-CompletedRunState } elseif (@($registry.open_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "held_waiting_human_pr_review" } else { "not_started" }
+    managed_mode_run_209_state = if ($ManagedModeRunId -eq "managed-mode-run-209" -and @($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "managed_mode_run_209_completed" } elseif ($ManagedModeRunId -eq "managed-mode-run-209" -and @($registry.open_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "held_waiting_human_pr_review" } else { "not_started" }
     no_next_execution_authorized = $true
     next_safe_action = if (@($registry.completed_runs | Where-Object { $_.run_id -eq $ManagedModeRunId }).Count -eq 1) { "one-at-a-time mode ready for future explicit goal; no_next_execution_authorized" } else { "run one explicitly authorized low-risk docs/local-smoke workunit" }
     token_printed = $false
@@ -814,10 +823,10 @@ function New-RunFinalizerState {
   $pr = Get-RunTaskPrState
   $finalizerExists = Test-Path -LiteralPath (Get-FinalizerEvidencePath) -PathType Leaf
   $changedFileExists = Test-Path -LiteralPath (Resolve-RepoPath $TargetPath) -PathType Leaf
-  $codexCount = if ($result -and ($result.PSObject.Properties.Name -contains "codex_execution_count")) { [int]$result.codex_execution_count } else { 0 }
-  $prCount = if ($result -and ($result.PSObject.Properties.Name -contains "pr_count")) { [int]$result.pr_count } else { 0 }
+  $codexCount = if ($result -and ($result.PSObject.Properties.Name -contains "codex_execution_count")) { [int]$result.codex_execution_count } elseif ($evidence -and ($evidence.PSObject.Properties.Name -contains "codex_execution_count")) { [int]$evidence.codex_execution_count } else { 0 }
+  $prCount = if ($result -and ($result.PSObject.Properties.Name -contains "pr_count")) { [int]$result.pr_count } elseif ($evidence -and ($evidence.PSObject.Properties.Name -contains "pr_count")) { [int]$evidence.pr_count } else { 0 }
   $blockers = New-Object System.Collections.Generic.List[string]
-  if ($finalizerExists) { $blockers.Add("managed_mode_run_209_already_completed") | Out-Null }
+  if ($finalizerExists) { $blockers.Add((Get-AlreadyCompletedBlocker)) | Out-Null }
   if (-not $result -or -not $evidence) { $blockers.Add("run_success_evidence_missing") | Out-Null }
   if (-not $pr.exists) { $blockers.Add("task_pr_missing") | Out-Null }
   if ($pr.exists -and -not $pr.merged) { $blockers.Add("task_pr_not_merged") | Out-Null }
@@ -837,7 +846,7 @@ function New-RunFinalizerState {
     task_id = "$ManagedModeRunId-task-001"
     worker_id = $WorkerId
     can_finalize = ($blockers.Count -eq 0)
-    final_state = if ($finalizerExists) { "managed_mode_run_209_completed" } elseif ($pr.exists -and -not $pr.merged) { "held_waiting_human_pr_review" } elseif ($blockers.Count -eq 0) { "ready_to_finalize" } else { "finalizer_blocked" }
+    final_state = if ($finalizerExists) { Get-CompletedRunState } elseif ($pr.exists -and -not $pr.merged) { "held_waiting_human_pr_review" } elseif ($blockers.Count -eq 0) { "ready_to_finalize" } else { "finalizer_blocked" }
     task_pr = $pr
     changed_file_exists_on_main = $changedFileExists
     exactly_one_workunit = $true
@@ -878,7 +887,7 @@ function Invoke-RunFinalizer {
     workunit_id = "$ManagedModeRunId-workunit-001"
     task_id = "$ManagedModeRunId-task-001"
     worker_id = $WorkerId
-    final_state = "managed_mode_run_209_completed"
+    final_state = Get-CompletedRunState
     task_pr = $state.task_pr
     changed_file = $TargetPath
     exactly_one_workunit = $true
@@ -898,7 +907,7 @@ function Invoke-RunFinalizer {
   $report = [pscustomobject]@{
     schema = "skybridge.managed_mode_run_finalizer_report.v1"
     run_id = $ManagedModeRunId
-    final_state = "managed_mode_run_209_completed"
+    final_state = Get-CompletedRunState
     evidence_path = ConvertTo-ShortPath (Get-FinalizerEvidencePath)
     token_printed = $false
   }
@@ -1045,7 +1054,7 @@ function Invoke-RunApply {
       task_type = $TaskType
       risk = $Risk
       mode = if ($replacementMode) { if ($execution.timed_out) { "replacement_timeout" } else { "replacement_controlled_failure" } } else { "run_apply_controlled_failure" }
-      final_state = if ($replacementMode) { if ($execution.timed_out) { "managed_mode_run_209_timeout_replacement_exhausted" } else { "managed_mode_run_209_failed_replacement_exhausted" } } else { "failed" }
+      final_state = if ($replacementMode) { if ($execution.timed_out) { "$($ManagedModeRunId.Replace("-", "_"))_timeout_replacement_exhausted" } else { "$($ManagedModeRunId.Replace("-", "_"))_failed_replacement_exhausted" } } else { "failed" }
       selected_invocation_profile = $codex.metadata.command_profile_id
       replacement_attempt = if ($replacementMode) { 1 } else { 0 }
       replacement_attempt_count = if ($replacementMode) { 1 } else { 0 }
@@ -1081,7 +1090,7 @@ function Invoke-RunApply {
       schema = "skybridge.managed_mode_run_apply_result.v1"
       run_id = $ManagedModeRunId
       mode = if ($replacementMode) { "replacement_no_changes" } else { "run_apply_no_changes" }
-      final_state = if ($replacementMode) { "managed_mode_run_209_failed_replacement_exhausted" } else { "failed" }
+      final_state = if ($replacementMode) { "$($ManagedModeRunId.Replace("-", "_"))_failed_replacement_exhausted" } else { "failed" }
       selected_invocation_profile = $codex.metadata.command_profile_id
       replacement_attempt = if ($replacementMode) { 1 } else { 0 }
       replacement_attempt_count = if ($replacementMode) { 1 } else { 0 }
@@ -1107,7 +1116,7 @@ function Invoke-RunApply {
         schema = "skybridge.managed_mode_run_apply_result.v1"
         run_id = $ManagedModeRunId
         mode = if ($replacementMode) { "replacement_disallowed_path" } else { "run_apply_disallowed_path" }
-        final_state = if ($replacementMode) { "managed_mode_run_209_failed_replacement_exhausted" } else { "failed" }
+        final_state = if ($replacementMode) { "$($ManagedModeRunId.Replace("-", "_"))_failed_replacement_exhausted" } else { "failed" }
         selected_invocation_profile = $codex.metadata.command_profile_id
         replacement_attempt = if ($replacementMode) { 1 } else { 0 }
         replacement_attempt_count = if ($replacementMode) { 1 } else { 0 }
