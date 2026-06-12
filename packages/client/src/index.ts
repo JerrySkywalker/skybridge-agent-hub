@@ -2574,7 +2574,13 @@ export interface BoincV1AlphaWorkunit {
   task_type: "docs/local-smoke";
   risk: "low";
   dependency: string;
-  status: "ready_if_gates_pass" | "blocked_by_unfinalized_workunit_a" | "held_waiting_human_pr_review_workunit_a";
+  status:
+    | "ready_if_gates_pass"
+    | "blocked_by_unfinalized_workunit_a"
+    | "held_waiting_human_pr_review_workunit_a"
+    | "completed"
+    | "pending_gates"
+    | "held_waiting_human_pr_review_workunit_b";
   apply_enabled_for_this_goal: boolean;
   token_printed: false;
 }
@@ -2588,6 +2594,13 @@ export interface BoincV1AlphaStatus {
   open_review_hold: boolean;
   apply_disabled: true;
   workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a";
+  workunit_b_pr_url: string | null;
+  readiness_state:
+    | "workunit_a_completed_workunit_b_pending"
+    | "boinc_v1_alpha_waiting_for_workunit_b_human_review"
+    | "workunit_a_finalizer_pending";
+  workunit_c_present: false;
+  no_next_execution_authorized: true;
   resource_gate_status: "passed" | "blocked" | "not_evaluated";
   drain_pause_status: {
     drain_after_current: true;
@@ -4734,7 +4747,7 @@ export const fixtureBoincV1AlphaStatus: BoincV1AlphaStatus = {
     task_type: "docs/local-smoke",
     risk: "low",
     dependency: "none",
-    status: "ready_if_gates_pass",
+    status: "completed",
     apply_enabled_for_this_goal: false,
     token_printed: false,
   },
@@ -4747,13 +4760,17 @@ export const fixtureBoincV1AlphaStatus: BoincV1AlphaStatus = {
     task_type: "docs/local-smoke",
     risk: "low",
     dependency: "Workunit A completed and finalized",
-    status: "blocked_by_unfinalized_workunit_a",
+    status: "pending_gates",
     apply_enabled_for_this_goal: false,
     token_printed: false,
   },
   open_review_hold: false,
   apply_disabled: true,
   workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a",
+  workunit_b_pr_url: null,
+  readiness_state: "workunit_a_completed_workunit_b_pending",
+  workunit_c_present: false,
+  no_next_execution_authorized: true,
   resource_gate_status: "passed",
   drain_pause_status: {
     drain_after_current: true,
