@@ -1355,8 +1355,73 @@ export interface WorkerServiceReadiness {
   token_printed: false;
 }
 
+export interface DesktopWorkerControlState {
+  schema: "skybridge.desktop_worker_control_state.v1";
+  pause_after_current: boolean;
+  drain_after_current: boolean;
+  pause_new_claims: boolean;
+  emergency_stop_requested: boolean;
+  operator_hold: boolean;
+  review_hold: boolean;
+  resource_gate_hold: boolean;
+  no_next_execution_authorized: true;
+  token_printed: false;
+}
+
+export interface DesktopTrayState {
+  schema: "skybridge.desktop_tray_state.v1";
+  menu_entries: string[];
+  pause_preview_apply_enabled: false;
+  drain_preview_apply_enabled: false;
+  emergency_stop_preview_apply_enabled: false;
+  close_to_tray_preview: boolean;
+  autostart_supported: boolean;
+  autostart_enabled: false;
+  autostart_apply_enabled: false;
+  task_claim_enabled: false;
+  codex_execution_enabled: false;
+  queue_apply_enabled: false;
+  token_printed: false;
+}
+
+export interface DesktopWorkerSafetyBanner {
+  schema: "skybridge.desktop_worker_safety_banner.v1";
+  execution_enabled: false;
+  queue_apply_enabled: false;
+  no_next_execution_authorized: true;
+  message: string;
+  token_printed: false;
+}
+
 export interface DesktopResidentState {
-  schema: "skybridge.desktop_resident_state.v1";
+  schema: "skybridge.desktop_resident_worker.v1";
+  worker_id: string;
+  device_id: string;
+  resident_enabled: false;
+  execution_enabled: false;
+  poll_enabled: false;
+  run_apply_enabled: false;
+  queue_apply_enabled: false;
+  resource_gate_required: true;
+  require_operator_approval: true;
+  require_human_review: true;
+  no_next_execution_authorized: true;
+  current_repo: string;
+  current_branch: string;
+  current_commit: string;
+  active_tasks: 0;
+  stale_leases: 0;
+  runner_lock: "none";
+  open_review_hold: boolean;
+  resource_gate_status: "required" | "pass" | "blocked" | "unknown";
+  drain_pause_state: "preview_only" | "clear" | "paused" | "draining" | "emergency_preview";
+  last_heartbeat_at: string | null;
+  control_state: DesktopWorkerControlState;
+  tray_state: DesktopTrayState;
+  safety_banner: DesktopWorkerSafetyBanner;
+  evidence_folder: string;
+  logs_folder: string;
+  github_pr_list_url: string;
   tray_available: boolean;
   window_visible: boolean;
   close_to_tray_supported: boolean;
@@ -3658,14 +3723,83 @@ export const fixtureWorkerServiceState: WorkerServiceState = {
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {
-  schema: "skybridge.desktop_resident_state.v1",
+  schema: "skybridge.desktop_resident_worker.v1",
+  worker_id: "laptop-zenbookduo",
+  device_id: "local-fixture-device",
+  resident_enabled: false,
+  execution_enabled: false,
+  poll_enabled: false,
+  run_apply_enabled: false,
+  queue_apply_enabled: false,
+  resource_gate_required: true,
+  require_operator_approval: true,
+  require_human_review: true,
+  no_next_execution_authorized: true,
+  current_repo: "skybridge-agent-hub",
+  current_branch: "main",
+  current_commit: "local-fixture",
+  active_tasks: 0,
+  stale_leases: 0,
+  runner_lock: "none",
+  open_review_hold: false,
+  resource_gate_status: "required",
+  drain_pause_state: "preview_only",
+  last_heartbeat_at: null,
+  control_state: {
+    schema: "skybridge.desktop_worker_control_state.v1",
+    pause_after_current: false,
+    drain_after_current: false,
+    pause_new_claims: false,
+    emergency_stop_requested: false,
+    operator_hold: false,
+    review_hold: false,
+    resource_gate_hold: false,
+    no_next_execution_authorized: true,
+    token_printed: false,
+  },
+  tray_state: {
+    schema: "skybridge.desktop_tray_state.v1",
+    menu_entries: [
+      "Open SkyBridge",
+      "Worker Status",
+      "Resource Gate",
+      "Pause Preview",
+      "Drain Preview",
+      "Emergency Stop Preview",
+      "Open Evidence Folder",
+      "Open Logs Folder",
+      "Quit",
+    ],
+    pause_preview_apply_enabled: false,
+    drain_preview_apply_enabled: false,
+    emergency_stop_preview_apply_enabled: false,
+    close_to_tray_preview: true,
+    autostart_supported: false,
+    autostart_enabled: false,
+    autostart_apply_enabled: false,
+    task_claim_enabled: false,
+    codex_execution_enabled: false,
+    queue_apply_enabled: false,
+    token_printed: false,
+  },
+  safety_banner: {
+    schema: "skybridge.desktop_worker_safety_banner.v1",
+    execution_enabled: false,
+    queue_apply_enabled: false,
+    no_next_execution_authorized: true,
+    message: "Desktop resident worker v1 is installed as a safe preview shell. Execution and queue apply stay disabled.",
+    token_printed: false,
+  },
+  evidence_folder: ".agent/tmp/desktop-resident-worker",
+  logs_folder: ".agent/tmp/local-supervisor",
+  github_pr_list_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pulls",
   tray_available: true,
   window_visible: true,
-  close_to_tray_supported: false,
+  close_to_tray_supported: true,
   autostart_supported: false,
   autostart_enabled: false,
   resident_mode: "tray_resident_preview",
-  last_refresh_at: "2026-06-09T00:00:00.000Z",
+  last_refresh_at: "2026-06-13T00:00:00.000Z",
   token_printed: false,
 };
 

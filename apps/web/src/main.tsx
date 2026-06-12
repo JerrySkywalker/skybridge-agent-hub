@@ -28,6 +28,7 @@ import {
   fixtureBoincV1Status,
   fixtureBoincV1AlphaStatus,
   fixtureCoreEngineStatus,
+  fixtureDesktopResidentState,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
@@ -55,6 +56,7 @@ import {
   type BoincV1Status,
   type BoincV1AlphaStatus,
   type CoreEngineStatus,
+  type DesktopResidentState,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
   type OneAtATimeManagedModeGate,
@@ -327,6 +329,7 @@ function CampaignQueuePage() {
   const workerReadiness = createWorkerServiceReadiness(report.worker_service_state);
   const workunitPlan = report.workunit_preview_plan ?? fixtureBoundedQueuePlan;
   const boundedQueueReadiness = report.bounded_queue_readiness ?? fixtureBoundedQueueReadiness;
+  const residentState = report.desktop_resident_state ?? fixtureDesktopResidentState;
 
   return (
     <div className="route-stack campaign-queue" data-readonly-dashboard="true">
@@ -374,6 +377,7 @@ function CampaignQueuePage() {
           <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
           <BoincV1AlphaPanel status={fixtureBoincV1AlphaStatus} />
           <BoincV1PreviewPanel status={fixtureBoincV1Status} />
+          <WebResidentWorkerSummaryPanel resident={residentState} />
           <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
           <ManagedModeRunRegistryPanel
             registry={fixtureManagedModeRunRegistry}
@@ -530,6 +534,47 @@ function BoincV1PreviewPanel({ status }: { status: BoincV1Status }) {
         <button type="button" disabled aria-disabled="true">No task claim</button>
         <button type="button" disabled aria-disabled="true">No execution</button>
       </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebResidentWorkerSummaryPanel({ resident }: { resident: DesktopResidentState }) {
+  return (
+    <section className="skybridge-panel web-resident-worker-summary-panel" aria-label="Web resident worker summary panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Desktop Resident Worker</p>
+          <h2>Safe Preview Shell</h2>
+        </div>
+        <span className={badgeClass(resident.execution_enabled ? "bad" : "ok")}>execution disabled</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Resident enabled</dt>
+          <dd>{String(resident.resident_enabled)}</dd>
+        </div>
+        <div>
+          <dt>Execution / queue apply</dt>
+          <dd>{`execution_enabled=${String(resident.execution_enabled)}; queue_apply_enabled=${String(resident.queue_apply_enabled)}`}</dd>
+        </div>
+        <div>
+          <dt>No next execution</dt>
+          <dd>{String(resident.no_next_execution_authorized)}</dd>
+        </div>
+        <div>
+          <dt>Resource gate</dt>
+          <dd>{`required=${String(resident.resource_gate_required)}; status=${resident.resource_gate_status}`}</dd>
+        </div>
+        <div>
+          <dt>Preview controls</dt>
+          <dd>{`pause=${String(resident.control_state.pause_after_current)}; drain=${String(resident.control_state.drain_after_current)}; emergency=${String(resident.control_state.emergency_stop_requested)}`}</dd>
+        </div>
+        <div>
+          <dt>Completed alpha</dt>
+          <dd>Workunit A completed; Workunit B completed; Workunit C absent</dd>
+        </div>
+      </dl>
       <span>token_printed=false</span>
     </section>
   );
