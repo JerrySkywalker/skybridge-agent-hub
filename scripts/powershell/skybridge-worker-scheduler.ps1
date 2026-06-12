@@ -12,6 +12,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$SkybridgeCoreEngineModules = @("Skybridge.Core.psm1", "Skybridge.QueuePolicy.psm1", "Skybridge.SafetyScanner.psm1")
+foreach ($module in $SkybridgeCoreEngineModules) {
+  Import-Module (Join-Path $PSScriptRoot "lib/$module") -Force
+}
+
 function Test-SecretLookingText {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }

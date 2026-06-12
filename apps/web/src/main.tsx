@@ -26,6 +26,7 @@ import {
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
   fixtureBoincV1Status,
+  fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
@@ -51,6 +52,7 @@ import {
   type BoundedQueueReadiness,
   type BoincManagerState,
   type BoincV1Status,
+  type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
   type OneAtATimeManagedModeGate,
@@ -367,6 +369,7 @@ function CampaignQueuePage() {
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
+          <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
           <BoincV1PreviewPanel status={fixtureBoincV1Status} />
           <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
           <ManagedModeRunRegistryPanel
@@ -523,6 +526,48 @@ function BoincV1PreviewPanel({ status }: { status: BoincV1Status }) {
         <button type="button" disabled aria-disabled="true">No task creation</button>
         <button type="button" disabled aria-disabled="true">No task claim</button>
         <button type="button" disabled aria-disabled="true">No execution</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function CoreEngineStatusPanel({ status }: { status: CoreEngineStatus }) {
+  return (
+    <section className="skybridge-panel core-engine-status-panel" aria-label="Core engine module status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Core Engine</p>
+          <h2>Shared Safety Kernel</h2>
+        </div>
+        <span className={badgeClass(status.no_next_execution_authorized ? "ok" : "bad")}>read-only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Core Engine module status</dt>
+          <dd>{`${status.module_status.modules_added.length} modules; preferred=${String(status.module_status.preferred_implementation_path)}`}</dd>
+        </div>
+        <div>
+          <dt>completed run registry</dt>
+          <dd>{status.completed_run_registry.completed_run_ids.join("; ")}</dd>
+        </div>
+        <div>
+          <dt>Resource gate</dt>
+          <dd>{`required=${String(status.resource_gate_status.resource_gate_required)}; blockers=${status.resource_gate_status.blockers.join("; ") || "none"}`}</dd>
+        </div>
+        <div>
+          <dt>Two-workunit preview</dt>
+          <dd>{`count=${status.two_workunit_preview_status.preview_workunit_count}; apply=${String(status.two_workunit_preview_status.apply_enabled)}`}</dd>
+        </div>
+        <div>
+          <dt>Apply disabled</dt>
+          <dd>{status.apply_disabled_status.reason}</dd>
+        </div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Run apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execution disabled</button>
       </div>
       <span>token_printed=false</span>
     </section>

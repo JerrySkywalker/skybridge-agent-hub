@@ -14,6 +14,7 @@ import {
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
   fixtureBoincV1Status,
+  fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
@@ -41,6 +42,7 @@ import {
   type BoundedQueueReadiness,
   type BoincManagerState,
   type BoincV1Status,
+  type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
   type OneAtATimeManagedModeGate,
@@ -422,6 +424,30 @@ function BoincV1PreviewPanel({ status }: { status: BoincV1Status }) {
   );
 }
 
+function CoreEngineStatusPanel({ status }: { status: CoreEngineStatus }) {
+  return (
+    <section className="panel core-engine-status-panel" aria-label="Core engine module status panel">
+      <h2>Core Engine</h2>
+      <dl>
+        <StatusValue label="Module status" value={`${status.module_status.modules_added.length} modules; preferred=${String(status.module_status.preferred_implementation_path)}`} />
+        <StatusValue label="completed run registry" value={status.completed_run_registry.completed_run_ids.join("; ")} />
+        <StatusValue label="Resource gate" value={`required=${String(status.resource_gate_status.resource_gate_required)}; blockers=${status.resource_gate_status.blockers.join("; ") || "none"}`} />
+        <StatusValue label="Two-workunit preview" value={`count=${status.two_workunit_preview_status.preview_workunit_count}; apply=${String(status.two_workunit_preview_status.apply_enabled)}`} />
+        <StatusValue label="Drain / pause preview" value={`drain=${String(status.drain_pause_preview_status.drain_after_current)}; pause=${String(status.drain_pause_preview_status.pause_new_claims)}`} />
+        <StatusValue label="Apply disabled" value={`${status.apply_disabled_status.reason}; general=${String(status.apply_disabled_status.general_bounded_queue_apply_enabled)}`} />
+        <StatusValue label="No next execution authorized" value={String(status.no_next_execution_authorized)} />
+        <StatusValue label="token_printed" value={String(status.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Run apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execution disabled</button>
+      </div>
+      <p>Core engine status is read-only; no raw logs or execution controls are exposed. token_printed=false</p>
+    </section>
+  );
+}
+
 function ManagedModeRunRegistryPanel({
   registry,
   gate,
@@ -627,6 +653,7 @@ function App() {
       <AttentionPanel events={attention.attention_events} />
       <ExecutionDisabledBanner guard={executionGuard} />
       <BoincManagerPanel state={fixtureBoincManagerState} />
+      <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
       <BoincV1PreviewPanel status={fixtureBoincV1Status} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <ManagedModeRunRegistryPanel

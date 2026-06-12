@@ -2090,6 +2090,50 @@ export interface ManagedModeRunRegistry {
   token_printed: false;
 }
 
+export interface CoreEngineStatus {
+  schema: "skybridge.core_engine_status.v1";
+  module_status: {
+    modules_added: string[];
+    preferred_implementation_path: boolean;
+    wrappers_compatible: boolean;
+    token_printed: false;
+  };
+  completed_run_registry: {
+    completed_run_ids: string[];
+    active_tasks: number;
+    stale_leases: number;
+    runner_lock: string;
+    open_managed_mode_pr_count: number;
+    token_printed: false;
+  };
+  resource_gate_status: {
+    resource_gate_required: boolean;
+    can_run_one_at_a_time: boolean;
+    blockers: string[];
+    token_printed: false;
+  };
+  two_workunit_preview_status: {
+    preview_workunit_count: number;
+    apply_enabled: false;
+    workunit_b_waits_for_a_finalized: boolean;
+    token_printed: false;
+  };
+  drain_pause_preview_status: {
+    drain_after_current: boolean;
+    pause_after_current: boolean;
+    pause_new_claims: boolean;
+    token_printed: false;
+  };
+  apply_disabled_status: {
+    general_bounded_queue_apply_enabled: false;
+    multi_workunit_apply_enabled: false;
+    reason: string;
+    token_printed: false;
+  };
+  no_next_execution_authorized: true;
+  token_printed: false;
+}
+
 export interface OneAtATimeManagedModeGate {
   schema: "skybridge.one_at_a_time_managed_mode_gate.v1";
   run_id: string;
@@ -4225,6 +4269,61 @@ export const fixtureManagedModeRunRegistry: ManagedModeRunRegistry = {
   open_runs: [],
   general_bounded_queue_apply_enabled: false,
   max_workunits: 1,
+  token_printed: false,
+};
+
+export const fixtureCoreEngineStatus: CoreEngineStatus = {
+  schema: "skybridge.core_engine_status.v1",
+  module_status: {
+    modules_added: [
+      "Skybridge.Core",
+      "Skybridge.CodexExecutor",
+      "Skybridge.ResourceGate",
+      "Skybridge.WorkunitRegistry",
+      "Skybridge.EvidenceStore",
+      "Skybridge.PrPackager",
+      "Skybridge.Finalizer",
+      "Skybridge.QueuePolicy",
+      "Skybridge.SafetyScanner",
+      "Skybridge.SmokeHarness",
+    ],
+    preferred_implementation_path: true,
+    wrappers_compatible: true,
+    token_printed: false,
+  },
+  completed_run_registry: {
+    completed_run_ids: ["managed-mode-pilot-208", "managed-mode-run-209", "managed-mode-run-210", "managed-mode-run-211"],
+    active_tasks: 0,
+    stale_leases: 0,
+    runner_lock: "none",
+    open_managed_mode_pr_count: 0,
+    token_printed: false,
+  },
+  resource_gate_status: {
+    resource_gate_required: true,
+    can_run_one_at_a_time: true,
+    blockers: [],
+    token_printed: false,
+  },
+  two_workunit_preview_status: {
+    preview_workunit_count: 2,
+    apply_enabled: false,
+    workunit_b_waits_for_a_finalized: true,
+    token_printed: false,
+  },
+  drain_pause_preview_status: {
+    drain_after_current: true,
+    pause_after_current: true,
+    pause_new_claims: true,
+    token_printed: false,
+  },
+  apply_disabled_status: {
+    general_bounded_queue_apply_enabled: false,
+    multi_workunit_apply_enabled: false,
+    reason: "core_engine_consolidation_no_execution_boundary",
+    token_printed: false,
+  },
+  no_next_execution_authorized: true,
   token_printed: false,
 };
 

@@ -12,6 +12,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$SkybridgeCoreEngineModules = @("Skybridge.Core.psm1", "Skybridge.WorkunitRegistry.psm1", "Skybridge.SafetyScanner.psm1")
+foreach ($module in $SkybridgeCoreEngineModules) {
+  Import-Module (Join-Path $PSScriptRoot "lib/$module") -Force
+}
+
 function Get-RepoRoot {
   (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 }
