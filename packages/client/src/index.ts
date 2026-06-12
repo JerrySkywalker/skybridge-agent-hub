@@ -1392,13 +1392,64 @@ export interface LocalResourcePolicy {
   max_memory_percent: number;
   network_required: boolean;
   allowed_hours: string;
+  lid_sleep_note?: string;
   sleep_lid_behavior_note: string;
   policy_source: "fixture" | "local_script" | "desktop_metadata";
   enforcement_status: "preview_only" | "metadata_only" | "enforced";
+  observation_source?: string;
   battery_state: "unknown" | "ac_power" | "battery" | "no_battery";
   battery_percent: number | null;
+  ac_power?: boolean | null;
   memory_used_percent: number | null;
   cpu_summary: string;
+  blockers?: string[];
+  warnings?: string[];
+  can_run_one_at_a_time?: boolean;
+  token_printed: false;
+}
+
+export interface LocalResourceObservation {
+  schema: "skybridge.local_resource_observation.v1";
+  observation_source: string;
+  battery_state: "unknown" | "ac_power" | "battery" | "no_battery";
+  battery_percent: number | null;
+  ac_power: boolean | null;
+  memory_used_percent: number | null;
+  cpu_percent: number | null;
+  network_available: boolean | null;
+  current_local_time: string;
+  token_printed: false;
+}
+
+export interface LocalResourceBlocker {
+  schema: "skybridge.local_resource_blocker.v1";
+  blocker_id: string;
+  severity: "blocker" | "warning";
+  summary: string;
+  token_printed: false;
+}
+
+export interface LocalResourcePolicyEnforcement {
+  schema: "skybridge.local_resource_policy_enforcement.v1";
+  policy: LocalResourcePolicy;
+  observation: LocalResourceObservation;
+  blockers: LocalResourceBlocker[];
+  warnings: string[];
+  can_run_one_at_a_time: boolean;
+  task_claimed: false;
+  task_executed: false;
+  no_powercfg_mutation: true;
+  admin_required: false;
+  token_printed: false;
+}
+
+export interface LocalRunAllowance {
+  schema: "skybridge.local_run_allowance.v1";
+  run_id: string;
+  explicit_authorization_required: true;
+  resource_gate_required: true;
+  can_run_one_at_a_time: boolean;
+  blockers: string[];
   token_printed: false;
 }
 
@@ -2094,6 +2145,62 @@ export interface ManagedModeRepeatabilitySummary {
   stale_leases: number;
   runner_lock: string;
   next_safe_action: string;
+  token_printed: false;
+}
+
+export interface ManagedModeV0CompletedRuns {
+  schema: "skybridge.managed_mode_v0_completed_runs.v1";
+  completed_run_count: 2;
+  completed_run_ids: string[];
+  runs: ManagedModeRunRecord[];
+  changed_files: string[];
+  token_printed: false;
+}
+
+export interface ManagedModeV0ReleaseReadiness {
+  schema: "skybridge.managed_mode_v0_release_readiness.v1";
+  self_bootstrap_v0_complete: true;
+  managed_mode_pilot_complete: true;
+  repeatable_one_at_a_time_run_complete: true;
+  completed_runs: string[];
+  active_tasks: number;
+  stale_leases: number;
+  runner_lock: string;
+  open_managed_mode_pr_count: number;
+  general_bounded_queue_apply_enabled: false;
+  multi_workunit_queue_enabled: false;
+  resource_gate_required_for_next_run: true;
+  next_run_requires_explicit_future_goal: true;
+  no_next_execution_authorized: true;
+  release_ready: boolean;
+  blockers: string[];
+  token_printed: false;
+}
+
+export interface ManagedModeV0OperatorGuidance {
+  schema: "skybridge.managed_mode_v0_operator_guidance.v1";
+  current_state: string;
+  next_safe_action: string;
+  banners: string[];
+  disabled_actions: string[];
+  token_printed: false;
+}
+
+export interface ManagedModeV0ReleaseReport {
+  schema: "skybridge.managed_mode_v0_release_report.v1";
+  status: ManagedModeV0Status;
+  generated_at: string;
+  report_path?: string;
+  token_printed: false;
+}
+
+export interface ManagedModeV0Status {
+  schema: "skybridge.managed_mode_v0_status.v1";
+  product: "SkyBridge Agent Hub";
+  status: "ready" | "blocked";
+  completed_runs: ManagedModeV0CompletedRuns;
+  release_readiness: ManagedModeV0ReleaseReadiness;
+  operator_guidance: ManagedModeV0OperatorGuidance;
   token_printed: false;
 }
 
@@ -3297,19 +3404,62 @@ export const fixtureLocalResourcePolicy: LocalResourcePolicy = {
   schema: "skybridge.local_resource_policy.v1",
   require_ac_power: true,
   pause_on_battery: true,
-  pause_below_battery_percent: 40,
+  pause_below_battery_percent: 30,
   require_idle: false,
   max_cpu_percent: 65,
-  max_memory_percent: 75,
+  max_memory_percent: 90,
   network_required: true,
   allowed_hours: "00:00-23:59 local",
+  lid_sleep_note: "No powercfg mutation; operator-managed Windows sleep/lid behavior.",
   sleep_lid_behavior_note: "No powercfg mutation; operator-managed Windows sleep/lid behavior.",
   policy_source: "fixture",
-  enforcement_status: "preview_only",
+  enforcement_status: "enforced",
+  observation_source: "fixture",
   battery_state: "unknown",
   battery_percent: null,
+  ac_power: null,
   memory_used_percent: null,
   cpu_summary: "preview only",
+  blockers: [],
+  warnings: ["cpu usage is advisory in fixture mode"],
+  can_run_one_at_a_time: true,
+  token_printed: false,
+};
+
+export const fixtureLocalResourceObservation: LocalResourceObservation = {
+  schema: "skybridge.local_resource_observation.v1",
+  observation_source: "fixture",
+  battery_state: "ac_power",
+  battery_percent: 95,
+  ac_power: true,
+  memory_used_percent: 42,
+  cpu_percent: null,
+  network_available: true,
+  current_local_time: "12:00",
+  token_printed: false,
+};
+
+export const fixtureLocalResourcePolicyEnforcement: LocalResourcePolicyEnforcement = {
+  schema: "skybridge.local_resource_policy_enforcement.v1",
+  policy: fixtureLocalResourcePolicy,
+  observation: fixtureLocalResourceObservation,
+  blockers: [],
+  warnings: ["cpu usage is advisory"],
+  can_run_one_at_a_time: true,
+  task_claimed: false,
+  task_executed: false,
+  no_powercfg_mutation: true,
+  admin_required: false,
+  token_printed: false,
+};
+
+export const fixtureLocalRunAllowance: LocalRunAllowance = {
+  schema: "skybridge.local_run_allowance.v1",
+  run_id: "managed-mode-run-210",
+  explicit_authorization_required: true,
+  resource_gate_required: true,
+  can_run_one_at_a_time: false,
+  blockers: ["explicit_future_goal_required"],
   token_printed: false,
 };
 
@@ -3825,13 +3975,34 @@ export const fixtureManagedModeCompleted208Archive: ManagedModeRunRecord = {
   token_printed: false,
 };
 
+export const fixtureManagedModeCompleted209Archive: ManagedModeRunRecord = {
+  schema: "skybridge.managed_mode_run_record.v1",
+  run_id: "managed-mode-run-209",
+  managed_mode_run_id: "managed-mode-run-209",
+  sequence_number: 2,
+  source_workunit_id: "managed-mode-run-209-workunit-001",
+  task_id: "managed-mode-run-209-task-001",
+  worker_id: "laptop-zenbookduo",
+  task_type: "docs/local-smoke",
+  risk: "low",
+  allowed_paths: ["docs/managed-mode-repeatability-orientation.md"],
+  state: "completed",
+  pr_url: "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/144",
+  pr_state: "merged",
+  finalizer_evidence_path: ".agent/tmp/managed-mode-run-209/finalizer-evidence.json",
+  evidence_hash: "fixture-managed-mode-run-209-finalizer-hash",
+  created_at: "2026-06-12T00:00:00.000Z",
+  completed_at: "2026-06-12T00:30:11.5283244Z",
+  token_printed: false,
+};
+
 export const fixtureManagedModeRunRegistry: ManagedModeRunRegistry = {
   schema: "skybridge.managed_mode_run_registry.v1",
   project_id: "skybridge-agent-hub",
   registry_id: "skybridge-managed-mode-run-registry",
   sequence_policy: fixtureManagedModeSequencePolicy,
-  records: [fixtureManagedModeCompleted208Archive],
-  completed_runs: [fixtureManagedModeCompleted208Archive],
+  records: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
+  completed_runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
   open_runs: [],
   general_bounded_queue_apply_enabled: false,
   max_workunits: 1,
@@ -3879,20 +4050,68 @@ export const fixtureManagedModeRepeatabilitySummary: ManagedModeRepeatabilitySum
   schema: "skybridge.managed_mode_repeatability_summary.v1",
   managed_mode_pilot_208: "completed",
   next_mode: "repeatable one-at-a-time preview",
-  next_run_id: "managed-mode-run-209",
-  next_sequence_number: 2,
+  next_run_id: "managed-mode-run-210",
+  next_sequence_number: 3,
   general_bounded_queue: "disabled",
   general_bounded_queue_apply_enabled: false,
   one_at_a_time_run_apply_enabled: false,
   can_run_one_at_a_time: true,
   apply_disabled_reason: "one_at_a_time_run_apply_disabled_by_default",
-  completed_run_count: 1,
+  completed_run_count: 2,
   open_run_count: 0,
   open_managed_mode_pr_count: 0,
   active_tasks: 0,
   stale_leases: 0,
   runner_lock: "none",
-  next_safe_action: "run one explicitly authorized low-risk docs/local-smoke workunit",
+  next_safe_action: "resource gate required before any explicit future one-at-a-time run",
+  token_printed: false,
+};
+
+export const fixtureManagedModeV0CompletedRuns: ManagedModeV0CompletedRuns = {
+  schema: "skybridge.managed_mode_v0_completed_runs.v1",
+  completed_run_count: 2,
+  completed_run_ids: ["managed-mode-pilot-208", "managed-mode-run-209"],
+  runs: [fixtureManagedModeCompleted208Archive, fixtureManagedModeCompleted209Archive],
+  changed_files: ["docs/managed-mode-pilot-orientation.md", "docs/managed-mode-repeatability-orientation.md"],
+  token_printed: false,
+};
+
+export const fixtureManagedModeV0ReleaseReadiness: ManagedModeV0ReleaseReadiness = {
+  schema: "skybridge.managed_mode_v0_release_readiness.v1",
+  self_bootstrap_v0_complete: true,
+  managed_mode_pilot_complete: true,
+  repeatable_one_at_a_time_run_complete: true,
+  completed_runs: ["managed-mode-pilot-208", "managed-mode-run-209"],
+  active_tasks: 0,
+  stale_leases: 0,
+  runner_lock: "none",
+  open_managed_mode_pr_count: 0,
+  general_bounded_queue_apply_enabled: false,
+  multi_workunit_queue_enabled: false,
+  resource_gate_required_for_next_run: true,
+  next_run_requires_explicit_future_goal: true,
+  no_next_execution_authorized: true,
+  release_ready: true,
+  blockers: [],
+  token_printed: false,
+};
+
+export const fixtureManagedModeV0OperatorGuidance: ManagedModeV0OperatorGuidance = {
+  schema: "skybridge.managed_mode_v0_operator_guidance.v1",
+  current_state: "managed_mode_v0_release_hardened",
+  next_safe_action: "Create an explicit future goal, pass the local resource gate, then run at most one one-at-a-time workunit.",
+  banners: ["Resource gate required before next run", "Execution disabled until explicit future goal", "General bounded queue apply disabled"],
+  disabled_actions: ["start-all", "start-queue apply", "bounded queue apply", "resume -Apply", "unbounded worker loop"],
+  token_printed: false,
+};
+
+export const fixtureManagedModeV0Status: ManagedModeV0Status = {
+  schema: "skybridge.managed_mode_v0_status.v1",
+  product: "SkyBridge Agent Hub",
+  status: "ready",
+  completed_runs: fixtureManagedModeV0CompletedRuns,
+  release_readiness: fixtureManagedModeV0ReleaseReadiness,
+  operator_guidance: fixtureManagedModeV0OperatorGuidance,
   token_printed: false,
 };
 

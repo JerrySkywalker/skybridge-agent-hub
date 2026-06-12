@@ -13,8 +13,10 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
+  fixtureManagedModeV0Status,
   fixtureOneAtATimeManagedModeGate,
   fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
@@ -43,7 +45,9 @@ import {
   type DesktopResidentState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
+  type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
+  type ManagedModeV0Status,
   type MultiWorkerReadiness,
   type SchedulingPreview,
   type WorkunitCandidatePack,
@@ -298,8 +302,28 @@ function LocalResourcePolicyPanel({ policy }: { policy: LocalResourcePolicy }) {
         <StatusValue label="Memory used" value={policy.memory_used_percent === null ? "unknown" : `${policy.memory_used_percent}%`} />
         <StatusValue label="CPU summary" value={policy.cpu_summary} />
         <StatusValue label="Enforcement" value={`${policy.enforcement_status}; source=${policy.policy_source}`} />
+        <StatusValue label="Run allowance" value={`can_run_one_at_a_time=${String(policy.can_run_one_at_a_time ?? false)}`} />
+        <StatusValue label="Gate blockers" value={policy.blockers?.join("; ") || "none"} />
         <StatusValue label="Sleep/lid note" value={policy.sleep_lid_behavior_note} />
         <StatusValue label="token_printed" value={String(policy.token_printed)} />
+      </dl>
+    </section>
+  );
+}
+
+function LocalResourceEnforcementPanel({ enforcement }: { enforcement: LocalResourcePolicyEnforcement }) {
+  return (
+    <section className="panel local-resource-enforcement-card" aria-label="Local resource enforcement gate">
+      <h2>Resource Gate</h2>
+      <dl>
+        <StatusValue label="Can run one-at-a-time" value={String(enforcement.can_run_one_at_a_time)} />
+        <StatusValue label="Observation" value={`${enforcement.observation.observation_source}; ac=${String(enforcement.observation.ac_power)}; network=${String(enforcement.observation.network_available)}`} />
+        <StatusValue label="Memory" value={enforcement.observation.memory_used_percent === null ? "unknown" : `${enforcement.observation.memory_used_percent}%`} />
+        <StatusValue label="Blockers" value={enforcement.blockers.map((blocker) => blocker.blocker_id).join("; ") || "none"} />
+        <StatusValue label="No power mutation" value={String(enforcement.no_powercfg_mutation)} />
+        <StatusValue label="Admin required" value={String(enforcement.admin_required)} />
+        <StatusValue label="No task execution" value={`claimed=${String(enforcement.task_claimed)}; executed=${String(enforcement.task_executed)}`} />
+        <StatusValue label="token_printed" value={String(enforcement.token_printed)} />
       </dl>
     </section>
   );
@@ -397,6 +421,29 @@ function ManagedModeRunRegistryPanel({
         <button type="button" disabled aria-disabled="true">Human review required</button>
       </div>
       <p>Read-only registry panel: no active execution buttons are exposed. token_printed=false</p>
+    </section>
+  );
+}
+
+function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
+  return (
+    <section className="panel managed-mode-v0-status-panel" aria-label="Managed Mode v0 status panel">
+      <h2>Managed Mode v0</h2>
+      <dl>
+        <StatusValue label="Release status" value={status.status} />
+        <StatusValue label="Completed runs" value={status.completed_runs.completed_run_ids.join("; ")} />
+        <StatusValue label="Release readiness" value={String(status.release_readiness.release_ready)} />
+        <StatusValue label="No next execution authorized" value={String(status.release_readiness.no_next_execution_authorized)} />
+        <StatusValue label="Resource gate required" value={String(status.release_readiness.resource_gate_required_for_next_run)} />
+        <StatusValue label="General bounded queue apply" value={String(status.release_readiness.general_bounded_queue_apply_enabled)} />
+        <StatusValue label="Next safe action" value={status.operator_guidance.next_safe_action} />
+        <StatusValue label="token_printed" value={String(status.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Execution disabled</button>
+        <button type="button" disabled aria-disabled="true">Resource gate required</button>
+        <button type="button" disabled aria-disabled="true">General bounded queue apply disabled</button>
+      </div>
     </section>
   );
 }
@@ -550,6 +597,7 @@ function App() {
       <AttentionPanel events={attention.attention_events} />
       <ExecutionDisabledBanner guard={executionGuard} />
       <BoincManagerPanel state={fixtureBoincManagerState} />
+      <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <ManagedModeRunRegistryPanel
         registry={fixtureManagedModeRunRegistry}
         gate={fixtureOneAtATimeManagedModeGate}
@@ -558,6 +606,7 @@ function App() {
       <ResidentStatusPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />
+      <LocalResourceEnforcementPanel enforcement={fixtureLocalResourcePolicyEnforcement} />
       <WorkunitPreviewPanel plan={workunitPlan} readiness={boundedQueueReadiness} />
       <CampaignLockPanel />
       <CampaignPriorityQueuePanel />

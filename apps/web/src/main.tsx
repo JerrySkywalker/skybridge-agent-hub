@@ -25,8 +25,10 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
   fixtureManagedModeRunRegistry,
+  fixtureManagedModeV0Status,
   fixtureOneAtATimeManagedModeGate,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
@@ -52,7 +54,9 @@ import {
   type OneAtATimeManagedModeGate,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
+  type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
+  type ManagedModeV0Status,
   type MultiWorkerReadiness,
   type SchedulingPreview,
   type HermesSummary,
@@ -361,6 +365,7 @@ function CampaignQueuePage() {
           <ProjectProfileReviewPanel profile={fixtureProjectProfileReviewSummary} />
           <GoalQueueReviewPanel review={fixtureGoalQueueReviewSummary} />
           <BoincControlPlanePanel state={fixtureBoincManagerState} />
+          <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
           <ManagedModeRunRegistryPanel
             registry={fixtureManagedModeRunRegistry}
             gate={fixtureOneAtATimeManagedModeGate}
@@ -374,6 +379,7 @@ function CampaignQueuePage() {
             policy={report.local_resource_policy ?? fixtureLocalResourcePolicy}
             guard={report.local_execution_guard ?? fixtureLocalExecutionGuard}
           />
+          <WebLocalResourceEnforcementPanel enforcement={fixtureLocalResourcePolicyEnforcement} />
           <WebBoundedQueuePreviewPanel plan={workunitPlan} readiness={boundedQueueReadiness} />
           <WorkerSchedulingPreviewPanel preview={fixtureSchedulingPreview} readiness={fixtureMultiWorkerReadiness} />
           <WorkerRoutingPanel report={report} />
@@ -528,6 +534,43 @@ function ManagedModeRunRegistryPanel({
         fallback="No sequence policy."
       />
       <p className="skybridge-state-note">Read-only registry panel: no active execution buttons are exposed. token_printed=false</p>
+    </section>
+  );
+}
+
+function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
+  return (
+    <section className="skybridge-panel managed-mode-v0-status-panel" aria-label="Managed Mode v0 status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Managed Mode v0</p>
+          <h2>Release Status</h2>
+        </div>
+        <span className={badgeClass(status.release_readiness.release_ready ? "ok" : "bad")}>resource gate required</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Completed runs</dt>
+          <dd>{status.completed_runs.completed_run_ids.join("; ")}</dd>
+        </div>
+        <div>
+          <dt>Release readiness</dt>
+          <dd>{String(status.release_readiness.release_ready)}</dd>
+        </div>
+        <div>
+          <dt>No next execution authorized</dt>
+          <dd>{String(status.release_readiness.no_next_execution_authorized)}</dd>
+        </div>
+        <div>
+          <dt>General bounded queue apply</dt>
+          <dd>{String(status.release_readiness.general_bounded_queue_apply_enabled)}</dd>
+        </div>
+        <div>
+          <dt>Next safe action</dt>
+          <dd>{status.operator_guidance.next_safe_action}</dd>
+        </div>
+      </dl>
+      <p className="skybridge-state-note">Execution disabled banner: no start/run/apply controls. token_printed=false</p>
     </section>
   );
 }
@@ -1057,6 +1100,39 @@ function WebLocalWorkerPolicyPanel({
       <QueueList title="Readiness blockers" items={supervisor.readiness_blockers} fallback="No local worker blockers." />
       <p className="skybridge-state-note">Web policy summary is read-only; local execution controls remain disabled.</p>
       <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebLocalResourceEnforcementPanel({ enforcement }: { enforcement: LocalResourcePolicyEnforcement }) {
+  return (
+    <section className="skybridge-panel web-local-resource-enforcement-summary" aria-label="Web local resource enforcement summary">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Resource Gate</p>
+          <h2>Run Allowance</h2>
+        </div>
+        <span className={badgeClass(enforcement.can_run_one_at_a_time ? "ok" : "bad")}>enforcement gate</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div>
+          <dt>Can run one-at-a-time</dt>
+          <dd>{String(enforcement.can_run_one_at_a_time)}</dd>
+        </div>
+        <div>
+          <dt>Observation</dt>
+          <dd>{`${enforcement.observation.observation_source}; ac=${String(enforcement.observation.ac_power)}; network=${String(enforcement.observation.network_available)}`}</dd>
+        </div>
+        <div>
+          <dt>Blockers</dt>
+          <dd>{enforcement.blockers.map((blocker) => blocker.blocker_id).join("; ") || "none"}</dd>
+        </div>
+        <div>
+          <dt>No mutation</dt>
+          <dd>{`powercfg=${String(enforcement.no_powercfg_mutation)}; admin_required=${String(enforcement.admin_required)}`}</dd>
+        </div>
+      </dl>
+      <p className="skybridge-state-note">Resource policy gate only: no task claim and no task execution. token_printed=false</p>
     </section>
   );
 }
