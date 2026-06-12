@@ -85,6 +85,11 @@ function Get-AlreadyCompletedBlocker {
   "$($ManagedModeRunId.Replace("-", "_"))_already_completed"
 }
 
+function Get-ExpectedTargetPath {
+  if ($ManagedModeRunId -eq "managed-mode-run-211") { return "docs/managed-mode-v0-repeatability-check.md" }
+  "docs/managed-mode-repeatability-orientation.md"
+}
+
 function Read-SafeJsonFile {
   param([Parameter(Mandatory = $true)][string]$Path)
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
@@ -361,6 +366,38 @@ function New-Completed208Archive {
   }
 }
 
+function New-CompletedManagedModeRunArchive {
+  param(
+    [Parameter(Mandatory = $true)][string]$RunId,
+    [Parameter(Mandatory = $true)][int]$RunSequenceNumber,
+    [Parameter(Mandatory = $true)][string]$RunTargetPath,
+    [Parameter(Mandatory = $true)][string]$RunStateDir
+  )
+  $finalizerPath = Resolve-RepoPath (Join-Path $RunStateDir "finalizer-evidence.json")
+  $finalizer = Read-SafeJsonFile -Path $finalizerPath
+  if (-not $finalizer) { return $null }
+  [pscustomobject]@{
+    schema = "skybridge.managed_mode_run_record.v1"
+    run_id = $RunId
+    managed_mode_run_id = $RunId
+    sequence_number = $RunSequenceNumber
+    source_workunit_id = "$RunId-workunit-001"
+    task_id = "$RunId-task-001"
+    worker_id = if ($finalizer.worker_id) { [string]$finalizer.worker_id } else { "laptop-zenbookduo" }
+    task_type = "docs/local-smoke"
+    risk = "low"
+    allowed_paths = @($RunTargetPath)
+    state = "completed"
+    pr_url = if ($finalizer.task_pr) { [string]$finalizer.task_pr.url } else { $null }
+    pr_state = "merged"
+    finalizer_evidence_path = ConvertTo-ShortPath $finalizerPath
+    evidence_hash = if (Test-Path -LiteralPath $finalizerPath -PathType Leaf) { Get-Sha256Text (Get-Content -Raw -LiteralPath $finalizerPath) } else { $null }
+    created_at = $null
+    completed_at = if ($finalizer.completed_at) { [string]$finalizer.completed_at } else { $null }
+    token_printed = $false
+  }
+}
+
 function Get-OpenManagedModePrs {
   if ($SimulatePriorOpenPr) {
     return @([pscustomobject]@{ number = 209; url = "https://github.com/JerrySkywalker/skybridge-agent-hub/pull/209"; title = "Task managed-mode-run-209-workunit-001"; state = "OPEN"; token_printed = $false })
@@ -406,6 +443,12 @@ function Get-Persisted209Record {
 function New-Registry {
   $records = @()
   $records += New-Completed208Archive
+  foreach ($archive in @(
+    (New-CompletedManagedModeRunArchive -RunId "managed-mode-run-209" -RunSequenceNumber 2 -RunTargetPath "docs/managed-mode-repeatability-orientation.md" -RunStateDir ".agent/tmp/managed-mode-run-209"),
+    (New-CompletedManagedModeRunArchive -RunId "managed-mode-run-210" -RunSequenceNumber 3 -RunTargetPath "docs/managed-mode-v0-operator-checklist.md" -RunStateDir ".agent/tmp/managed-mode-run-210")
+  )) {
+    if ($archive -and @($records | Where-Object { $_.run_id -eq $archive.run_id }).Count -eq 0) { $records += $archive }
+  }
   if ($SimulateOpenRun) {
     $records += [pscustomobject]@{
       schema = "skybridge.managed_mode_run_record.v1"
@@ -429,7 +472,7 @@ function New-Registry {
     }
   }
   $persisted = Get-Persisted209Record
-  if ($persisted) { $records += $persisted }
+  if ($persisted -and @($records | Where-Object { $_.run_id -eq $persisted.run_id }).Count -eq 0) { $records += $persisted }
   [pscustomobject]@{
     schema = "skybridge.managed_mode_run_registry.v1"
     project_id = "skybridge-agent-hub"
@@ -731,7 +774,7 @@ function New-RunReplacementReadiness {
   if ($WorkerId -ne "laptop-zenbookduo") { $blockers.Add("selected_worker_not_explicitly_eligible") | Out-Null }
   if ($TaskType -ne "docs/local-smoke") { $blockers.Add("task_type_not_docs_local_smoke") | Out-Null }
   if ($Risk -ne "low") { $blockers.Add("risk_not_low") | Out-Null }
-  if ($TargetPath -ne "docs/managed-mode-repeatability-orientation.md" -or -not (Test-PathAllowedForRun $TargetPath)) { $blockers.Add("unexpected_target_path") | Out-Null }
+  if ($TargetPath -ne (Get-ExpectedTargetPath) -or -not (Test-PathAllowedForRun $TargetPath)) { $blockers.Add("unexpected_target_path") | Out-Null }
 
   [pscustomobject]@{
     schema = "skybridge.managed_mode_run_replacement_readiness.v1"
@@ -764,7 +807,7 @@ function New-RunReplacementPreview {
     schema = "skybridge.managed_mode_run_replacement_preview.v1"
     readiness = New-RunReplacementReadiness
     prompt_contract = [pscustomobject]@{
-      target_path = "docs/managed-mode-repeatability-orientation.md"
+      target_path = Get-ExpectedTargetPath
       markdown_bullets = "3_to_6"
       broad_repo_inspection_allowed = $false
       tests_allowed = $false
@@ -923,6 +966,7 @@ $TargetPath
 Write a short Markdown file with exactly 3-6 concise bullet points.
 Explain repeatable one-at-a-time managed mode.
 Mention that each workunit creates one PR then stops for human review.
+Mention that the resource gate must pass before the run.
 Mention that general bounded queue apply remains disabled.
 Mention token_printed=false.
 
@@ -961,7 +1005,7 @@ function Invoke-RunApply {
     if (-not $Authorize209B) { $blockers.Add("explicit_209b_authorization_required") | Out-Null }
     if ([string]::IsNullOrWhiteSpace($AuthorizationReason)) { $blockers.Add("authorization_reason_required") | Out-Null }
   }
-  if ($TargetPath -ne "docs/managed-mode-repeatability-orientation.md") { $blockers.Add("unexpected_target_path") | Out-Null }
+  if ($TargetPath -ne (Get-ExpectedTargetPath)) { $blockers.Add("unexpected_target_path") | Out-Null }
   if ($blockers.Count -gt 0) {
     return [pscustomobject]@{
       ok = $false
@@ -1158,7 +1202,7 @@ function Invoke-RunApply {
 
   git add -- $TargetPath *> $null
   if ($LASTEXITCODE -ne 0) { throw "git add failed for $TargetPath" }
-  git commit -m "docs: add managed mode run 209 orientation" *> $null
+  git commit -m "docs: add $ManagedModeRunId repeatability check" *> $null
   if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
   git push -u origin $branch *> $null
   if ($LASTEXITCODE -ne 0) { throw "git push failed." }
@@ -1178,7 +1222,8 @@ function Invoke-RunApply {
 "@
   if (Test-SecretLookingText $body) { throw "Secret-looking PR body detected." }
   $body | Set-Content -LiteralPath (Get-TaskPrBodyPath) -Encoding UTF8
-  $prOutput = gh pr create --title "Managed Mode Run 209: Task $ManagedModeRunId-workunit-001" --body-file (Get-TaskPrBodyPath) --base main --head $branch
+  $runNumberLabel = $ManagedModeRunId.Replace('managed-mode-run-', '')
+  $prOutput = gh pr create --title "Managed Mode Run $runNumberLabel`: Task $ManagedModeRunId-workunit-001" --body-file (Get-TaskPrBodyPath) --base main --head $branch
   if ($LASTEXITCODE -ne 0) { throw "gh pr create failed." }
   $prUrl = (($prOutput | Out-String).Trim() -split "\r?\n" | Select-Object -Last 1)
 
