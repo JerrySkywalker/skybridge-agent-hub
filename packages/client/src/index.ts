@@ -2547,6 +2547,58 @@ export interface BoincV1Status {
   token_printed: false;
 }
 
+export interface BoincV1AlphaPolicy {
+  schema: "skybridge.boinc_v1_alpha_policy.v1";
+  alpha_id: "boinc-v1-alpha-215";
+  alpha_mode: "controlled_two_workunit_alpha";
+  max_preview_workunits: 2;
+  max_apply_workunits_for_this_goal: 1;
+  general_apply_enabled: false;
+  workunit_b_apply_enabled: false;
+  require_resource_gate: true;
+  require_worker_readiness: true;
+  require_human_review: true;
+  serialize_repo_mutations: true;
+  stop_on_pr_created: true;
+  stop_on_ci_failure: true;
+  stop_on_warning: true;
+  token_printed: false;
+}
+
+export interface BoincV1AlphaWorkunit {
+  schema: "skybridge.boinc_v1_alpha_workunit.v1";
+  alpha_id: "boinc-v1-alpha-215";
+  workunit_id: "boinc-v1-alpha-215-workunit-a" | "boinc-v1-alpha-215-workunit-b";
+  task_id: "boinc-v1-alpha-215-task-a" | "boinc-v1-alpha-215-task-b";
+  target_path: "docs/boinc-v1-alpha-workunit-a.md" | "docs/boinc-v1-alpha-workunit-b.md";
+  task_type: "docs/local-smoke";
+  risk: "low";
+  dependency: string;
+  status: "ready_if_gates_pass" | "blocked_by_unfinalized_workunit_a" | "held_waiting_human_pr_review_workunit_a";
+  apply_enabled_for_this_goal: boolean;
+  token_printed: false;
+}
+
+export interface BoincV1AlphaStatus {
+  schema: "skybridge.boinc_v1_alpha_status.v1";
+  alpha_id: "boinc-v1-alpha-215";
+  policy: BoincV1AlphaPolicy;
+  workunit_a: BoincV1AlphaWorkunit;
+  workunit_b: BoincV1AlphaWorkunit;
+  open_review_hold: boolean;
+  apply_disabled: true;
+  workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a";
+  resource_gate_status: "passed" | "blocked" | "not_evaluated";
+  drain_pause_status: {
+    drain_after_current: true;
+    pause_after_current: true;
+    pause_new_claims: true;
+    token_printed: false;
+  };
+  no_raw_logs: true;
+  token_printed: false;
+}
+
 export type LockStatus = "active" | "stale" | "released" | "cancelled" | "aborted" | "held";
 
 export interface LockOwner {
@@ -4648,6 +4700,68 @@ export const fixtureBoincV1Status: BoincV1Status = {
   drain_pause_policy: fixtureBoincV1DrainPausePolicy,
   action_matrix: fixtureBoincV1ActionMatrix,
   readiness: fixtureBoincV1ReadinessReport,
+  token_printed: false,
+};
+
+export const fixtureBoincV1AlphaPolicy: BoincV1AlphaPolicy = {
+  schema: "skybridge.boinc_v1_alpha_policy.v1",
+  alpha_id: "boinc-v1-alpha-215",
+  alpha_mode: "controlled_two_workunit_alpha",
+  max_preview_workunits: 2,
+  max_apply_workunits_for_this_goal: 1,
+  general_apply_enabled: false,
+  workunit_b_apply_enabled: false,
+  require_resource_gate: true,
+  require_worker_readiness: true,
+  require_human_review: true,
+  serialize_repo_mutations: true,
+  stop_on_pr_created: true,
+  stop_on_ci_failure: true,
+  stop_on_warning: true,
+  token_printed: false,
+};
+
+export const fixtureBoincV1AlphaStatus: BoincV1AlphaStatus = {
+  schema: "skybridge.boinc_v1_alpha_status.v1",
+  alpha_id: "boinc-v1-alpha-215",
+  policy: fixtureBoincV1AlphaPolicy,
+  workunit_a: {
+    schema: "skybridge.boinc_v1_alpha_workunit.v1",
+    alpha_id: "boinc-v1-alpha-215",
+    workunit_id: "boinc-v1-alpha-215-workunit-a",
+    task_id: "boinc-v1-alpha-215-task-a",
+    target_path: "docs/boinc-v1-alpha-workunit-a.md",
+    task_type: "docs/local-smoke",
+    risk: "low",
+    dependency: "none",
+    status: "ready_if_gates_pass",
+    apply_enabled_for_this_goal: false,
+    token_printed: false,
+  },
+  workunit_b: {
+    schema: "skybridge.boinc_v1_alpha_workunit.v1",
+    alpha_id: "boinc-v1-alpha-215",
+    workunit_id: "boinc-v1-alpha-215-workunit-b",
+    task_id: "boinc-v1-alpha-215-task-b",
+    target_path: "docs/boinc-v1-alpha-workunit-b.md",
+    task_type: "docs/local-smoke",
+    risk: "low",
+    dependency: "Workunit A completed and finalized",
+    status: "blocked_by_unfinalized_workunit_a",
+    apply_enabled_for_this_goal: false,
+    token_printed: false,
+  },
+  open_review_hold: false,
+  apply_disabled: true,
+  workunit_b_blocked_reason: "blocked_by_unfinalized_workunit_a",
+  resource_gate_status: "passed",
+  drain_pause_status: {
+    drain_after_current: true,
+    pause_after_current: true,
+    pause_new_claims: true,
+    token_printed: false,
+  },
+  no_raw_logs: true,
   token_printed: false,
 };
 
