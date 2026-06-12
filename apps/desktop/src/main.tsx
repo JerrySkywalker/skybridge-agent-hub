@@ -250,16 +250,77 @@ function ExecutionDisabledBanner({ guard }: { guard: LocalExecutionGuard }) {
 function ResidentStatusPanel({ resident }: { resident: DesktopResidentState }) {
   return (
     <section className="panel resident-status-card" aria-label="Resident status card">
-      <h2>Resident Status</h2>
+      <h2>Desktop Resident Worker</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Desktop resident execution disabled banner">
+        <span>EXECUTION DISABLED</span>
+        <span>queue_apply_enabled={String(resident.queue_apply_enabled)}</span>
+        <span>no_next_execution_authorized={String(resident.no_next_execution_authorized)}</span>
+      </div>
       <dl>
+        <StatusValue label="Schema" value={resident.schema} />
+        <StatusValue label="Worker id" value={resident.worker_id} />
+        <StatusValue label="Device id" value={resident.device_id} />
+        <StatusValue label="Resident enabled" value={String(resident.resident_enabled)} />
+        <StatusValue label="Execution enabled" value={String(resident.execution_enabled)} />
+        <StatusValue label="Poll enabled" value={String(resident.poll_enabled)} />
+        <StatusValue label="Run apply enabled" value={String(resident.run_apply_enabled)} />
+        <StatusValue label="Queue apply enabled" value={String(resident.queue_apply_enabled)} />
+        <StatusValue label="Resource gate required" value={String(resident.resource_gate_required)} />
+        <StatusValue label="Operator approval" value={String(resident.require_operator_approval)} />
+        <StatusValue label="Human review" value={String(resident.require_human_review)} />
+        <StatusValue label="No next execution" value={String(resident.no_next_execution_authorized)} />
+        <StatusValue label="Current repo" value={resident.current_repo} />
+        <StatusValue label="Current branch" value={resident.current_branch} />
+        <StatusValue label="Current commit" value={resident.current_commit} />
+        <StatusValue label="Active tasks" value={String(resident.active_tasks)} />
+        <StatusValue label="Stale leases" value={String(resident.stale_leases)} />
+        <StatusValue label="Runner lock" value={resident.runner_lock} />
+        <StatusValue label="Open review hold" value={String(resident.open_review_hold)} />
+        <StatusValue label="Resource gate" value={resident.resource_gate_status} />
+        <StatusValue label="Drain/pause state" value={resident.drain_pause_state} />
+        <StatusValue label="Last heartbeat" value={resident.last_heartbeat_at ?? "none"} />
         <StatusValue label="Tray available" value={String(resident.tray_available)} />
         <StatusValue label="Window visible" value={String(resident.window_visible)} />
-        <StatusValue label="Close to tray" value={resident.close_to_tray_supported ? "supported" : "disabled pending safe window-close handler"} />
-        <StatusValue label="Autostart" value={`${String(resident.autostart_supported)} / enabled=${String(resident.autostart_enabled)}`} />
+        <StatusValue label="Close to tray" value={resident.close_to_tray_supported ? "preview supported" : "disabled pending safe window-close handler"} />
+        <StatusValue label="Autostart" value={`${String(resident.tray_state.autostart_supported)} / enabled=${String(resident.tray_state.autostart_enabled)} / apply=${String(resident.tray_state.autostart_apply_enabled)}`} />
         <StatusValue label="Resident mode" value={resident.resident_mode} />
+        <StatusValue label="Safety banner" value={resident.safety_banner.message} />
+        <StatusValue label="Pause preview" value={String(resident.control_state.pause_after_current)} />
+        <StatusValue label="Drain preview" value={String(resident.control_state.drain_after_current)} />
+        <StatusValue label="Emergency stop preview" value={String(resident.control_state.emergency_stop_requested)} />
+        <StatusValue label="Completed alpha" value="Workunit A completed; Workunit B completed; Workunit C absent" />
         <StatusValue label="Last refresh" value={resident.last_refresh_at} />
         <StatusValue label="token_printed" value={String(resident.token_printed)} />
       </dl>
+      <div className="queue-action-grid" aria-label="Resident worker safe folder actions">
+        <button type="button" disabled aria-disabled="true">Open Evidence Folder</button>
+        <button type="button" disabled aria-disabled="true">Open Logs Folder</button>
+        <a href={resident.github_pr_list_url} target="_blank" rel="noreferrer">Open GitHub PR List</a>
+      </div>
+    </section>
+  );
+}
+
+function TrayPreviewPanel({ resident }: { resident: DesktopResidentState }) {
+  return (
+    <section className="panel desktop-tray-preview-card" aria-label="Desktop tray preview controls">
+      <h2>Tray Controls Preview</h2>
+      <dl>
+        <StatusValue label="Tray schema" value={resident.tray_state.schema} />
+        <StatusValue label="Menu entries" value={resident.tray_state.menu_entries.join("; ")} />
+        <StatusValue label="Pause Preview" value={`preview_only apply=${String(resident.tray_state.pause_preview_apply_enabled)}`} />
+        <StatusValue label="Drain Preview" value={`preview_only apply=${String(resident.tray_state.drain_preview_apply_enabled)}`} />
+        <StatusValue label="Emergency Stop Preview" value={`preview_only apply=${String(resident.tray_state.emergency_stop_preview_apply_enabled)}`} />
+        <StatusValue label="Task claim enabled" value={String(resident.tray_state.task_claim_enabled)} />
+        <StatusValue label="Codex execution enabled" value={String(resident.tray_state.codex_execution_enabled)} />
+        <StatusValue label="Queue apply enabled" value={String(resident.tray_state.queue_apply_enabled)} />
+        <StatusValue label="token_printed" value={String(resident.tray_state.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Pause Preview metadata only</button>
+        <button type="button" disabled aria-disabled="true">Drain Preview metadata only</button>
+        <button type="button" disabled aria-disabled="true">Emergency Stop Preview metadata only</button>
+      </div>
     </section>
   );
 }
@@ -695,6 +756,7 @@ function App() {
         summary={fixtureManagedModeRepeatabilitySummary}
       />
       <ResidentStatusPanel resident={residentState} />
+      <TrayPreviewPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />
       <LocalResourceEnforcementPanel enforcement={fixtureLocalResourcePolicyEnforcement} />

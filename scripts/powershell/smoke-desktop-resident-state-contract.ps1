@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 $client = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "..\..\packages\client\src\index.ts")
 foreach ($required in @(
-  "skybridge.desktop_resident_state.v1",
+  "skybridge.desktop_resident_worker.v1",
+  "skybridge.desktop_tray_state.v1",
+  "skybridge.desktop_worker_control_state.v1",
   "tray_available",
   "window_visible",
   "close_to_tray_supported",
