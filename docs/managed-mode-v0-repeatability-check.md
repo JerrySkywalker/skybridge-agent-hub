@@ -1,0 +1,5 @@
+- Managed mode v0 is repeatable by running one bounded workunit at a time.
+- Each workunit creates one PR, then stops for human review before any next unit.
+- The resource gate must pass before the run begins.
+- General bounded queue apply remains disabled.
+- `token_printed=false`.
