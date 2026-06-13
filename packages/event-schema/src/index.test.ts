@@ -6,13 +6,20 @@ import {
   fixtureOperatorApprovalGate,
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
+  fixtureAuditReport,
+  fixtureEvidenceRetentionReport,
+  fixtureFailureBudgetReport,
+  fixtureSafeExportGate,
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
   isNotificationTrigger,
   listAdapterCapabilities,
   parseOperatorApprovalRequest,
+  parseAuditReport,
+  parseEvidenceRetentionReport,
   parseEvent,
+  parseFailureBudget,
   parseWorkerHeartbeat,
   parseWorkerRegistration,
   redactForTelemetry,
@@ -233,5 +240,54 @@ describe("event schema", () => {
       remote_arbitrary_command_dispatch_enabled: false,
       token_printed: false,
     });
+  });
+
+  it("models Goal 219 failure budget without silent retry", () => {
+    expect(parseFailureBudget(fixtureFailureBudgetReport.policy)).toMatchObject({
+      schema: "skybridge.failure_budget.v1",
+      retry_requires_explicit_authorization: true,
+      replacement_requires_no_mutation_classification: true,
+      no_silent_rerun: true,
+      no_retry_after_pr_created: true,
+      no_retry_after_raw_artifact: true,
+      no_retry_after_secret_detected: true,
+      token_printed: false,
+    });
+    expect(fixtureFailureBudgetReport.retry_gate).toMatchObject({
+      retry_allowed: false,
+      automatic_retry_allowed: false,
+      explicit_operator_authorization_required: true,
+    });
+    expect(fixtureFailureBudgetReport.replacement_gate).toMatchObject({
+      automatic_replacement_allowed: false,
+      requires_no_mutation_classification: true,
+    });
+  });
+
+  it("models Goal 219 safe evidence retention and hash chain", () => {
+    const report = parseEvidenceRetentionReport(fixtureEvidenceRetentionReport);
+    expect(report.schema).toBe("skybridge.evidence_retention_report.v1");
+    expect(report.hash_chain.schema).toBe("skybridge.evidence_hash_chain.v1");
+    expect(report.entries.every((entry) => entry.raw_artifact === false)).toBe(true);
+    expect(report.entries.every((entry) => entry.secret_detected === false)).toBe(true);
+    expect(report.export_summary.raw_artifact_count).toBe(0);
+    expect(report.token_printed).toBe(false);
+  });
+
+  it("models Goal 219 audit, redaction, and safe export gates", () => {
+    const report = parseAuditReport(fixtureAuditReport);
+    expect(report.audit_trail.raw_payload_included).toBe(false);
+    expect(report.redaction_scan.passed).toBe(true);
+    expect(report.safe_export_gate).toMatchObject({
+      safe_to_export: true,
+      raw_prompt_persisted: false,
+      raw_transcript_persisted: false,
+      raw_stdout_persisted: false,
+      raw_stderr_persisted: false,
+      raw_logs_persisted: false,
+      authorization_persisted: false,
+      token_printed: false,
+    });
+    expect(fixtureSafeExportGate.token_printed).toBe(false);
   });
 });

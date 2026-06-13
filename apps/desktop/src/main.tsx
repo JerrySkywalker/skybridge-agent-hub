@@ -23,6 +23,10 @@ import {
   fixtureOneAtATimeManagedModeGate,
   fixtureDesktopResidentState,
   fixtureGoalQueueReviewSummary,
+  fixtureAuditReport,
+  fixtureEvidenceRetentionReport,
+  fixtureFailureBudgetReport,
+  fixtureSafeExportGate,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
@@ -59,6 +63,10 @@ import {
   type WorkunitCandidatePack,
   type WorkerServiceState,
   type ProposedGoalReviewSummary,
+  type AuditTrailSummary,
+  type EvidenceRetentionSummary,
+  type FailureBudgetSummary,
+  type SafeExportGateSummary,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
 
@@ -597,6 +605,42 @@ function ManagedModeV0StatusPanel({ status }: { status: ManagedModeV0Status }) {
   );
 }
 
+function DesktopAuditPanel({
+  failureBudget,
+  evidence,
+  audit,
+  safeExportGate,
+}: {
+  failureBudget: FailureBudgetSummary;
+  evidence: EvidenceRetentionSummary;
+  audit: AuditTrailSummary;
+  safeExportGate: SafeExportGateSummary;
+}) {
+  return (
+    <section className="panel desktop-audit-panel" aria-label="Desktop failure budget and audit panel">
+      <h2>Failure Budget / Audit</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Desktop audit execution disabled banner">
+        <span>EXECUTION DISABLED</span>
+        <span>queue_apply_enabled=false</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Failure budget status" value={failureBudget.policy.no_silent_rerun ? "no silent rerun" : "blocked"} />
+        <StatusValue label="Retry gate status" value={`retry_allowed=${String(failureBudget.retry_gate.retry_allowed)}; automatic=${String(failureBudget.retry_gate.automatic_retry_allowed)}`} />
+        <StatusValue label="Replacement gate status" value={`replacement_allowed=${String(failureBudget.replacement_gate.replacement_allowed)}; automatic=${String(failureBudget.replacement_gate.automatic_replacement_allowed)}`} />
+        <StatusValue label="Evidence retention status" value={`entries=${evidence.entries.length}; safe_to_export=${String(evidence.retention.safe_to_export)}`} />
+        <StatusValue label="Hash chain status" value={`verified=${String(evidence.hash_chain.verified)}; head=${evidence.hash_chain.head_hash.slice(0, 12)}`} />
+        <StatusValue label="Audit trail summary" value={`${audit.audit_trail.events.length} metadata events; raw_payload_included=${String(audit.audit_trail.raw_payload_included)}`} />
+        <StatusValue label="Redaction scan status" value={`passed=${String(audit.redaction_scan.passed)}; violations=${audit.redaction_scan.violations.length}`} />
+        <StatusValue label="Safe export gate status" value={`safe_to_export=${String(safeExportGate.safe_to_export)}; raw_logs_persisted=${String(safeExportGate.raw_logs_persisted)}`} />
+        <StatusValue label="v1 readiness gap closure status" value="ready for Goal 220 after checks" />
+        <StatusValue label="No raw logs" value="raw prompts, transcripts, stdout, stderr, worker logs, CI logs and GitHub logs are not displayed" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -750,6 +794,12 @@ function App() {
       <BoincV1AlphaPanel status={fixtureBoincV1AlphaStatus} />
       <BoincV1PreviewPanel status={fixtureBoincV1Status} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
+      <DesktopAuditPanel
+        failureBudget={fixtureFailureBudgetReport}
+        evidence={fixtureEvidenceRetentionReport}
+        audit={fixtureAuditReport}
+        safeExportGate={fixtureSafeExportGate}
+      />
       <ManagedModeRunRegistryPanel
         registry={fixtureManagedModeRunRegistry}
         gate={fixtureOneAtATimeManagedModeGate}

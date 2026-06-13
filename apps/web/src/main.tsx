@@ -42,6 +42,10 @@ import {
   fixtureOperatorApprovalGate,
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
+  fixtureAuditReport,
+  fixtureEvidenceRetentionReport,
+  fixtureFailureBudgetReport,
+  fixtureSafeExportGate,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
@@ -92,6 +96,10 @@ import {
   type ControlPlaneWorkerHeartbeat,
   type ControlPlaneWorkerPairingPreview,
   type ControlPlaneWorkerRegistration,
+  type AuditTrailSummary,
+  type EvidenceRetentionSummary,
+  type FailureBudgetSummary,
+  type SafeExportGateSummary,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -130,6 +138,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "notifications", label: "Notifications" },
   { route: "hermes", label: "Hermes Adapter" },
   { route: "sources", label: "Sources/Audit" },
+  { route: "audit", label: "Reliability Audit" },
   { route: "settings", label: "Settings" },
 ];
 
@@ -208,6 +217,7 @@ function App() {
         ) : null}
         {route === "hermes" ? <HermesPage apiBase={apiBase} /> : null}
         {route === "sources" ? <SourcesAuditPage apiBase={apiBase} /> : null}
+        {route === "audit" ? <ReliabilityAuditPage /> : null}
         {route === "settings" ? <SettingsPage apiBase={apiBase} /> : null}
       </main>
     </div>
@@ -2016,6 +2026,194 @@ function SourcesAuditPage({ apiBase }: { apiBase: string }) {
   );
 }
 
+function ReliabilityAuditPage() {
+  return (
+    <div className="route-stack reliability-audit" data-no-remote-execution="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>Failure Budget / Audit</h2>
+          <p>No execution enabled; this surface is safe metadata only.</p>
+        </div>
+        <span className={badgeClass("bad")}>queue apply disabled</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="remote_execution_enabled" value="false" />
+        <Kpi label="arbitrary_command_enabled" value="false" />
+        <Kpi label="queue_apply_enabled" value="false" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <FailureBudgetPanel report={fixtureFailureBudgetReport} />
+          <EvidenceRetentionPanel report={fixtureEvidenceRetentionReport} />
+          <AuditTrailPanel report={fixtureAuditReport} />
+        </div>
+        <aside className="dashboard-grid__side">
+          <RetryReplacementGatePanel report={fixtureFailureBudgetReport} />
+          <HashChainPanel report={fixtureEvidenceRetentionReport} />
+          <RedactionScanPanel report={fixtureAuditReport} />
+          <SafeExportGatePanel gate={fixtureSafeExportGate} />
+          <V1ReadinessGapPanel />
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+function FailureBudgetPanel({ report }: { report: FailureBudgetSummary }) {
+  return (
+    <section className="skybridge-panel web-audit-panel" aria-label="Failure budget status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Failure Budget</p>
+          <h2>Failure Budget Status</h2>
+        </div>
+        <span className={badgeClass("ok")}>no silent rerun</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Retry authorization</dt><dd>{String(report.policy.retry_requires_explicit_authorization)}</dd></div>
+        <div><dt>Replacement authorization</dt><dd>{String(report.policy.replacement_requires_no_mutation_classification)}</dd></div>
+        <div><dt>Max retries</dt><dd>{report.policy.max_retries_per_workunit}</dd></div>
+        <div><dt>PR-created hold</dt><dd>{String(report.policy.no_retry_after_pr_created)}</dd></div>
+        <div><dt>Raw artifact hold</dt><dd>{String(report.policy.no_retry_after_raw_artifact)}</dd></div>
+        <div><dt>token_printed</dt><dd>{String(report.token_printed)}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function RetryReplacementGatePanel({ report }: { report: FailureBudgetSummary }) {
+  return (
+    <SummaryCard
+      title="Retry / Replacement Gate Status"
+      state="automatic retry refused"
+      lines={[
+        `retry_allowed=${String(report.retry_gate.retry_allowed)}`,
+        `automatic_retry_allowed=${String(report.retry_gate.automatic_retry_allowed)}`,
+        `replacement_allowed=${String(report.replacement_gate.replacement_allowed)}`,
+        `automatic_replacement_allowed=${String(report.replacement_gate.automatic_replacement_allowed)}`,
+        "explicit operator authorization required",
+        "token_printed=false",
+      ]}
+    />
+  );
+}
+
+function EvidenceRetentionPanel({ report }: { report: EvidenceRetentionSummary }) {
+  return (
+    <section className="skybridge-panel" aria-label="Evidence retention status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Evidence</p>
+          <h2>Evidence Retention Status</h2>
+        </div>
+        <span className={badgeClass(report.retention.safe_to_export ? "ok" : "bad")}>
+          {report.entries.length} entries
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Safe to export</dt><dd>{String(report.retention.safe_to_export)}</dd></div>
+        <div><dt>Raw artifacts</dt><dd>{String(report.retention.raw_artifact)}</dd></div>
+        <div><dt>Secret detected</dt><dd>{String(report.retention.secret_detected)}</dd></div>
+        <div><dt>Indexed paths</dt><dd>{report.retention.indexed_paths.join("; ")}</dd></div>
+        <div><dt>token_printed</dt><dd>{String(report.token_printed)}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function HashChainPanel({ report }: { report: EvidenceRetentionSummary }) {
+  return (
+    <SummaryCard
+      title="Hash Chain Status"
+      state={report.hash_chain.verified ? "verified" : "blocked"}
+      lines={[
+        `chain=${report.hash_chain.chain_id}`,
+        `entries=${report.hash_chain.entries.length}`,
+        `head=${report.hash_chain.head_hash.slice(0, 12)}`,
+        "safe metadata only",
+        "token_printed=false",
+      ]}
+    />
+  );
+}
+
+function AuditTrailPanel({ report }: { report: AuditTrailSummary }) {
+  return (
+    <section className="skybridge-panel" aria-label="Audit trail summary">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Audit</p>
+          <h2>Audit Trail Summary</h2>
+        </div>
+        <span className={badgeClass("ok")}>{report.audit_trail.events.length} events</span>
+      </div>
+      <ol className="rich-list">
+        {report.audit_trail.events.map((event) => (
+          <li key={event.event_id}>
+            <div>
+              <strong>{event.event_type}</strong>
+              <small>{event.actor_type} · {event.reason}</small>
+            </div>
+            <span className={badgeClass("ok")}>metadata</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function RedactionScanPanel({ report }: { report: AuditTrailSummary }) {
+  return (
+    <SummaryCard
+      title="Redaction Scan Status"
+      state={report.redaction_scan.passed ? "passed" : "blocked"}
+      lines={[
+        `scanned=${report.redaction_scan.scanned_path_count}`,
+        `violations=${report.redaction_scan.violations.length}`,
+        "raw logs not shown",
+        "secrets not shown",
+        "token_printed=false",
+      ]}
+    />
+  );
+}
+
+function SafeExportGatePanel({ gate }: { gate: SafeExportGateSummary }) {
+  return (
+    <SummaryCard
+      title="Safe Export Gate Status"
+      state={gate.safe_to_export ? "safe_to_export" : "blocked"}
+      lines={[
+        `raw_prompt_persisted=${String(gate.raw_prompt_persisted)}`,
+        `raw_transcript_persisted=${String(gate.raw_transcript_persisted)}`,
+        `raw_stdout_persisted=${String(gate.raw_stdout_persisted)}`,
+        `raw_stderr_persisted=${String(gate.raw_stderr_persisted)}`,
+        `raw_logs_persisted=${String(gate.raw_logs_persisted)}`,
+        `authorization_persisted=${String(gate.authorization_persisted)}`,
+        "token_printed=false",
+      ]}
+    />
+  );
+}
+
+function V1ReadinessGapPanel() {
+  return (
+    <SummaryCard
+      title="v1 Readiness Gap Closure Status"
+      state="ready for Goal 220"
+      lines={[
+        "Failure budget policy present",
+        "Evidence hash-chain present",
+        "Audit trail present",
+        "Redaction scan present",
+        "Remote execution disabled",
+        "Queue apply disabled",
+      ]}
+    />
+  );
+}
+
 function SettingsPage({ apiBase }: { apiBase: string }) {
   const data = useProductData(apiBase);
   return (
@@ -3032,6 +3230,7 @@ function titleForRoute(route: Route): string {
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "control-plane") return "Control Plane";
+  if (route === "audit") return "Reliability Audit";
   if (route === "tasks") return "Task Queue";
   return route.charAt(0).toUpperCase() + route.slice(1);
 }
