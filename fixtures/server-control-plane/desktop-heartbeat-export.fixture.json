@@ -1,0 +1,28 @@
+{
+  "schema": "skybridge.worker_heartbeat.v1",
+  "worker_id": "laptop-zenbookduo",
+  "device_id_hash": "local-fixture-device",
+  "repo": "skybridge-agent-hub",
+  "branch": "main",
+  "commit": "fixture-goal-218",
+  "resident_enabled": false,
+  "execution_enabled": false,
+  "queue_apply_enabled": false,
+  "resource_gate_status": "pass",
+  "resource_gate_blockers": [],
+  "active_tasks": 0,
+  "stale_leases": 0,
+  "runner_lock": "none",
+  "open_review_hold": false,
+  "queue_preview": {
+    "queued_workunits": 0,
+    "runnable_workunits": 0,
+    "would_create_tasks": false,
+    "would_claim_tasks": false,
+    "would_execute_tasks": false
+  },
+  "drain_pause_state": false,
+  "emergency_stop_preview_state": false,
+  "timestamp": "2026-06-13T00:00:00.000Z",
+  "token_printed": false
+}

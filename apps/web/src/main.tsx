@@ -39,11 +39,17 @@ import {
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureGoalQueueReviewSummary,
+  fixtureOperatorApprovalGate,
+  fixtureOperatorApprovalRequest,
+  fixtureOperatorApprovalState,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureRepoExclusiveLock,
   fixtureSchedulingPreview,
+  fixtureWorkerHeartbeat,
+  fixtureWorkerPairingPreview,
+  fixtureWorkerRegistration,
   fixtureStaleCampaignLock,
   fixtureWorkunitCandidatePack,
   queueControlActionMatrix,
@@ -80,6 +86,12 @@ import {
   type WorkerSummary,
   type ProposedGoalReviewSummary,
   type WorkunitCandidatePack,
+  type ControlPlaneOperatorApprovalGate,
+  type ControlPlaneOperatorApprovalRequest,
+  type ControlPlaneOperatorApprovalState,
+  type ControlPlaneWorkerHeartbeat,
+  type ControlPlaneWorkerPairingPreview,
+  type ControlPlaneWorkerRegistration,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -95,6 +107,7 @@ type Route =
   | "campaign-queue"
   | "goals"
   | "workers"
+  | "control-plane"
   | "tasks"
   | "pr-ci"
   | "notifications"
@@ -111,6 +124,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "campaign-queue", label: "Campaign Queue" },
   { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
+  { route: "control-plane", label: "Control Plane" },
   { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
   { route: "notifications", label: "Notifications" },
@@ -186,6 +200,7 @@ function App() {
         {route === "campaign-queue" ? <CampaignQueuePage /> : null}
         {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
+        {route === "control-plane" ? <ControlPlanePage apiBase={apiBase} /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
         {route === "notifications" ? (
@@ -2056,6 +2071,324 @@ function SettingsPage({ apiBase }: { apiBase: string }) {
   );
 }
 
+function ControlPlanePage({ apiBase }: { apiBase: string }) {
+  const data = useControlPlaneData(apiBase);
+  const workers =
+    data.workers.length > 0
+      ? data.workers.map((worker) => worker.registration)
+      : [fixtureWorkerRegistration];
+  const heartbeat = data.workers[0]?.heartbeat ?? fixtureWorkerHeartbeat;
+  const pairing = data.workers[0]?.pairing_preview ?? fixtureWorkerPairingPreview;
+  const approvals =
+    data.approvals.length > 0
+      ? data.approvals
+      : [
+          {
+            request: fixtureOperatorApprovalRequest,
+            state: fixtureOperatorApprovalState,
+            gate: fixtureOperatorApprovalGate,
+          },
+        ];
+
+  return (
+    <div className="route-stack server-control-plane" data-no-remote-execution="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>Server Control Plane</h2>
+          <p>No server-triggered task execution is available from this surface.</p>
+        </div>
+        <span className={badgeClass("bad")}>remote execution disabled</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="remote_execution_enabled" value="false" />
+        <Kpi label="arbitrary_command_enabled" value="false" />
+        <Kpi label="execution_enabled" value="false" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <ControlPlaneWorkerListPanel workers={workers} />
+          <ControlPlaneWorkerDetailPanel worker={workers[0] ?? fixtureWorkerRegistration} heartbeat={heartbeat} />
+          <ControlPlaneApprovalPanel approvals={approvals} />
+          <ControlPlaneCompletedRunsPanel />
+        </div>
+        <aside className="dashboard-grid__side">
+          <ControlPlaneDisabledBanner />
+          <ControlPlanePairingPanel pairing={pairing} />
+          <ControlPlaneResourceBlockersPanel heartbeat={heartbeat} />
+          <ControlPlaneQueuePreviewPanel heartbeat={heartbeat} />
+          <ControlPlaneResidentStatePanel heartbeat={heartbeat} />
+          <ControlPlaneEvidencePanel />
+          <ControlPlaneReviewHoldsPanel heartbeat={heartbeat} />
+        </aside>
+      </section>
+      {data.error ? <p className="skybridge-error">{data.error}</p> : null}
+    </div>
+  );
+}
+
+function ControlPlaneDisabledBanner() {
+  return (
+    <section className="skybridge-panel control-plane-disabled-banner" aria-label="No execution enabled banner">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Boundary</p>
+          <h2>No Execution Enabled</h2>
+        </div>
+        <span className={badgeClass("bad")}>disabled</span>
+      </div>
+      <ul className="summary-lines">
+        <li>Remote execution disabled banner: remote_execution_enabled=false</li>
+        <li>Server dispatch disabled: arbitrary_command_enabled=false</li>
+        <li>Queue apply disabled: queue_apply_enabled=false</li>
+        <li>No execute button, no run button, no apply button, no command text box, no raw logs</li>
+      </ul>
+    </section>
+  );
+}
+
+function ControlPlaneWorkerListPanel({ workers }: { workers: ControlPlaneWorkerRegistration[] }) {
+  return (
+    <section className="skybridge-panel control-plane-worker-list" aria-label="Worker list">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Workers</p>
+          <h2>Worker List</h2>
+        </div>
+        <span className="skybridge-state">{workers.length}</span>
+      </div>
+      <div className="data-table data-table--workers">
+        <div className="data-table__head">
+          <span>Worker</span>
+          <span>Repo</span>
+          <span>Capabilities</span>
+          <span>Execution boundary</span>
+        </div>
+        {workers.map((worker) => (
+          <div className="data-table__row" key={worker.worker_id}>
+            <span>{worker.display_name}<small>{worker.worker_id} · {worker.device_id_hash}</small></span>
+            <span>{worker.repo}<small>{worker.branch} · {worker.commit}</small></span>
+            <span>{worker.capabilities.join(", ")}<small>{worker.resource_policy_summary}</small></span>
+            <span>execution_enabled={String(worker.execution_enabled)}<small>remote_execution_enabled={String(worker.remote_execution_enabled)}</small></span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ControlPlaneWorkerDetailPanel({
+  worker,
+  heartbeat,
+}: {
+  worker: ControlPlaneWorkerRegistration;
+  heartbeat: ControlPlaneWorkerHeartbeat;
+}) {
+  return (
+    <section className="skybridge-panel control-plane-worker-detail" aria-label="Worker detail status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Status</p>
+          <h2>Worker Detail / Status</h2>
+        </div>
+        <span className={badgeClass(heartbeat.resource_gate_status === "pass" ? "ok" : "bad")}>{heartbeat.resource_gate_status}</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Identity</dt><dd>{worker.worker_id}; paired={String(worker.paired)}; pairing_state={worker.pairing_state}</dd></div>
+        <div><dt>Resident worker state</dt><dd>resident_enabled={String(heartbeat.resident_enabled)}; execution_enabled={String(heartbeat.execution_enabled)}</dd></div>
+        <div><dt>Resource state</dt><dd>active_tasks={heartbeat.active_tasks}; stale_leases={heartbeat.stale_leases}; runner_lock={heartbeat.runner_lock}</dd></div>
+        <div><dt>Safe ingest</dt><dd>raw logs=false; raw prompts=false; token_printed=false</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function ControlPlanePairingPanel({ pairing }: { pairing: ControlPlaneWorkerPairingPreview }) {
+  return (
+    <SummaryCard
+      title="Pairing preview"
+      state={pairing.pairing_state}
+      lines={[
+        `paired=${String(pairing.paired)}`,
+        `pairing_code_hash=${pairing.pairing_code_hash}`,
+        `pairing_code_raw_persisted=${String(pairing.pairing_code_raw_persisted)}`,
+        `execution_enabled=${String(pairing.execution_enabled)}`,
+        `arbitrary_command_enabled=${String(pairing.arbitrary_command_enabled)}`,
+      ]}
+    />
+  );
+}
+
+function ControlPlaneResourceBlockersPanel({ heartbeat }: { heartbeat: ControlPlaneWorkerHeartbeat }) {
+  return (
+    <SummaryCard
+      title="Resource blockers"
+      state={heartbeat.resource_gate_status}
+      lines={[
+        `Blockers: ${heartbeat.resource_gate_blockers.join("; ") || "none"}`,
+        `Active tasks: ${heartbeat.active_tasks}`,
+        `Stale leases: ${heartbeat.stale_leases}`,
+        `Open review hold: ${String(heartbeat.open_review_hold)}`,
+      ]}
+    />
+  );
+}
+
+function ControlPlaneQueuePreviewPanel({ heartbeat }: { heartbeat: ControlPlaneWorkerHeartbeat }) {
+  return (
+    <SummaryCard
+      title="Queue preview"
+      state={`${heartbeat.queue_preview.queued_workunits} queued`}
+      lines={[
+        `Runnable: ${heartbeat.queue_preview.runnable_workunits}`,
+        `would_create_tasks=${String(heartbeat.queue_preview.would_create_tasks)}`,
+        `would_claim_tasks=${String(heartbeat.queue_preview.would_claim_tasks)}`,
+        `would_execute_tasks=${String(heartbeat.queue_preview.would_execute_tasks)}`,
+      ]}
+    />
+  );
+}
+
+function ControlPlaneResidentStatePanel({ heartbeat }: { heartbeat: ControlPlaneWorkerHeartbeat }) {
+  return (
+    <SummaryCard
+      title="Resident worker state"
+      state={heartbeat.resident_enabled ? "resident enabled" : "resident disabled"}
+      lines={[
+        `drain_pause_state=${String(heartbeat.drain_pause_state)}`,
+        `emergency_stop_preview_state=${String(heartbeat.emergency_stop_preview_state)}`,
+        `queue_apply_enabled=${String(heartbeat.queue_apply_enabled)}`,
+        `token_printed=${String(heartbeat.token_printed)}`,
+      ]}
+    />
+  );
+}
+
+function ControlPlaneApprovalPanel({
+  approvals,
+}: {
+  approvals: Array<{
+    request: ControlPlaneOperatorApprovalRequest;
+    state: ControlPlaneOperatorApprovalState;
+    gate: ControlPlaneOperatorApprovalGate;
+  }>;
+}) {
+  return (
+    <section className="skybridge-panel control-plane-approval-panel" aria-label="Pending approval">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Operator Approval</p>
+          <h2>Pending Approval / Approval State</h2>
+        </div>
+        <span className="skybridge-state">{approvals.length}</span>
+      </div>
+      <ol className="rich-list">
+        {approvals.map((approval) => (
+          <li key={approval.request.approval_request_id}>
+            <div>
+              <strong>{approval.request.requested_action}</strong>
+              <small>{approval.state.approval_state} · expires {formatDateTime(approval.request.expires_at)}</small>
+              <small>approval_does_not_execute={String(approval.gate.approval_does_not_execute)}; allowed_to_execute={String(approval.gate.allowed_to_execute)}</small>
+            </div>
+            <span className={badgeClass("bad")}>preview controls only</span>
+          </li>
+        ))}
+      </ol>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Approve preview disabled</button>
+        <button type="button" disabled aria-disabled="true">Reject preview disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function ControlPlaneCompletedRunsPanel() {
+  return (
+    <SummaryCard
+      title="Completed runs"
+      state="safe evidence only"
+      lines={[
+        "Workunit A completed: true",
+        "Workunit B completed: true",
+        "No next execution authorized: true",
+        "No raw logs or transcripts stored",
+      ]}
+    />
+  );
+}
+
+function ControlPlaneEvidencePanel() {
+  return (
+    <SummaryCard
+      title="Evidence summary"
+      state="metadata only"
+      lines={[
+        "Schemas added for Goal 218",
+        "Server preview routes do not execute",
+        "Desktop heartbeat export matches worker_heartbeat.v1",
+        "ready_for_goal_219 depends on checks",
+      ]}
+    />
+  );
+}
+
+function ControlPlaneReviewHoldsPanel({ heartbeat }: { heartbeat: ControlPlaneWorkerHeartbeat }) {
+  return (
+    <SummaryCard
+      title="Open review holds"
+      state={heartbeat.open_review_hold ? "hold" : "none"}
+      lines={[
+        `open_review_hold=${String(heartbeat.open_review_hold)}`,
+        "Human PR review remains required",
+        "Approval cannot bypass finalizer",
+        "Approval cannot bypass resource gate",
+      ]}
+    />
+  );
+}
+
+function useControlPlaneData(apiBase: string) {
+  const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
+  const [workers, setWorkers] = useState<
+    Array<{
+      registration: ControlPlaneWorkerRegistration;
+      pairing_preview?: ControlPlaneWorkerPairingPreview;
+      heartbeat?: ControlPlaneWorkerHeartbeat;
+      token_printed: false;
+    }>
+  >([]);
+  const [approvals, setApprovals] = useState<
+    Array<{
+      request: ControlPlaneOperatorApprovalRequest;
+      state: ControlPlaneOperatorApprovalState;
+      gate: ControlPlaneOperatorApprovalGate;
+    }>
+  >([]);
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      client.listControlPlaneWorkers(),
+      client.listControlPlaneApprovals(),
+    ])
+      .then(([nextWorkers, nextApprovals]) => {
+        if (cancelled) return;
+        setWorkers(nextWorkers);
+        setApprovals(nextApprovals);
+        setError(undefined);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  return { workers, approvals, error };
+}
+
 function useProductData(apiBase: string) {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
   const [summary, setSummary] = useState<SummaryResponse | undefined>();
@@ -2698,6 +3031,7 @@ function titleForRoute(route: Route): string {
   if (route === "campaign-queue") return "Campaign Queue";
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
+  if (route === "control-plane") return "Control Plane";
   if (route === "tasks") return "Task Queue";
   return route.charAt(0).toUpperCase() + route.slice(1);
 }

@@ -510,6 +510,29 @@ describe("SkyBridgeClient", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(19, "http://localhost:8787/v1/tasks/summary");
   });
 
+  it("builds Goal 218 control-plane helper URLs", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ workers: [] }))
+      .mockResolvedValueOnce(jsonResponse({ worker: { registration: { worker_id: "worker/1" } }, approval_gate: {}, token_printed: false }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, worker: { worker_id: "worker/1" }, token_printed: false }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, heartbeat: { worker_id: "worker/1" }, token_printed: false }))
+      .mockResolvedValueOnce(jsonResponse({ approvals: [] }));
+    const client = new SkyBridgeClient("http://localhost:8787/");
+
+    await client.listControlPlaneWorkers();
+    await client.getControlPlaneWorkerStatus("worker/1");
+    await client.registerControlPlaneWorkerPreview({ worker_id: "worker/1" });
+    await client.sendControlPlaneHeartbeat("worker/1", { worker_id: "worker/1" });
+    await client.listControlPlaneApprovals();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://localhost:8787/api/workers");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://localhost:8787/api/workers/worker%2F1/status");
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:8787/api/workers/register-preview", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "http://localhost:8787/api/workers/worker%2F1/heartbeat-ingest", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:8787/api/operator-approvals");
+  });
+
   it("throws useful errors for non-2xx responses", async () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_query" }, 400));

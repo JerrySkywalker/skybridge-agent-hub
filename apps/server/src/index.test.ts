@@ -657,6 +657,198 @@ describe("server api", () => {
     });
   });
 
+  it("serves Goal 218 worker registration, pairing and heartbeat preview routes without execution", async () => {
+    const server = await testServer();
+
+    const register = await server.inject({
+      method: "POST",
+      url: "/api/workers/register-preview",
+      payload: {
+        worker_id: "goal-218-worker",
+        device_id_hash: "safe-fixture-device",
+        display_name: "Goal 218 worker",
+        repo: "skybridge-agent-hub",
+        branch: "main",
+        commit: "test",
+        capabilities: ["heartbeat"],
+        resource_policy_summary: "safe",
+        resident_enabled: false,
+        paired: false,
+        pairing_state: "pairing_preview",
+        pairing_code_hash: "hash-only",
+      },
+    });
+    expect(register.statusCode).toBe(202);
+    expect(
+      register.json<{ worker: { execution_enabled: boolean; token_printed: boolean } }>().worker,
+    ).toMatchObject({
+      execution_enabled: false,
+      token_printed: false,
+    });
+
+    const pairing = await server.inject({
+      method: "POST",
+      url: "/api/workers/pairing-preview",
+      payload: { worker_id: "goal-218-worker", pairing_code_hash: "hash-only" },
+    });
+    expect(pairing.statusCode).toBe(202);
+    expect(
+      pairing.json<{
+        pairing_preview: {
+          remote_execution_enabled: boolean;
+          arbitrary_command_enabled: boolean;
+        };
+      }>().pairing_preview,
+    ).toMatchObject({
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+    });
+
+    const heartbeat = await server.inject({
+      method: "POST",
+      url: "/api/workers/goal-218-worker/heartbeat-ingest",
+      payload: {
+        worker_id: "goal-218-worker",
+        device_id_hash: "safe-fixture-device",
+        repo: "skybridge-agent-hub",
+        branch: "main",
+        commit: "test",
+        resident_enabled: false,
+        resource_gate_status: "pass",
+        resource_gate_blockers: [],
+        active_tasks: 0,
+        stale_leases: 0,
+        runner_lock: "none",
+        open_review_hold: false,
+        queue_preview: {
+          queued_workunits: 0,
+          runnable_workunits: 0,
+          would_create_tasks: false,
+          would_claim_tasks: false,
+          would_execute_tasks: false,
+        },
+        drain_pause_state: false,
+        emergency_stop_preview_state: false,
+        timestamp: "2026-06-13T00:00:00.000Z",
+      },
+    });
+    expect(heartbeat.statusCode).toBe(202);
+    expect(
+      heartbeat.json<{
+        heartbeat: {
+          execution_enabled: boolean;
+          active_tasks: number;
+          stale_leases: number;
+        };
+      }>().heartbeat,
+    ).toMatchObject({
+      execution_enabled: false,
+      active_tasks: 0,
+      stale_leases: 0,
+    });
+
+    const status = await server.inject({
+      method: "GET",
+      url: "/api/workers/goal-218-worker/status",
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.body).toContain("skybridge.worker_identity.v1");
+    expect(status.body).toContain("skybridge.worker_connection_state.v1");
+  });
+
+  it("rejects unsafe Goal 218 heartbeat ingest payloads", async () => {
+    const server = await testServer();
+    for (const payload of [
+      { raw_logs: "log text" },
+      { raw_prompt: "prompt text" },
+      { token_printed: true },
+      { headers: { Authorization: "Bearer secret-value" } },
+      { private_key: "-----BEGIN OPENSSH PRIVATE KEY----- secret" },
+    ]) {
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/workers/laptop-zenbookduo/heartbeat-ingest",
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(
+        response.json<{ schema: string; token_printed: boolean }>(),
+      ).toMatchObject({
+        schema: "skybridge.worker_ingest_rejection.v1",
+        token_printed: false,
+      });
+    }
+  });
+
+  it("models Goal 218 approval preview as non-executing and resource-gated", async () => {
+    const server = await testServer();
+    const create = await server.inject({
+      method: "POST",
+      url: "/api/operator-approvals/request-preview",
+      payload: {
+        approval_request_id: "approval-route-test",
+        requested_action: "future_start_one_controlled_preview",
+        requested_mode: "preview",
+        scope: "local",
+        workunit_ids: [],
+        max_workunits: 0,
+        risk: "medium",
+        expires_at: "2099-01-01T00:00:00.000Z",
+      },
+    });
+    expect(create.statusCode).toBe(202);
+    expect(
+      create.json<{
+        approval_gate: {
+          allowed_to_execute: boolean;
+          resource_gate_required: boolean;
+        };
+      }>().approval_gate,
+    ).toMatchObject({
+      allowed_to_execute: false,
+      resource_gate_required: true,
+    });
+
+    const approve = await server.inject({
+      method: "POST",
+      url: "/api/operator-approvals/approval-route-test/approve-preview",
+      payload: { decision_reason: "test preview" },
+    });
+    expect(approve.statusCode).toBe(200);
+    expect(
+      approve.json<{
+        execution_started: boolean;
+        approval_state: {
+          execution_enabled: boolean;
+          arbitrary_command_enabled: boolean;
+        };
+      }>(),
+    ).toMatchObject({
+      execution_started: false,
+      approval_state: {
+        execution_enabled: false,
+        arbitrary_command_enabled: false,
+      },
+    });
+
+    const shell = await server.inject({
+      method: "POST",
+      url: "/api/operator-approvals/request-preview",
+      payload: {
+        approval_request_id: "approval-shell-test",
+        requested_action: "future",
+        requested_mode: "preview",
+        scope: "local",
+        workunit_ids: [],
+        max_workunits: 0,
+        risk: "medium",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        shell_command: "echo unsafe",
+      },
+    });
+    expect(shell.statusCode).toBe(400);
+  });
+
   it("guards queue control preview and safe action apply", async () => {
     await withWorkerToken("queue-control-token", async () => {
       const server = await testServer();

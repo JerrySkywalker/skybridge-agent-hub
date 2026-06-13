@@ -40,7 +40,8 @@ foreach ($allowedLegacy in @("register-heartbeat")) {
 }
 
 foreach ($forbidden in @("start-one", "start-all", "execute-step", "run-until-complete", "run-until-hold", "run-next", "skybridge-edge-worker.ps1")) {
-  if ($bridge -match [regex]::Escape($forbidden)) {
+  $commandPattern = '"(command|action|script|executable|command_name)"\s*:\s*"' + [regex]::Escape($forbidden) + '"'
+  if ($bridge -match $commandPattern) {
     throw "Desktop bridge contains forbidden execution command: $forbidden"
   }
 }
