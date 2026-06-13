@@ -1,6 +1,7 @@
 import { z } from "zod";
 import redactionRules from "./redaction-rules.json" with { type: "json" };
 export * from "./control-plane.js";
+export * from "./reliability.js";
 
 export const SKYBRIDGE_EVENT_SCHEMA_VERSION =
   "skybridge.agent_event.v1" as const;

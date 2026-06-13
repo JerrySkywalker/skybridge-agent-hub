@@ -26,6 +26,10 @@ import type {
   OperatorApprovalGate,
   OperatorApprovalRequest,
   OperatorApprovalState,
+  AuditReport,
+  EvidenceRetentionReport,
+  FailureBudgetReport,
+  SafeExportGate,
   ControlPlaneWorkerHeartbeat as ControlPlaneWorkerHeartbeatContract,
   WorkerPairingPreview,
   WorkerRegistration,
@@ -35,6 +39,15 @@ export {
   fixtureOperatorApprovalGate,
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
+  fixtureAuditReport,
+  fixtureAuditEvent,
+  fixtureEvidenceRetentionReport,
+  fixtureFailureBudgetReport,
+  fixtureFailureBudget,
+  fixtureFailureClassification,
+  fixtureReplacementAuthorizationGate,
+  fixtureRetryAuthorizationGate,
+  fixtureSafeExportGate,
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
@@ -150,6 +163,10 @@ export type ControlPlaneWorkerPairingPreview = WorkerPairingPreview;
 export type ControlPlaneOperatorApprovalRequest = OperatorApprovalRequest;
 export type ControlPlaneOperatorApprovalState = OperatorApprovalState;
 export type ControlPlaneOperatorApprovalGate = OperatorApprovalGate;
+export type FailureBudgetSummary = FailureBudgetReport;
+export type EvidenceRetentionSummary = EvidenceRetentionReport;
+export type AuditTrailSummary = AuditReport;
+export type SafeExportGateSummary = SafeExportGate;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
 export interface GoalTaskSummary {
