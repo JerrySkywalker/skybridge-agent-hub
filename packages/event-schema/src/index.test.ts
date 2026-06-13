@@ -3,9 +3,18 @@ import {
   createEvent,
   createManualExecutionResult,
   createRuleBasedPlannerDecision,
+  fixtureOperatorApprovalGate,
+  fixtureOperatorApprovalRequest,
+  fixtureOperatorApprovalState,
+  fixtureWorkerHeartbeat,
+  fixtureWorkerPairingPreview,
+  fixtureWorkerRegistration,
   isNotificationTrigger,
   listAdapterCapabilities,
+  parseOperatorApprovalRequest,
   parseEvent,
+  parseWorkerHeartbeat,
+  parseWorkerRegistration,
   redactForTelemetry,
   SharedRedactionRules,
 } from "./index.js";
@@ -172,5 +181,57 @@ describe("event schema", () => {
     expect(result.pr_number).toBe(27);
     expect(result.events[0]?.source.adapter).toBe("manual-executor");
     expect(result.events[0]?.payload.manual_result).toBe(true);
+  });
+
+  it("models Goal 218 worker control-plane contracts without execution", () => {
+    expect(parseWorkerRegistration(fixtureWorkerRegistration)).toMatchObject({
+      schema: "skybridge.worker_registration.v1",
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      pairing_code_raw_persisted: false,
+      token_printed: false,
+    });
+    expect(fixtureWorkerPairingPreview).toMatchObject({
+      schema: "skybridge.worker_pairing_preview.v1",
+      pairing_preview_only: true,
+      execution_enabled: false,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      token_printed: false,
+    });
+    expect(parseWorkerHeartbeat(fixtureWorkerHeartbeat)).toMatchObject({
+      schema: "skybridge.worker_heartbeat.v1",
+      active_tasks: 0,
+      stale_leases: 0,
+      runner_lock: "none",
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 218 operator approval as non-executing and gated", () => {
+    expect(parseOperatorApprovalRequest(fixtureOperatorApprovalRequest)).toMatchObject({
+      schema: "skybridge.operator_approval_request.v1",
+      max_parallel_repo_mutations: 1,
+      resource_gate_required: true,
+      human_review_required: true,
+      finalizer_required: true,
+      token_printed: false,
+    });
+    expect(fixtureOperatorApprovalState).toMatchObject({
+      schema: "skybridge.operator_approval_state.v1",
+      approval_state: "pending",
+      execution_enabled: false,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+    });
+    expect(fixtureOperatorApprovalGate).toMatchObject({
+      allowed_to_execute: false,
+      approval_does_not_execute: true,
+      generic_bounded_queue_apply_enabled: false,
+      remote_arbitrary_command_dispatch_enabled: false,
+      token_printed: false,
+    });
   });
 });

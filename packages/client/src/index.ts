@@ -23,6 +23,21 @@ import type {
   TaskStatus,
   Worker,
   WorkerCapability,
+  OperatorApprovalGate,
+  OperatorApprovalRequest,
+  OperatorApprovalState,
+  ControlPlaneWorkerHeartbeat as ControlPlaneWorkerHeartbeatContract,
+  WorkerPairingPreview,
+  WorkerRegistration,
+} from "@skybridge-agent-hub/event-schema";
+
+export {
+  fixtureOperatorApprovalGate,
+  fixtureOperatorApprovalRequest,
+  fixtureOperatorApprovalState,
+  fixtureWorkerHeartbeat,
+  fixtureWorkerPairingPreview,
+  fixtureWorkerRegistration,
 } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
@@ -129,6 +144,12 @@ export interface ProjectSummary {
 }
 
 export type WorkerRecord = Worker;
+export type ControlPlaneWorkerRegistration = WorkerRegistration;
+export type ControlPlaneWorkerHeartbeat = ControlPlaneWorkerHeartbeatContract;
+export type ControlPlaneWorkerPairingPreview = WorkerPairingPreview;
+export type ControlPlaneOperatorApprovalRequest = OperatorApprovalRequest;
+export type ControlPlaneOperatorApprovalState = OperatorApprovalState;
+export type ControlPlaneOperatorApprovalGate = OperatorApprovalGate;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
 export interface GoalTaskSummary {
@@ -781,6 +802,94 @@ export class SkyBridgeClient {
     const json = await this.getJson<{ approvals: ApprovalSummary[] }>(
       "/v1/approvals",
     );
+    return json.approvals;
+  }
+
+  async listControlPlaneWorkers(): Promise<
+    Array<{
+      registration: WorkerRegistration;
+      pairing_preview?: WorkerPairingPreview;
+      heartbeat?: ControlPlaneWorkerHeartbeat;
+      token_printed: false;
+    }>
+  > {
+    const json = await this.getJson<{
+      workers: Array<{
+        registration: WorkerRegistration;
+        pairing_preview?: WorkerPairingPreview;
+        heartbeat?: ControlPlaneWorkerHeartbeat;
+        token_printed: false;
+      }>;
+    }>("/api/workers");
+    return json.workers;
+  }
+
+  async getControlPlaneWorkerStatus(workerId: string): Promise<{
+    worker: {
+      registration: WorkerRegistration;
+      pairing_preview?: WorkerPairingPreview;
+      heartbeat?: ControlPlaneWorkerHeartbeat;
+      token_printed: false;
+    };
+    heartbeat?: ControlPlaneWorkerHeartbeat;
+    approval_gate: OperatorApprovalGate;
+    token_printed: false;
+  }> {
+    return this.getJson(
+      `/api/workers/${encodeURIComponent(workerId)}/status`,
+    );
+  }
+
+  async registerControlPlaneWorkerPreview(
+    input: Partial<WorkerRegistration>,
+  ): Promise<{ ok: boolean; worker: WorkerRegistration; token_printed: false }> {
+    const response = await fetch(this.url("/api/workers/register-preview"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    await assertOk(response, "control-plane worker register preview");
+    return response.json() as Promise<{
+      ok: boolean;
+      worker: WorkerRegistration;
+      token_printed: false;
+    }>;
+  }
+
+  async sendControlPlaneHeartbeat(
+    workerId: string,
+    input: Partial<ControlPlaneWorkerHeartbeat>,
+  ): Promise<{ ok: boolean; heartbeat: ControlPlaneWorkerHeartbeat; token_printed: false }> {
+    const response = await fetch(
+      this.url(`/api/workers/${encodeURIComponent(workerId)}/heartbeat-ingest`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    await assertOk(response, "control-plane heartbeat ingest");
+    return response.json() as Promise<{
+      ok: boolean;
+      heartbeat: ControlPlaneWorkerHeartbeat;
+      token_printed: false;
+    }>;
+  }
+
+  async listControlPlaneApprovals(): Promise<
+    Array<{
+      request: OperatorApprovalRequest;
+      state: OperatorApprovalState;
+      gate: OperatorApprovalGate;
+    }>
+  > {
+    const json = await this.getJson<{
+      approvals: Array<{
+        request: OperatorApprovalRequest;
+        state: OperatorApprovalState;
+        gate: OperatorApprovalGate;
+      }>;
+    }>("/api/operator-approvals");
     return json.approvals;
   }
 

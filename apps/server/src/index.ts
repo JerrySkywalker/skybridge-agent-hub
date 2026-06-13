@@ -13,6 +13,15 @@ import {
   parseEvent,
   SOURCE_CAPABILITIES,
   SharedRedactionRules,
+  fixtureOperatorApprovalGate,
+  fixtureOperatorApprovalRequest,
+  fixtureOperatorApprovalState,
+  fixtureWorkerHeartbeat,
+  fixtureWorkerPairingPreview,
+  fixtureWorkerRegistration,
+  parseOperatorApprovalRequest,
+  parseWorkerHeartbeat,
+  parseWorkerRegistration,
   type RunDetail,
   type RunSummary,
   type IterationRun,
@@ -42,6 +51,11 @@ import {
   type Worker,
   type WorkerCapability,
   type WorkerStatus,
+  type OperatorApprovalRequest,
+  type OperatorApprovalState,
+  type ControlPlaneWorkerHeartbeat,
+  type WorkerPairingPreview,
+  type WorkerRegistration,
 } from "@skybridge-agent-hub/event-schema";
 import {
   send as sendNtfy,
@@ -425,6 +439,21 @@ export async function createServer(
     : new MemoryStore();
   const clients = new Set<{ write: (data: string) => void }>();
   const app = Fastify({ logger: options.logger ?? true });
+  const controlPlaneWorkers = new Map<string, WorkerRegistration>([
+    [fixtureWorkerRegistration.worker_id, fixtureWorkerRegistration],
+  ]);
+  const controlPlanePairings = new Map<string, WorkerPairingPreview>([
+    [fixtureWorkerPairingPreview.worker_id, fixtureWorkerPairingPreview],
+  ]);
+  const controlPlaneHeartbeats = new Map<string, ControlPlaneWorkerHeartbeat>([
+    [fixtureWorkerHeartbeat.worker_id, fixtureWorkerHeartbeat],
+  ]);
+  const operatorApprovalRequests = new Map<string, OperatorApprovalRequest>([
+    [fixtureOperatorApprovalRequest.approval_request_id, fixtureOperatorApprovalRequest],
+  ]);
+  const operatorApprovalStates = new Map<string, OperatorApprovalState>([
+    [fixtureOperatorApprovalState.approval_request_id, fixtureOperatorApprovalState],
+  ]);
 
   await store.load();
   await app.register(cors, { origin: true });
@@ -547,6 +576,251 @@ export async function createServer(
           role as Parameters<typeof listAdapterCapabilities>[0],
         ),
       };
+    },
+  );
+
+  app.get("/api/workers", async () => ({
+    workers: [...controlPlaneWorkers.values()].map((worker) =>
+      controlPlaneWorkerView(
+        worker,
+        controlPlanePairings.get(worker.worker_id),
+        controlPlaneHeartbeats.get(worker.worker_id),
+      ),
+    ),
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    execution_enabled: false,
+    token_printed: false,
+  }));
+
+  app.get<{ Params: { workerId: string } }>(
+    "/api/workers/:workerId/status",
+    async (request, reply) => {
+      const workerId = decodeURIComponent(request.params.workerId);
+      const worker = controlPlaneWorkers.get(workerId);
+      if (!worker) return reply.code(404).send({ ok: false, error: "worker_not_found", token_printed: false });
+      return {
+        worker: controlPlaneWorkerView(
+          worker,
+          controlPlanePairings.get(workerId),
+          controlPlaneHeartbeats.get(workerId),
+        ),
+        heartbeat: controlPlaneHeartbeats.get(workerId),
+        approval_gate: fixtureOperatorApprovalGate,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        execution_enabled: false,
+        token_printed: false,
+      };
+    },
+  );
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/workers/register-preview",
+    async (request, reply) => {
+      const unsafe = findUnsafeControlPlanePayload(request.body);
+      if (unsafe.length > 0) return reply.code(400).send(workerIngestRejection(unsafe));
+      try {
+        const registration = parseWorkerRegistration({
+          ...fixtureWorkerRegistration,
+          ...request.body,
+          execution_enabled: false,
+          queue_apply_enabled: false,
+          remote_execution_enabled: false,
+          arbitrary_command_enabled: false,
+          pairing_code_raw_persisted: false,
+          token_printed: false,
+        });
+        controlPlaneWorkers.set(registration.worker_id, registration);
+        return reply.code(202).send({
+          ok: true,
+          worker: registration,
+          remote_execution_enabled: false,
+          arbitrary_command_enabled: false,
+          execution_enabled: false,
+          token_printed: false,
+        });
+      } catch (error) {
+        return reply.code(400).send({ ok: false, error: "invalid_worker_registration", message: error instanceof Error ? error.message : String(error), token_printed: false });
+      }
+    },
+  );
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/workers/pairing-preview",
+    async (request, reply) => {
+      const unsafe = findUnsafeControlPlanePayload(request.body);
+      if (unsafe.length > 0) return reply.code(400).send(workerIngestRejection(unsafe));
+      const workerId = safeString(request.body?.worker_id) ?? fixtureWorkerRegistration.worker_id;
+      const worker = controlPlaneWorkers.get(workerId) ?? fixtureWorkerRegistration;
+      const preview: WorkerPairingPreview = {
+        ...fixtureWorkerPairingPreview,
+        worker_id: worker.worker_id,
+        resident_enabled: worker.resident_enabled,
+        paired: request.body?.paired === true,
+        pairing_state: request.body?.paired === true ? "paired" : "pairing_preview",
+        pairing_code_hash: safeString(request.body?.pairing_code_hash) ?? worker.pairing_code_hash,
+        pairing_code_raw_persisted: false,
+        execution_enabled: false,
+        queue_apply_enabled: false,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        token_printed: false,
+      };
+      controlPlanePairings.set(worker.worker_id, preview);
+      return reply.code(202).send({
+        ok: true,
+        pairing_preview: preview,
+        approval_gate: fixtureOperatorApprovalGate,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        execution_enabled: false,
+        token_printed: false,
+      });
+    },
+  );
+
+  app.post<{ Params: { workerId: string } }>(
+    "/api/workers/:workerId/revoke-preview",
+    async (request, reply) => {
+      const workerId = decodeURIComponent(request.params.workerId);
+      const pairing = controlPlanePairings.get(workerId);
+      if (!pairing) return reply.code(404).send({ ok: false, error: "pairing_not_found", token_printed: false });
+      const revoked: WorkerPairingPreview = {
+        ...pairing,
+        paired: false,
+        pairing_state: "revoked",
+        execution_enabled: false,
+        queue_apply_enabled: false,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        token_printed: false,
+      };
+      controlPlanePairings.set(workerId, revoked);
+      return { ok: true, pairing_preview: revoked, token_printed: false };
+    },
+  );
+
+  app.post<{
+    Params: { workerId: string };
+    Body: Record<string, unknown>;
+  }>("/api/workers/:workerId/heartbeat-ingest", async (request, reply) => {
+    const unsafe = findUnsafeControlPlanePayload(request.body);
+    if (unsafe.length > 0) return reply.code(400).send(workerIngestRejection(unsafe));
+    const workerId = decodeURIComponent(request.params.workerId);
+    try {
+      const heartbeat = parseWorkerHeartbeat({
+        ...fixtureWorkerHeartbeat,
+        ...request.body,
+        worker_id: safeString(request.body?.worker_id) ?? workerId,
+        execution_enabled: false,
+        queue_apply_enabled: false,
+        token_printed: false,
+      });
+      if (heartbeat.worker_id !== workerId) {
+        return reply.code(400).send({ ok: false, error: "worker_id_mismatch", token_printed: false });
+      }
+      controlPlaneHeartbeats.set(workerId, heartbeat);
+      return reply.code(202).send({
+        ok: true,
+        heartbeat,
+        stored_safe_json_only: true,
+        raw_logs_included: false,
+        raw_prompts_included: false,
+        token_printed: false,
+      });
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: "invalid_worker_heartbeat", message: error instanceof Error ? error.message : String(error), token_printed: false });
+    }
+  });
+
+  app.get("/api/operator-approvals", async () => ({
+    approvals: [...operatorApprovalRequests.values()].map((request) => ({
+      request,
+      state: operatorApprovalStates.get(request.approval_request_id) ?? fixtureOperatorApprovalState,
+      gate: {
+        ...fixtureOperatorApprovalGate,
+        approval_request_id: request.approval_request_id,
+      },
+    })),
+    execution_enabled: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    token_printed: false,
+  }));
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/operator-approvals/request-preview",
+    async (request, reply) => {
+      const unsafe = findUnsafeControlPlanePayload(request.body);
+      if (unsafe.length > 0 || safeString(request.body?.shell_command)) {
+        return reply.code(400).send(workerIngestRejection([...unsafe, "raw_shell_command_forbidden"]));
+      }
+      try {
+        const approval = parseOperatorApprovalRequest({
+          ...fixtureOperatorApprovalRequest,
+          ...request.body,
+          requested_mode: safeString(request.body?.requested_mode) ?? "preview",
+          max_parallel_repo_mutations: 1,
+          resource_gate_required: true,
+          human_review_required: true,
+          finalizer_required: true,
+          failure_budget_required: true,
+          evidence_retention_required: true,
+          audit_required: true,
+          token_printed: false,
+        });
+        operatorApprovalRequests.set(approval.approval_request_id, approval);
+        const state: OperatorApprovalState = {
+          ...fixtureOperatorApprovalState,
+          approval_request_id: approval.approval_request_id,
+          approval_state: "pending",
+          consumed: false,
+          execution_enabled: false,
+          remote_execution_enabled: false,
+          arbitrary_command_enabled: false,
+          token_printed: false,
+        };
+        operatorApprovalStates.set(approval.approval_request_id, state);
+        return reply.code(202).send({
+          ok: true,
+          approval_request: approval,
+          approval_state: state,
+          approval_gate: { ...fixtureOperatorApprovalGate, approval_request_id: approval.approval_request_id },
+          execution_started: false,
+          token_printed: false,
+        });
+      } catch (error) {
+        return reply.code(400).send({ ok: false, error: "invalid_operator_approval_request", message: error instanceof Error ? error.message : String(error), token_printed: false });
+      }
+    },
+  );
+
+  app.post<{ Params: { approvalId: string }; Body: Record<string, unknown> }>(
+    "/api/operator-approvals/:approvalId/approve-preview",
+    async (request, reply) => {
+      return resolveOperatorApprovalPreview(
+        decodeURIComponent(request.params.approvalId),
+        "approved",
+        request.body,
+        operatorApprovalRequests,
+        operatorApprovalStates,
+        reply,
+      );
+    },
+  );
+
+  app.post<{ Params: { approvalId: string }; Body: Record<string, unknown> }>(
+    "/api/operator-approvals/:approvalId/reject-preview",
+    async (request, reply) => {
+      return resolveOperatorApprovalPreview(
+        decodeURIComponent(request.params.approvalId),
+        "rejected",
+        request.body,
+        operatorApprovalRequests,
+        operatorApprovalStates,
+        reply,
+      );
     },
   );
 
@@ -3193,6 +3467,163 @@ function safeRecord(input: unknown): Record<string, unknown> | undefined {
   return input && typeof input === "object" && !Array.isArray(input)
     ? input as Record<string, unknown>
     : undefined;
+}
+
+function controlPlaneWorkerView(
+  worker: WorkerRegistration,
+  pairing: WorkerPairingPreview | undefined,
+  heartbeat: ControlPlaneWorkerHeartbeat | undefined,
+) {
+  return {
+    identity: {
+      schema: "skybridge.worker_identity.v1",
+      worker_id: worker.worker_id,
+      device_id_hash: worker.device_id_hash,
+      display_name: worker.display_name,
+      repo: worker.repo,
+      branch: worker.branch,
+      commit: worker.commit,
+      token_printed: false,
+    },
+    capabilities: {
+      schema: "skybridge.worker_capability_summary.v1",
+      capabilities: worker.capabilities,
+      resource_policy_summary: worker.resource_policy_summary,
+      resident_enabled: worker.resident_enabled,
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      token_printed: false,
+    },
+    connection_state: {
+      schema: "skybridge.worker_connection_state.v1",
+      worker_id: worker.worker_id,
+      paired: pairing?.paired ?? worker.paired,
+      pairing_state: pairing?.pairing_state ?? worker.pairing_state,
+      resident_enabled: worker.resident_enabled,
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      token_printed: false,
+    },
+    registration: worker,
+    pairing_preview: pairing,
+    heartbeat,
+    token_printed: false,
+  };
+}
+
+function workerIngestRejection(reasons: string[]) {
+  return {
+    schema: "skybridge.worker_ingest_rejection.v1",
+    ok: false,
+    error: "unsafe_worker_ingest_rejected",
+    reasons: [...new Set(reasons)],
+    token_printed: false,
+  };
+}
+
+function findUnsafeControlPlanePayload(input: unknown): string[] {
+  const reasons: string[] = [];
+  visitUnsafePayload(input, [], reasons);
+  return [...new Set(reasons)];
+}
+
+function visitUnsafePayload(input: unknown, path: string[], reasons: string[]): void {
+  if (input === true && path.at(-1) === "token_printed") {
+    reasons.push("token_printed_true_forbidden");
+    return;
+  }
+  if (typeof input === "string") {
+    if (/Bearer\s+[A-Za-z0-9._~+/-]+=*/i.test(input)) reasons.push("bearer_token_forbidden");
+    if (/-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/i.test(input)) reasons.push("private_key_forbidden");
+    if (/Authorization\s*:/i.test(input)) reasons.push("authorization_header_forbidden");
+    if (/Cookie\s*:/i.test(input)) reasons.push("cookie_forbidden");
+    return;
+  }
+  if (Array.isArray(input)) {
+    input.forEach((item, index) => visitUnsafePayload(item, [...path, String(index)], reasons));
+    return;
+  }
+  if (!input || typeof input !== "object") return;
+  for (const [key, value] of Object.entries(input)) {
+    const lower = key.toLowerCase();
+    if (/^(raw_)?(log|logs|stdout|stderr|prompt|prompts|transcript|transcripts|worker_log|worker_logs|ci_log|ci_logs|github_log|github_logs|diff|diffs)$/.test(lower)) {
+      reasons.push(`${lower}_forbidden`);
+      continue;
+    }
+    if (/authorization/.test(lower)) {
+      reasons.push("authorization_header_forbidden");
+      continue;
+    }
+    if (/cookie/.test(lower)) {
+      reasons.push("cookie_forbidden");
+      continue;
+    }
+    if (/private.*key|token|secret/.test(lower) && lower !== "token_printed") {
+      reasons.push(`${lower}_forbidden`);
+      continue;
+    }
+    if (/env|environment/.test(lower) && (lower.includes("dump") || lower === "env" || lower === "environment")) {
+      reasons.push("environment_dump_forbidden");
+      continue;
+    }
+    visitUnsafePayload(value, [...path, lower], reasons);
+  }
+}
+
+async function resolveOperatorApprovalPreview(
+  approvalId: string,
+  decision: "approved" | "rejected",
+  body: Record<string, unknown> | undefined,
+  requests: Map<string, OperatorApprovalRequest>,
+  states: Map<string, OperatorApprovalState>,
+  reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } },
+) {
+  const unsafe = findUnsafeControlPlanePayload(body ?? {});
+  if (unsafe.length > 0) return reply.code(400).send(workerIngestRejection(unsafe));
+  const request = requests.get(approvalId);
+  if (!request) return reply.code(404).send({ ok: false, error: "approval_not_found", token_printed: false });
+  const current = states.get(approvalId);
+  if (current?.consumed || current?.approval_state === "consumed") {
+    return reply.code(409).send({ ok: false, error: "approval_already_consumed", token_printed: false });
+  }
+  const now = new Date();
+  const expiresAt = Date.parse(request.expires_at);
+  const state: OperatorApprovalState = {
+    schema: "skybridge.operator_approval_state.v1",
+    approval_request_id: approvalId,
+    approval_state: Number.isFinite(expiresAt) && expiresAt <= now.getTime() ? "expired" : decision,
+    decision_reason: safeString(body?.decision_reason) ?? `${decision}_preview_only`,
+    consumed: false,
+    execution_enabled: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    token_printed: false,
+  };
+  states.set(approvalId, state);
+  return {
+    ok: true,
+    approval_state: state,
+    decision: {
+      schema: "skybridge.operator_approval_decision.v1",
+      approval_request_id: approvalId,
+      decision,
+      decision_reason: state.decision_reason,
+      decided_by: safeString(body?.decided_by) ?? "local-operator",
+      decided_at: now.toISOString(),
+      execution_started: false,
+      token_printed: false,
+    },
+    approval_gate: {
+      ...fixtureOperatorApprovalGate,
+      approval_request_id: approvalId,
+    },
+    execution_started: false,
+    token_printed: false,
+  };
 }
 
 function resolvePersistence(options: CreateServerOptions): {
