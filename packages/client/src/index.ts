@@ -27,6 +27,9 @@ import type {
   OperatorApprovalRequest,
   OperatorApprovalState,
   AuditReport,
+  BoincV1ReleaseApproval,
+  BoincV1ReleaseReport,
+  BoincV1ReleaseStatus,
   EvidenceRetentionReport,
   FailureBudgetReport,
   SafeExportGate,
@@ -41,6 +44,15 @@ export {
   fixtureOperatorApprovalState,
   fixtureAuditReport,
   fixtureAuditEvent,
+  fixtureBoincV1ControlledApplyBoundary,
+  fixtureBoincV1ControlledReleasePolicy,
+  fixtureBoincV1ReleaseApproval,
+  fixtureBoincV1ReleaseGate,
+  fixtureBoincV1ReleaseOperatorPolicy,
+  fixtureBoincV1ReleaseReadiness,
+  fixtureBoincV1ReleaseReport,
+  fixtureBoincV1ReleaseStatus,
+  fixtureBoincV1ReleaseTagPlan,
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureFailureBudget,
@@ -167,6 +179,9 @@ export type FailureBudgetSummary = FailureBudgetReport;
 export type EvidenceRetentionSummary = EvidenceRetentionReport;
 export type AuditTrailSummary = AuditReport;
 export type SafeExportGateSummary = SafeExportGate;
+export type BoincV1ReleaseStatusSummary = BoincV1ReleaseStatus;
+export type BoincV1ReleaseReportSummary = BoincV1ReleaseReport;
+export type BoincV1ReleaseApprovalSummary = BoincV1ReleaseApproval;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
 export interface GoalTaskSummary {
