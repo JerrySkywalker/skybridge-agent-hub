@@ -944,6 +944,9 @@ function FirstRunWizardCard() {
         <StatusValue label="Onboarding status" value="skybridge.onboarding_status.v1; preview_only=true" />
         <StatusValue label="Runtime health" value=".agent/tmp/local-runtime/runtime-health-report.json" />
         <StatusValue label="Packaging candidate" value=".agent/tmp/packaging-preview/desktop-package-candidate.json" />
+        <StatusValue label="Config wizard preview" value="skybridge.local_config.v1; fixtures/productization/local-config.example.json; execution_enabled=false" />
+        <StatusValue label="Config validation" value="skybridge.local_config_validation.v1; skybridge.local_config_redaction.v1" />
+        <StatusValue label="Productization RC" value="skybridge.local_productization_rc_report.v1; v1.1.0-local-productization-rc" />
         <StatusValue label="Update preview" value=".agent/tmp/upgrade-preview/update-preview-report.json; network_update=false" />
         <StatusValue label="Backup/restore preview" value=".agent/tmp/upgrade-preview/backup-restore-preview.json; raw_artifacts_included=false" />
         <StatusValue label="Disabled controls" value="execute=false; apply=false; start=false; claim=false" />

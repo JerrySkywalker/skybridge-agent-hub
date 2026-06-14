@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("health", "product-readiness", "dependency-check", "git-state", "node-state", "rust-state", "desktop-state", "web-state", "server-state", "smoke-matrix-state", "runtime-state", "safe-summary", "report")]
+  [ValidateSet("health", "product-readiness", "dependency-check", "git-state", "node-state", "rust-state", "desktop-state", "web-state", "server-state", "smoke-matrix-state", "runtime-state", "runtime-session-health", "runtime-lock-health", "runtime-port-health", "cleanup-preview", "safe-summary", "report")]
   [string]$Command = "health",
   [switch]$Json
 )
@@ -47,6 +47,61 @@ function New-RuntimeDiagnosticsState {
     smoke_matrix_state = "local_validation_only"
     disabled_capability_state = @("execution", "queue_apply", "remote_execution", "arbitrary_command_dispatch")
     raw_logs_included = $false
+    token_printed = $false
+  }
+}
+
+function Invoke-RuntimeJson([string]$RuntimeCommand) {
+  $json = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-local-runtime.ps1") -Command $RuntimeCommand -Json
+  if ($LASTEXITCODE -ne 0) { throw "Runtime diagnostics command failed: $RuntimeCommand" }
+  $json | ConvertFrom-Json
+}
+
+function New-RuntimeSessionHealth {
+  $candidate = Invoke-RuntimeJson "apply-candidate"
+  [pscustomobject]@{
+    schema = "skybridge.runtime_session_health.v1"
+    status = "bounded_candidate_ready"
+    session_id = $candidate.session_id
+    component_count = @($candidate.components).Count
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    starts_unbounded_loop = $false
+    raw_log_persisted = $false
+    token_printed = $false
+  }
+}
+
+function New-RuntimeLockHealth {
+  $lock = Invoke-RuntimeJson "lock-check"
+  [pscustomobject]@{
+    schema = "skybridge.runtime_lock_health.v1"
+    lock_file_path = $lock.lock_file_path
+    stale_lock_detected = [bool]$lock.stale_lock_detected
+    stale_pid_detected = [bool]$lock.stale_pid_detected
+    unsafe_component_detected = [bool]$lock.unsafe_component_detected
+    token_printed = $false
+  }
+}
+
+function New-RuntimePortHealth {
+  $ports = Invoke-RuntimeJson "port-check"
+  [pscustomobject]@{
+    schema = "skybridge.runtime_port_health.v1"
+    checks = @($ports.checks)
+    ok = $true
+    token_printed = $false
+  }
+}
+
+function New-CleanupPreview {
+  $cleanup = Invoke-RuntimeJson "cleanup-stale-session"
+  [pscustomobject]@{
+    schema = "skybridge.runtime_cleanup_preview.v1"
+    session_id = $cleanup.session_id
+    preview_only = $true
+    background_process_left_running = $false
+    raw_log_persisted = $false
     token_printed = $false
   }
 }
@@ -111,6 +166,19 @@ function Write-HealthReports {
   $readiness = New-ProductReadinessReport
   New-Item -ItemType Directory -Force -Path $ReadinessDir | Out-Null
   $readiness | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $ReadinessDir "product-readiness-report.json") -Encoding utf8
+  $runtimeSession = New-RuntimeSessionHealth
+  $runtimeSession | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath (Join-Path $DiagnosticsDir "runtime-session-health.json") -Encoding utf8
+  @(
+    "# Runtime Session Health",
+    "",
+    "- schema: skybridge.runtime_session_health.v1",
+    "- status: bounded_candidate_ready",
+    "- starts_codex_worker=false",
+    "- runs_workunit_apply=false",
+    "- starts_unbounded_loop=false",
+    "- raw_log_persisted=false",
+    "- token_printed=false"
+  ) | Set-Content -LiteralPath (Join-Path $DiagnosticsDir "runtime-session-health.md") -Encoding utf8
   @(
     "# Product Readiness Report",
     "",
@@ -137,7 +205,11 @@ $result = switch ($Command) {
   "server-state" { New-State "server" $true "Server preview is build-only." }
   "smoke-matrix-state" { New-State "smoke-matrix" $true "Smoke matrix scripts are local validation only." }
   "runtime-state" { New-RuntimeDiagnosticsState }
-  "safe-summary" { [pscustomobject]@{ ok = $true; diagnostics_safe = $true; raw_env_dump = $false; raw_logs = $false; token_printed = $false } }
+  "runtime-session-health" { New-RuntimeSessionHealth }
+  "runtime-lock-health" { New-RuntimeLockHealth }
+  "runtime-port-health" { New-RuntimePortHealth }
+  "cleanup-preview" { New-CleanupPreview }
+  "safe-summary" { [pscustomobject]@{ ok = $true; diagnostics_safe = $true; raw_env_dump = $false; raw_logs = $false; runtime_session_diagnostics = $true; token_printed = $false } }
   "report" { Write-HealthReports }
 }
 

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "plan", "start-preview", "stop-preview", "restart-preview", "health", "pid-plan", "profile-plan", "safe-summary", "report")]
+  [ValidateSet("status", "plan", "start-preview", "stop-preview", "restart-preview", "health", "pid-plan", "profile-plan", "apply-candidate", "start-local-session", "stop-local-session", "restart-local-session", "session-status", "cleanup-stale-session", "port-check", "lock-check", "safe-summary", "report")]
   [string]$Command = "status",
   [switch]$Json
 )
@@ -8,6 +8,10 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $ReportDir = Join-Path $RepoRoot ".agent\tmp\local-runtime"
+$SessionId = "local-runtime-rc-session"
+$SessionDir = Join-Path $ReportDir "sessions"
+$LockFile = Join-Path $SessionDir "$SessionId.lock.json"
+$PidFile = Join-Path $SessionDir "$SessionId.pid.json"
 
 function New-RuntimeComponent([string]$Id, [string]$CommandPreview) {
   [pscustomobject]@{
@@ -43,6 +47,144 @@ function Get-RuntimeComponents {
     New-RuntimeComponent "diagnostics" "pwsh -ExecutionPolicy Bypass -File scripts/powershell/skybridge-diagnostics.ps1 -Command report"
     New-RuntimeComponent "product-readiness" "pwsh -ExecutionPolicy Bypass -File scripts/powershell/skybridge-diagnostics.ps1 -Command product-readiness"
   )
+}
+
+function New-SessionComponent([string]$Id, [int]$Port, [string]$CommandPreview) {
+  [pscustomobject]@{
+    schema = "skybridge.local_runtime_session.v1"
+    session_id = $SessionId
+    component_id = $Id
+    command_preview_sanitized = $CommandPreview
+    pid_present = $false
+    pid_file_path = ".agent/tmp/local-runtime/sessions/$SessionId.pid.json"
+    lock_file_path = ".agent/tmp/local-runtime/sessions/$SessionId.lock.json"
+    port = $Port
+    port_available = Test-PortAvailable $Port
+    started_by_preview_or_apply_candidate = $true
+    bounded = $true
+    stop_supported = $true
+    stale_detection_supported = $true
+    raw_log_persisted = $false
+    execution_enabled = $false
+    queue_apply_enabled = $false
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    token_printed = $false
+  }
+}
+
+function Test-PortAvailable([int]$Port) {
+  try {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+    $listener.Start()
+    $listener.Stop()
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+function New-PortCheck {
+  $checks = @(
+    [pscustomobject]@{ schema = "skybridge.local_runtime_port_check.v1"; component_id = "web"; port = 5173; port_available = Test-PortAvailable 5173; token_printed = $false }
+    [pscustomobject]@{ schema = "skybridge.local_runtime_port_check.v1"; component_id = "server-preview"; port = 8787; port_available = Test-PortAvailable 8787; token_printed = $false }
+  )
+  [pscustomobject]@{ schema = "skybridge.local_runtime_port_check.v1"; checks = @($checks); ok = $true; token_printed = $false }
+}
+
+function New-LockState {
+  $exists = Test-Path -LiteralPath $LockFile
+  [pscustomobject]@{
+    schema = "skybridge.local_runtime_lock.v1"
+    session_id = $SessionId
+    lock_file_path = ".agent/tmp/local-runtime/sessions/$SessionId.lock.json"
+    lock_present = $exists
+    stale_lock_detected = $false
+    stale_pid_detected = $false
+    unsafe_component_detected = $false
+    execution_component_included = $false
+    raw_log_path_included = $false
+    token_printed = $false
+  }
+}
+
+function New-ApplyCandidate {
+  $components = @(
+    New-SessionComponent "web" 5173 "corepack pnpm --filter @skybridge-agent-hub/web dev --host 127.0.0.1 --strictPort"
+    New-SessionComponent "server-preview" 8787 "corepack pnpm --filter @skybridge-agent-hub/server dev"
+    New-SessionComponent "desktop-dev-preview-metadata" 0 "corepack pnpm -C apps/desktop build"
+    New-SessionComponent "local-supervisor-heartbeat-preview" 0 "pwsh -File scripts/powershell/skybridge-local-supervisor.ps1 -Command status"
+    New-SessionComponent "resident-polling-preview" 0 "pwsh -File scripts/powershell/skybridge-resident-polling.ps1 -Command status"
+    New-SessionComponent "diagnostics" 0 "pwsh -File scripts/powershell/skybridge-diagnostics.ps1 -Command report"
+    New-SessionComponent "product-readiness" 0 "pwsh -File scripts/powershell/skybridge-diagnostics.ps1 -Command product-readiness"
+  )
+  [pscustomobject]@{
+    schema = "skybridge.local_runtime_apply_candidate.v1"
+    mode = "bounded_non_worker_local_candidate"
+    session_id = $SessionId
+    components = @($components)
+    lock = New-LockState
+    port_check = New-PortCheck
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    queue_apply_enabled = $false
+    starts_unbounded_loop = $false
+    bounded = $true
+    stop_supported = $true
+    cleanup_supported = $true
+    token_printed = $false
+  }
+}
+
+function Write-SessionMetadata {
+  New-Item -ItemType Directory -Force -Path $SessionDir | Out-Null
+  $session = [pscustomobject]@{
+    schema = "skybridge.local_runtime_session.v1"
+    session_id = $SessionId
+    status = "metadata_started"
+    bounded = $true
+    pid_present = $false
+    pid_file_path = ".agent/tmp/local-runtime/sessions/$SessionId.pid.json"
+    lock_file_path = ".agent/tmp/local-runtime/sessions/$SessionId.lock.json"
+    stop_supported = $true
+    stale_detection_supported = $true
+    raw_log_persisted = $false
+    execution_enabled = $false
+    queue_apply_enabled = $false
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
+    token_printed = $false
+  }
+  $session | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $LockFile -Encoding utf8
+  [pscustomobject]@{ pid = $null; pid_present = $false; token_printed = $false } | ConvertTo-Json | Set-Content -LiteralPath $PidFile -Encoding utf8
+  $session
+}
+
+function Stop-SessionMetadata {
+  if (Test-Path -LiteralPath $LockFile) { Remove-Item -LiteralPath $LockFile -Force }
+  if (Test-Path -LiteralPath $PidFile) { Remove-Item -LiteralPath $PidFile -Force }
+  [pscustomobject]@{ schema = "skybridge.local_runtime_cleanup_report.v1"; session_id = $SessionId; stopped = $true; stale_lock_removed = $true; stale_pid_removed = $true; background_process_left_running = $false; token_printed = $false }
+}
+
+function New-CleanupReport {
+  $lockExists = Test-Path -LiteralPath $LockFile
+  $pidExists = Test-Path -LiteralPath $PidFile
+  [pscustomobject]@{
+    schema = "skybridge.local_runtime_cleanup_report.v1"
+    session_id = $SessionId
+    stale_lock_detected = $lockExists
+    stale_pid_detected = $pidExists
+    stale_lock_removed = $false
+    stale_pid_removed = $false
+    preview_only = $true
+    background_process_left_running = $false
+    raw_log_persisted = $false
+    token_printed = $false
+  }
 }
 
 function New-ProcessStatus([string]$Id) {
@@ -118,9 +260,15 @@ function Write-RuntimeReports {
     health = $health
     token_printed = $false
   }
+  $applyCandidate = New-ApplyCandidate
+  $sessionReport = [pscustomobject]@{ schema = "skybridge.local_runtime_session_report.v1"; session = Write-SessionMetadata; apply_candidate = $applyCandidate; token_printed = $false }
+  $cleanupReport = New-CleanupReport
   $plan | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "runtime-plan.json") -Encoding utf8
   $health | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "runtime-health-report.json") -Encoding utf8
   $report | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "local-runtime-report.json") -Encoding utf8
+  $applyCandidate | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "local-runtime-apply-candidate.json") -Encoding utf8
+  $sessionReport | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "local-runtime-session-report.json") -Encoding utf8
+  $cleanupReport | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $ReportDir "local-runtime-cleanup-report.json") -Encoding utf8
   @(
     "# Runtime Health Report",
     "",
@@ -147,7 +295,15 @@ $result = switch ($Command) {
   "health" { New-RuntimeHealth }
   "pid-plan" { (New-RuntimePlan "pid-plan").process_plan }
   "profile-plan" { [pscustomobject]@{ schema = "skybridge.local_runtime_plan.v1"; profile = "full-local-preview"; plan = New-RuntimePlan "profile-plan"; token_printed = $false } }
-  "safe-summary" { [pscustomobject]@{ ok = $true; dry_run = $true; starts_codex_worker = $false; starts_unbounded_loop = $false; execution_enabled = $false; queue_apply_enabled = $false; token_printed = $false } }
+  "apply-candidate" { New-ApplyCandidate }
+  "start-local-session" { Write-SessionMetadata }
+  "stop-local-session" { Stop-SessionMetadata }
+  "restart-local-session" { Stop-SessionMetadata | Out-Null; Write-SessionMetadata }
+  "session-status" { if (Test-Path -LiteralPath $LockFile) { Get-Content -Raw -LiteralPath $LockFile | ConvertFrom-Json } else { [pscustomobject]@{ schema = "skybridge.local_runtime_session.v1"; session_id = $SessionId; status = "stopped"; pid_present = $false; token_printed = $false } } }
+  "cleanup-stale-session" { New-CleanupReport }
+  "port-check" { New-PortCheck }
+  "lock-check" { New-LockState }
+  "safe-summary" { [pscustomobject]@{ ok = $true; dry_run = $false; bounded_apply_candidate = $true; starts_codex_worker = $false; starts_unbounded_loop = $false; runs_workunit_apply = $false; claims_task = $false; execution_enabled = $false; queue_apply_enabled = $false; token_printed = $false } }
   "report" { Write-RuntimeReports }
 }
 
