@@ -895,6 +895,29 @@ function OperatorCockpitPanel() {
   );
 }
 
+function ProductReadinessCard() {
+  return (
+    <section className="panel product-readiness-card" aria-label="Product Readiness">
+      <h2>Product Readiness</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>EXECUTION DISABLED</span>
+        <span>launch profile preview only</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Health summary" value="safe local diagnostics; no env dump or raw logs" />
+        <StatusValue label="launch profile status" value="dev-preview, desktop-only, web-control-plane-preview, supervisor-heartbeat-preview, resident-polling-preview, full-local-preview" />
+        <StatusValue label="Diagnostics status" value=".agent/tmp/diagnostics/health-report.json; .agent/tmp/product-readiness/product-readiness-report.json" />
+        <StatusValue label="Packaging preview status" value="Packaging preview metadata only; uploads_artifacts=false; creates_github_release=false" />
+        <StatusValue label="Windows launcher preview status" value="Windows launcher preview dry-run; registry/startup/service mutations=false" />
+        <StatusValue label="Bootstrap-complete status" value="active_tasks=0; stale_leases=0; runner_lock=none; no_next_execution_authorized=true" />
+        <StatusValue label="Disabled capabilities" value="execution_enabled=false; queue_apply_enabled=false; remote_execution_enabled=false; arbitrary_command_enabled=false" />
+        <StatusValue label="Next safe action" value="Run productization smokes and review safe reports; do not create workunits or tasks" />
+      </dl>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1056,6 +1079,7 @@ function App() {
       <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
       <ServerApprovedTrial226Panel />
       <OperatorCockpitPanel />
+      <ProductReadinessCard />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}
