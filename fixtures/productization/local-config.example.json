@@ -1,0 +1,20 @@
+{
+  "schema": "skybridge.local_config.v1",
+  "profile": {
+    "schema": "skybridge.local_config_profile.v1",
+    "profile_name": "local-preview",
+    "mode": "local_preview",
+    "web_enabled": true,
+    "desktop_enabled": true,
+    "server_preview_enabled": true,
+    "resident_polling_preview_enabled": true,
+    "diagnostics_enabled": true,
+    "execution_enabled": false,
+    "queue_apply_enabled": false,
+    "remote_execution_enabled": false,
+    "arbitrary_command_enabled": false,
+    "trusted_docs_auto_merge_enabled": false,
+    "token_printed": false
+  },
+  "token_printed": false
+}
