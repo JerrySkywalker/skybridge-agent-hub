@@ -31,6 +31,9 @@ import {
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureSafeExportGate,
+  fixtureWorkerPairingRecord,
+  fixtureOperatorApprovalRecord,
+  fixtureResidentPollingReport,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerSupervisorState,
@@ -313,6 +316,37 @@ function ResidentStatusPanel({ resident }: { resident: DesktopResidentState }) {
         <button type="button" disabled aria-disabled="true">Open Logs Folder</button>
         <a href={resident.github_pr_list_url} target="_blank" rel="noreferrer">Open GitHub PR List</a>
       </div>
+    </section>
+  );
+}
+
+function DurablePairingApprovalPollingPanel() {
+  const pairing = fixtureWorkerPairingRecord;
+  const approval = fixtureOperatorApprovalRecord;
+  const polling = fixtureResidentPollingReport;
+  return (
+    <section className="panel durable-pairing-polling-card" aria-label="Pairing approval polling status">
+      <h2>Durable Pairing / Approval / Polling</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Desktop durable control-plane execution disabled banner">
+        <span>Execution disabled</span>
+        <span>Claim disabled</span>
+        <span>Queue apply disabled</span>
+      </div>
+      <dl>
+        <StatusValue label="Pairing status" value={`${pairing.pairing_state}; worker=${pairing.worker_id}`} />
+        <StatusValue label="Paired worker id" value={pairing.worker_id} />
+        <StatusValue label="Pairing state" value={pairing.pairing_state} />
+        <StatusValue label="Approval state summary" value={`${approval.state}; can_execute_now=${String(approval.can_execute_now)}`} />
+        <StatusValue label="Local supervisor sync status" value="preview-only safe metadata sync" />
+        <StatusValue label="Resident polling preview status" value={polling.status.status} />
+        <StatusValue label="Last poll summary" value={polling.status.last_poll_summary} />
+        <StatusValue label="Next poll interval" value={`${polling.policy.poll_interval_seconds}s`} />
+        <StatusValue label="Execution disabled" value={String(polling.policy.execution_enabled === false)} />
+        <StatusValue label="Claim disabled" value={String(polling.policy.claim_enabled === false)} />
+        <StatusValue label="Queue apply disabled" value={String(polling.policy.queue_apply_enabled === false)} />
+        <StatusValue label="no_next_execution_authorized" value={String(polling.policy.no_next_execution_authorized)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
     </section>
   );
 }
@@ -937,6 +971,7 @@ function App() {
         summary={fixtureManagedModeRepeatabilitySummary}
       />
       <ResidentStatusPanel resident={residentState} />
+      <DurablePairingApprovalPollingPanel />
       <TrayPreviewPanel resident={residentState} />
       <LocalWorkerSupervisorPanel supervisor={supervisorState} />
       <LocalResourcePolicyPanel policy={resourcePolicy} />

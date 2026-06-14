@@ -44,8 +44,10 @@ import type {
 
 export {
   fixtureOperatorApprovalGate,
+  fixtureOperatorApprovalRecord,
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
+  fixtureResidentPollingReport,
   fixtureAuditReport,
   fixtureAuditEvent,
   fixtureBoincV1ControlledApplyBoundary,
@@ -69,6 +71,7 @@ export {
   fixtureTrustedDocsAutoMergeGate,
   fixtureTrustedDocsAutoMergePolicy,
   fixtureWorkerHeartbeat,
+  fixtureWorkerPairingRecord,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
 } from "@skybridge-agent-hub/event-schema";
