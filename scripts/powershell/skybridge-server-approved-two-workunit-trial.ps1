@@ -11,6 +11,7 @@ param(
   [int]$ActiveTasks = 0,
   [int]$StaleLeases = 0,
   [string]$RunnerLock = "none",
+  [string]$EvidenceDir = ".agent/tmp/server-approved-two-workunit-trial-226",
   [switch]$Json
 )
 
@@ -26,7 +27,6 @@ $TargetA = "docs/server-approved-two-workunit-226-a.md"
 $TargetB = "docs/server-approved-two-workunit-226-b.md"
 $BranchA = "ai/server-approved-two-workunit-trial-226/workunit-a"
 $BranchB = "ai/server-approved-two-workunit-trial-226/workunit-b"
-$EvidenceDir = ".agent/tmp/server-approved-two-workunit-trial-226"
 
 function Resolve-TrialPath([string]$Path) {
   if ([System.IO.Path]::IsPathRooted($Path)) { return [System.IO.Path]::GetFullPath($Path) }
