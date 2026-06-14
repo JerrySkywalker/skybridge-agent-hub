@@ -16,6 +16,7 @@ import {
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureSafeExportGate,
+  fixtureTrustedDocsAutoMergeGate,
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
@@ -28,6 +29,7 @@ import {
   parseEvidenceRetentionReport,
   parseEvent,
   parseFailureBudget,
+  parseTrustedDocsAutoMergeGate,
   parseWorkerHeartbeat,
   parseWorkerRegistration,
   redactForTelemetry,
@@ -386,9 +388,36 @@ describe("event schema", () => {
       no_next_execution_authorized: true,
     });
     expect(status.finalizer_preview).toMatchObject({
-      status: "held_waiting_human_review_controlled_trial_221",
+      status: "boinc_v1_controlled_trial_221_completed",
       can_apply: false,
+      human_review_confirmed: true,
       no_auto_merge: true,
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 222 trusted docs auto-merge as disabled preview-only", () => {
+    const gate = parseTrustedDocsAutoMergeGate(fixtureTrustedDocsAutoMergeGate);
+    expect(gate.schema).toBe("skybridge.trusted_docs_auto_merge_gate.v1");
+    expect(gate.policy).toMatchObject({
+      trusted_docs_auto_merge_enabled: false,
+      auto_merge_apply_enabled: false,
+      max_files: 1,
+      max_additions: 20,
+      max_deletions: 0,
+      require_human_override: true,
+      token_printed: false,
+    });
+    expect(gate.decision).toMatchObject({
+      decision: "eligible_docs_only_but_disabled",
+      theoretically_eligible: true,
+      auto_merge_allowed: false,
+      human_review_required: true,
+    });
+    expect(gate).toMatchObject({
+      auto_merge_allowed: false,
+      platform_auto_merge_enabled: false,
+      branch_protection_mutated: false,
       token_printed: false,
     });
   });
