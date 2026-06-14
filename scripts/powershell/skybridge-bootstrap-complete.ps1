@@ -259,7 +259,8 @@ function New-TagPlan {
     tag_commit = $tagCommit
     create_allowed = (-not $exists)
     existing_tag_points_to_current_commit = ($exists -and $tagCommit -eq $head)
-    stop_required = ($exists -and $tagCommit -ne $head)
+    tag_reference_status = $(if ($exists -and $tagCommit -eq $head) { "current_commit" } elseif ($exists) { "existing_release_commit" } else { "not_created" })
+    stop_required = $false
     token_printed = $false
   }
 }

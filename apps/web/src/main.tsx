@@ -131,6 +131,7 @@ type Route =
   | "goals"
   | "workers"
   | "control-plane"
+  | "product-readiness"
   | "release"
   | "tasks"
   | "pr-ci"
@@ -149,6 +150,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
   { route: "control-plane", label: "Control Plane" },
+  { route: "product-readiness", label: "Product Readiness" },
   { route: "release", label: "Release" },
   { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
@@ -227,6 +229,7 @@ function App() {
         {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "control-plane" ? <ControlPlanePage apiBase={apiBase} /> : null}
+        {route === "product-readiness" ? <ProductReadinessPage /> : null}
         {route === "release" ? <BoincV1ReleaseDashboard /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
@@ -2383,6 +2386,105 @@ function OperatorCockpitPanel() {
   );
 }
 
+function ProductReadinessPage() {
+  const disabledCapabilities = [
+    "execution_enabled=false",
+    "queue_apply_enabled=false",
+    "remote_execution_enabled=false",
+    "arbitrary_command_enabled=false",
+    "trusted_docs_auto_merge_enabled=false",
+  ];
+  return (
+    <div className="route-stack product-readiness-dashboard" data-no-remote-execution="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>Product Readiness</h2>
+          <p>Local product launch, diagnostics and packaging previews are read-only metadata surfaces.</p>
+        </div>
+        <span className={badgeClass("bad")}>execution disabled</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="Health summary" value="safe" />
+        <Kpi label="Launch profile summary" value="preview only" />
+        <Kpi label="Diagnostics summary" value="metadata" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <ProductTable
+            title="Launch Profiles"
+            rows={[
+              ["dev-preview", "desktop + web + server previews", "execution_enabled=false"],
+              ["desktop-only", "Desktop preview", "queue_apply_enabled=false"],
+              ["web-control-plane-preview", "Web and server previews", "remote_execution_enabled=false"],
+              ["supervisor-heartbeat-preview", "Supervisor status preview", "arbitrary_command_enabled=false"],
+              ["resident-polling-preview", "Resident polling preview", "trusted_docs_auto_merge_enabled=false"],
+              ["full-local-preview", "All local previews", "token_printed=false"],
+            ]}
+          />
+          <ProductTable
+            title="Diagnostics Summary"
+            rows={[
+              [".agent/tmp/diagnostics/health-report.json", "health report", "no env dump"],
+              [".agent/tmp/product-readiness/product-readiness-report.json", "product readiness report", "no raw logs"],
+            ]}
+          />
+          <ProductTable
+            title="Packaging preview status"
+            rows={[
+              [".agent/tmp/packaging-preview/desktop-packaging-preview.json", "metadata only", "uploads_artifacts=false"],
+              ["Release artifact preview", "no GitHub release", "creates_github_release=false"],
+            ]}
+          />
+          <ProductTable
+            title="Windows launcher preview status"
+            rows={[
+              [".agent/tmp/windows-launcher-preview/windows-launcher-preview.json", "dry run", "registry_mutation=false"],
+              ["Autostart preview", "not applied", "startup_folder_write=false"],
+              ["Service preview", "not applied", "service_creation=false"],
+            ]}
+          />
+        </div>
+        <aside className="dashboard-grid__side">
+          <SummaryCard
+            title="Bootstrap-complete status"
+            state="verified"
+            lines={[
+              "release tag v1.0.0-boinc-like-self-bootstrap-complete",
+              "active_tasks=0",
+              "stale_leases=0",
+              "runner_lock=none",
+              "no_next_execution_authorized=true",
+            ]}
+          />
+          <SummaryCard
+            title="Disabled capabilities"
+            state="disabled"
+            lines={disabledCapabilities}
+          />
+          <SummaryCard
+            title="Next safe action"
+            state="review"
+            lines={[
+              "Run productization smokes.",
+              "Review generated safe reports.",
+              "Do not start workers or create workunits.",
+              "token_printed=false",
+            ]}
+          />
+          <DocLinks
+            links={[
+              ["Product state layout", "docs/dev/PRODUCT_STATE_LAYOUT.md"],
+              ["Local productization overview", "docs/dev/LOCAL_PRODUCTIZATION_OVERVIEW.md"],
+              ["Operator daily checklist", "docs/dev/OPERATOR_DAILY_CHECKLIST.md"],
+            ]}
+          />
+        </aside>
+      </section>
+    </div>
+  );
+}
+
 function ReleaseReliabilityPanel() {
   return (
     <SummaryCard
@@ -3652,6 +3754,7 @@ function titleForRoute(route: Route): string {
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "control-plane") return "Control Plane";
+  if (route === "product-readiness") return "Product Readiness";
   if (route === "release") return "Release";
   if (route === "audit") return "Reliability Audit";
   if (route === "tasks") return "Task Queue";
