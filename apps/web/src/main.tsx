@@ -59,6 +59,9 @@ import {
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
+  fixtureWorkerPairingRecord,
+  fixtureOperatorApprovalRecord,
+  fixtureResidentPollingReport,
   fixtureStaleCampaignLock,
   fixtureWorkunitCandidatePack,
   queueControlActionMatrix,
@@ -2564,12 +2567,15 @@ function ControlPlanePage({ apiBase }: { apiBase: string }) {
         <div className="dashboard-grid__main">
           <ControlPlaneWorkerListPanel workers={workers} />
           <ControlPlaneWorkerDetailPanel worker={workers[0] ?? fixtureWorkerRegistration} heartbeat={heartbeat} />
+          <ControlPlanePairingStorePanel />
           <ControlPlaneApprovalPanel approvals={approvals} />
+          <ControlPlaneApprovalStorePanel />
           <ControlPlaneCompletedRunsPanel />
         </div>
         <aside className="dashboard-grid__side">
           <ControlPlaneDisabledBanner />
           <ControlPlanePairingPanel pairing={pairing} />
+          <ControlPlanePollingPreviewPanel />
           <ControlPlaneResourceBlockersPanel heartbeat={heartbeat} />
           <ControlPlaneQueuePreviewPanel heartbeat={heartbeat} />
           <ControlPlaneResidentStatePanel heartbeat={heartbeat} />
@@ -2595,6 +2601,7 @@ function ControlPlaneDisabledBanner() {
       <ul className="summary-lines">
         <li>Remote execution disabled banner: remote_execution_enabled=false</li>
         <li>Server dispatch disabled: arbitrary_command_enabled=false</li>
+        <li>No arbitrary command banner: arbitrary_command_enabled=false</li>
         <li>Queue apply disabled: queue_apply_enabled=false</li>
         <li>No execute button, no run button, no apply button, no command text box, no raw logs</li>
       </ul>
@@ -2671,6 +2678,69 @@ function ControlPlanePairingPanel({ pairing }: { pairing: ControlPlaneWorkerPair
         `arbitrary_command_enabled=${String(pairing.arbitrary_command_enabled)}`,
       ]}
     />
+  );
+}
+
+function ControlPlanePairingStorePanel() {
+  const pairing = fixtureWorkerPairingRecord;
+  return (
+    <section className="skybridge-panel control-plane-pairing-store-list" aria-label="Pairing store list">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Pairing Store</p>
+          <h2>Pairing store list</h2>
+        </div>
+        <span className={badgeClass("bad")}>{pairing.pairing_state}</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Pairing record detail</dt><dd>{`${pairing.pairing_id}; worker=${pairing.worker_id}`}</dd></div>
+        <div><dt>Pairing expired/revoked status</dt><dd>{`expires=${formatDateTime(pairing.expires_at)}; revoked=${pairing.revoked_at ?? "none"}`}</dd></div>
+        <div><dt>Secret persistence</dt><dd>{`raw_pairing_code_persisted=${String(pairing.raw_pairing_code_persisted)}; token_printed=${String(pairing.token_printed)}`}</dd></div>
+        <div><dt>Execution flags</dt><dd>{`execution_enabled=${String(pairing.execution_enabled)}; remote_execution_enabled=${String(pairing.remote_execution_enabled)}; arbitrary_command_enabled=${String(pairing.arbitrary_command_enabled)}`}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function ControlPlaneApprovalStorePanel() {
+  const approval = fixtureOperatorApprovalRecord;
+  return (
+    <section className="skybridge-panel control-plane-approval-store-list" aria-label="Approval store list">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Approval Store</p>
+          <h2>Approval store list</h2>
+        </div>
+        <span className={badgeClass("bad")}>{approval.state}</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Approval detail</dt><dd>{`${approval.approval_id}; ${approval.requested_action}`}</dd></div>
+        <div><dt>Approval audit state</dt><dd>{`audit_required=${String(approval.audit_required)}; redaction_required=${String(approval.redaction_required)}`}</dd></div>
+        <div><dt>Execution decision</dt><dd>{`can_execute_now=${String(approval.can_execute_now)}; max_codex_executions=${approval.max_codex_executions}; max_task_prs=${approval.max_task_prs}`}</dd></div>
+        <div><dt>Review gates</dt><dd>{`resource_gate_required=${String(approval.resource_gate_required)}; human_review_required=${String(approval.human_review_required)}`}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function ControlPlanePollingPreviewPanel() {
+  const polling = fixtureResidentPollingReport;
+  return (
+    <section className="skybridge-panel control-plane-polling-preview-events" aria-label="Worker polling status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Resident Polling</p>
+          <h2>Worker polling status</h2>
+        </div>
+        <span className={badgeClass("bad")}>preview only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Polling preview events</dt><dd>{`iterations=${polling.iterations.length}; ${polling.status.last_poll_summary}`}</dd></div>
+        <div><dt>Blockers</dt><dd>{polling.status.blockers.map((blocker) => blocker.blocker_id).join("; ") || "none"}</dd></div>
+        <div><dt>No execution enabled</dt><dd>{`execution_enabled=${String(polling.policy.execution_enabled)}; claim_enabled=${String(polling.policy.claim_enabled)}; queue_apply_enabled=${String(polling.policy.queue_apply_enabled)}`}</dd></div>
+        <div><dt>Next interval</dt><dd>{`${polling.policy.poll_interval_seconds}s; no_next_execution_authorized=${String(polling.policy.no_next_execution_authorized)}`}</dd></div>
+      </dl>
+    </section>
   );
 }
 

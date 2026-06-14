@@ -1,0 +1,2 @@
+. "$PSScriptRoot\smoke-goal-223-224-common.ps1"
+Invoke-Goal223224Smoke "worker-pairing-revoke-expire"

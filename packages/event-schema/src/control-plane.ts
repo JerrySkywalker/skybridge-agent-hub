@@ -85,6 +85,85 @@ export const WorkerPairingPreviewSchema = z.object({
   token_printed: z.literal(false),
 });
 
+export const WorkerPairingTokenHashSchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_token_hash.v1"),
+  pairing_id: z.string().min(1),
+  pairing_code_hash: z.string().min(1),
+  raw_pairing_code_persisted: z.literal(false),
+  raw_token_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const WorkerPairingRevocationSchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_revocation.v1"),
+  pairing_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  revoked_at: z.string().datetime(),
+  pairing_state: z.literal("revoked"),
+  execution_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const WorkerPairingExpirySchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_expiry.v1"),
+  pairing_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  expires_at: z.string().datetime(),
+  pairing_state: z.literal("expired"),
+  execution_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const WorkerPairingRecordSchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_record.v1"),
+  pairing_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  device_id_hash: z.string().min(1),
+  repo: z.string().min(1),
+  display_name: z.string().min(1),
+  created_at: z.string().datetime(),
+  expires_at: z.string().datetime(),
+  revoked_at: z.string().datetime().nullable(),
+  pairing_state: z.enum(["pending", "paired", "expired", "revoked"]),
+  raw_pairing_code_persisted: z.literal(false),
+  pairing_code_hash: z.string().min(1),
+  pairing_code_preview_last4: z.string().length(4).optional(),
+  capabilities: z.array(z.string()),
+  resident_enabled: z.boolean(),
+  execution_enabled: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const WorkerPairingStoreSchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_store.v1"),
+  store_path_redacted: z.string().min(1),
+  records: z.array(WorkerPairingRecordSchema),
+  revocations: z.array(WorkerPairingRevocationSchema),
+  expiries: z.array(WorkerPairingExpirySchema),
+  raw_pairing_code_persisted: z.literal(false),
+  raw_token_persisted: z.literal(false),
+  execution_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const WorkerPairingStoreReportSchema = z.object({
+  schema: z.literal("skybridge.worker_pairing_store_report.v1"),
+  pairing_count: z.number().int().nonnegative(),
+  paired_count: z.number().int().nonnegative(),
+  expired_count: z.number().int().nonnegative(),
+  revoked_count: z.number().int().nonnegative(),
+  raw_pairing_code_persisted: z.literal(false),
+  raw_token_persisted: z.literal(false),
+  execution_enabled: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
 export const WorkerResourceGateReportSchema = z.object({
   schema: z.literal("skybridge.worker_resource_gate_report.v1"),
   resource_gate_status: z.enum(["pass", "blocked", "unknown"]),
@@ -213,11 +292,159 @@ export const OperatorApprovalGateSchema = z.object({
   token_printed: z.literal(false),
 });
 
+export const OperatorApprovalConsumptionSchema = z.object({
+  schema: z.literal("skybridge.operator_approval_consumption.v1"),
+  approval_id: z.string().min(1),
+  consumed_at: z.string().datetime(),
+  consumed_preview_only: z.literal(true),
+  execution_started: z.literal(false),
+  can_execute_now: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const OperatorApprovalExpirySchema = z.object({
+  schema: z.literal("skybridge.operator_approval_expiry.v1"),
+  approval_id: z.string().min(1),
+  expires_at: z.string().datetime(),
+  state: z.literal("expired"),
+  can_execute_now: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const OperatorApprovalAuditRecordSchema = z.object({
+  schema: z.literal("skybridge.operator_approval_audit_record.v1"),
+  audit_id: z.string().min(1),
+  approval_id: z.string().min(1),
+  event_type: z.enum([
+    "approval_requested_preview",
+    "approval_approved_preview",
+    "approval_rejected_preview",
+    "approval_expired_preview",
+    "approval_consumed_preview",
+    "unsafe_payload_rejected",
+    "remote_execution_rejected",
+    "arbitrary_command_rejected",
+  ]),
+  occurred_at: z.string().datetime(),
+  safe_summary: z.string().min(1),
+  token_printed: z.literal(false),
+});
+
+export const OperatorApprovalRecordSchema = z.object({
+  schema: z.literal("skybridge.operator_approval_record.v1"),
+  approval_id: z.string().min(1),
+  scope: z.string().min(1),
+  requested_action: z.string().min(1),
+  requested_mode: z.string().min(1),
+  run_id: z.string().min(1),
+  workunit_ids: z.array(z.string()),
+  max_workunits: z.number().int().nonnegative(),
+  max_tasks: z.number().int().nonnegative(),
+  max_claims: z.number().int().nonnegative(),
+  max_codex_executions: z.number().int().nonnegative(),
+  max_task_prs: z.number().int().nonnegative(),
+  resource_gate_required: z.literal(true),
+  human_review_required: z.literal(true),
+  finalizer_required: z.literal(true),
+  failure_budget_required: z.literal(true),
+  evidence_retention_required: z.literal(true),
+  audit_required: z.literal(true),
+  redaction_required: z.literal(true),
+  state: z.enum(["pending", "approved_preview", "rejected", "expired", "consumed"]),
+  created_at: z.string().datetime(),
+  expires_at: z.string().datetime(),
+  consumed_at: z.string().datetime().nullable(),
+  decision_reason: z.string(),
+  can_execute_now: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const OperatorApprovalStoreSchema = z.object({
+  schema: z.literal("skybridge.operator_approval_store.v1"),
+  store_path_redacted: z.string().min(1),
+  approvals: z.array(OperatorApprovalRecordSchema),
+  consumptions: z.array(OperatorApprovalConsumptionSchema),
+  expiries: z.array(OperatorApprovalExpirySchema),
+  audit: z.array(OperatorApprovalAuditRecordSchema),
+  execution_enabled: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const ResidentPollingPolicySchema = z.object({
+  schema: z.literal("skybridge.resident_polling_policy.v1"),
+  polling_enabled: z.literal(false),
+  polling_preview_enabled: z.literal(true),
+  execution_enabled: z.literal(false),
+  claim_enabled: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
+  poll_interval_seconds: z.number().int().min(300),
+  max_iterations_preview: z.number().int().positive(),
+  require_resource_gate: z.literal(true),
+  require_pairing: z.literal(true),
+  require_approval_for_future_execution: z.literal(true),
+  no_next_execution_authorized: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const ResidentPollingBlockerSchema = z.object({
+  schema: z.literal("skybridge.resident_polling_blocker.v1"),
+  blocker_id: z.string().min(1),
+  reason: z.string().min(1),
+  token_printed: z.literal(false),
+});
+
+export const ResidentPollingIterationSchema = z.object({
+  schema: z.literal("skybridge.resident_polling_iteration.v1"),
+  iteration_id: z.string().min(1),
+  poll_started_at: z.string().datetime(),
+  server_state_checked: z.literal(true),
+  pairing_state_checked: z.literal(true),
+  approval_state_checked: z.literal(true),
+  queue_state_checked: z.literal(true),
+  task_claimed: z.literal(false),
+  codex_executed: z.literal(false),
+  queue_apply_performed: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const ResidentPollingStatusSchema = z.object({
+  schema: z.literal("skybridge.resident_polling_status.v1"),
+  status: z.enum(["preview_disabled", "preview_ready", "preview_checked"]),
+  last_poll_summary: z.string(),
+  next_poll_interval_seconds: z.number().int().min(300),
+  blockers: z.array(ResidentPollingBlockerSchema),
+  execution_enabled: z.literal(false),
+  claim_enabled: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  no_next_execution_authorized: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const ResidentPollingReportSchema = z.object({
+  schema: z.literal("skybridge.resident_polling_report.v1"),
+  policy: ResidentPollingPolicySchema,
+  status: ResidentPollingStatusSchema,
+  iterations: z.array(ResidentPollingIterationSchema),
+  task_claimed: z.literal(false),
+  codex_executed: z.literal(false),
+  queue_apply_performed: z.literal(false),
+  ready_for_goal_225: z.boolean(),
+  token_printed: z.literal(false),
+});
+
 export type WorkerCapabilitySummary = z.infer<typeof WorkerCapabilitySummarySchema>;
 export type WorkerIdentity = z.infer<typeof WorkerIdentitySchema>;
 export type WorkerConnectionState = z.infer<typeof WorkerConnectionStateSchema>;
 export type WorkerRegistration = z.infer<typeof WorkerRegistrationSchema>;
 export type WorkerPairingPreview = z.infer<typeof WorkerPairingPreviewSchema>;
+export type WorkerPairingRecord = z.infer<typeof WorkerPairingRecordSchema>;
+export type WorkerPairingStore = z.infer<typeof WorkerPairingStoreSchema>;
+export type WorkerPairingStoreReport = z.infer<typeof WorkerPairingStoreReportSchema>;
 export type WorkerResourceGateReport = z.infer<typeof WorkerResourceGateReportSchema>;
 export type WorkerQueuePreviewReport = z.infer<typeof WorkerQueuePreviewReportSchema>;
 export type WorkerResidentStatus = z.infer<typeof WorkerResidentStatusSchema>;
@@ -227,6 +454,11 @@ export type OperatorApprovalRequest = z.infer<typeof OperatorApprovalRequestSche
 export type OperatorApprovalState = z.infer<typeof OperatorApprovalStateSchema>;
 export type OperatorApprovalDecision = z.infer<typeof OperatorApprovalDecisionSchema>;
 export type OperatorApprovalGate = z.infer<typeof OperatorApprovalGateSchema>;
+export type OperatorApprovalRecord = z.infer<typeof OperatorApprovalRecordSchema>;
+export type OperatorApprovalStore = z.infer<typeof OperatorApprovalStoreSchema>;
+export type ResidentPollingPolicy = z.infer<typeof ResidentPollingPolicySchema>;
+export type ResidentPollingStatus = z.infer<typeof ResidentPollingStatusSchema>;
+export type ResidentPollingReport = z.infer<typeof ResidentPollingReportSchema>;
 
 export const fixtureWorkerRegistration: WorkerRegistration = {
   schema: "skybridge.worker_registration.v1",
@@ -266,6 +498,29 @@ export const fixtureWorkerPairingPreview: WorkerPairingPreview = {
   arbitrary_command_enabled: false,
   operator_approval_required: true,
   human_review_required: true,
+  token_printed: false,
+};
+
+export const fixtureWorkerPairingRecord: WorkerPairingRecord = {
+  schema: "skybridge.worker_pairing_record.v1",
+  pairing_id: "pairing-goal-223-preview",
+  worker_id: fixtureWorkerRegistration.worker_id,
+  device_id_hash: fixtureWorkerRegistration.device_id_hash,
+  repo: fixtureWorkerRegistration.repo,
+  display_name: fixtureWorkerRegistration.display_name,
+  created_at: "2026-06-14T00:00:00.000Z",
+  expires_at: "2026-06-14T01:00:00.000Z",
+  revoked_at: null,
+  pairing_state: "pending",
+  raw_pairing_code_persisted: false,
+  pairing_code_hash: "sha256-fixture-pairing-code-hash-only",
+  pairing_code_preview_last4: "1234",
+  capabilities: ["heartbeat", "resident-polling-preview"],
+  resident_enabled: false,
+  execution_enabled: false,
+  queue_apply_enabled: false,
+  remote_execution_enabled: false,
+  arbitrary_command_enabled: false,
   token_printed: false,
 };
 
@@ -341,6 +596,74 @@ export const fixtureOperatorApprovalGate: OperatorApprovalGate = {
   finalizer_required: true,
   generic_bounded_queue_apply_enabled: false,
   remote_arbitrary_command_dispatch_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureOperatorApprovalRecord: OperatorApprovalRecord = {
+  schema: "skybridge.operator_approval_record.v1",
+  approval_id: "approval-goal-223-preview",
+  scope: "skybridge-agent-hub/local-preview",
+  requested_action: "resident_polling_preview",
+  requested_mode: "preview",
+  run_id: "goal-223-224-preview",
+  workunit_ids: [],
+  max_workunits: 0,
+  max_tasks: 0,
+  max_claims: 0,
+  max_codex_executions: 0,
+  max_task_prs: 0,
+  resource_gate_required: true,
+  human_review_required: true,
+  finalizer_required: true,
+  failure_budget_required: true,
+  evidence_retention_required: true,
+  audit_required: true,
+  redaction_required: true,
+  state: "pending",
+  created_at: "2026-06-14T00:00:00.000Z",
+  expires_at: "2026-06-14T01:00:00.000Z",
+  consumed_at: null,
+  decision_reason: "preview-only approval state; no execution side effects",
+  can_execute_now: false,
+  token_printed: false,
+};
+
+export const fixtureResidentPollingReport: ResidentPollingReport = {
+  schema: "skybridge.resident_polling_report.v1",
+  policy: {
+    schema: "skybridge.resident_polling_policy.v1",
+    polling_enabled: false,
+    polling_preview_enabled: true,
+    execution_enabled: false,
+    claim_enabled: false,
+    queue_apply_enabled: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    poll_interval_seconds: 300,
+    max_iterations_preview: 3,
+    require_resource_gate: true,
+    require_pairing: true,
+    require_approval_for_future_execution: true,
+    no_next_execution_authorized: true,
+    token_printed: false,
+  },
+  status: {
+    schema: "skybridge.resident_polling_status.v1",
+    status: "preview_ready",
+    last_poll_summary: "preview fixture has not executed work",
+    next_poll_interval_seconds: 300,
+    blockers: [],
+    execution_enabled: false,
+    claim_enabled: false,
+    queue_apply_enabled: false,
+    no_next_execution_authorized: true,
+    token_printed: false,
+  },
+  iterations: [],
+  task_claimed: false,
+  codex_executed: false,
+  queue_apply_performed: false,
+  ready_for_goal_225: false,
   token_printed: false,
 };
 
