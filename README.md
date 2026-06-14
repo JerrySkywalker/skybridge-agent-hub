@@ -61,6 +61,32 @@ SkyBridge is in an MVP foundation stage. The repository already contains:
 The remote-control surface is intentionally not production-ready yet. Current work focuses on local-first telemetry, notification, reviewable AI branches and safe iteration.
 The v0.9 release-candidate track adds multi-agent adapters, sidecar node identity, provider/rule notification records, approval queue APIs and security hardening while keeping remote execution disabled. OpenCode and Hermes compatibility is fixture-backed until real runtime contract tests are added.
 
+## BOINC-like v1 Controlled Release
+
+SkyBridge now has a BOINC-like v1 controlled release package. This means the release gate, Desktop preview, server control-plane preview, operator approval preview, failure budget, evidence retention/hash-chain, audit/redaction, and safe export reporting are available for inspection.
+
+The current safety boundary remains strict:
+
+- `remote_execution_enabled=false`
+- `arbitrary_command_enabled=false`
+- `execution_enabled=false`
+- `queue_apply_enabled=false`
+- `no_next_execution_authorized=true`
+- no secrets, raw prompts, raw transcripts, stdout, stderr, worker logs, CI logs, GitHub logs, or raw diffs are exported by default
+- `token_printed=false`
+
+Quick release inspection commands:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-boinc-v1-release.ps1 -Command status
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-local-supervisor.ps1 -Command status
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-server-worker-pairing-contract.ps1
+corepack pnpm -C apps/desktop build
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-boinc-v1-release-readiness-gate.ps1
+```
+
+See [docs/dev/BOINC_LIKE_V1_CONTROLLED_RELEASE.md](docs/dev/BOINC_LIKE_V1_CONTROLLED_RELEASE.md) and [docs/dev/OPERATOR_RUNBOOK_V1.md](docs/dev/OPERATOR_RUNBOOK_V1.md).
+
 ## Quick Start
 
 Requirements:

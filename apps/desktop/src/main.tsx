@@ -15,6 +15,8 @@ import {
   fixtureBoincManagerState,
   fixtureBoincV1Status,
   fixtureBoincV1AlphaStatus,
+  fixtureBoincV1ReleaseApproval,
+  fixtureBoincV1ReleaseStatus,
   fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
@@ -48,6 +50,8 @@ import {
   type BoincManagerState,
   type BoincV1Status,
   type BoincV1AlphaStatus,
+  type BoincV1ReleaseApprovalSummary,
+  type BoincV1ReleaseStatusSummary,
   type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
@@ -641,6 +645,46 @@ function DesktopAuditPanel({
   );
 }
 
+function BoincV1ReleaseStatusPanel({
+  status,
+  approval,
+}: {
+  status: BoincV1ReleaseStatusSummary;
+  approval: BoincV1ReleaseApprovalSummary;
+}) {
+  const readiness = status.gate.readiness;
+  return (
+    <section className="panel boinc-v1-release-status-panel" aria-label="BOINC-like v1 release status">
+      <h2>BOINC-like v1 Release</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Release no execution enabled banner">
+        <span>EXECUTION DISABLED</span>
+        <span>queue_apply_enabled=false</span>
+        <span>remote_execution_enabled=false</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Release version" value={status.release_version} />
+        <StatusValue label="Release gate summary" value={`${status.gate.gate_result}; can_execute_now=${String(status.gate.can_execute_now)}`} />
+        <StatusValue label="Controlled release policy" value={`resource=${String(status.gate.policy.require_resource_gate)}; approval=${String(status.gate.policy.require_operator_approval)}; review=${String(status.gate.policy.require_human_review)}`} />
+        <StatusValue label="Desktop resident state" value={String(readiness.desktop_resident_worker_ready)} />
+        <StatusValue label="Resource gate state" value={String(readiness.resource_gate_ready)} />
+        <StatusValue label="Server approval state" value={String(readiness.operator_approval_preview_ready)} />
+        <StatusValue label="Failure budget state" value={String(readiness.failure_budget_ready)} />
+        <StatusValue label="Evidence retention/hash chain state" value={String(readiness.evidence_retention_hash_chain_ready)} />
+        <StatusValue label="Audit/redaction state" value={String(readiness.audit_redaction_ready)} />
+        <StatusValue label="Safe export status" value={String(readiness.safe_export_gate_ready)} />
+        <StatusValue label="Approval preview" value={`${approval.approval_state}; can_execute_now=${String(approval.can_execute_now)}; expires=${approval.expires_at}`} />
+        <StatusValue label="No next execution authorized" value={String(readiness.no_next_execution_authorized)} />
+        <StatusValue label="Execution enabled" value={String(readiness.execution_enabled)} />
+        <StatusValue label="Queue apply enabled" value={String(readiness.queue_apply_enabled)} />
+        <StatusValue label="Remote execution enabled" value={String(readiness.remote_execution_enabled)} />
+        <StatusValue label="Arbitrary command enabled" value={String(readiness.arbitrary_command_enabled)} />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -793,6 +837,10 @@ function App() {
       <CoreEngineStatusPanel status={fixtureCoreEngineStatus} />
       <BoincV1AlphaPanel status={fixtureBoincV1AlphaStatus} />
       <BoincV1PreviewPanel status={fixtureBoincV1Status} />
+      <BoincV1ReleaseStatusPanel
+        status={fixtureBoincV1ReleaseStatus}
+        approval={fixtureBoincV1ReleaseApproval}
+      />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}

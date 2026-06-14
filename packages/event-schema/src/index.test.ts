@@ -7,6 +7,11 @@ import {
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
   fixtureAuditReport,
+  fixtureBoincV1ControlledApplyBoundary,
+  fixtureBoincV1ReleaseApproval,
+  fixtureBoincV1ReleaseOperatorPolicy,
+  fixtureBoincV1ReleaseStatus,
+  fixtureBoincV1ReleaseTagPlan,
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureSafeExportGate,
@@ -17,6 +22,7 @@ import {
   listAdapterCapabilities,
   parseOperatorApprovalRequest,
   parseAuditReport,
+  parseBoincV1ReleaseStatus,
   parseEvidenceRetentionReport,
   parseEvent,
   parseFailureBudget,
@@ -289,5 +295,60 @@ describe("event schema", () => {
       token_printed: false,
     });
     expect(fixtureSafeExportGate.token_printed).toBe(false);
+  });
+
+  it("models Goal 220 BOINC-like v1 release gate without default execution", () => {
+    const status = parseBoincV1ReleaseStatus(fixtureBoincV1ReleaseStatus);
+    expect(status.schema).toBe("skybridge.boinc_v1_release_status.v1");
+    expect(status.gate.gate_result).toBe("pass");
+    expect(status.gate.can_execute_now).toBe(false);
+    expect(status.gate.can_create_workunit_now).toBe(false);
+    expect(status.gate.can_claim_task_now).toBe(false);
+    expect(status.gate.readiness).toMatchObject({
+      active_tasks: 0,
+      stale_leases: 0,
+      runner_lock: "none",
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      generic_bounded_queue_apply_enabled: false,
+      no_next_execution_authorized: true,
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 220 release approval and apply boundary as preview-only", () => {
+    expect(fixtureBoincV1ReleaseApproval).toMatchObject({
+      schema: "skybridge.boinc_v1_release_approval.v1",
+      max_parallel_repo_mutations: 1,
+      require_resource_gate: true,
+      require_human_review: true,
+      require_finalizer: true,
+      require_failure_budget: true,
+      require_evidence_retention: true,
+      require_audit: true,
+      approval_state: "preview_only",
+      can_execute_now: false,
+      token_printed: false,
+    });
+    expect(fixtureBoincV1ControlledApplyBoundary).toMatchObject({
+      generic_bounded_queue_apply_enabled: false,
+      remote_arbitrary_command_dispatch_enabled: false,
+      workunit_creation_enabled: false,
+      task_claim_enabled: false,
+      task_pr_creation_enabled: false,
+      can_execute_now: false,
+    });
+    expect(fixtureBoincV1ReleaseOperatorPolicy.shell_command_text_allowed).toBe(false);
+  });
+
+  it("models Goal 220 tag plan without force-moving tags", () => {
+    expect(fixtureBoincV1ReleaseTagPlan).toMatchObject({
+      schema: "skybridge.boinc_v1_release_tag_plan.v1",
+      tag: "v0.99.0-boinc-like-v1-controlled-release",
+      force_tag: false,
+      token_printed: false,
+    });
   });
 });

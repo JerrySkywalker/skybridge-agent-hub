@@ -27,6 +27,9 @@ import {
   fixtureBoincManagerState,
   fixtureBoincV1Status,
   fixtureBoincV1AlphaStatus,
+  fixtureBoincV1ReleaseApproval,
+  fixtureBoincV1ReleaseReport,
+  fixtureBoincV1ReleaseStatus,
   fixtureCoreEngineStatus,
   fixtureDesktopResidentState,
   fixtureLocalResourcePolicyEnforcement,
@@ -65,6 +68,9 @@ import {
   type BoincManagerState,
   type BoincV1Status,
   type BoincV1AlphaStatus,
+  type BoincV1ReleaseApprovalSummary,
+  type BoincV1ReleaseReportSummary,
+  type BoincV1ReleaseStatusSummary,
   type CoreEngineStatus,
   type DesktopResidentState,
   type ManagedModeRepeatabilitySummary,
@@ -116,6 +122,7 @@ type Route =
   | "goals"
   | "workers"
   | "control-plane"
+  | "release"
   | "tasks"
   | "pr-ci"
   | "notifications"
@@ -133,6 +140,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
   { route: "control-plane", label: "Control Plane" },
+  { route: "release", label: "Release" },
   { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
   { route: "notifications", label: "Notifications" },
@@ -210,6 +218,7 @@ function App() {
         {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "control-plane" ? <ControlPlanePage apiBase={apiBase} /> : null}
+        {route === "release" ? <BoincV1ReleaseDashboard /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
         {route === "notifications" ? (
@@ -2060,6 +2069,177 @@ function ReliabilityAuditPage() {
   );
 }
 
+function BoincV1ReleaseDashboard() {
+  return (
+    <div className="route-stack boinc-v1-release-dashboard" data-no-remote-execution="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>BOINC-like v1 Controlled Release</h2>
+          <p>No execution enabled banner: release status is metadata only.</p>
+        </div>
+        <span className={badgeClass("bad")}>execution disabled</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="Release" value={fixtureBoincV1ReleaseStatus.release_version} />
+        <Kpi label="Gate" value={fixtureBoincV1ReleaseStatus.gate.gate_result} />
+        <Kpi label="queue_apply_enabled" value="false" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <ReleaseReadinessPanel status={fixtureBoincV1ReleaseStatus} />
+          <ReleaseApprovalPreviewPanel approval={fixtureBoincV1ReleaseApproval} />
+          <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
+          <ReleasePostChecklistPanel />
+        </div>
+        <aside className="dashboard-grid__side">
+          <ControlPlaneDisabledBanner />
+          <ReleaseGatePanel status={fixtureBoincV1ReleaseStatus} />
+          <ReleasePolicyPanel status={fixtureBoincV1ReleaseStatus} />
+          <ReleaseReliabilityPanel />
+          <SummaryCard
+            title="No enabled execute/run/apply/start controls"
+            state="disabled"
+            lines={[
+              "No arbitrary command input",
+              "No raw logs",
+              "No raw secrets",
+              "remote_execution_enabled=false",
+              "arbitrary_command_enabled=false",
+              "token_printed=false",
+            ]}
+          />
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+function ReleaseReadinessPanel({ status }: { status: BoincV1ReleaseStatusSummary }) {
+  const readiness = status.gate.readiness;
+  return (
+    <section className="skybridge-panel" aria-label="Release readiness">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Release Dashboard</p>
+          <h2>Release Readiness</h2>
+        </div>
+        <span className={badgeClass(status.status === "ready" ? "ok" : "bad")}>{status.status}</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Core / alpha</dt><dd>{`core=${String(readiness.core_engine_ready)}; alpha=${String(readiness.boinc_v1_alpha_completed)}`}</dd></div>
+        <div><dt>Workunits</dt><dd>{readiness.completed_alpha_workunits.join("; ")}</dd></div>
+        <div><dt>Desktop / server</dt><dd>{`desktop=${String(readiness.desktop_resident_worker_ready)}; server=${String(readiness.server_control_plane_ready)}`}</dd></div>
+        <div><dt>Reliability</dt><dd>{`failure=${String(readiness.failure_budget_ready)}; evidence=${String(readiness.evidence_retention_hash_chain_ready)}; audit=${String(readiness.audit_redaction_ready)}`}</dd></div>
+        <div><dt>Open task PR / active state</dt><dd>{`open_task_pr=${String(!readiness.no_open_task_pr)}; active=${readiness.active_tasks}; stale=${readiness.stale_leases}; lock=${readiness.runner_lock}`}</dd></div>
+        <div><dt>token_printed</dt><dd>{String(readiness.token_printed)}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function ReleaseGatePanel({ status }: { status: BoincV1ReleaseStatusSummary }) {
+  return (
+    <SummaryCard
+      title="Release Gate Summary"
+      state={status.gate.gate_result}
+      lines={[
+        `can_execute_now=${String(status.gate.can_execute_now)}`,
+        `can_create_workunit_now=${String(status.gate.can_create_workunit_now)}`,
+        `can_claim_task_now=${String(status.gate.can_claim_task_now)}`,
+        `deferred=${status.gate.blockers.map((blocker) => blocker.blocker_id).join(", ")}`,
+        "token_printed=false",
+      ]}
+    />
+  );
+}
+
+function ReleasePolicyPanel({ status }: { status: BoincV1ReleaseStatusSummary }) {
+  const policy = status.gate.policy;
+  return (
+    <SummaryCard
+      title="Controlled Release Policy"
+      state="preview only"
+      lines={[
+        `operator_approval=${String(policy.require_operator_approval)}`,
+        `resource_gate=${String(policy.require_resource_gate)}`,
+        `human_review=${String(policy.require_human_review)}`,
+        `finalizer=${String(policy.require_finalizer)}`,
+        `failure_budget=${String(policy.require_failure_budget)}`,
+        `evidence_retention=${String(policy.require_evidence_retention)}`,
+        `audit=${String(policy.require_audit)}`,
+      ]}
+    />
+  );
+}
+
+function ReleaseApprovalPreviewPanel({ approval }: { approval: BoincV1ReleaseApprovalSummary }) {
+  return (
+    <section className="skybridge-panel" aria-label="Approval preview">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Approval Preview</p>
+          <h2>Controlled Release Approval</h2>
+        </div>
+        <span className={badgeClass("bad")}>can_execute_now=false</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Approval state</dt><dd>{approval.approval_state}</dd></div>
+        <div><dt>Max workunits</dt><dd>{approval.max_workunits}</dd></div>
+        <div><dt>Max parallel repo mutations</dt><dd>{approval.max_parallel_repo_mutations}</dd></div>
+        <div><dt>Requires</dt><dd>resource gate, human review, finalizer, failure budget, evidence retention, audit, server approval and desktop resident state</dd></div>
+        <div><dt>Expires</dt><dd>{approval.expires_at}</dd></div>
+        <div><dt>token_printed</dt><dd>{String(approval.token_printed)}</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Release approve preview disabled</button>
+        <button type="button" disabled aria-disabled="true">Release reject preview disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function ReleaseCompletedRunsPanel({ report }: { report: BoincV1ReleaseReportSummary }) {
+  return (
+    <ProductTable
+      title="Completed runs and alpha"
+      rows={report.completed_workunits_runs.map((item) => [item, "complete", "safe metadata", "token_printed=false"])}
+    />
+  );
+}
+
+function ReleaseReliabilityPanel() {
+  return (
+    <SummaryCard
+      title="Reliability Audit"
+      state="ready"
+      lines={[
+        "Failure budget ready",
+        "Evidence retention ready",
+        "Hash chain verified",
+        "Audit/redaction ready",
+        "Safe export gate ready",
+      ]}
+    />
+  );
+}
+
+function ReleasePostChecklistPanel() {
+  return (
+    <SummaryCard
+      title="Post-release checklist"
+      state="pending tag"
+      lines={[
+        "Post-merge gate",
+        "Post-release smokes",
+        "Create immutable tag",
+        "Write safe release reports",
+        "No workunit execution",
+      ]}
+    />
+  );
+}
+
 function FailureBudgetPanel({ report }: { report: FailureBudgetSummary }) {
   return (
     <section className="skybridge-panel web-audit-panel" aria-label="Failure budget status">
@@ -3230,6 +3410,7 @@ function titleForRoute(route: Route): string {
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "control-plane") return "Control Plane";
+  if (route === "release") return "Release";
   if (route === "audit") return "Reliability Audit";
   if (route === "tasks") return "Task Queue";
   return route.charAt(0).toUpperCase() + route.slice(1);
