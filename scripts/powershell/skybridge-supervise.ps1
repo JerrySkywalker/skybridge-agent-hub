@@ -47,7 +47,8 @@ function New-SupervisorId {
 
 function New-MasterGoalId {
   param([string]$Title)
-  $slug = (($Title ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  $source = if ($null -ne $Title) { $Title } else { "" }
+  $slug = ($source.ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
   if ([string]::IsNullOrWhiteSpace($slug)) { throw "skybridge-supervise requires -MasterGoalId or a non-empty -GoalTitle to derive one." }
   return "master-goal-$($slug.Substring(0, [Math]::Min(72, $slug.Length)))"
 }

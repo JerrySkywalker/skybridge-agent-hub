@@ -91,6 +91,19 @@ The first post-release controlled trial is documented in [docs/dev/BOINC_V1_CONT
 
 Controlled Trial 221 completion and the disabled trusted-docs auto-merge preview are documented in [docs/dev/CONTROLLED_TRIAL_221_COMPLETION_REPORT.md](docs/dev/CONTROLLED_TRIAL_221_COMPLETION_REPORT.md) and [docs/dev/TRUSTED_DOCS_AUTO_MERGE_PREVIEW.md](docs/dev/TRUSTED_DOCS_AUTO_MERGE_PREVIEW.md). Trusted-docs auto-merge remains preview-only and disabled by default.
 
+## BOINC-like Self-bootstrap Complete
+
+The BOINC-like self-bootstrap path is complete in controlled mode. Complete means Goals 214 through 226 have safe metadata evidence, server-approved run 225 and the two-workunit trial 226 are finalized, task PRs #171, #175 and #176 are merged, and the final state is idle: `active_tasks=0`, `stale_leases=0`, `runner_lock=none`, open task PR count zero and `no_next_execution_authorized=true`.
+
+This does not enable production remote execution. `remote_execution_enabled=false`, `arbitrary_command_enabled=false`, `execution_enabled=false`, `queue_apply_enabled=false`, generic bounded queue apply remains disabled and global trusted-docs auto-merge remains disabled. Scoped trusted-docs merge exists only for explicit safe docs-only PRs.
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-complete.ps1 -Command gate
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-smoke-matrix.ps1 -Command run-bootstrap-complete
+```
+
+See [docs/dev/BOINC_LIKE_SELF_BOOTSTRAP_COMPLETE.md](docs/dev/BOINC_LIKE_SELF_BOOTSTRAP_COMPLETE.md), [docs/dev/SELF_BOOTSTRAP_COMPLETE_RELEASE_NOTES.md](docs/dev/SELF_BOOTSTRAP_COMPLETE_RELEASE_NOTES.md) and [docs/dev/OPERATOR_COCKPIT_RUNBOOK.md](docs/dev/OPERATOR_COCKPIT_RUNBOOK.md). `token_printed=false`
+
 ## Quick Start
 
 Requirements:

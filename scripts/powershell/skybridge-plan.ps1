@@ -47,7 +47,8 @@ function New-Slug {
 
 function New-StableSlug {
   param([string]$Text, [string]$Fallback = "master-goal")
-  $slug = (($Text ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  $source = if ($null -ne $Text) { $Text } else { "" }
+  $slug = ($source.ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
   if ([string]::IsNullOrWhiteSpace($slug)) { $slug = $Fallback }
   return $slug.Substring(0, [Math]::Min(72, $slug.Length))
 }

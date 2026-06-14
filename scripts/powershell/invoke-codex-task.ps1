@@ -11,7 +11,9 @@ function New-EdgeWorkerRunDirectory {
 
 function Get-SafeTaskBranchName {
   param($Config, $Task)
-  $slug = (($Task.title ?? $Task.task_id) -replace "[^A-Za-z0-9]+", "-").Trim("-").ToLowerInvariant()
+  $source = [string]$Task.title
+  if ([string]::IsNullOrWhiteSpace($source)) { $source = [string]$Task.task_id }
+  $slug = ($source -replace "[^A-Za-z0-9]+", "-").Trim("-").ToLowerInvariant()
   if ($slug.Length -gt 48) { $slug = $slug.Substring(0, 48).Trim("-") }
   if ([string]::IsNullOrWhiteSpace($slug)) { $slug = "task" }
   $prefix = if ($Config.branch_prefix) { [string]$Config.branch_prefix } else { "ai/edge-worker/" }
