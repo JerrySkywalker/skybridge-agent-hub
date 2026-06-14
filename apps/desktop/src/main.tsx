@@ -13,6 +13,7 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureBoincV1ControlledTrialStatus,
   fixtureBoincV1Status,
   fixtureBoincV1AlphaStatus,
   fixtureBoincV1ReleaseApproval,
@@ -48,6 +49,7 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type BoincV1ControlledTrialStatusSummary,
   type BoincV1Status,
   type BoincV1AlphaStatus,
   type BoincV1ReleaseApprovalSummary,
@@ -685,6 +687,49 @@ function BoincV1ReleaseStatusPanel({
   );
 }
 
+function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTrialStatusSummary }) {
+  const gate = status.gate;
+  const reliability = gate.reliability_gates as Record<string, unknown>;
+  const releaseGate = gate.release_gate as Record<string, unknown>;
+  const taskPrUrl =
+    typeof status.finalizer_preview === "object" &&
+    status.finalizer_preview !== null &&
+    "task_pr_url" in status.finalizer_preview
+      ? String((status.finalizer_preview as Record<string, unknown>).task_pr_url ?? "pending")
+      : "pending";
+  return (
+    <section className="panel boinc-v1-controlled-trial-panel" aria-label="BOINC v1 controlled trial 221 status">
+      <h2>BOINC v1 Controlled Trial 221</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Controlled trial human review hold">
+        <span>held_waiting_human_review_controlled_trial_221</span>
+        <span>queue_apply_enabled=false</span>
+        <span>remote_execution_enabled=false</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Trial" value={status.trial_id} />
+        <StatusValue label="Workunit" value={status.workunit.workunit_id} />
+        <StatusValue label="Task" value={`${status.workunit.task_id}; ${status.workunit.task_type}; ${status.workunit.risk}`} />
+        <StatusValue label="Target" value={status.workunit.target_path} />
+        <StatusValue label="Release gate" value={String(releaseGate.release_gate_result)} />
+        <StatusValue label="Approval gate" value={gate.approval_gate.approval_state} />
+        <StatusValue label="Resource gate" value={String((gate.resource_gate as Record<string, unknown>).can_run_one_at_a_time)} />
+        <StatusValue label="Failure budget gate" value={String(reliability.failure_budget_gate_result)} />
+        <StatusValue label="Evidence retention gate" value={String(reliability.evidence_retention_gate_result)} />
+        <StatusValue label="Audit/redaction gate" value={String(reliability.audit_redaction_gate_result)} />
+        <StatusValue label="Task PR URL" value={taskPrUrl} />
+        <StatusValue label="Human review hold" value="task PR must remain open until reviewed" />
+        <StatusValue label="No next execution authorized" value={String(gate.no_next_execution_authorized)} />
+        <StatusValue label="No raw logs" value="raw prompts, transcripts, stdout, stderr, worker logs and CI logs are not displayed" />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Trial apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -841,6 +886,7 @@ function App() {
         status={fixtureBoincV1ReleaseStatus}
         approval={fixtureBoincV1ReleaseApproval}
       />
+      <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}

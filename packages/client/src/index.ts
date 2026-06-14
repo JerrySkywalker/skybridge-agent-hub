@@ -27,6 +27,8 @@ import type {
   OperatorApprovalRequest,
   OperatorApprovalState,
   AuditReport,
+  BoincV1ControlledTrialApproval,
+  BoincV1ControlledTrialStatus,
   BoincV1ReleaseApproval,
   BoincV1ReleaseReport,
   BoincV1ReleaseStatus,
@@ -45,6 +47,8 @@ export {
   fixtureAuditReport,
   fixtureAuditEvent,
   fixtureBoincV1ControlledApplyBoundary,
+  fixtureBoincV1ControlledTrialApproval,
+  fixtureBoincV1ControlledTrialStatus,
   fixtureBoincV1ControlledReleasePolicy,
   fixtureBoincV1ReleaseApproval,
   fixtureBoincV1ReleaseGate,
@@ -182,6 +186,8 @@ export type SafeExportGateSummary = SafeExportGate;
 export type BoincV1ReleaseStatusSummary = BoincV1ReleaseStatus;
 export type BoincV1ReleaseReportSummary = BoincV1ReleaseReport;
 export type BoincV1ReleaseApprovalSummary = BoincV1ReleaseApproval;
+export type BoincV1ControlledTrialStatusSummary = BoincV1ControlledTrialStatus;
+export type BoincV1ControlledTrialApprovalSummary = BoincV1ControlledTrialApproval;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
 export interface GoalTaskSummary {

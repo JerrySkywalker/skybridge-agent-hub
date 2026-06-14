@@ -8,6 +8,7 @@ import {
   fixtureOperatorApprovalState,
   fixtureAuditReport,
   fixtureBoincV1ControlledApplyBoundary,
+  fixtureBoincV1ControlledTrialStatus,
   fixtureBoincV1ReleaseApproval,
   fixtureBoincV1ReleaseOperatorPolicy,
   fixtureBoincV1ReleaseStatus,
@@ -22,6 +23,7 @@ import {
   listAdapterCapabilities,
   parseOperatorApprovalRequest,
   parseAuditReport,
+  parseBoincV1ControlledTrialStatus,
   parseBoincV1ReleaseStatus,
   parseEvidenceRetentionReport,
   parseEvent,
@@ -348,6 +350,45 @@ describe("event schema", () => {
       schema: "skybridge.boinc_v1_release_tag_plan.v1",
       tag: "v0.99.0-boinc-like-v1-controlled-release",
       force_tag: false,
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 221 controlled trial as one local human-reviewed workunit", () => {
+    const status = parseBoincV1ControlledTrialStatus(fixtureBoincV1ControlledTrialStatus);
+    expect(status.schema).toBe("skybridge.boinc_v1_controlled_trial_status.v1");
+    expect(status.workunit).toMatchObject({
+      workunit_id: "boinc-v1-controlled-trial-221-workunit-001",
+      task_id: "boinc-v1-controlled-trial-221-task-001",
+      task_type: "docs/local-smoke",
+      risk: "low",
+      target_path: "docs/boinc-v1-controlled-trial-221.md",
+      max_workunits: 1,
+      max_tasks: 1,
+      max_claims: 1,
+      max_task_prs: 1,
+      token_printed: false,
+    });
+    expect(status.policy).toMatchObject({
+      max_codex_executions: 1,
+      allow_remote_execution: false,
+      allow_arbitrary_command: false,
+      allow_generic_queue_apply: false,
+      approval_can_execute_work: false,
+      shell_command_text_allowed: false,
+    });
+    expect(status.gate).toMatchObject({
+      gate_result: "pass",
+      active_tasks: 0,
+      stale_leases: 0,
+      runner_lock: "none",
+      open_task_pr_count: 0,
+      no_next_execution_authorized: true,
+    });
+    expect(status.finalizer_preview).toMatchObject({
+      status: "held_waiting_human_review_controlled_trial_221",
+      can_apply: false,
+      no_auto_merge: true,
       token_printed: false,
     });
   });
