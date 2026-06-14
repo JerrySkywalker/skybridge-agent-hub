@@ -35,6 +35,7 @@ import type {
   EvidenceRetentionReport,
   FailureBudgetReport,
   SafeExportGate,
+  ServerApprovedWorkunitStatus,
   TrustedDocsAutoMergeGate,
   TrustedDocsAutoMergePolicy,
   ControlPlaneWorkerHeartbeat as ControlPlaneWorkerHeartbeatContract,
@@ -68,6 +69,7 @@ export {
   fixtureReplacementAuthorizationGate,
   fixtureRetryAuthorizationGate,
   fixtureSafeExportGate,
+  fixtureServerApprovedWorkunitStatus,
   fixtureTrustedDocsAutoMergeGate,
   fixtureTrustedDocsAutoMergePolicy,
   fixtureWorkerHeartbeat,
@@ -195,6 +197,7 @@ export type BoincV1ReleaseReportSummary = BoincV1ReleaseReport;
 export type BoincV1ReleaseApprovalSummary = BoincV1ReleaseApproval;
 export type BoincV1ControlledTrialStatusSummary = BoincV1ControlledTrialStatus;
 export type BoincV1ControlledTrialApprovalSummary = BoincV1ControlledTrialApproval;
+export type ServerApprovedWorkunitStatusSummary = ServerApprovedWorkunitStatus;
 export type TrustedDocsAutoMergeGateSummary = TrustedDocsAutoMergeGate;
 export type TrustedDocsAutoMergePolicySummary = TrustedDocsAutoMergePolicy;
 export type ProjectRecord = Project;

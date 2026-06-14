@@ -16,6 +16,7 @@ import {
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureSafeExportGate,
+  fixtureServerApprovedWorkunitStatus,
   fixtureTrustedDocsAutoMergeGate,
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
@@ -29,6 +30,7 @@ import {
   parseEvidenceRetentionReport,
   parseEvent,
   parseFailureBudget,
+  parseServerApprovedWorkunitStatus,
   parseTrustedDocsAutoMergeGate,
   parseWorkerHeartbeat,
   parseWorkerRegistration,
@@ -391,6 +393,49 @@ describe("event schema", () => {
       status: "boinc_v1_controlled_trial_221_completed",
       can_apply: false,
       human_review_confirmed: true,
+      no_auto_merge: true,
+      token_printed: false,
+    });
+  });
+
+  it("models Goal 225 server-approved one-workunit execution with human-review hold", () => {
+    const status = parseServerApprovedWorkunitStatus(fixtureServerApprovedWorkunitStatus);
+    expect(status.schema).toBe("skybridge.server_approved_workunit_status.v1");
+    expect(status.workunit).toMatchObject({
+      workunit_id: "server-approved-run-225-workunit-001",
+      task_id: "server-approved-run-225-task-001",
+      task_type: "docs/local-smoke",
+      risk: "low",
+      target_path: "docs/server-approved-workunit-225.md",
+      max_workunits: 1,
+      max_tasks: 1,
+      max_claims: 1,
+      max_task_prs: 1,
+      token_printed: false,
+    });
+    expect(status.policy).toMatchObject({
+      mode: "server_approved_one_workunit",
+      max_codex_executions: 1,
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      generic_queue_apply_enabled: false,
+      trusted_docs_auto_merge_enabled: false,
+      stop_on_pr_created: true,
+    });
+    expect(status.gate).toMatchObject({
+      gate_result: "pass",
+      approval_consumption_status: "consumed",
+      active_tasks: 0,
+      stale_leases: 0,
+      runner_lock: "none",
+      open_task_pr_count: 1,
+      no_next_execution_authorized: true,
+      token_printed: false,
+    });
+    expect(status.finalizer_preview).toMatchObject({
+      status: "held_waiting_human_review_server_approved_run_225",
+      can_apply: false,
+      human_review_required: true,
       no_auto_merge: true,
       token_printed: false,
     });
