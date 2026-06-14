@@ -130,7 +130,14 @@ function Get-ChangedFiles {
 function Get-CodexCommand {
   $cmd = Get-Command "codex" -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $cmd) { return $null }
-  [pscustomobject]@{ file_path = [string]$cmd.Source; argument_list = @("exec", "--sandbox", "workspace-write", "-"); token_printed = $false }
+  $source = [string]$cmd.Source
+  if ([System.IO.Path]::GetExtension($source).ToLowerInvariant() -eq ".ps1") {
+    $pwsh = Get-Command "pwsh" -ErrorAction SilentlyContinue
+    if (-not $pwsh) { $pwsh = Get-Command "powershell.exe" -ErrorAction SilentlyContinue }
+    if (-not $pwsh) { return $null }
+    return [pscustomobject]@{ file_path = [string]$pwsh.Source; argument_list = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $source, "exec", "--sandbox", "workspace-write", "-"); token_printed = $false }
+  }
+  [pscustomobject]@{ file_path = $source; argument_list = @("exec", "--sandbox", "workspace-write", "-"); token_printed = $false }
 }
 
 function Invoke-CodexPrompt([string]$Prompt) {
