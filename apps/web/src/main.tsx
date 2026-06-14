@@ -2101,6 +2101,7 @@ function BoincV1ReleaseDashboard() {
           <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
           <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
           <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
+          <ServerApprovedTrial226Panel />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
           <ReleasePostChecklistPanel />
         </div>
@@ -2317,6 +2318,30 @@ function TrustedDocsAutoMergePanel({ gate }: { gate: TrustedDocsAutoMergeGateSum
       <div className="queue-placeholder-controls">
         <button type="button" disabled aria-disabled="true">Auto-merge disabled</button>
         <button type="button" disabled aria-disabled="true">Human review required</button>
+      </div>
+    </section>
+  );
+}
+
+function ServerApprovedTrial226Panel() {
+  return (
+    <section className="skybridge-panel server-approved-trial-226-panel" aria-label="Server-approved two-workunit trial 226">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Server-approved Trial</p>
+          <h2>Trial 226 Completed</h2>
+        </div>
+        <span className={badgeClass("ok")}>no_next_execution_authorized=true</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Workunit A</dt><dd>A/B task PRs and merge commits are recorded in `.agent/tmp/server-approved-two-workunit-trial-226`.</dd></div>
+        <div><dt>Workunit B</dt><dd>Runs only after Workunit A is merged and finalized; repo mutation is serialized.</dd></div>
+        <div><dt>Trusted-docs scoped merge</dt><dd>Exact docs-only PR scope, green CI, redaction and audit required.</dd></div>
+        <div><dt>Execution boundary</dt><dd>remote_execution_enabled=false; generic_bounded_queue_apply_enabled=false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Remote execution disabled</button>
+        <button type="button" disabled aria-disabled="true">Generic queue apply disabled</button>
       </div>
     </section>
   );
