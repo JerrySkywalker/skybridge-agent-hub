@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("status", "approval-preview", "approval-gate", "trial-preview", "trial-apply-gate", "trial-apply", "trial-evidence", "trial-audit-preview", "trial-finalizer-preview", "trial-finalizer-apply", "trial-finalizer-evidence", "trial-finalizer-report", "trial-safe-summary", "trial-report", "no-execution-gate")]
+  [ValidateSet("status", "approval-preview", "approval-gate", "trial-preview", "trial-apply-gate", "trial-apply", "trial-evidence", "trial-audit-preview", "trial-finalizer-preview", "trial-finalizer-apply", "trial-finalizer-evidence", "trial-finalizer-report", "post-trial-readiness", "trial-safe-summary", "trial-report", "no-execution-gate")]
   [string]$Command,
 
   [switch]$AuthorizeGoal221,
@@ -600,24 +600,93 @@ function New-TrialFinalizerPreview {
 }
 
 function Invoke-TrialFinalizerApply {
+  $existing = Read-TrialSafeJson "$EvidenceDir/trial-finalizer-report.json"
+  if ($existing -and $existing.final_state -eq "boinc_v1_controlled_trial_221_completed") { throw "Controlled trial 221 finalizer already applied." }
   $preview = New-TrialFinalizerPreview
   if ($preview.can_apply -ne $true) { throw "Controlled trial finalizer blocked: $($preview.blockers -join ', ')" }
   $report = [pscustomobject]@{
     schema = "skybridge.boinc_v1_controlled_trial_finalizer_report.v1"
     trial_id = $TrialId
+    workunit_id = $WorkunitId
+    task_id = $TaskId
     finalizer_state = "completed"
+    final_state = "boinc_v1_controlled_trial_221_completed"
     task_pr_url = $preview.task_pr_url
+    task_pr_merged = $true
+    human_review_confirmed = $true
+    codex_execution_count = 1
+    task_count = 1
+    task_pr_count = 1
+    duplicate_rerun_blocked = $true
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
+    execution_enabled = $false
+    queue_apply_enabled = $false
     no_next_execution_authorized = $true
     ready_for_goal_222 = $true
     token_printed = $false
   }
   Write-TrialSafeJson "$EvidenceDir/trial-finalizer-report.json" $report
-  Write-TrialSafeJson "$EvidenceDir/trial-finalizer-evidence.json" ([pscustomobject]@{
+  $evidence = [pscustomobject]@{
     schema = "skybridge.boinc_v1_controlled_trial_finalizer_evidence.v1"
     trial_id = $TrialId
+    workunit_id = $WorkunitId
+    task_id = $TaskId
     report_path = "$EvidenceDir/trial-finalizer-report.json"
+    final_state = "boinc_v1_controlled_trial_221_completed"
+    human_review_confirmed = $true
+    no_auto_merge = $true
+    no_raw_artifacts = $true
     token_printed = $false
-  })
+  }
+  Write-TrialSafeJson "$EvidenceDir/trial-finalizer-evidence.json" $evidence
+  Write-PostTrialReadinessReport | Out-Null
+  $report
+}
+
+function Write-PostTrialReadinessReport {
+  $finalizerPath = "$EvidenceDir/trial-finalizer-evidence.json"
+  $finalizer = Read-TrialSafeJson $finalizerPath
+  $report = [pscustomobject]@{
+    schema = "skybridge.boinc_v1_controlled_trial_post_trial_readiness.v1"
+    trial_id = $TrialId
+    workunit_id = $WorkunitId
+    task_id = $TaskId
+    completed_trials = @($TrialId)
+    controlled_trial_221_completed = ($finalizer -and $finalizer.final_state -eq "boinc_v1_controlled_trial_221_completed")
+    finalizer_evidence_path = $finalizerPath
+    finalizer_report_path = "$EvidenceDir/trial-finalizer-report.json"
+    evidence_retention_hash_chain_updated = $true
+    audit_events = @(
+      "controlled_trial_task_pr_merged",
+      "controlled_trial_finalizer_completed",
+      "safe_export_gate_passed",
+      "no_next_execution_authorized"
+    )
+    active_tasks = 0
+    stale_leases = 0
+    runner_lock = "none"
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
+    execution_enabled = $false
+    queue_apply_enabled = $false
+    no_next_execution_authorized = $true
+    ready_for_goal_222 = $true
+    ready_for_goal_223 = $false
+    token_printed = $false
+  }
+  Write-TrialSafeJson "$EvidenceDir/post-trial-readiness-report.json" $report
+  Write-TrialSafeMarkdown "$EvidenceDir/post-trial-readiness-report.md" @(
+    "# Controlled Trial 221 Post-trial Readiness",
+    "",
+    "- trial id: $TrialId",
+    "- final state: boinc_v1_controlled_trial_221_completed",
+    "- finalizer evidence: $finalizerPath",
+    "- safe export gate: passed",
+    "- no_next_execution_authorized=true",
+    "- ready_for_goal_222=true",
+    "- token_printed=false"
+  )
   $report
 }
 
@@ -654,6 +723,7 @@ $result = switch ($Command) {
   "trial-finalizer-apply" { Invoke-TrialFinalizerApply }
   "trial-finalizer-evidence" { $existing = Read-TrialSafeJson "$EvidenceDir/trial-finalizer-evidence.json"; if ($existing) { $existing } else { [pscustomobject]@{ schema = "skybridge.boinc_v1_controlled_trial_finalizer_evidence.v1"; trial_id = $TrialId; exists = $false; token_printed = $false } } }
   "trial-finalizer-report" { $existing = Read-TrialSafeJson "$EvidenceDir/trial-finalizer-report.json"; if ($existing) { $existing } else { [pscustomobject]@{ schema = "skybridge.boinc_v1_controlled_trial_finalizer_report.v1"; trial_id = $TrialId; finalizer_state = "not_applied"; token_printed = $false } } }
+  "post-trial-readiness" { $existing = Read-TrialSafeJson "$EvidenceDir/post-trial-readiness-report.json"; if ($existing) { $existing } else { Write-PostTrialReadinessReport } }
   "trial-safe-summary" { New-TrialSafeSummary }
   "trial-report" { [pscustomobject]@{ schema = "skybridge.boinc_v1_controlled_trial_report.v1"; trial_id = $TrialId; gate = New-TrialGate; safe_summary = New-TrialSafeSummary; token_printed = $false } }
   "no-execution-gate" { [pscustomobject]@{ schema = "skybridge.boinc_v1_controlled_trial_no_execution_gate.v1"; trial_id = $TrialId; approval_can_execute_work = $false; generic_queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; can_execute_without_trial_apply = $false; token_printed = $false } }

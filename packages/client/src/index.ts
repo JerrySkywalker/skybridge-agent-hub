@@ -35,6 +35,8 @@ import type {
   EvidenceRetentionReport,
   FailureBudgetReport,
   SafeExportGate,
+  TrustedDocsAutoMergeGate,
+  TrustedDocsAutoMergePolicy,
   ControlPlaneWorkerHeartbeat as ControlPlaneWorkerHeartbeatContract,
   WorkerPairingPreview,
   WorkerRegistration,
@@ -64,6 +66,8 @@ export {
   fixtureReplacementAuthorizationGate,
   fixtureRetryAuthorizationGate,
   fixtureSafeExportGate,
+  fixtureTrustedDocsAutoMergeGate,
+  fixtureTrustedDocsAutoMergePolicy,
   fixtureWorkerHeartbeat,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
@@ -188,6 +192,8 @@ export type BoincV1ReleaseReportSummary = BoincV1ReleaseReport;
 export type BoincV1ReleaseApprovalSummary = BoincV1ReleaseApproval;
 export type BoincV1ControlledTrialStatusSummary = BoincV1ControlledTrialStatus;
 export type BoincV1ControlledTrialApprovalSummary = BoincV1ControlledTrialApproval;
+export type TrustedDocsAutoMergeGateSummary = TrustedDocsAutoMergeGate;
+export type TrustedDocsAutoMergePolicySummary = TrustedDocsAutoMergePolicy;
 export type ProjectRecord = Project;
 export type ProjectControlRecord = ProjectControlState;
 export interface GoalTaskSummary {

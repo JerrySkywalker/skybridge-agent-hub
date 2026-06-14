@@ -31,6 +31,7 @@ import {
   fixtureBoincV1ReleaseApproval,
   fixtureBoincV1ReleaseReport,
   fixtureBoincV1ReleaseStatus,
+  fixtureTrustedDocsAutoMergeGate,
   fixtureCoreEngineStatus,
   fixtureDesktopResidentState,
   fixtureLocalResourcePolicyEnforcement,
@@ -73,6 +74,7 @@ import {
   type BoincV1ReleaseApprovalSummary,
   type BoincV1ReleaseReportSummary,
   type BoincV1ReleaseStatusSummary,
+  type TrustedDocsAutoMergeGateSummary,
   type CoreEngineStatus,
   type DesktopResidentState,
   type ManagedModeRepeatabilitySummary,
@@ -2092,6 +2094,7 @@ function BoincV1ReleaseDashboard() {
           <ReleaseReadinessPanel status={fixtureBoincV1ReleaseStatus} />
           <ReleaseApprovalPreviewPanel approval={fixtureBoincV1ReleaseApproval} />
           <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
+          <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
           <ReleasePostChecklistPanel />
         </div>
@@ -2221,14 +2224,20 @@ function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTria
     "task_pr_url" in status.finalizer_preview
       ? String((status.finalizer_preview as Record<string, unknown>).task_pr_url ?? "pending")
       : "pending";
+  const finalizerEvidence =
+    typeof status.finalizer_preview === "object" &&
+    status.finalizer_preview !== null &&
+    "finalizer_evidence_path" in status.finalizer_preview
+      ? String((status.finalizer_preview as Record<string, unknown>).finalizer_evidence_path)
+      : ".agent/tmp/boinc-v1-controlled-trial-221/trial-finalizer-evidence.json";
   return (
     <section className="skybridge-panel boinc-v1-controlled-trial-panel" aria-label="BOINC v1 controlled trial 221 status">
       <div className="skybridge-card__header">
         <div>
           <p className="skybridge-kicker">Controlled Trial 221</p>
-          <h2>Human Review Hold</h2>
+          <h2>Controlled Trial Completed</h2>
         </div>
-        <span className={badgeClass("bad")}>held_waiting_human_review_controlled_trial_221</span>
+        <span className={badgeClass("ok")}>boinc_v1_controlled_trial_221_completed</span>
       </div>
       <dl className="queue-definition-list">
         <div><dt>Trial / workunit</dt><dd>{`${status.trial_id}; ${status.workunit.workunit_id}`}</dd></div>
@@ -2237,12 +2246,40 @@ function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTria
         <div><dt>Gates</dt><dd>{`release=${String(releaseGate.release_gate_result)}; approval=${gate.approval_gate.approval_state}; resource=${String((gate.resource_gate as Record<string, unknown>).can_run_one_at_a_time)}`}</dd></div>
         <div><dt>Reliability</dt><dd>{`failure=${String(reliability.failure_budget_gate_result)}; evidence=${String(reliability.evidence_retention_gate_result)}; audit=${String(reliability.audit_redaction_gate_result)}`}</dd></div>
         <div><dt>Task PR URL</dt><dd>{taskPrUrl}</dd></div>
+        <div><dt>Finalizer evidence</dt><dd>{finalizerEvidence}</dd></div>
         <div><dt>Safety</dt><dd>no_next_execution_authorized=true; remote_execution_enabled=false; queue_apply_enabled=false</dd></div>
         <div><dt>No enabled execution buttons</dt><dd>No raw logs, no command input, no apply controls, token_printed=false</dd></div>
       </dl>
       <div className="queue-placeholder-controls">
         <button type="button" disabled aria-disabled="true">Trial apply disabled</button>
         <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
+    </section>
+  );
+}
+
+function TrustedDocsAutoMergePanel({ gate }: { gate: TrustedDocsAutoMergeGateSummary }) {
+  return (
+    <section className="skybridge-panel trusted-docs-auto-merge-panel" aria-label="Trusted docs auto-merge preview">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Trusted Docs Preview</p>
+          <h2>Auto-merge Disabled</h2>
+        </div>
+        <span className={badgeClass("bad")}>trusted_docs_auto_merge_enabled=false</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Policy</dt><dd>{`auto_merge_apply_enabled=${String(gate.policy.auto_merge_apply_enabled)}; max_files=${gate.policy.max_files}; max_additions=${gate.policy.max_additions}; max_deletions=${gate.policy.max_deletions}`}</dd></div>
+        <div><dt>Allowed</dt><dd>{gate.policy.allowed_paths.join("; ")}</dd></div>
+        <div><dt>Decision</dt><dd>{gate.decision.decision}</dd></div>
+        <div><dt>Eligible preview</dt><dd>{`theoretical=${String(gate.decision.theoretically_eligible)}; auto_merge_allowed=${String(gate.decision.auto_merge_allowed)}`}</dd></div>
+        <div><dt>Blockers</dt><dd>{gate.decision.blockers.join("; ")}</dd></div>
+        <div><dt>Human review</dt><dd>{`required=${String(gate.decision.human_review_required)}; no auto-merge enabled`}</dd></div>
+        <div><dt>Audit</dt><dd>{gate.audit.events.join("; ")}</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Auto-merge disabled</button>
+        <button type="button" disabled aria-disabled="true">Human review required</button>
       </div>
     </section>
   );

@@ -555,6 +555,77 @@ export const BoincV1ControlledTrialStatusSchema = z.object({
   token_printed: z.literal(false),
 });
 
+export const TrustedDocsAutoMergePolicySchema = z.object({
+  schema: z.literal("skybridge.trusted_docs_auto_merge_policy.v1"),
+  trusted_docs_auto_merge_enabled: z.literal(false),
+  auto_merge_apply_enabled: z.literal(false),
+  max_files: z.literal(1),
+  max_additions: z.literal(20),
+  max_deletions: z.literal(0),
+  allowed_paths: z.array(z.string()),
+  forbidden_paths: z.array(z.string()),
+  require_release_gate: z.literal(true),
+  require_resource_gate: z.literal(true),
+  require_failure_budget: z.literal(true),
+  require_evidence_retention: z.literal(true),
+  require_audit: z.literal(true),
+  require_redaction: z.literal(true),
+  require_human_override: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const TrustedDocsAutoMergeBlockerSchema = z.object({
+  schema: z.literal("skybridge.trusted_docs_auto_merge_blocker.v1"),
+  blocker_id: z.string().min(1),
+  reason: z.string().min(1),
+  token_printed: z.literal(false),
+});
+
+export const TrustedDocsAutoMergeDecisionSchema = z.object({
+  schema: z.literal("skybridge.trusted_docs_auto_merge_decision.v1"),
+  fixture: z.string().min(1),
+  pr_number: z.number().int().positive(),
+  decision: z.enum([
+    "eligible_docs_only_but_disabled",
+    "blocked_by_policy_disabled",
+    "blocked_by_multiple_files",
+    "blocked_by_too_many_changes",
+    "blocked_by_deletions",
+    "blocked_by_disallowed_path",
+    "blocked_by_raw_artifact",
+    "blocked_by_secret_scan",
+    "blocked_by_missing_ci",
+    "blocked_by_open_review_hold",
+    "blocked_by_no_human_override",
+    "blocked_by_token_printed_true",
+  ]),
+  theoretically_eligible: z.boolean(),
+  auto_merge_allowed: z.literal(false),
+  auto_merge_apply_enabled: z.literal(false),
+  human_review_required: z.literal(true),
+  files: z.array(z.record(z.unknown())),
+  blockers: z.array(z.string()),
+  token_printed: z.literal(false),
+});
+
+export const TrustedDocsAutoMergeAuditSchema = z.object({
+  schema: z.literal("skybridge.trusted_docs_auto_merge_audit.v1"),
+  events: z.array(z.enum(["trusted_docs_auto_merge_evaluated", "trusted_docs_auto_merge_blocked", "trusted_docs_auto_merge_disabled"])),
+  metadata_only: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const TrustedDocsAutoMergeGateSchema = z.object({
+  schema: z.literal("skybridge.trusted_docs_auto_merge_gate.v1"),
+  policy: TrustedDocsAutoMergePolicySchema,
+  decision: TrustedDocsAutoMergeDecisionSchema,
+  audit: TrustedDocsAutoMergeAuditSchema,
+  auto_merge_allowed: z.literal(false),
+  platform_auto_merge_enabled: z.literal(false),
+  branch_protection_mutated: z.literal(false),
+  token_printed: z.literal(false),
+});
+
 export type FailureBudget = z.infer<typeof FailureBudgetSchema>;
 export type FailureClassification = z.infer<typeof FailureClassificationSchema>;
 export type RetryAuthorizationGate = z.infer<typeof RetryAuthorizationGateSchema>;
@@ -570,6 +641,8 @@ export type BoincV1ReleaseReport = z.infer<typeof BoincV1ReleaseReportSchema>;
 export type BoincV1ReleaseApproval = z.infer<typeof BoincV1ReleaseApprovalSchema>;
 export type BoincV1ControlledTrialStatus = z.infer<typeof BoincV1ControlledTrialStatusSchema>;
 export type BoincV1ControlledTrialApproval = z.infer<typeof BoincV1ControlledTrialApprovalSchema>;
+export type TrustedDocsAutoMergeGate = z.infer<typeof TrustedDocsAutoMergeGateSchema>;
+export type TrustedDocsAutoMergePolicy = z.infer<typeof TrustedDocsAutoMergePolicySchema>;
 
 const fixtureHash = "0".repeat(64);
 const fixtureHashA = "a".repeat(64);
@@ -1051,13 +1124,63 @@ export const fixtureBoincV1ControlledTrialStatus: BoincV1ControlledTrialStatus =
     token_printed: false,
   },
   finalizer_preview: {
-    status: "held_waiting_human_review_controlled_trial_221",
+    status: "boinc_v1_controlled_trial_221_completed",
     can_apply: false,
+    finalizer_evidence_path: ".agent/tmp/boinc-v1-controlled-trial-221/trial-finalizer-evidence.json",
+    safe_export_state: "safe_to_export",
     human_review_required: true,
+    human_review_confirmed: true,
     no_auto_merge: true,
     no_raw_artifacts: true,
     token_printed: false,
   },
+  token_printed: false,
+};
+
+export const fixtureTrustedDocsAutoMergePolicy: TrustedDocsAutoMergePolicy = {
+  schema: "skybridge.trusted_docs_auto_merge_policy.v1",
+  trusted_docs_auto_merge_enabled: false,
+  auto_merge_apply_enabled: false,
+  max_files: 1,
+  max_additions: 20,
+  max_deletions: 0,
+  allowed_paths: ["docs/**", "README.md"],
+  forbidden_paths: [".github/**", "apps/**", "packages/**", "scripts/**", "server/**", "infra/**", ".env*", "**/*secret*", "**/*token*"],
+  require_release_gate: true,
+  require_resource_gate: true,
+  require_failure_budget: true,
+  require_evidence_retention: true,
+  require_audit: true,
+  require_redaction: true,
+  require_human_override: true,
+  token_printed: false,
+};
+
+export const fixtureTrustedDocsAutoMergeGate: TrustedDocsAutoMergeGate = {
+  schema: "skybridge.trusted_docs_auto_merge_gate.v1",
+  policy: fixtureTrustedDocsAutoMergePolicy,
+  decision: {
+    schema: "skybridge.trusted_docs_auto_merge_decision.v1",
+    fixture: "eligible-docs-only",
+    pr_number: 9001,
+    decision: "eligible_docs_only_but_disabled",
+    theoretically_eligible: true,
+    auto_merge_allowed: false,
+    auto_merge_apply_enabled: false,
+    human_review_required: true,
+    files: [{ path: "docs/trusted-docs-preview.md", additions: 8, deletions: 0 }],
+    blockers: ["blocked_by_policy_disabled", "blocked_by_no_human_override"],
+    token_printed: false,
+  },
+  audit: {
+    schema: "skybridge.trusted_docs_auto_merge_audit.v1",
+    events: ["trusted_docs_auto_merge_evaluated", "trusted_docs_auto_merge_blocked", "trusted_docs_auto_merge_disabled"],
+    metadata_only: true,
+    token_printed: false,
+  },
+  auto_merge_allowed: false,
+  platform_auto_merge_enabled: false,
+  branch_protection_mutated: false,
   token_printed: false,
 };
 
@@ -1079,4 +1202,8 @@ export function parseBoincV1ReleaseStatus(input: unknown): BoincV1ReleaseStatus 
 
 export function parseBoincV1ControlledTrialStatus(input: unknown): BoincV1ControlledTrialStatus {
   return BoincV1ControlledTrialStatusSchema.parse(input);
+}
+
+export function parseTrustedDocsAutoMergeGate(input: unknown): TrustedDocsAutoMergeGate {
+  return TrustedDocsAutoMergeGateSchema.parse(input);
 }

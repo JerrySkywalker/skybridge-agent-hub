@@ -18,6 +18,7 @@ import {
   fixtureBoincV1AlphaStatus,
   fixtureBoincV1ReleaseApproval,
   fixtureBoincV1ReleaseStatus,
+  fixtureTrustedDocsAutoMergeGate,
   fixtureCoreEngineStatus,
   fixtureLocalResourcePolicyEnforcement,
   fixtureManagedModeRepeatabilitySummary,
@@ -54,6 +55,7 @@ import {
   type BoincV1AlphaStatus,
   type BoincV1ReleaseApprovalSummary,
   type BoincV1ReleaseStatusSummary,
+  type TrustedDocsAutoMergeGateSummary,
   type CoreEngineStatus,
   type ManagedModeRepeatabilitySummary,
   type ManagedModeRunRegistry,
@@ -697,11 +699,17 @@ function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTria
     "task_pr_url" in status.finalizer_preview
       ? String((status.finalizer_preview as Record<string, unknown>).task_pr_url ?? "pending")
       : "pending";
+  const finalizerEvidence =
+    typeof status.finalizer_preview === "object" &&
+    status.finalizer_preview !== null &&
+    "finalizer_evidence_path" in status.finalizer_preview
+      ? String((status.finalizer_preview as Record<string, unknown>).finalizer_evidence_path)
+      : ".agent/tmp/boinc-v1-controlled-trial-221/trial-finalizer-evidence.json";
   return (
     <section className="panel boinc-v1-controlled-trial-panel" aria-label="BOINC v1 controlled trial 221 status">
       <h2>BOINC v1 Controlled Trial 221</h2>
       <div className="mode-strip execution-disabled-banner" aria-label="Controlled trial human review hold">
-        <span>held_waiting_human_review_controlled_trial_221</span>
+        <span>boinc_v1_controlled_trial_221_completed</span>
         <span>queue_apply_enabled=false</span>
         <span>remote_execution_enabled=false</span>
         <span>token_printed=false</span>
@@ -718,13 +726,41 @@ function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTria
         <StatusValue label="Evidence retention gate" value={String(reliability.evidence_retention_gate_result)} />
         <StatusValue label="Audit/redaction gate" value={String(reliability.audit_redaction_gate_result)} />
         <StatusValue label="Task PR URL" value={taskPrUrl} />
-        <StatusValue label="Human review hold" value="task PR must remain open until reviewed" />
+        <StatusValue label="Finalizer evidence" value={finalizerEvidence} />
+        <StatusValue label="Human review" value="confirmed by merged task PR" />
         <StatusValue label="No next execution authorized" value={String(gate.no_next_execution_authorized)} />
         <StatusValue label="No raw logs" value="raw prompts, transcripts, stdout, stderr, worker logs and CI logs are not displayed" />
       </dl>
       <div className="queue-placeholder-controls">
         <button type="button" disabled aria-disabled="true">Trial apply disabled</button>
         <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
+    </section>
+  );
+}
+
+function TrustedDocsAutoMergePanel({ gate }: { gate: TrustedDocsAutoMergeGateSummary }) {
+  return (
+    <section className="panel trusted-docs-auto-merge-panel" aria-label="Trusted docs auto-merge preview">
+      <h2>Trusted Docs Auto-merge Preview</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Trusted docs auto-merge disabled">
+        <span>trusted_docs_auto_merge_enabled=false</span>
+        <span>auto_merge_apply_enabled=false</span>
+        <span>human_review_required=true</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Policy" value={`max_files=${gate.policy.max_files}; max_additions=${gate.policy.max_additions}; max_deletions=${gate.policy.max_deletions}`} />
+        <StatusValue label="Allowed paths" value={gate.policy.allowed_paths.join("; ")} />
+        <StatusValue label="Decision" value={gate.decision.decision} />
+        <StatusValue label="Eligible preview" value={`theoretical=${String(gate.decision.theoretically_eligible)}; auto_merge_allowed=${String(gate.decision.auto_merge_allowed)}`} />
+        <StatusValue label="Blockers" value={gate.decision.blockers.join("; ")} />
+        <StatusValue label="Audit" value={gate.audit.events.join("; ")} />
+        <StatusValue label="No enabled auto-merge button" value="true" />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Auto-merge disabled</button>
+        <button type="button" disabled aria-disabled="true">Human review required</button>
       </div>
     </section>
   );
@@ -887,6 +923,7 @@ function App() {
         approval={fixtureBoincV1ReleaseApproval}
       />
       <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
+      <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}
