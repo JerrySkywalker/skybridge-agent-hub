@@ -63,10 +63,16 @@ function New-BootstrapBlocker([string]$Code, [string]$Message, [string]$Evidence
   }
 }
 
-function Get-GitOutput([string[]]$Args) {
-  $output = & git @Args 2>$null
-  if ($LASTEXITCODE -ne 0) { return "" }
-  (($output | Out-String).Trim())
+function Get-GitOutput([string[]]$GitArgs) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $output = & git @GitArgs 2>$null
+    if ($LASTEXITCODE -ne 0) { return "" }
+    (($output | Out-String).Trim())
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
 }
 
 function Get-PrMergeState([int]$Number) {
@@ -242,8 +248,8 @@ function Invoke-BootstrapGate {
 }
 
 function New-TagPlan {
-  $head = Get-GitOutput @("rev-parse", "HEAD")
-  $tagCommit = Get-GitOutput @("rev-list", "-n", "1", $ReleaseTag)
+  $head = Get-GitOutput -GitArgs @("rev-parse", "HEAD")
+  $tagCommit = Get-GitOutput -GitArgs @("rev-list", "-n", "1", $ReleaseTag)
   $exists = -not [string]::IsNullOrWhiteSpace($tagCommit)
   [pscustomobject]@{
     schema = "skybridge.self_bootstrap_tag_plan.v1"
@@ -267,7 +273,7 @@ function New-ReleaseReport([string]$Kind) {
     kind = $Kind
     bootstrap_complete = [bool]$gate.gate_pass
     release_tag = $ReleaseTag
-    release_commit = (Get-GitOutput @("rev-parse", "HEAD"))
+    release_commit = (Get-GitOutput -GitArgs @("rev-parse", "HEAD"))
     completed_goals = $gate.status.completed_goals
     completed_trials = $gate.status.completed_trials
     completed_task_prs = $registry.completed_task_prs
