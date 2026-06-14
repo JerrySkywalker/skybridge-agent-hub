@@ -132,6 +132,7 @@ type Route =
   | "workers"
   | "control-plane"
   | "product-readiness"
+  | "first-run"
   | "release"
   | "tasks"
   | "pr-ci"
@@ -151,6 +152,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "workers", label: "Worker Pool" },
   { route: "control-plane", label: "Control Plane" },
   { route: "product-readiness", label: "Product Readiness" },
+  { route: "first-run", label: "First-run" },
   { route: "release", label: "Release" },
   { route: "tasks", label: "Task Queue" },
   { route: "pr-ci", label: "PR/CI" },
@@ -230,6 +232,7 @@ function App() {
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "control-plane" ? <ControlPlanePage apiBase={apiBase} /> : null}
         {route === "product-readiness" ? <ProductReadinessPage /> : null}
+        {route === "first-run" ? <FirstRunWizardPage /> : null}
         {route === "release" ? <BoincV1ReleaseDashboard /> : null}
         {route === "tasks" ? <TaskQueuePage apiBase={apiBase} /> : null}
         {route === "pr-ci" ? <PrCiPage apiBase={apiBase} /> : null}
@@ -2485,6 +2488,86 @@ function ProductReadinessPage() {
   );
 }
 
+const firstRunSteps = [
+  ["Bootstrap complete status", "verified; active_tasks=0; stale_leases=0"],
+  ["Product readiness status", "ready_for_local_preview"],
+  ["Runtime profile selection", "preview-only profiles; no worker start"],
+  ["Diagnostics health", ".agent/tmp/diagnostics/health-report.json"],
+  ["Pairing/approval state", "metadata-only; no raw pairing codes"],
+  ["Resident polling preview", "status preview only"],
+  ["Packaging preview", "desktop package candidate metadata"],
+  ["Backup/restore preview", "safe metadata only"],
+  ["Disabled capabilities", "execution/apply/start/claim unavailable"],
+  ["Next safe action", "run smokes and review reports"],
+];
+
+function FirstRunWizardPage() {
+  return (
+    <div className="route-stack first-run-wizard" data-no-remote-execution="true">
+      <section className="hero-panel hero-panel--queue">
+        <div>
+          <h2>First-run Wizard</h2>
+          <p>Read-only onboarding for local product preview and safe runtime planning.</p>
+        </div>
+        <span className={badgeClass("bad")}>no execute controls</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="Wizard schema" value="skybridge.first_run_wizard.v1" />
+        <Kpi label="Onboarding" value="preview only" />
+        <Kpi label="Runtime" value="dry run" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <ProductTable
+            title="First-run steps"
+            rows={firstRunSteps.map(([step, status], index) => [
+              `${index + 1}. ${step}`,
+              status,
+              "skybridge.first_run_step.v1",
+            ])}
+          />
+          <ProductTable
+            title="Runtime and process health"
+            rows={[
+              [".agent/tmp/local-runtime/runtime-plan.json", "skybridge.local_runtime_plan.v1", "starts_unbounded_loop=false"],
+              [".agent/tmp/local-runtime/runtime-health-report.json", "skybridge.local_runtime_health.v1", "raw_process_output_persisted=false"],
+            ]}
+          />
+        </div>
+        <aside className="dashboard-grid__side">
+          <SummaryCard
+            title="Onboarding status"
+            state="preview"
+            lines={[
+              "skybridge.onboarding_status.v1",
+              "skybridge.next_safe_action.v1",
+              "no raw logs",
+              "no secrets",
+              "token_printed=false",
+            ]}
+          />
+          <SummaryCard
+            title="Disabled controls"
+            state="disabled"
+            lines={[
+              "execute disabled",
+              "apply disabled",
+              "start disabled",
+              "claim disabled",
+            ]}
+          />
+          <div className="queue-placeholder-controls">
+            <button type="button" disabled aria-disabled="true">Start disabled</button>
+            <button type="button" disabled aria-disabled="true">Apply disabled</button>
+            <button type="button" disabled aria-disabled="true">Claim disabled</button>
+          </div>
+        </aside>
+      </section>
+    </div>
+  );
+}
+
 function ReleaseReliabilityPanel() {
   return (
     <SummaryCard
@@ -3755,6 +3838,7 @@ function titleForRoute(route: Route): string {
   if (route === "workers") return "Worker Pool";
   if (route === "control-plane") return "Control Plane";
   if (route === "product-readiness") return "Product Readiness";
+  if (route === "first-run") return "First-run";
   if (route === "release") return "Release";
   if (route === "audit") return "Reliability Audit";
   if (route === "tasks") return "Task Queue";

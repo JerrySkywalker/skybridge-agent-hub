@@ -918,6 +918,45 @@ function ProductReadinessCard() {
   );
 }
 
+function FirstRunWizardCard() {
+  const steps = [
+    "Bootstrap complete status",
+    "Product readiness status",
+    "Runtime profile selection",
+    "Diagnostics health",
+    "Pairing/approval state",
+    "Resident polling preview",
+    "Packaging preview",
+    "Backup/restore preview",
+    "Disabled capabilities",
+    "Next safe action",
+  ];
+  return (
+    <section className="panel first-run-wizard-card" aria-label="First-run Wizard">
+      <h2>First-run Wizard</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.first_run_wizard.v1</span>
+        <span>read-only onboarding</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Wizard steps" value={steps.join("; ")} />
+        <StatusValue label="Onboarding status" value="skybridge.onboarding_status.v1; preview_only=true" />
+        <StatusValue label="Runtime health" value=".agent/tmp/local-runtime/runtime-health-report.json" />
+        <StatusValue label="Packaging candidate" value=".agent/tmp/packaging-preview/desktop-package-candidate.json" />
+        <StatusValue label="Update preview" value=".agent/tmp/upgrade-preview/update-preview-report.json; network_update=false" />
+        <StatusValue label="Backup/restore preview" value=".agent/tmp/upgrade-preview/backup-restore-preview.json; raw_artifacts_included=false" />
+        <StatusValue label="Disabled controls" value="execute=false; apply=false; start=false; claim=false" />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Start disabled</button>
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1080,6 +1119,7 @@ function App() {
       <ServerApprovedTrial226Panel />
       <OperatorCockpitPanel />
       <ProductReadinessCard />
+      <FirstRunWizardCard />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}
