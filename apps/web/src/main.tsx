@@ -2102,6 +2102,7 @@ function BoincV1ReleaseDashboard() {
           <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
           <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
           <ServerApprovedTrial226Panel />
+          <OperatorCockpitPanel />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
           <ReleasePostChecklistPanel />
         </div>
@@ -2342,6 +2343,41 @@ function ServerApprovedTrial226Panel() {
       <div className="queue-placeholder-controls">
         <button type="button" disabled aria-disabled="true">Remote execution disabled</button>
         <button type="button" disabled aria-disabled="true">Generic queue apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function OperatorCockpitPanel() {
+  return (
+    <section className="skybridge-panel operator-cockpit-panel" aria-label="Operator Cockpit">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Operator Cockpit</p>
+          <h2>Bootstrap Complete</h2>
+        </div>
+        <span className={badgeClass("ok")}>controlled mode</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Release status</dt><dd>v1.0 bootstrap-complete candidate; controlled mode only</dd></div>
+        <div><dt>Bootstrap-complete status</dt><dd>Goal 214 through Goal 226 chain verified</dd></div>
+        <div><dt>Active/stale/lock state</dt><dd>active_tasks=0; stale_leases=0; runner_lock=none</dd></div>
+        <div><dt>Worker pairing state</dt><dd>durable pairing evidence retained; worker execution remains disabled</dd></div>
+        <div><dt>Approval state</dt><dd>server approval and finalizer evidence retained; human review remains required unless future scoped approval says otherwise</dd></div>
+        <div><dt>Resident polling state</dt><dd>resident polling gate passed for controlled trials; no worker loop is running</dd></div>
+        <div><dt>Resource gate state</dt><dd>one-at-a-time resource policy retained; no concurrent repo mutation authorized</dd></div>
+        <div><dt>Queue/apply disabled state</dt><dd>remote_execution_enabled=false; arbitrary_command_enabled=false; execution_enabled=false; queue_apply_enabled=false</dd></div>
+        <div><dt>Completed Runs</dt><dd>214, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226</dd></div>
+        <div><dt>Completed two-workunit trial</dt><dd>Workunit A and Workunit B merged and finalized; no Workunit C</dd></div>
+        <div><dt>Evidence retention</dt><dd>hash-chain and safe export evidence retained as safe metadata only</dd></div>
+        <div><dt>Audit/redaction</dt><dd>audit trail and redaction reports present; no raw logs or secrets displayed</dd></div>
+        <div><dt>Trusted-docs Scoped Merge</dt><dd>explicit exact-PR docs-only scoped merge; global trusted-docs auto-merge disabled</dd></div>
+        <div><dt>Blocked capabilities</dt><dd>start-all, start-queue, resume apply, generic bounded queue apply, remote execution and arbitrary command dispatch</dd></div>
+        <div><dt>Next safe action</dt><dd>productization, installer, authenticated server pairing and controlled v1.1 planning; no_next_execution_authorized=true; token_printed=false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Cockpit read-only</button>
+        <button type="button" disabled aria-disabled="true">Execution disabled</button>
       </div>
     </section>
   );

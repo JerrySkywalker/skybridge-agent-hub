@@ -83,7 +83,8 @@ function New-GuideNextCommand {
 
 function New-GuideMasterGoalId {
   param([string]$Title)
-  $slug = (($Title ?? "").ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
+  $source = if ($null -ne $Title) { $Title } else { "" }
+  $slug = ($source.ToLowerInvariant() -replace "[^a-z0-9]+", "-" -replace "^-|-$", "")
   if ([string]::IsNullOrWhiteSpace($slug)) { return $null }
   return "master-goal-$($slug.Substring(0, [Math]::Min(72, $slug.Length)))"
 }

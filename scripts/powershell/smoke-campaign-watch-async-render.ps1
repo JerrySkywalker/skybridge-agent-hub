@@ -9,7 +9,7 @@ try {
   $text = $raw -join "`n"
   if ($elapsed -ge 1800) { throw "Render loop blocked on slow poll; elapsed=${elapsed}ms." }
   if ($text -notmatch "Polling remote state") { throw "Expected cached placeholder while poll is in flight." }
-  if (($text.ToCharArray() | Where-Object { $_ -in @([char]"⠋", [char]"⠙", [char]"⠹") }).Count -lt 2) { throw "Expected multiple spinner frames during slow poll." }
+  if (($text.ToCharArray() | Where-Object { $_ -in @([char]"|", [char]"/", [char]"-", [char]"\") }).Count -lt 2) { throw "Expected multiple spinner frames during slow poll." }
 } finally {
   if ($null -eq $oldDelay) { Remove-Item Env:\SKYBRIDGE_WATCH_TEST_POLL_DELAY_MS -ErrorAction SilentlyContinue }
   else { $env:SKYBRIDGE_WATCH_TEST_POLL_DELAY_MS = $oldDelay }

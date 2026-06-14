@@ -292,7 +292,9 @@ function Invoke-EdgeWorkerOnce {
         $summaryText = if ($classification.execution_error_class -in @("codex_transport_eof", "codex_transport_error")) {
           "Codex transport failed after $retryCount retry."
         } else {
-          ($execution.error_summary ?? $execution.summary)
+          $summary = [string]$execution.error_summary
+          if ([string]::IsNullOrWhiteSpace($summary)) { $summary = [string]$execution.summary }
+          $summary
         }
         $failed = Fail-Task -Config $Config -TaskId $next.task.task_id -Result @{
           error_summary = ($summaryText -replace "\s+", " ").Substring(0, [Math]::Min(240, ($summaryText -replace "\s+", " ").Length))

@@ -860,6 +860,41 @@ function ServerApprovedTrial226Panel() {
   );
 }
 
+function OperatorCockpitPanel() {
+  return (
+    <section className="panel operator-cockpit-panel" aria-label="Operator Cockpit">
+      <h2>Operator Cockpit</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>Bootstrap Complete</span>
+        <span>controlled mode</span>
+        <span>no_next_execution_authorized=true</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Release status" value="v1.0 bootstrap-complete candidate; controlled mode only" />
+        <StatusValue label="Bootstrap-complete status" value="Goal 214 through Goal 226 chain verified" />
+        <StatusValue label="Active/stale/lock state" value="active_tasks=0; stale_leases=0; runner_lock=none" />
+        <StatusValue label="Worker pairing state" value="durable pairing evidence retained; worker execution remains disabled" />
+        <StatusValue label="Approval state" value="server approval and finalizer evidence retained; human review remains required unless future scoped approval says otherwise" />
+        <StatusValue label="Resident polling state" value="resident polling gate passed for controlled trials; no worker loop is running" />
+        <StatusValue label="Resource gate state" value="one-at-a-time resource policy retained; no concurrent repo mutation authorized" />
+        <StatusValue label="Queue/apply disabled state" value="remote_execution_enabled=false; arbitrary_command_enabled=false; execution_enabled=false; queue_apply_enabled=false" />
+        <StatusValue label="Completed Runs" value="214, 216, 217, 218, 219, 220, 221, 223, 224, 225, 226" />
+        <StatusValue label="Completed two-workunit trial" value="Workunit A and Workunit B merged and finalized; no Workunit C" />
+        <StatusValue label="Evidence retention" value="hash-chain and safe export evidence retained as safe metadata only" />
+        <StatusValue label="Audit/redaction" value="audit trail and redaction reports present; no raw logs or secrets displayed" />
+        <StatusValue label="Trusted-docs Scoped Merge" value="explicit exact-PR docs-only scoped merge; global trusted-docs auto-merge disabled" />
+        <StatusValue label="Blocked capabilities" value="start-all, start-queue, resume apply, generic bounded queue apply, remote execution and arbitrary command dispatch" />
+        <StatusValue label="Next safe action" value="productization, installer, authenticated server pairing and controlled v1.1 planning" />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Cockpit read-only</button>
+        <button type="button" disabled aria-disabled="true">Execution disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1020,6 +1055,7 @@ function App() {
       <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
       <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
       <ServerApprovedTrial226Panel />
+      <OperatorCockpitPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}

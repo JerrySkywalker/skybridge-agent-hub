@@ -31,7 +31,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$SpinnerFrames = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+$SpinnerFrames = @("|", "/", "-", "\")
 
 function Test-ColorEnabled {
   if ($Json) { return $false }
@@ -463,7 +463,7 @@ function Receive-SnapshotPoll {
 
 function Format-StepLine {
   param($Step, [int]$Total, [bool]$Current)
-  $marker = if ($Current) { "▸" } else { " " }
+  $marker = if ($Current) { ">" } else { " " }
   $status = [string]$Step.status
   $line = "{0} {1:00}/{2:00}  {3,-62} {4}" -f $marker, [int]$Step.order, $Total, [string]$Step.goal_id, $status.ToUpperInvariant()
   $kind = if ($Current) { "current" } else { Get-StatusKind $status }
@@ -479,7 +479,7 @@ function Format-WatchFrame {
   }
   $lines = New-Object System.Collections.Generic.List[string]
   $lines.Add(("$(Colorize $Spinner 'cyan') SkyBridge Dev Queue Watch                                      $timestamp")) | Out-Null
-  $lines.Add("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━") | Out-Null
+  $lines.Add("--------------------------------------------------------------------------------------") | Out-Null
   if ($Snapshot.warning) {
     $lines.Add((Colorize (" WARNING     {0}" -f $Snapshot.warning) "red")) | Out-Null
   }

@@ -32,7 +32,8 @@ function Get-BatterySummary {
         token_printed = $false
       }
     }
-    $status = [int]($battery.BatteryStatus ?? 0)
+    $batteryStatus = if ($null -ne $battery.BatteryStatus) { $battery.BatteryStatus } else { 0 }
+    $status = [int]$batteryStatus
     $onAc = $status -in @(2, 6, 7, 8, 9, 11)
     [pscustomobject]@{
       battery_state = if ($onAc) { "ac_power" } else { "battery" }
