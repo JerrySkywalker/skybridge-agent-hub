@@ -2501,6 +2501,17 @@ const firstRunSteps = [
   ["Next safe action", "run smokes and review reports"],
 ];
 
+const firstRunConfigWizardRows = [
+  ["schema", "skybridge.local_config.v1"],
+  ["profile schema", "skybridge.local_config_profile.v1"],
+  ["validation", "skybridge.local_config_validation.v1"],
+  ["redaction", "skybridge.local_config_redaction.v1"],
+  ["example", "fixtures/productization/local-config.example.json"],
+  ["execution", "execution_enabled=false; queue_apply_enabled=false"],
+  ["remote", "remote_execution_enabled=false; arbitrary_command_enabled=false"],
+  ["trusted docs", "trusted_docs_auto_merge_enabled=false"],
+];
+
 function FirstRunWizardPage() {
   return (
     <div className="route-stack first-run-wizard" data-no-remote-execution="true">
@@ -2534,6 +2545,10 @@ function FirstRunWizardPage() {
               [".agent/tmp/local-runtime/runtime-health-report.json", "skybridge.local_runtime_health.v1", "raw_process_output_persisted=false"],
             ]}
           />
+          <ProductTable
+            title="First-run config wizard preview"
+            rows={firstRunConfigWizardRows}
+          />
         </div>
         <aside className="dashboard-grid__side">
           <SummaryCard
@@ -2544,6 +2559,17 @@ function FirstRunWizardPage() {
               "skybridge.next_safe_action.v1",
               "no raw logs",
               "no secrets",
+              "token_printed=false",
+            ]}
+          />
+          <SummaryCard
+            title="Productization RC"
+            state="candidate"
+            lines={[
+              "skybridge.local_productization_rc_report.v1",
+              "v1.1.0-local-productization-rc",
+              "bounded runtime candidate",
+              "safe config validation",
               "token_printed=false",
             ]}
           />
