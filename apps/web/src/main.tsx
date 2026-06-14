@@ -51,6 +51,7 @@ import {
   fixtureEvidenceRetentionReport,
   fixtureFailureBudgetReport,
   fixtureSafeExportGate,
+  fixtureServerApprovedWorkunitStatus,
   fixtureProposedGoalReviewSummary,
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
@@ -113,6 +114,7 @@ import {
   type EvidenceRetentionSummary,
   type FailureBudgetSummary,
   type SafeExportGateSummary,
+  type ServerApprovedWorkunitStatusSummary,
 } from "@skybridge-agent-hub/client";
 import type {
   IterationRun,
@@ -2097,6 +2099,7 @@ function BoincV1ReleaseDashboard() {
           <ReleaseReadinessPanel status={fixtureBoincV1ReleaseStatus} />
           <ReleaseApprovalPreviewPanel approval={fixtureBoincV1ReleaseApproval} />
           <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
+          <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
           <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
           <ReleasePostChecklistPanel />
@@ -2255,6 +2258,37 @@ function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTria
       </dl>
       <div className="queue-placeholder-controls">
         <button type="button" disabled aria-disabled="true">Trial apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
+    </section>
+  );
+}
+
+function ServerApprovedWorkunitPanel({ status }: { status: ServerApprovedWorkunitStatusSummary }) {
+  const finalizerPreview = status.finalizer_preview as Record<string, unknown>;
+  return (
+    <section className="skybridge-panel" aria-label="Server-approved run 225">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Server-approved Run</p>
+          <h2>Server-approved run 225</h2>
+        </div>
+        <span className={badgeClass("bad")}>Human review hold</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Run id</dt><dd>{status.run_id}</dd></div>
+        <div><dt>Workunit</dt><dd>{status.workunit.workunit_id}</dd></div>
+        <div><dt>Task</dt><dd>{status.workunit.task_id}</dd></div>
+        <div><dt>Pairing / approval</dt><dd>{`pairing=${status.gate.pairing_gate_result}; approval=${status.gate.approval_gate_result}; consumed=${status.gate.approval_consumption_status}`}</dd></div>
+        <div><dt>Resident polling / resource</dt><dd>{`polling=${status.gate.resident_polling_gate_result}; resource=${status.gate.resource_gate_result}`}</dd></div>
+        <div><dt>Failure / evidence / audit</dt><dd>{`failure=${status.gate.failure_budget_gate_result}; evidence=${status.gate.evidence_retention_gate_result}; audit=${status.gate.audit_redaction_gate_result}`}</dd></div>
+        <div><dt>task PR URL</dt><dd>{String(finalizerPreview.task_pr_url ?? "pending")}</dd></div>
+        <div><dt>Human review hold</dt><dd>{String(finalizerPreview.status ?? "pending")}</dd></div>
+        <div><dt>Execution boundary</dt><dd>{`remote_execution_enabled=${String(status.execution_boundary.remote_execution_enabled)}; arbitrary_command_enabled=${String(status.execution_boundary.arbitrary_command_enabled)}; queue_apply_enabled=false`}</dd></div>
+        <div><dt>No enabled execution buttons</dt><dd>true</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Server-approved apply disabled</button>
         <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
       </div>
     </section>

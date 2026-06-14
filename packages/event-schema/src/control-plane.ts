@@ -350,7 +350,14 @@ export const OperatorApprovalRecordSchema = z.object({
   evidence_retention_required: z.literal(true),
   audit_required: z.literal(true),
   redaction_required: z.literal(true),
-  state: z.enum(["pending", "approved_preview", "rejected", "expired", "consumed"]),
+  state: z.enum([
+    "pending",
+    "approved_preview",
+    "approved_for_this_goal_only",
+    "rejected",
+    "expired",
+    "consumed",
+  ]),
   created_at: z.string().datetime(),
   expires_at: z.string().datetime(),
   consumed_at: z.string().datetime().nullable(),
@@ -663,7 +670,7 @@ export const fixtureResidentPollingReport: ResidentPollingReport = {
   task_claimed: false,
   codex_executed: false,
   queue_apply_performed: false,
-  ready_for_goal_225: false,
+  ready_for_goal_225: true,
   token_printed: false,
 };
 

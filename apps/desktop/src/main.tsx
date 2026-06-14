@@ -42,6 +42,7 @@ import {
   fixtureProjectProfileReviewSummary,
   fixtureQueueControlState,
   fixtureSchedulingPreview,
+  fixtureServerApprovedWorkunitStatus,
   fixtureWorkunitCandidatePack,
   fixtureRepoExclusiveLock,
   fixtureStaleCampaignLock,
@@ -78,6 +79,7 @@ import {
   type EvidenceRetentionSummary,
   type FailureBudgetSummary,
   type SafeExportGateSummary,
+  type ServerApprovedWorkunitStatusSummary,
 } from "@skybridge-agent-hub/client";
 import "./styles.css";
 
@@ -347,6 +349,39 @@ function DurablePairingApprovalPollingPanel() {
         <StatusValue label="no_next_execution_authorized" value={String(polling.policy.no_next_execution_authorized)} />
         <StatusValue label="token_printed" value="false" />
       </dl>
+    </section>
+  );
+}
+
+function ServerApprovedWorkunitPanel({ status }: { status: ServerApprovedWorkunitStatusSummary }) {
+  const finalizerPreview = status.finalizer_preview as Record<string, unknown>;
+  return (
+    <section className="panel server-approved-workunit-card" aria-label="Server-approved workunit 225 status">
+      <h2>Server-approved Run 225</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Server-approved workunit human review hold">
+        <span>Human review hold</span>
+        <span>remote_execution_enabled=false</span>
+        <span>queue_apply_enabled=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Run id" value={status.run_id} />
+        <StatusValue label="Workunit" value={status.workunit.workunit_id} />
+        <StatusValue label="Task" value={status.workunit.task_id} />
+        <StatusValue label="Pairing gate" value={status.gate.pairing_gate_result} />
+        <StatusValue label="Approval gate" value={`${status.gate.approval_gate_result}; consumed=${status.gate.approval_consumption_status}`} />
+        <StatusValue label="Resident polling gate" value={status.gate.resident_polling_gate_result} />
+        <StatusValue label="Resource gate" value={status.gate.resource_gate_result} />
+        <StatusValue label="Failure budget" value={status.gate.failure_budget_gate_result} />
+        <StatusValue label="Evidence retention" value={status.gate.evidence_retention_gate_result} />
+        <StatusValue label="Audit/redaction" value={status.gate.audit_redaction_gate_result} />
+        <StatusValue label="task PR URL" value={String(finalizerPreview.task_pr_url ?? "pending")} />
+        <StatusValue label="Human review hold" value={String(finalizerPreview.status ?? "pending")} />
+        <StatusValue label="no_next_execution_authorized" value={String(status.gate.no_next_execution_authorized)} />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Server-approved apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
     </section>
   );
 }
@@ -957,6 +992,7 @@ function App() {
         approval={fixtureBoincV1ReleaseApproval}
       />
       <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
+      <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
       <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
