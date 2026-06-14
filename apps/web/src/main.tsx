@@ -25,6 +25,7 @@ import {
   fixtureBoundedQueuePlan,
   fixtureBoundedQueueReadiness,
   fixtureBoincManagerState,
+  fixtureBoincV1ControlledTrialStatus,
   fixtureBoincV1Status,
   fixtureBoincV1AlphaStatus,
   fixtureBoincV1ReleaseApproval,
@@ -66,6 +67,7 @@ import {
   type BoundedQueuePlan,
   type BoundedQueueReadiness,
   type BoincManagerState,
+  type BoincV1ControlledTrialStatusSummary,
   type BoincV1Status,
   type BoincV1AlphaStatus,
   type BoincV1ReleaseApprovalSummary,
@@ -2089,6 +2091,7 @@ function BoincV1ReleaseDashboard() {
         <div className="dashboard-grid__main">
           <ReleaseReadinessPanel status={fixtureBoincV1ReleaseStatus} />
           <ReleaseApprovalPreviewPanel approval={fixtureBoincV1ReleaseApproval} />
+          <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
           <ReleasePostChecklistPanel />
         </div>
@@ -2205,6 +2208,43 @@ function ReleaseCompletedRunsPanel({ report }: { report: BoincV1ReleaseReportSum
       title="Completed runs and alpha"
       rows={report.completed_workunits_runs.map((item) => [item, "complete", "safe metadata", "token_printed=false"])}
     />
+  );
+}
+
+function BoincV1ControlledTrialPanel({ status }: { status: BoincV1ControlledTrialStatusSummary }) {
+  const gate = status.gate;
+  const reliability = gate.reliability_gates as Record<string, unknown>;
+  const releaseGate = gate.release_gate as Record<string, unknown>;
+  const taskPrUrl =
+    typeof status.finalizer_preview === "object" &&
+    status.finalizer_preview !== null &&
+    "task_pr_url" in status.finalizer_preview
+      ? String((status.finalizer_preview as Record<string, unknown>).task_pr_url ?? "pending")
+      : "pending";
+  return (
+    <section className="skybridge-panel boinc-v1-controlled-trial-panel" aria-label="BOINC v1 controlled trial 221 status">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Controlled Trial 221</p>
+          <h2>Human Review Hold</h2>
+        </div>
+        <span className={badgeClass("bad")}>held_waiting_human_review_controlled_trial_221</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Trial / workunit</dt><dd>{`${status.trial_id}; ${status.workunit.workunit_id}`}</dd></div>
+        <div><dt>Task</dt><dd>{`${status.workunit.task_id}; ${status.workunit.task_type}; ${status.workunit.risk}`}</dd></div>
+        <div><dt>Target</dt><dd>{status.workunit.target_path}</dd></div>
+        <div><dt>Gates</dt><dd>{`release=${String(releaseGate.release_gate_result)}; approval=${gate.approval_gate.approval_state}; resource=${String((gate.resource_gate as Record<string, unknown>).can_run_one_at_a_time)}`}</dd></div>
+        <div><dt>Reliability</dt><dd>{`failure=${String(reliability.failure_budget_gate_result)}; evidence=${String(reliability.evidence_retention_gate_result)}; audit=${String(reliability.audit_redaction_gate_result)}`}</dd></div>
+        <div><dt>Task PR URL</dt><dd>{taskPrUrl}</dd></div>
+        <div><dt>Safety</dt><dd>no_next_execution_authorized=true; remote_execution_enabled=false; queue_apply_enabled=false</dd></div>
+        <div><dt>No enabled execution buttons</dt><dd>No raw logs, no command input, no apply controls, token_printed=false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Trial apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Finalizer apply requires merged task PR</button>
+      </div>
+    </section>
   );
 }
 

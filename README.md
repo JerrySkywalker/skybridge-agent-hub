@@ -87,6 +87,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-boinc-v1-release-r
 
 See [docs/dev/BOINC_LIKE_V1_CONTROLLED_RELEASE.md](docs/dev/BOINC_LIKE_V1_CONTROLLED_RELEASE.md) and [docs/dev/OPERATOR_RUNBOOK_V1.md](docs/dev/OPERATOR_RUNBOOK_V1.md).
 
+The first post-release controlled trial is documented in [docs/dev/BOINC_V1_CONTROLLED_TRIAL_221.md](docs/dev/BOINC_V1_CONTROLLED_TRIAL_221.md). It is limited to one low-risk docs/local-smoke workunit and one task PR that must remain open for human review. Generic bounded queue apply, remote execution and arbitrary command dispatch remain disabled; `token_printed=false`.
+
 ## Quick Start
 
 Requirements:

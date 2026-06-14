@@ -426,6 +426,135 @@ export const BoincV1ReleaseReportSchema = z.object({
   token_printed: z.literal(false),
 });
 
+export const BoincV1ControlledTrialBlockerSchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial_blocker.v1"),
+  trial_id: z.string().min(1),
+  state: z.enum(["blocked_before_execution", "controlled_trial_failed"]),
+  blockers: z.array(z.string()),
+  codex_execution_count: z.number().int().nonnegative(),
+  task_pr_count: z.number().int().nonnegative(),
+  active_tasks: z.number().int().nonnegative(),
+  stale_leases: z.number().int().nonnegative(),
+  runner_lock: z.string().min(1),
+  no_next_execution_authorized: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const BoincV1ControlledTrialPolicySchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial_policy.v1"),
+  trial_id: z.string().min(1),
+  max_workunits: z.literal(1),
+  max_tasks: z.literal(1),
+  max_claims: z.literal(1),
+  max_codex_executions: z.literal(1),
+  max_task_prs: z.literal(1),
+  max_parallel_repo_mutations: z.literal(1),
+  require_release_gate: z.literal(true),
+  require_resource_gate: z.literal(true),
+  require_operator_approval: z.literal(true),
+  require_human_review: z.literal(true),
+  require_finalizer: z.literal(true),
+  require_failure_budget: z.literal(true),
+  require_evidence_retention: z.literal(true),
+  require_audit: z.literal(true),
+  require_redaction: z.literal(true),
+  allow_remote_execution: z.literal(false),
+  allow_arbitrary_command: z.literal(false),
+  allow_generic_queue_apply: z.literal(false),
+  approval_can_execute_work: z.literal(false),
+  shell_command_text_allowed: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const BoincV1ControlledTrialApprovalSchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial_approval.v1"),
+  approval_id: z.string().min(1),
+  trial_id: z.string().min(1),
+  workunit_id: z.string().min(1),
+  requested_mode: z.literal("one_workunit_controlled_trial"),
+  max_workunits: z.literal(1),
+  max_tasks: z.literal(1),
+  max_claims: z.literal(1),
+  max_codex_executions: z.literal(1),
+  max_task_prs: z.literal(1),
+  max_parallel_repo_mutations: z.literal(1),
+  require_release_gate: z.literal(true),
+  require_resource_gate: z.literal(true),
+  require_operator_approval: z.literal(true),
+  require_human_review: z.literal(true),
+  require_finalizer: z.literal(true),
+  require_failure_budget: z.literal(true),
+  require_evidence_retention: z.literal(true),
+  require_audit: z.literal(true),
+  require_redaction: z.literal(true),
+  allow_remote_execution: z.literal(false),
+  allow_arbitrary_command: z.literal(false),
+  allow_generic_queue_apply: z.literal(false),
+  approval_state: z.enum(["approved_for_this_goal_only", "explicit_fixture_approved", "consumed", "expired", "rejected"]),
+  expires_at: z.string().datetime(),
+  consumed: z.boolean(),
+  approval_can_execute_work: z.literal(false),
+  shell_command_text_allowed: z.literal(false),
+  token_printed: z.literal(false),
+});
+
+export const BoincV1ControlledTrialWorkunitSchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial.v1"),
+  trial_id: z.string().min(1),
+  workunit_id: z.string().min(1),
+  task_id: z.string().min(1),
+  task_type: z.literal("docs/local-smoke"),
+  risk: z.literal("low"),
+  target_path: z.string().min(1),
+  allowed_paths: z.array(z.string()),
+  resource_gate: z.literal("required"),
+  approval: z.literal("required"),
+  human_review: z.literal("required"),
+  finalizer: z.literal("required"),
+  max_workunits: z.literal(1),
+  max_tasks: z.literal(1),
+  max_claims: z.literal(1),
+  max_task_prs: z.literal(1),
+  token_printed: z.literal(false),
+});
+
+export const BoincV1ControlledTrialGateSchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial_gate.v1"),
+  trial_id: z.string().min(1),
+  workunit_id: z.string().min(1),
+  task_id: z.string().min(1),
+  gate_result: z.enum(["pass", "blocked"]),
+  can_execute_one_workunit: z.boolean(),
+  max_workunits: z.literal(1),
+  max_tasks: z.literal(1),
+  max_claims: z.literal(1),
+  max_codex_executions: z.literal(1),
+  max_task_prs: z.literal(1),
+  release_gate: z.record(z.unknown()),
+  approval_gate: BoincV1ControlledTrialApprovalSchema,
+  resource_gate: z.record(z.unknown()),
+  reliability_gates: z.record(z.unknown()),
+  desktop_resident_status: z.string().min(1),
+  server_control_plane_status: z.string().min(1),
+  active_tasks: z.literal(0),
+  stale_leases: z.literal(0),
+  runner_lock: z.literal("none"),
+  open_task_pr_count: z.number().int().nonnegative(),
+  blockers: z.array(z.string()),
+  no_next_execution_authorized: z.literal(true),
+  token_printed: z.literal(false),
+});
+
+export const BoincV1ControlledTrialStatusSchema = z.object({
+  schema: z.literal("skybridge.boinc_v1_controlled_trial_status.v1"),
+  trial_id: z.string().min(1),
+  workunit: BoincV1ControlledTrialWorkunitSchema,
+  policy: BoincV1ControlledTrialPolicySchema,
+  gate: BoincV1ControlledTrialGateSchema,
+  finalizer_preview: z.record(z.unknown()),
+  token_printed: z.literal(false),
+});
+
 export type FailureBudget = z.infer<typeof FailureBudgetSchema>;
 export type FailureClassification = z.infer<typeof FailureClassificationSchema>;
 export type RetryAuthorizationGate = z.infer<typeof RetryAuthorizationGateSchema>;
@@ -439,6 +568,8 @@ export type SafeExportGate = z.infer<typeof SafeExportGateSchema>;
 export type BoincV1ReleaseStatus = z.infer<typeof BoincV1ReleaseStatusSchema>;
 export type BoincV1ReleaseReport = z.infer<typeof BoincV1ReleaseReportSchema>;
 export type BoincV1ReleaseApproval = z.infer<typeof BoincV1ReleaseApprovalSchema>;
+export type BoincV1ControlledTrialStatus = z.infer<typeof BoincV1ControlledTrialStatusSchema>;
+export type BoincV1ControlledTrialApproval = z.infer<typeof BoincV1ControlledTrialApprovalSchema>;
 
 const fixtureHash = "0".repeat(64);
 const fixtureHashA = "a".repeat(64);
@@ -798,6 +929,138 @@ export const fixtureBoincV1ReleaseReport: BoincV1ReleaseReport = {
   token_printed: false,
 };
 
+export const fixtureBoincV1ControlledTrialApproval: BoincV1ControlledTrialApproval = {
+  schema: "skybridge.boinc_v1_controlled_trial_approval.v1",
+  approval_id: "boinc-v1-controlled-trial-221-approval-001",
+  trial_id: "boinc-v1-controlled-trial-221",
+  workunit_id: "boinc-v1-controlled-trial-221-workunit-001",
+  requested_mode: "one_workunit_controlled_trial",
+  max_workunits: 1,
+  max_tasks: 1,
+  max_claims: 1,
+  max_codex_executions: 1,
+  max_task_prs: 1,
+  max_parallel_repo_mutations: 1,
+  require_release_gate: true,
+  require_resource_gate: true,
+  require_operator_approval: true,
+  require_human_review: true,
+  require_finalizer: true,
+  require_failure_budget: true,
+  require_evidence_retention: true,
+  require_audit: true,
+  require_redaction: true,
+  allow_remote_execution: false,
+  allow_arbitrary_command: false,
+  allow_generic_queue_apply: false,
+  approval_state: "approved_for_this_goal_only",
+  expires_at: "2026-06-15T00:00:00.000Z",
+  consumed: false,
+  approval_can_execute_work: false,
+  shell_command_text_allowed: false,
+  token_printed: false,
+};
+
+export const fixtureBoincV1ControlledTrialStatus: BoincV1ControlledTrialStatus = {
+  schema: "skybridge.boinc_v1_controlled_trial_status.v1",
+  trial_id: "boinc-v1-controlled-trial-221",
+  workunit: {
+    schema: "skybridge.boinc_v1_controlled_trial.v1",
+    trial_id: "boinc-v1-controlled-trial-221",
+    workunit_id: "boinc-v1-controlled-trial-221-workunit-001",
+    task_id: "boinc-v1-controlled-trial-221-task-001",
+    task_type: "docs/local-smoke",
+    risk: "low",
+    target_path: "docs/boinc-v1-controlled-trial-221.md",
+    allowed_paths: ["README.md", "docs/**"],
+    resource_gate: "required",
+    approval: "required",
+    human_review: "required",
+    finalizer: "required",
+    max_workunits: 1,
+    max_tasks: 1,
+    max_claims: 1,
+    max_task_prs: 1,
+    token_printed: false,
+  },
+  policy: {
+    schema: "skybridge.boinc_v1_controlled_trial_policy.v1",
+    trial_id: "boinc-v1-controlled-trial-221",
+    max_workunits: 1,
+    max_tasks: 1,
+    max_claims: 1,
+    max_codex_executions: 1,
+    max_task_prs: 1,
+    max_parallel_repo_mutations: 1,
+    require_release_gate: true,
+    require_resource_gate: true,
+    require_operator_approval: true,
+    require_human_review: true,
+    require_finalizer: true,
+    require_failure_budget: true,
+    require_evidence_retention: true,
+    require_audit: true,
+    require_redaction: true,
+    allow_remote_execution: false,
+    allow_arbitrary_command: false,
+    allow_generic_queue_apply: false,
+    approval_can_execute_work: false,
+    shell_command_text_allowed: false,
+    token_printed: false,
+  },
+  gate: {
+    schema: "skybridge.boinc_v1_controlled_trial_gate.v1",
+    trial_id: "boinc-v1-controlled-trial-221",
+    workunit_id: "boinc-v1-controlled-trial-221-workunit-001",
+    task_id: "boinc-v1-controlled-trial-221-task-001",
+    gate_result: "pass",
+    can_execute_one_workunit: true,
+    max_workunits: 1,
+    max_tasks: 1,
+    max_claims: 1,
+    max_codex_executions: 1,
+    max_task_prs: 1,
+    release_gate: {
+      release_gate_result: "pass",
+      remote_execution_enabled: false,
+      arbitrary_command_enabled: false,
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      token_printed: false,
+    },
+    approval_gate: fixtureBoincV1ControlledTrialApproval,
+    resource_gate: {
+      can_run_one_at_a_time: true,
+      token_printed: false,
+    },
+    reliability_gates: {
+      failure_budget_gate_result: "pass",
+      evidence_retention_gate_result: "pass",
+      audit_redaction_gate_result: "pass",
+      safe_export_gate_result: "pass",
+      token_printed: false,
+    },
+    desktop_resident_status: "safe_local_supervisor_ready",
+    server_control_plane_status: "safe_preview_approval_only",
+    active_tasks: 0,
+    stale_leases: 0,
+    runner_lock: "none",
+    open_task_pr_count: 0,
+    blockers: [],
+    no_next_execution_authorized: true,
+    token_printed: false,
+  },
+  finalizer_preview: {
+    status: "held_waiting_human_review_controlled_trial_221",
+    can_apply: false,
+    human_review_required: true,
+    no_auto_merge: true,
+    no_raw_artifacts: true,
+    token_printed: false,
+  },
+  token_printed: false,
+};
+
 export function parseFailureBudget(input: unknown): FailureBudget {
   return FailureBudgetSchema.parse(input);
 }
@@ -812,4 +1075,8 @@ export function parseAuditReport(input: unknown): AuditReport {
 
 export function parseBoincV1ReleaseStatus(input: unknown): BoincV1ReleaseStatus {
   return BoincV1ReleaseStatusSchema.parse(input);
+}
+
+export function parseBoincV1ControlledTrialStatus(input: unknown): BoincV1ControlledTrialStatus {
+  return BoincV1ControlledTrialStatusSchema.parse(input);
 }
