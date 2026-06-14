@@ -142,7 +142,7 @@ function ConvertFrom-LivePr {
     files = $files
     ci_status = $ciStatus
     redaction_passed = (-not (Test-TrustedDocsUnsafeText $safeText))
-    raw_artifact_detected = ($safeText -match '(?i)raw prompt|raw transcript|raw stdout|raw stderr|worker log|ci log')
+    raw_artifact_detected = ($safeText -match '(?i)raw_prompt|raw_transcript|raw_stdout|raw_stderr|raw_worker_log|raw_codex_transcript|raw_ci_log')
     content_secret_scan_passed = (-not (Test-TrustedDocsUnsafeText $safeText))
     task_pr = $true
     low_risk_docs_local_smoke = $true
