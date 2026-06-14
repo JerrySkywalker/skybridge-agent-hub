@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("health", "product-readiness", "dependency-check", "git-state", "node-state", "rust-state", "desktop-state", "web-state", "server-state", "smoke-matrix-state", "safe-summary", "report")]
+  [ValidateSet("health", "product-readiness", "dependency-check", "git-state", "node-state", "rust-state", "desktop-state", "web-state", "server-state", "smoke-matrix-state", "runtime-state", "safe-summary", "report")]
   [string]$Command = "health",
   [switch]$Json
 )
@@ -35,6 +35,22 @@ function New-GitState {
   [pscustomobject]@{ schema = "skybridge.local_git_state.v1"; branch = $branch; clean = [string]::IsNullOrWhiteSpace($status); commit = (Get-SafeGitValue @("rev-parse", "--short", "HEAD")); token_printed = $false }
 }
 
+function New-RuntimeDiagnosticsState {
+  [pscustomobject]@{
+    schema = "skybridge.runtime_diagnostics_state.v1"
+    runtime_orchestrator_state = "preview_ready"
+    product_profiles = @("dev-preview", "desktop-only", "web-control-plane-preview", "supervisor-heartbeat-preview", "resident-polling-preview", "full-local-preview")
+    desktop_readiness = "preview_build_only"
+    web_readiness = "read_only_dashboard"
+    server_preview_readiness = "build_only"
+    resident_polling_preview_readiness = "status_only"
+    smoke_matrix_state = "local_validation_only"
+    disabled_capability_state = @("execution", "queue_apply", "remote_execution", "arbitrary_command_dispatch")
+    raw_logs_included = $false
+    token_printed = $false
+  }
+}
+
 function New-HealthReport {
   $git = New-GitState
   $deps = New-DependencyCheck
@@ -45,6 +61,7 @@ function New-HealthReport {
     dependencies = $deps
     states = @(
       New-State "bootstrap-complete" $true "Release tag and bootstrap gate are expected before productization."
+      New-State "runtime-orchestrator" $true "Local runtime orchestrator is preview-only."
       New-State "desktop" $true "Desktop preview is build-only and execution disabled."
       New-State "web" $true "Web product readiness route is read-only."
       New-State "server" $true "Server preview is metadata-only."
@@ -54,6 +71,7 @@ function New-HealthReport {
     queue_apply_enabled = $false
     remote_execution_enabled = $false
     arbitrary_command_enabled = $false
+    runtime_diagnostics = New-RuntimeDiagnosticsState
     token_printed = $false
   }
 }
@@ -118,6 +136,7 @@ $result = switch ($Command) {
   "web-state" { New-State "web" $true "Web preview route is read-only." }
   "server-state" { New-State "server" $true "Server preview is build-only." }
   "smoke-matrix-state" { New-State "smoke-matrix" $true "Smoke matrix scripts are local validation only." }
+  "runtime-state" { New-RuntimeDiagnosticsState }
   "safe-summary" { [pscustomobject]@{ ok = $true; diagnostics_safe = $true; raw_env_dump = $false; raw_logs = $false; token_printed = $false } }
   "report" { Write-HealthReports }
 }
