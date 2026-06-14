@@ -835,6 +835,31 @@ function TrustedDocsAutoMergePanel({ gate }: { gate: TrustedDocsAutoMergeGateSum
   );
 }
 
+function ServerApprovedTrial226Panel() {
+  return (
+    <section className="panel server-approved-trial-226-panel" aria-label="Server-approved two-workunit trial 226">
+      <h2>Server-approved Trial 226</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>server_approved_two_workunit_trial_226_completed</span>
+        <span>remote_execution_enabled=false</span>
+        <span>generic_bounded_queue_apply_enabled=false</span>
+        <span>no_next_execution_authorized=true</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Workunit A" value="task PR, merge commit and finalizer evidence shown in trial report" />
+        <StatusValue label="Workunit B" value="runs only after Workunit A merge and finalizer" />
+        <StatusValue label="Trusted-docs scoped merge audit" value="docs-only exact PR scope required" />
+        <StatusValue label="Final reports" value=".agent/tmp/server-approved-two-workunit-trial-226" />
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Remote execution disabled</button>
+        <button type="button" disabled aria-disabled="true">Generic queue apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -994,6 +1019,7 @@ function App() {
       <BoincV1ControlledTrialPanel status={fixtureBoincV1ControlledTrialStatus} />
       <ServerApprovedWorkunitPanel status={fixtureServerApprovedWorkunitStatus} />
       <TrustedDocsAutoMergePanel gate={fixtureTrustedDocsAutoMergeGate} />
+      <ServerApprovedTrial226Panel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}
