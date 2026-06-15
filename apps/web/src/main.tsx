@@ -2588,6 +2588,7 @@ function BoincV1ReleaseDashboard() {
           <ServerApprovedTrial226Panel />
           <OperatorCockpitPanel />
           <ReleaseCompletedRunsPanel report={fixtureBoincV1ReleaseReport} />
+          <InstallerPromotionRcPanel />
           <ReleasePostChecklistPanel />
         </div>
         <aside className="dashboard-grid__side">
@@ -3101,6 +3102,48 @@ function ReleasePostChecklistPanel() {
         "No workunit execution",
       ]}
     />
+  );
+}
+
+function InstallerPromotionRcPanel() {
+  const rows = [
+    ["Installer promotion panel", "skybridge.installer_promotion_report.v1", "artifact_promotion_gate_status=passed"],
+    ["Release Artifact Manifest", "skybridge.release_artifact_candidate_manifest.v1", "manual_upload_performed=false"],
+    ["Update Channel Manifest", "skybridge.update_channel_manifest_preview.v1", "network_update_allowed=false"],
+    ["Host Mutation Gate", "skybridge.host_mutation_gate.v1", "host_mutation_allowed=false"],
+    ["Long Soak", "skybridge.long_sandbox_soak_report.v1", "background_process_left=false"],
+    ["Operator Acceptance v4", "skybridge.operator_acceptance_v4_report.v1", "token_printed=false"],
+  ];
+  return (
+    <section className="skybridge-panel installer-promotion-rc-panel" aria-label="Installer promotion release candidate panels">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Installer Promotion RC</p>
+          <h2>Release Candidate Surfaces</h2>
+        </div>
+        <span className={badgeClass("bad")}>host mutation disabled</span>
+      </div>
+      <div className="data-table data-table--workers">
+        {rows.map(([name, schema, status]) => (
+          <div className="data-table__row" key={name}>
+            <span>{name}<small>{schema}</small></span>
+            <span>{status}<small>safe report under .agent/tmp</small></span>
+            <span>read-only<small>no install/update/upload/release control</small></span>
+          </div>
+        ))}
+      </div>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Update disabled</button>
+        <button type="button" disabled aria-disabled="true">Upload disabled</button>
+        <button type="button" disabled aria-disabled="true">GitHub Release disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Next safe action</dt><dd>Open PR, wait for CI, merge, run post-merge smokes, then tag only after the tag safety gate passes.</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>real_install=false; network_update=false; manual_upload=false; manual_github_release=false; queue_apply_enabled=false</dd></div>
+      </dl>
+    </section>
   );
 }
 

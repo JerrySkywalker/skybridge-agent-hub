@@ -216,6 +216,7 @@ function Verify-Candidate {
 }
 
 function Write-Report {
+  $interlock = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-installer-safety-interlock.ps1") -Command gate -Json | ConvertFrom-Json
   $candidate = Build-Candidate -Archive
   $manifest = Get-Manifest
   $verification = Verify-Candidate
@@ -225,6 +226,7 @@ function Write-Report {
     candidate = $candidate
     manifest = $manifest
     verification = $verification
+    safety_interlock = $interlock
     disabled_capabilities = @("host_install", "host_uninstall", "registry", "startup", "scheduled_task", "service", "powercfg", "PATH", "upload", "github_release", "codex_worker", "workunit_apply", "task_claim", "queue_apply")
     token_printed = $false
   }
