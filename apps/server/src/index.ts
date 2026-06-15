@@ -579,6 +579,94 @@ export async function createServer(
     },
   );
 
+  app.get("/api/local-auth/status", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("local-auth-status");
+  });
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/local-auth/validate-preview",
+    async (request, reply) => {
+      const gate = evaluateLocalAuthPreviewRequest({
+        origin: safeString(request.headers.origin) ?? safeString(request.body?.origin) ?? "repo-local-dev-fixture",
+        fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? safeString(request.body?.fixture_auth),
+        payload: request.body,
+      });
+      if (!gate.accepted) return reply.code(401).send(gate);
+      return reply.code(202).send({
+        ok: true,
+        gate,
+        safe_metadata: localAuthSafeMetadata("validate-preview"),
+        token_printed: false,
+      });
+    },
+  );
+
+  app.get("/api/control-plane/local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("server-control-plane-preview");
+  });
+
+  app.get("/api/workers/pairing-local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("worker-pairing-preview");
+  });
+
+  app.get("/api/operator-approvals/local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("approval-preview");
+  });
+
+  app.get("/api/resident-polling/local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("resident-polling-preview");
+  });
+
+  app.get("/api/product-readiness/local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("product-readiness-preview");
+  });
+
+  app.get("/api/release-dashboard/local-auth-preview", async (request, reply) => {
+    const gate = evaluateLocalAuthPreviewRequest({
+      origin: safeString(request.headers.origin) ?? "repo-local-dev-fixture",
+      fixtureAuth: safeString(request.headers["x-skybridge-fixture-auth"]) ?? "fixture-hash",
+      payload: {},
+    });
+    if (!gate.accepted) return reply.code(401).send(gate);
+    return localAuthSafeMetadata("release-dashboard-preview");
+  });
+
   app.get("/api/workers", async () => ({
     workers: [...controlPlaneWorkers.values()].map((worker) =>
       controlPlaneWorkerView(
@@ -3523,6 +3611,103 @@ function workerIngestRejection(reasons: string[]) {
     reasons: [...new Set(reasons)],
     token_printed: false,
   };
+}
+
+function localAuthRejection(reasons: string[]) {
+  return {
+    schema: "skybridge.local_auth_rejection.v1",
+    ok: false,
+    accepted: false,
+    error: "local_auth_gate_rejected",
+    reasons: [...new Set(reasons)],
+    execution_enabled: false,
+    queue_apply_enabled: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    token_printed: false,
+  };
+}
+
+function localAuthSafeMetadata(route: string) {
+  return {
+    schema: "skybridge.local_auth_gate.v1",
+    route,
+    accepted: true,
+    fixture_authenticated: true,
+    public_safe_fixture_endpoint: false,
+    safe_metadata_only: true,
+    allowed_read_scope: ["safe_metadata", "status", "preview"],
+    auth_does_not_enable_execution: true,
+    release_gate_required: true,
+    resource_gate_required: true,
+    failure_gate_required: true,
+    evidence_gate_required: true,
+    audit_gate_required: true,
+    human_review_gate_required: true,
+    execution_enabled: false,
+    queue_apply_enabled: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    token_printed: false,
+  };
+}
+
+function evaluateLocalAuthPreviewRequest(input: {
+  origin?: string;
+  fixtureAuth?: string;
+  payload?: Record<string, unknown>;
+}) {
+  const reasons: string[] = [];
+  const origin = input.origin ?? "";
+  if (!isAllowedLoopbackOrigin(origin)) reasons.push("remote_origin_forbidden");
+  if (!input.fixtureAuth) reasons.push("unauthenticated_preview_request");
+  if (input.fixtureAuth && !["fixture-hash", "session-fixture-hash"].includes(input.fixtureAuth)) {
+    reasons.push("invalid_fixture_auth");
+  }
+  reasons.push(...findUnsafeControlPlanePayload(input.payload ?? {}));
+  if (containsExecutionRequest(input.payload ?? {})) reasons.push("execution_request_forbidden");
+  if (reasons.length > 0) return localAuthRejection(reasons);
+  return localAuthSafeMetadata("local-auth-preview");
+}
+
+function isAllowedLoopbackOrigin(origin: string): boolean {
+  if (origin === "repo-local-dev-fixture") return true;
+  try {
+    const parsed = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function containsExecutionRequest(input: unknown): boolean {
+  if (!input || typeof input !== "object") return false;
+  for (const [key, value] of Object.entries(input)) {
+    const lower = key.toLowerCase();
+    if (
+      [
+        "execute",
+        "execution_enabled",
+        "remote_execution_enabled",
+        "queue_apply",
+        "queue_apply_enabled",
+        "run_apply",
+        "start_all",
+        "start_queue",
+        "claim_task",
+        "shell_command",
+        "raw_shell_command",
+        "command_text",
+      ].includes(lower)
+    ) {
+      return true;
+    }
+    if (typeof value === "object" && containsExecutionRequest(value)) return true;
+    if (typeof value === "string" && /(?:pwsh|powershell|bash|cmd\.exe|start-all|start-queue|resume\s+-Apply)/i.test(value)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function findUnsafeControlPlanePayload(input: unknown): string[] {

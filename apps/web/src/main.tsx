@@ -389,6 +389,10 @@ function LocalSessionPage() {
       </section>
       <section className="dashboard-grid">
         <div className="dashboard-grid__main">
+          <WebLocalAuthStatusPanel />
+          <WebLoopbackOriginPolicyPanel />
+          <WebAuthSessionStatePanel />
+          <WebAuthRejectionSummaryPanel />
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
@@ -443,6 +447,99 @@ function LocalSessionPage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function WebLocalAuthStatusPanel() {
+  return (
+    <section className="skybridge-panel web-local-auth-status-panel" aria-label="Web local auth status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Local Auth</p>
+          <h2>Local Auth Status</h2>
+        </div>
+        <span className={badgeClass("ok")}>fixture-only</span>
+      </div>
+      <div className="mode-strip execution-disabled-banner" aria-label="Execution disabled by local auth">
+        <span>Execution disabled by local auth</span>
+        <span>Queue apply disabled</span>
+        <span>No real login, no raw token display, no enabled worker controls</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Model schema</dt><dd>skybridge.local_auth_model.v1</dd></div>
+        <div><dt>Session schema</dt><dd>skybridge.local_auth_session.v1</dd></div>
+        <div><dt>Gate schema</dt><dd>skybridge.local_auth_gate.v1</dd></div>
+        <div><dt>Raw token persisted</dt><dd>false; hash-only fixture state</dd></div>
+        <div><dt>Auth headers persisted</dt><dd>false</dd></div>
+        <div><dt>token_printed</dt><dd>false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Login disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebLoopbackOriginPolicyPanel() {
+  return (
+    <section className="skybridge-panel web-loopback-origin-policy-panel" aria-label="Loopback / Origin Policy">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Loopback / Origin Policy</p>
+          <h2>Loopback / Origin Policy</h2>
+        </div>
+        <span className={badgeClass("ok")}>remote blocked</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Policy schema</dt><dd>skybridge.loopback_origin_policy.v1</dd></div>
+        <div><dt>Allowed origins</dt><dd>localhost, 127.0.0.1, ::1 and repo-local dev fixtures</dd></div>
+        <div><dt>Remote origins allowed</dt><dd>false</dd></div>
+        <div><dt>Auth scope</dt><dd>safe metadata read-only</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function WebAuthSessionStatePanel() {
+  return (
+    <section className="skybridge-panel web-auth-session-state-panel" aria-label="Session State">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Session State</p>
+          <h2>Session State</h2>
+        </div>
+        <span className={badgeClass("ok")}>hash-only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Store path</dt><dd>.agent/tmp/local-auth/session-store</dd></div>
+        <div><dt>Stored fields</dt><dd>session id, hash, timestamps, state, scope and local origin summary</dd></div>
+        <div><dt>Cookies</dt><dd>not persisted</dd></div>
+        <div><dt>Private keys</dt><dd>not persisted</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function WebAuthRejectionSummaryPanel() {
+  return (
+    <section className="skybridge-panel web-auth-rejection-summary-panel" aria-label="Auth Rejection Summary">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Auth Rejection Summary</p>
+          <h2>Auth Rejection Summary</h2>
+        </div>
+        <span className={badgeClass("ok")}>fail closed</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Rejects</dt><dd>unauthenticated preview requests, remote origins, unsafe auth payloads and execution requests</dd></div>
+        <div><dt>Command text</dt><dd>rejected; auth cannot carry shell commands</dd></div>
+        <div><dt>Host mutation</dt><dd>not enabled by local auth</dd></div>
+        <div><dt>Gates</dt><dd>release, resource, failure, evidence, audit and human-review gates still required</dd></div>
+      </dl>
+    </section>
   );
 }
 
