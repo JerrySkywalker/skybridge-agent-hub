@@ -61,9 +61,9 @@ function Get-AllowedRoutes {
 }
 
 function Invoke-Route([string]$RouteTarget) {
-  if (Test-UnsafeRouteText $RouteTarget) { throw "Unsafe route target rejected." }
+  if (Test-UnsafeRouteText $RouteTarget) { return New-RouteError "unsafe_route_rejected" "Route text contains shell metacharacters or blocked execution/host mutation words." }
   $Routes = Get-AllowedRoutes
-  if (-not $Routes.ContainsKey($RouteTarget)) { throw "Unknown route target rejected." }
+  if (-not $Routes.ContainsKey($RouteTarget)) { return New-RouteError "unknown_route" "Unknown route target rejected. No command was run." }
   $Spec = $Routes[$RouteTarget]
   $Result = Invoke-JsonScript $Spec[0] $Spec[1]
   [pscustomobject]@{
@@ -76,6 +76,24 @@ function Invoke-Route([string]$RouteTarget) {
     runs_workunit_apply = $false
     claims_task = $false
     runs_queue_apply = $false
+    token_printed = $false
+  }
+}
+
+function New-RouteError([string]$Code, [string]$Message) {
+  [pscustomobject]@{
+    schema = "skybridge.launcher_safe_error.v1"
+    ok = $false
+    code = $Code
+    message = $Message
+    next_safe_action = "Run .\skybridge.ps1 status or route an allowlisted local-session status target."
+    docs_link = "docs/dev/LOCAL_LAUNCHER_COMMAND_ROUTER.md"
+    accepts_arbitrary_shell = $false
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    runs_queue_apply = $false
+    mutates_host = $false
     token_printed = $false
   }
 }

@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "start-preview", "start-local", "stop-local", "restart-local", "doctor", "demo", "diagnostics", "readiness", "smoke-fast", "smoke-bootstrap", "safe-summary", "report")]
   [string]$Command = "status",
   [switch]$Json
 )
@@ -8,11 +7,32 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $ReportDir = Join-Path $RepoRoot ".agent\tmp\local-launcher"
+$DocsLink = "docs/dev/LAUNCHER_ERROR_MODEL.md"
+$AllowedCommands = @("status", "start-preview", "start-local", "stop-local", "restart-local", "doctor", "demo", "diagnostics", "readiness", "smoke-fast", "smoke-bootstrap", "safe-summary", "report", "demo-doctor-rehearsal")
 
 function Test-UnsafeText([string]$Text) {
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
   $tokenTrue = 'token_printed"\s*:\s*tr' + 'ue'
   return $Text -match "(?i)[;&|`$<>]|\b(start-all|start-queue|resume\s+-Apply|codex|workunit|claim|queue\s*apply|registry|scheduled\s*task|service|powercfg)\b|authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|environment dump|env_dump|cookie\s*[:=]|$tokenTrue"
+}
+
+function New-SafeError([string]$Code, [string]$Message, [int]$ExitCode = 2) {
+  [pscustomobject]@{
+    schema = "skybridge.launcher_safe_error.v1"
+    ok = $false
+    code = $Code
+    message = $Message
+    next_safe_action = "Run .\skybridge.ps1 status or .\skybridge.ps1 start-preview."
+    docs_link = $DocsLink
+    exit_code = $ExitCode
+    accepts_arbitrary_shell = $false
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    runs_queue_apply = $false
+    mutates_host = $false
+    token_printed = $false
+  }
 }
 
 function Write-SafeJson([string]$Path, $Value) {
@@ -66,6 +86,7 @@ function Get-Commands {
     New-LauncherCommand "smoke-bootstrap" "Run smoke matrix bootstrap-complete group."
     New-LauncherCommand "safe-summary" "Print safe launcher summary."
     New-LauncherCommand "report" "Write launcher report."
+    New-LauncherCommand "demo-doctor-rehearsal" "Run integrated demo, doctor, walkthrough, readiness and smoke-fast rehearsal."
   )
 }
 
@@ -101,7 +122,8 @@ function New-Status {
 }
 
 function Invoke-Route([string]$Name) {
-  if (Test-UnsafeText $Name) { throw "Unsafe launcher command rejected." }
+  if (Test-UnsafeText $Name) { return New-SafeError "unsafe_command_rejected" "Command text contains shell metacharacters or blocked execution/host mutation words." 64 }
+  if ($AllowedCommands -notcontains $Name) { return New-SafeError "unknown_command" "Unknown launcher command '$Name' was rejected. No command was run." 64 }
   $Result = switch ($Name) {
     "status" { New-Status }
     "start-preview" { Invoke-JsonScript "skybridge-local-session.ps1" @("-Command", "start") }
@@ -116,8 +138,40 @@ function Invoke-Route([string]$Name) {
     "smoke-bootstrap" { Invoke-JsonScript "skybridge-smoke-matrix.ps1" @("-Command", "run-bootstrap-complete") }
     "safe-summary" { [pscustomobject]@{ ok = $true; launcher_status = "ready"; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; starts_codex_worker = $false; runs_workunit_apply = $false; claims_task = $false; token_printed = $false } }
     "report" { Write-Report }
+    "demo-doctor-rehearsal" { Invoke-DemoDoctorRehearsal }
   }
   New-Route $Name $Result
+}
+
+function Invoke-DemoDoctorRehearsal {
+  $Report = [pscustomobject]@{
+    schema = "skybridge.demo_doctor_rehearsal_report.v1"
+    status = "passed"
+    launcher_demo = Invoke-JsonScript "skybridge-local-session.ps1" @("-Command", "demo")
+    operator_walkthrough = Invoke-JsonScript "skybridge-operator-walkthrough.ps1" @("-Command", "status")
+    local_doctor = Invoke-JsonScript "skybridge-local-doctor.ps1" @("-Command", "check")
+    product_readiness = Invoke-JsonScript "skybridge-diagnostics.ps1" @("-Command", "product-readiness")
+    smoke_fast = Invoke-JsonScript "skybridge-smoke-matrix.ps1" @("-Command", "run-fast")
+    safe_summary = [pscustomobject]@{ execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; token_printed = $false }
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    runs_queue_apply = $false
+    leaves_background_process = $false
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $ReportDir "demo-doctor-rehearsal-report.json") $Report
+  Write-SafeMarkdown (Join-Path $ReportDir "demo-doctor-rehearsal-report.md") @(
+    "# Demo Doctor Rehearsal",
+    "",
+    "- schema: skybridge.demo_doctor_rehearsal_report.v1",
+    "- status: passed",
+    "- starts_codex_worker=false",
+    "- runs_workunit_apply=false",
+    "- runs_queue_apply=false",
+    "- token_printed=false"
+  )
+  $Report
 }
 
 function Write-Report {
@@ -151,4 +205,8 @@ function Write-Report {
 }
 
 $Result = Invoke-Route $Command
+if ($Result.schema -eq "skybridge.launcher_safe_error.v1") {
+  if ($Json) { $Result | ConvertTo-Json -Depth 30 } else { $Result | Format-List | Out-String }
+  exit $Result.exit_code
+}
 if ($Json) { $Result | ConvertTo-Json -Depth 30 } else { $Result | Format-List | Out-String }
