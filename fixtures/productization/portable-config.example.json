@@ -1,0 +1,27 @@
+{
+  "schema": "skybridge.portable_config.v1",
+  "profile": {
+    "schema": "skybridge.portable_config_profile.v1",
+    "profile_id": "portable-local-preview",
+    "mode": "portable_local_preview",
+    "reports_dir": ".agent/tmp/portable-package",
+    "local_auth_preview": {
+      "enabled": false,
+      "pairing_preview_only": true,
+      "raw_pairing_code_persisted": false
+    },
+    "execution_enabled": false,
+    "queue_apply_enabled": false,
+    "remote_execution_enabled": false,
+    "arbitrary_command_enabled": false
+  },
+  "validation": {
+    "schema": "skybridge.portable_config_validation.v1",
+    "ok": true,
+    "no_secrets": true,
+    "no_tokens": true,
+    "no_host_absolute_secret_paths": true,
+    "token_printed": false
+  },
+  "token_printed": false
+}

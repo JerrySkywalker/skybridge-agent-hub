@@ -391,6 +391,7 @@ function LocalSessionPage() {
         <div className="dashboard-grid__main">
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
+          <WebPortablePackagePanel />
           <WebLocalSessionPanel />
           <WebOperatorWalkthroughPanel />
           <ProductTable
@@ -432,6 +433,34 @@ function LocalSessionPage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function WebPortablePackagePanel() {
+  return (
+    <section className="skybridge-panel web-portable-package-panel" aria-label="Web portable package panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Portable Package</p>
+          <h2>Portable Package Candidate</h2>
+        </div>
+        <span className={badgeClass("ok")}>extract smoke ready</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Package schema</dt><dd>skybridge.portable_package.v1</dd></div>
+        <div><dt>Manifest status</dt><dd>skybridge.portable_package_manifest.v1; exclusions verified</dd></div>
+        <div><dt>Extraction smoke status</dt><dd>extracts under .agent/tmp/portable-package/extract-smoke only</dd></div>
+        <div><dt>Install preview</dt><dd>copy, shortcut, Start Menu and PATH plans are preview-only</dd></div>
+        <div><dt>Uninstall preview</dt><dd>detect/remove/cleanup plans are preview-only</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>install, upload, worker execution, workunit apply, claim and queue apply remain false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Upload disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 
