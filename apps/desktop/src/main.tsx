@@ -1096,6 +1096,84 @@ function DesktopOperatorAcceptancePanel() {
   );
 }
 
+function DesktopSandboxInstallPanel() {
+  return (
+    <section className="panel desktop-sandbox-install-panel" aria-label="Sandbox install status">
+      <h2>Install Sandbox</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.install_sandbox.v1</span>
+        <span>READ ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Sandbox root" value=".agent/tmp/install-sandbox/current only" />
+        <StatusValue label="Apply mode" value="portable package extract to sandbox; no host install" />
+        <StatusValue label="Validation" value="launcher status, start-preview, doctor, demo and safe-summary only" />
+        <StatusValue label="Forbidden host mutation" value="registry=false; service=false; scheduled_task=false; startup=false; PATH=false; powercfg=false" />
+        <StatusValue label="Disabled controls" value="real install=false; worker execute=false; apply=false; start=false; claim=false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Real install disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim/apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopSandboxUpgradeRollbackPanel() {
+  return (
+    <section className="panel desktop-sandbox-upgrade-rollback-panel" aria-label="Sandbox upgrade rollback status">
+      <h2>Upgrade / Rollback Sandbox</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.sandbox_upgrade_plan.v1</span>
+        <span>skybridge.sandbox_rollback_plan.v1</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Directories" value="current; previous; rollback; staging under .agent/tmp/install-sandbox" />
+        <StatusValue label="Migration preview" value="v1.5.0-portable-package-rc to v1.6.0-clean-room-portable-acceptance-rc; local channel only" />
+        <StatusValue label="Network" value="network_update=false; binary_download=false; GitHub release=false" />
+        <StatusValue label="Host mutation" value="registry=false; service=false; scheduled_task=false; PATH=false; powercfg=false" />
+        <StatusValue label="Disabled controls" value="host rollback=false; worker execute=false; queue apply=false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Network update disabled</button>
+        <button type="button" disabled aria-disabled="true">Host rollback disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopSandboxSoakStabilityPanel() {
+  return (
+    <section className="panel desktop-sandbox-soak-stability-panel" aria-label="Sandbox soak stability status">
+      <h2>Soak / Stability</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.extended_fixture_soak.v1</span>
+        <span>skybridge.stability_cleanup_report.v1</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Bounds" value="fixture-only; max iterations 5; max duration 180 seconds" />
+        <StatusValue label="Cleanup hardening" value="stale sandbox preview; orphan fixture detection; lock consistency; sandbox size preview" />
+        <StatusValue label="Raw artifacts" value="raw logs, transcripts, stdout, stderr, environment dumps and secrets are not persisted" />
+        <StatusValue label="Background processes" value="background_process_left_running=false" />
+        <StatusValue label="Disabled controls" value="worker loop=false; workunit apply=false; task claim=false; queue apply=false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Worker loop disabled</button>
+        <button type="button" disabled aria-disabled="true">Start queue disabled</button>
+        <button type="button" disabled aria-disabled="true">Resume apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1262,6 +1340,9 @@ function App() {
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
       <DesktopPortablePackagePanel />
+      <DesktopSandboxInstallPanel />
+      <DesktopSandboxUpgradeRollbackPanel />
+      <DesktopSandboxSoakStabilityPanel />
       <DesktopOperatorAcceptancePanel />
       <DesktopLocalSessionPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />

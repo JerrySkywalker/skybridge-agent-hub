@@ -392,6 +392,9 @@ function LocalSessionPage() {
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
+          <WebSandboxInstallPanel />
+          <WebSandboxUpgradeRollbackPanel />
+          <WebSandboxSoakStabilityPanel />
           <WebOperatorAcceptancePanel />
           <WebLocalSessionPanel />
           <WebOperatorWalkthroughPanel />
@@ -487,6 +490,87 @@ function WebOperatorAcceptancePanel() {
         <button type="button" disabled aria-disabled="true">Install disabled</button>
         <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
         <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebSandboxInstallPanel() {
+  return (
+    <section className="skybridge-panel web-sandbox-install-panel" aria-label="Web sandbox install panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Sandbox Install</p>
+          <h2>Install Sandbox</h2>
+        </div>
+        <span className={badgeClass("ok")}>read-only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Schema</dt><dd>skybridge.install_sandbox.v1</dd></div>
+        <div><dt>Sandbox root</dt><dd>.agent/tmp/install-sandbox/current only</dd></div>
+        <div><dt>Apply mode</dt><dd>portable package extract to sandbox; no host install</dd></div>
+        <div><dt>Validation</dt><dd>launcher status, start-preview, doctor, demo and safe-summary only</dd></div>
+        <div><dt>Disabled controls</dt><dd>real install, worker execute, apply, start and claim controls disabled</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Real install disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim/apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebSandboxUpgradeRollbackPanel() {
+  return (
+    <section className="skybridge-panel web-sandbox-upgrade-rollback-panel" aria-label="Web sandbox upgrade rollback panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Sandbox Upgrade</p>
+          <h2>Upgrade / Rollback</h2>
+        </div>
+        <span className={badgeClass("ok")}>local channel</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Upgrade schema</dt><dd>skybridge.sandbox_upgrade_plan.v1</dd></div>
+        <div><dt>Rollback schema</dt><dd>skybridge.sandbox_rollback_plan.v1</dd></div>
+        <div><dt>Migration preview</dt><dd>v1.5.0-portable-package-rc to v1.6.0-clean-room-portable-acceptance-rc</dd></div>
+        <div><dt>Containment</dt><dd>current, previous, rollback and staging stay under .agent/tmp/install-sandbox</dd></div>
+        <div><dt>Network</dt><dd>no update, no binary download, no GitHub release</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Network update disabled</button>
+        <button type="button" disabled aria-disabled="true">Host rollback disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebSandboxSoakStabilityPanel() {
+  return (
+    <section className="skybridge-panel web-sandbox-soak-stability-panel" aria-label="Web sandbox soak stability panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Soak / Stability</p>
+          <h2>Fixture Soak</h2>
+        </div>
+        <span className={badgeClass("ok")}>bounded</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Soak schema</dt><dd>skybridge.extended_fixture_soak.v1</dd></div>
+        <div><dt>Stability schema</dt><dd>skybridge.stability_cleanup_report.v1</dd></div>
+        <div><dt>Bounds</dt><dd>default max iterations 5; max duration 180 seconds</dd></div>
+        <div><dt>Cleanup</dt><dd>stale sandbox preview, orphan fixture detection and lock consistency check</dd></div>
+        <div><dt>Disabled controls</dt><dd>no worker loop, no task claim, no workunit apply, no queue apply</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Worker loop disabled</button>
+        <button type="button" disabled aria-disabled="true">Start queue disabled</button>
+        <button type="button" disabled aria-disabled="true">Resume apply disabled</button>
       </div>
       <span>token_printed=false</span>
     </section>

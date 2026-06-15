@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "safe-summary", "report")]
+  [ValidateSet("status", "safe-summary", "report", "v2-report")]
   [string]$Command = "status",
   [switch]$Json
 )
@@ -60,10 +60,57 @@ function New-AcceptanceReport {
   $report
 }
 
+function New-AcceptanceV2Report {
+  $install = Invoke-JsonScript "skybridge-install-sandbox.ps1" @("-Command", "report")
+  $uninstall = Invoke-JsonScript "skybridge-uninstall-sandbox.ps1" @("-Command", "status")
+  $upgradeRollback = Invoke-JsonScript "skybridge-upgrade-rollback-sandbox.ps1" @("-Command", "report")
+  $migration = Invoke-JsonScript "skybridge-upgrade-rollback-sandbox.ps1" @("-Command", "migration-preview")
+  $soak = Invoke-JsonScript "skybridge-local-soak.ps1" @("-Command", "extended-fixture-soak")
+  $stability = Invoke-JsonScript "skybridge-local-soak.ps1" @("-Command", "stability-cleanup")
+  $launcherValidation = Invoke-JsonScript "skybridge-install-sandbox.ps1" @("-Command", "verify")
+  $report = [pscustomobject]@{
+    schema = "skybridge.operator_acceptance_v2_report.v1"
+    status = $(if ($install.status -eq "passed" -and $soak.status -eq "passed" -and $stability.status -eq "passed") { "passed" } else { "preview" })
+    install_sandbox_status = $install.status
+    uninstall_sandbox_status = $uninstall.status
+    upgrade_sandbox_status = $(if ($upgradeRollback.upgrade_report) { $upgradeRollback.upgrade_report.status } else { "preview" })
+    rollback_sandbox_status = $(if ($upgradeRollback.rollback_report) { $upgradeRollback.rollback_report.status } else { "preview" })
+    version_channel_migration_preview_status = $migration.status
+    extended_fixture_soak_status = $soak.status
+    stability_cleanup_status = $stability.status
+    extracted_sandbox_launcher_validation = $launcherValidation
+    disabled_capabilities = @("codex_worker", "workunit_creation", "workunit_apply", "task_creation", "task_claim", "task_pr_creation", "generic_queue_apply", "start_all", "start_queue", "resume_apply", "remote_execution", "arbitrary_command_dispatch", "host_install", "host_uninstall", "upload", "github_release")
+    known_limitations = @("sandbox-only install model", "local channel migration preview only", "unsigned archive", "no network update", "no GitHub release")
+    next_safe_action = "Review sandbox reports and keep execution/apply controls disabled before Goal 265 planning."
+    web_status = "read_only_sandbox_install_upgrade_soak_panels"
+    desktop_status = "read_only_sandbox_install_upgrade_soak_panels"
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $ReportDir "operator-acceptance-v2-report.json") $report
+  @(
+    "# Operator Acceptance v2 Report",
+    "",
+    "- schema: skybridge.operator_acceptance_v2_report.v1",
+    "- status: $($report.status)",
+    "- install_sandbox_status: $($report.install_sandbox_status)",
+    "- uninstall_sandbox_status: $($report.uninstall_sandbox_status)",
+    "- upgrade_sandbox_status: $($report.upgrade_sandbox_status)",
+    "- rollback_sandbox_status: $($report.rollback_sandbox_status)",
+    "- version_channel_migration_preview_status: $($report.version_channel_migration_preview_status)",
+    "- extended_fixture_soak_status: $($report.extended_fixture_soak_status)",
+    "- stability_cleanup_status: $($report.stability_cleanup_status)",
+    "- web_status: $($report.web_status)",
+    "- desktop_status: $($report.desktop_status)",
+    "- token_printed=false"
+  ) | Set-Content -LiteralPath (Join-Path $ReportDir "operator-acceptance-v2-report.md") -Encoding utf8
+  $report
+}
+
 $Result = switch ($Command) {
   "status" { [pscustomobject]@{ schema = "skybridge.operator_acceptance_report.v1"; status = "ready"; token_printed = $false } }
   "safe-summary" { [pscustomobject]@{ ok = $true; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; token_printed = $false } }
   "report" { New-AcceptanceReport }
+  "v2-report" { New-AcceptanceV2Report }
 }
 
 if ($Json) { $Result | ConvertTo-Json -Depth 50 } else { $Result | Format-List | Out-String }
