@@ -131,6 +131,7 @@ type Route =
   | "goals"
   | "workers"
   | "control-plane"
+  | "local-session"
   | "product-readiness"
   | "first-run"
   | "release"
@@ -151,6 +152,7 @@ const navItems: Array<{ route: Route; label: string }> = [
   { route: "goals", label: "Goals" },
   { route: "workers", label: "Worker Pool" },
   { route: "control-plane", label: "Control Plane" },
+  { route: "local-session", label: "Local Session" },
   { route: "product-readiness", label: "Product Readiness" },
   { route: "first-run", label: "First-run" },
   { route: "release", label: "Release" },
@@ -231,6 +233,7 @@ function App() {
         {route === "goals" ? <GoalsPage apiBase={apiBase} /> : null}
         {route === "workers" ? <WorkerPoolPage apiBase={apiBase} /> : null}
         {route === "control-plane" ? <ControlPlanePage apiBase={apiBase} /> : null}
+        {route === "local-session" ? <LocalSessionPage /> : null}
         {route === "product-readiness" ? <ProductReadinessPage /> : null}
         {route === "first-run" ? <FirstRunWizardPage /> : null}
         {route === "release" ? <BoincV1ReleaseDashboard /> : null}
@@ -365,6 +368,101 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
       </section>
       {data.error ? <p className="skybridge-error">{data.error}</p> : null}
     </div>
+  );
+}
+
+function LocalSessionPage() {
+  return (
+    <div className="route-stack local-session-page">
+      <section className="hero-panel">
+        <div>
+          <h2>Manual Local Session</h2>
+          <p>Bounded non-worker preview for Web, server/control-plane, Desktop metadata, supervisor heartbeat, resident polling, diagnostics, product readiness and smoke-matrix status.</p>
+        </div>
+        <span className={badgeClass("ok")}>preview safe</span>
+      </section>
+      <section className="kpi-grid">
+        <Kpi label="Session schema" value="skybridge.local_session.v1" />
+        <Kpi label="Component schema" value="skybridge.local_session_component.v1" />
+        <Kpi label="Lifecycle schema" value="skybridge.local_session_lifecycle.v1" />
+        <Kpi label="token_printed" value="false" />
+      </section>
+      <section className="dashboard-grid">
+        <div className="dashboard-grid__main">
+          <WebLocalSessionPanel />
+          <ProductTable
+            title="Local session components"
+            rows={[
+              ["web-preview", "preview", "port 5173", "worker=false"],
+              ["server-control-plane-preview", "preview", "port 8787", "apply=false"],
+              ["desktop-dev-metadata", "metadata", "port n/a", "claim=false"],
+              ["local-supervisor-heartbeat-preview", "heartbeat", "bounded", "queue=false"],
+              ["resident-polling-preview", "poll preview", "bounded", "execute=false"],
+              ["diagnostics", "safe metadata", "no raw logs", "token_printed=false"],
+            ]}
+          />
+        </div>
+        <aside className="dashboard-grid__side">
+          <SummaryCard
+            title="doctor summary"
+            state="check available"
+            lines={[
+              "repo clean checked",
+              "bootstrap-complete checked",
+              "local productization RC checked",
+              "ports and locks checked",
+              "no env dump persisted",
+              "token_printed=false",
+            ]}
+          />
+          <SummaryCard
+            title="Disabled capabilities"
+            state="execution off"
+            lines={[
+              "remote_execution_enabled=false",
+              "arbitrary_command_enabled=false",
+              "execution_enabled=false",
+              "queue_apply_enabled=false",
+              "task claim/create/apply disabled",
+            ]}
+          />
+        </aside>
+      </section>
+    </div>
+  );
+}
+
+function WebLocalSessionPanel() {
+  return (
+    <section className="skybridge-panel web-local-session-panel" aria-label="Web local session status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Local Session</p>
+          <h2>Manual Local Session</h2>
+        </div>
+        <span className={badgeClass("ok")}>bounded</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Session status</dt><dd>stopped or fixture_completed; no raw logs</dd></div>
+        <div><dt>Component health</dt><dd>web preview, control-plane preview, desktop metadata and diagnostics are metadata-only</dd></div>
+        <div><dt>doctor summary</dt><dd>check, explain, ports, locks, dependencies and cleanup-preview</dd></div>
+        <div><dt>Port/lock status</dt><dd>.agent/tmp/local-session metadata; stale cleanup preview only</dd></div>
+        <div><dt>Disabled execution capabilities</dt><dd>Codex worker, workunit apply, task claim, task PR creation and generic queue apply remain disabled</dd></div>
+        <div><dt>Next safe action</dt><dd>Run start preview, then apply only with -Apply -Profile full-local-preview -Bounded</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true" title="Use scripts/powershell/skybridge-local-session.ps1 -Command start for preview">
+          Start preview disabled
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Stop is CLI metadata only for the manual local session">
+          Stop preview disabled
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Doctor is CLI metadata only">
+          Doctor preview disabled
+        </button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 
@@ -3863,6 +3961,7 @@ function titleForRoute(route: Route): string {
   if (route === "goals") return "Goals";
   if (route === "workers") return "Worker Pool";
   if (route === "control-plane") return "Control Plane";
+  if (route === "local-session") return "Local Session";
   if (route === "product-readiness") return "Product Readiness";
   if (route === "first-run") return "First-run";
   if (route === "release") return "Release";

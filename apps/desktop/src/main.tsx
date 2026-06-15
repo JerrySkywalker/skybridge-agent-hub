@@ -960,6 +960,34 @@ function FirstRunWizardCard() {
   );
 }
 
+function DesktopLocalSessionPanel() {
+  return (
+    <section className="panel desktop-local-session-panel" aria-label="Manual Local Session">
+      <h2>Manual Local Session</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.local_session.v1</span>
+        <span>bounded non-worker preview</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Session status" value="stopped or fixture_completed; no background process left by smoke" />
+        <StatusValue label="Component health" value="web preview; server/control-plane preview; Desktop dev metadata; supervisor heartbeat; resident polling; diagnostics" />
+        <StatusValue label="doctor summary" value="repo, bootstrap, productization RC, config, ports, locks and dependency checks" />
+        <StatusValue label="Port/lock status" value=".agent/tmp/local-session metadata; cleanup preview only" />
+        <StatusValue label="Disabled capabilities" value="Codex worker=false; workunit apply=false; task claim=false; task PR=false; queue apply=false" />
+        <StatusValue label="Next safe action" value="Preview start, then bounded CLI apply only when explicitly requested" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Start preview</button>
+        <button type="button" disabled aria-disabled="true">Stop preview</button>
+        <button type="button" disabled aria-disabled="true">Doctor preview</button>
+        <button type="button" disabled aria-disabled="true">Claim/apply/start-queue disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1123,6 +1151,7 @@ function App() {
       <OperatorCockpitPanel />
       <ProductReadinessCard />
       <FirstRunWizardCard />
+      <DesktopLocalSessionPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
         failureBudget={fixtureFailureBudgetReport}
