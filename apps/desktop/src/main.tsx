@@ -1070,6 +1070,32 @@ function DesktopPortablePackagePanel() {
   );
 }
 
+function DesktopOperatorAcceptancePanel() {
+  return (
+    <section className="panel desktop-operator-acceptance-panel" aria-label="Operator acceptance status">
+      <h2>Operator Acceptance</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.operator_acceptance_report.v1</span>
+        <span>READ ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Clean-room rehearsal status" value=".agent/tmp/portable-package/clean-room only; no install" />
+        <StatusValue label="Artifact integrity status" value="manifest checksum, package checksum and provenance metadata" />
+        <StatusValue label="Fixture soak status" value="bounded fixture soak and restart cleanup leave no background process" />
+        <StatusValue label="Next safe action" value="Review operator acceptance report and post-merge smoke results before tag" />
+        <StatusValue label="Disabled controls" value="install=false; upload=false; worker execute=false; apply=false; start=false; claim=false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1236,6 +1262,7 @@ function App() {
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
       <DesktopPortablePackagePanel />
+      <DesktopOperatorAcceptancePanel />
       <DesktopLocalSessionPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel

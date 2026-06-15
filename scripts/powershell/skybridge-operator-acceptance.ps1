@@ -1,0 +1,69 @@
+[CmdletBinding()]
+param(
+  [ValidateSet("status", "safe-summary", "report")]
+  [string]$Command = "status",
+  [switch]$Json
+)
+
+$ErrorActionPreference = "Stop"
+$RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
+$ReportDir = Join-Path $RepoRoot ".agent\tmp\operator-acceptance"
+
+function Write-SafeJson([string]$Path, $Value) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+  $Value | Add-Member -NotePropertyName token_printed -NotePropertyValue $false -Force
+  $Value | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath $Path -Encoding utf8
+}
+
+function Invoke-JsonScript([string]$Script, [string[]]$ScriptArgs) {
+  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $Script) @ScriptArgs -Json
+  if ($LASTEXITCODE -ne 0) { throw "$Script failed." }
+  ($raw | Out-String).Trim() | ConvertFrom-Json
+}
+
+function New-AcceptanceReport {
+  $cleanRoom = Invoke-JsonScript "skybridge-portable-package.ps1" @("-Command", "clean-room-rehearsal")
+  $integrity = Invoke-JsonScript "skybridge-artifact-integrity.ps1" @("-Command", "report")
+  $soak = Invoke-JsonScript "skybridge-local-soak.ps1" @("-Command", "report")
+  $restartPath = Join-Path $RepoRoot ".agent\tmp\local-session\restart-cleanup-rehearsal-report.json"
+  $restart = if (Test-Path -LiteralPath $restartPath) { Get-Content -Raw -LiteralPath $restartPath | ConvertFrom-Json } else { $null }
+  $reproPath = Join-Path $RepoRoot ".agent\tmp\portable-package\package-rebuild-reproducibility-report.json"
+  $repro = if (Test-Path -LiteralPath $reproPath) { Get-Content -Raw -LiteralPath $reproPath | ConvertFrom-Json } else { $null }
+  $report = [pscustomobject]@{
+    schema = "skybridge.operator_acceptance_report.v1"
+    status = $(if ($cleanRoom.status -eq "passed" -and $integrity.clean_room_verified -eq $true -and $soak.status -eq "passed") { "passed" } else { "blocked" })
+    clean_room_rehearsal_status = $cleanRoom.status
+    extracted_launcher_status = $cleanRoom.validation.extracted_launcher_status
+    doctor_status = $cleanRoom.validation.doctor_status
+    demo_status = $cleanRoom.validation.demo_status
+    smoke_fast_status = $cleanRoom.validation.smoke_fast_status
+    artifact_integrity_status = $(if ($integrity.clean_room_verified -eq $true) { "passed" } else { "blocked" })
+    reproducibility_status = $(if ($repro -and $repro.reproducible_manifest -eq $true -and $repro.reproducible_file_list -eq $true) { "passed" } else { "preview" })
+    fixture_soak_status = $soak.status
+    restart_cleanup_status = $(if ($restart -and $restart.status -eq "passed") { "passed" } else { "preview" })
+    disabled_capabilities = @("codex_worker", "workunit_creation", "task_creation", "task_claim", "task_pr_creation", "generic_queue_apply", "start_all", "start_queue", "resume_apply", "remote_execution", "arbitrary_command_dispatch", "host_mutation", "upload", "install")
+    known_limitations = @("repo-local clean-room rehearsal only", "archive is unsigned", "manual install remains preview-only", "no production deployment")
+    next_recommended_goals = @("signed package planning", "operator visual QA", "local auth pairing implementation preview")
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $ReportDir "operator-acceptance-report.json") $report
+  @(
+    "# Operator Acceptance Report",
+    "",
+    "- schema: skybridge.operator_acceptance_report.v1",
+    "- status: $($report.status)",
+    "- clean_room_rehearsal_status: $($report.clean_room_rehearsal_status)",
+    "- artifact_integrity_status: $($report.artifact_integrity_status)",
+    "- fixture_soak_status: $($report.fixture_soak_status)",
+    "- token_printed=false"
+  ) | Set-Content -LiteralPath (Join-Path $ReportDir "operator-acceptance-report.md") -Encoding utf8
+  $report
+}
+
+$Result = switch ($Command) {
+  "status" { [pscustomobject]@{ schema = "skybridge.operator_acceptance_report.v1"; status = "ready"; token_printed = $false } }
+  "safe-summary" { [pscustomobject]@{ ok = $true; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; token_printed = $false } }
+  "report" { New-AcceptanceReport }
+}
+
+if ($Json) { $Result | ConvertTo-Json -Depth 50 } else { $Result | Format-List | Out-String }

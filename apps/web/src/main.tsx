@@ -392,6 +392,7 @@ function LocalSessionPage() {
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
+          <WebOperatorAcceptancePanel />
           <WebLocalSessionPanel />
           <WebOperatorWalkthroughPanel />
           <ProductTable
@@ -458,6 +459,34 @@ function WebPortablePackagePanel() {
         <button type="button" disabled aria-disabled="true">Install disabled</button>
         <button type="button" disabled aria-disabled="true">Upload disabled</button>
         <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebOperatorAcceptancePanel() {
+  return (
+    <section className="skybridge-panel web-operator-acceptance-panel" aria-label="Web operator acceptance panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Operator Acceptance</p>
+          <h2>Clean-room Acceptance</h2>
+        </div>
+        <span className={badgeClass("ok")}>read-only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Acceptance schema</dt><dd>skybridge.operator_acceptance_report.v1</dd></div>
+        <div><dt>Clean-room rehearsal status</dt><dd>portable package extracts and runs under .agent/tmp/portable-package/clean-room only</dd></div>
+        <div><dt>Artifact integrity status</dt><dd>manifest checksum, package checksum and provenance are safe metadata</dd></div>
+        <div><dt>Fixture soak status</dt><dd>bounded fixture-only local session soak; no background process left running</dd></div>
+        <div><dt>Next safe action</dt><dd>Review operator acceptance report, then run post-merge smokes before tagging</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>install, upload, Codex worker, workunit apply, task claim and queue apply remain false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
       </div>
       <span>token_printed=false</span>
     </section>
