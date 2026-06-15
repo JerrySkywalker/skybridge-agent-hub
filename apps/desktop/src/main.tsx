@@ -988,6 +988,34 @@ function DesktopLocalSessionPanel() {
   );
 }
 
+function DesktopLauncherSupervisorPanel() {
+  return (
+    <section className="panel desktop-launcher-supervisor-panel" aria-label="Launcher supervisor status">
+      <h2>Launcher / Supervisor</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.repo_local_launcher.v1</span>
+        <span>fixed allowlist router</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Launcher status card" value="ready; default status/help only" />
+        <StatusValue label="Session supervisor card" value="route allowlist; arbitrary shell rejected" />
+        <StatusValue label="Walkthrough/demo card" value="safe fixture bundle and 10-step walkthrough" />
+        <StatusValue label="Doctor action guide card" value="severity, explanation, safe next action, docs link" />
+        <StatusValue label="Next safe action" value="Run start-preview, doctor, demo, or walkthrough report" />
+        <StatusValue label="Disabled controls" value="worker execute=false; apply=false; start-queue=false; claim=false" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Launcher status</button>
+        <button type="button" disabled aria-disabled="true">Start preview</button>
+        <button type="button" disabled aria-disabled="true">Walkthrough preview</button>
+        <button type="button" disabled aria-disabled="true">Claim/apply/start disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1151,6 +1179,7 @@ function App() {
       <OperatorCockpitPanel />
       <ProductReadinessCard />
       <FirstRunWizardCard />
+      <DesktopLauncherSupervisorPanel />
       <DesktopLocalSessionPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel

@@ -1,0 +1,17 @@
+{
+  "schema": "skybridge.local_session_demo_fixture.v1",
+  "session_id": "demo-local-session",
+  "status": "demo_ready",
+  "components": [
+    { "component_id": "web-preview", "status": "preview", "token_printed": false },
+    { "component_id": "server-control-plane-preview", "status": "preview", "token_printed": false },
+    { "component_id": "desktop-dev-metadata", "status": "metadata_only", "token_printed": false },
+    { "component_id": "diagnostics", "status": "safe_metadata", "token_printed": false }
+  ],
+  "starts_worker": false,
+  "executes_workunit": false,
+  "creates_task": false,
+  "mutates_host": false,
+  "raw_logs_persisted": false,
+  "token_printed": false
+}

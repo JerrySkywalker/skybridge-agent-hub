@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("check", "explain", "fix-preview", "cleanup-preview", "ports", "locks", "dependencies", "safe-summary", "report")]
+  [ValidateSet("check", "explain", "fix-preview", "cleanup-preview", "ports", "locks", "dependencies", "action-guide", "safe-summary", "report")]
   [string]$Command = "check",
   [switch]$Desktop,
   [switch]$Json
@@ -147,6 +147,50 @@ function New-FixPreview {
   }
 }
 
+function New-ActionGuide {
+  $Check = New-Check
+  [pscustomobject]@{
+    schema = "skybridge.local_doctor_action_guide.v1"
+    ok = [bool]$Check.ok
+    actions = @(
+      [pscustomobject]@{
+        issue = "repo clean"
+        severity = if ($Check.checks.repo_clean) { "ok" } else { "warning" }
+        explanation = "Release closeout expects a clean worktree."
+        safe_next_action = "Review git status and commit or intentionally ignore generated local reports."
+        destructive_action_required = $false
+        host_mutation_required = $false
+        suggested_command_preview = "git status --short"
+        docs_link = "docs/dev/LOCAL_DOCTOR_ACTION_GUIDE.md"
+        token_printed = $false
+      }
+      [pscustomobject]@{
+        issue = "ports"
+        severity = if ($Check.checks.ports_available) { "ok" } else { "warning" }
+        explanation = "Busy preview ports can block local start."
+        safe_next_action = "Inspect port status; do not kill arbitrary processes from the doctor."
+        destructive_action_required = $false
+        host_mutation_required = $false
+        suggested_command_preview = ".\skybridge.ps1 doctor"
+        docs_link = "docs/dev/LOCAL_SESSION_RECOVERY_GUIDE.md"
+        token_printed = $false
+      }
+      [pscustomobject]@{
+        issue = "execution flags"
+        severity = "ok"
+        explanation = "Execution, queue apply, remote execution and arbitrary command dispatch remain disabled."
+        safe_next_action = "Use launcher status or start-preview."
+        destructive_action_required = $false
+        host_mutation_required = $false
+        suggested_command_preview = ".\skybridge.ps1 start-preview"
+        docs_link = "docs/dev/LOCAL_LAUNCHER_SAFETY_MODEL.md"
+        token_printed = $false
+      }
+    )
+    token_printed = $false
+  }
+}
+
 function Write-Report {
   $Report = New-Check
   Write-SafeJson (Join-Path $ReportDir "local-doctor-report.json") $Report
@@ -172,6 +216,7 @@ $Result = switch ($Command) {
   "ports" { New-Ports }
   "locks" { New-Locks }
   "dependencies" { New-Dependencies }
+  "action-guide" { New-ActionGuide }
   "safe-summary" { [pscustomobject]@{ ok = $true; no_env_dump = $true; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; token_printed = $false } }
   "report" { Write-Report }
 }
