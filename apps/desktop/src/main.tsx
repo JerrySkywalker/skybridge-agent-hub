@@ -1043,6 +1043,33 @@ function DesktopPortableBundlePanel() {
   );
 }
 
+function DesktopPortablePackagePanel() {
+  return (
+    <section className="panel desktop-portable-package-panel" aria-label="Portable package status">
+      <h2>Portable Package Candidate</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>INSTALL DISABLED</span>
+        <span>UPLOAD DISABLED</span>
+        <span>EXECUTION DISABLED</span>
+      </div>
+      <dl>
+        <StatusValue label="Package schema" value="skybridge.portable_package.v1" />
+        <StatusValue label="Manifest status" value="skybridge.portable_package_manifest.v1 verified" />
+        <StatusValue label="Extraction smoke status" value=".agent/tmp/portable-package/extract-smoke only" />
+        <StatusValue label="Manual install preview" value="copy/shortcut/Start Menu/PATH preview-only" />
+        <StatusValue label="Manual uninstall preview" value="detect/remove/cleanup preview-only" />
+        <StatusValue label="Worker controls" value="execute/apply/start/claim disabled" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Upload disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1208,6 +1235,7 @@ function App() {
       <FirstRunWizardCard />
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
+      <DesktopPortablePackagePanel />
       <DesktopLocalSessionPanel />
       <ManagedModeV0StatusPanel status={fixtureManagedModeV0Status} />
       <DesktopAuditPanel
