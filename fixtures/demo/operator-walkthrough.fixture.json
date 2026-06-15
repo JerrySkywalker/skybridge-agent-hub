@@ -1,0 +1,22 @@
+{
+  "schema": "skybridge.operator_walkthrough_fixture.v1",
+  "status": "safe_flow_demo",
+  "steps": [
+    "bootstrap complete check",
+    "productization RC check",
+    "local config check",
+    "doctor check",
+    "start preview",
+    "demo mode",
+    "local session status",
+    "diagnostics",
+    "smoke fast",
+    "next safe action"
+  ],
+  "worker_execution": false,
+  "workunit_apply": false,
+  "queue_apply": false,
+  "host_mutation": false,
+  "raw_logs_persisted": false,
+  "token_printed": false
+}

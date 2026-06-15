@@ -1,0 +1,18 @@
+{
+  "schema": "skybridge.product_readiness_demo_fixture.v1",
+  "status": "ready_for_local_preview",
+  "launcher_status": "ready",
+  "session_supervisor_status": "ready",
+  "walkthrough_status": "safe_flow_demo",
+  "disabled_capabilities": [
+    "codex_worker",
+    "workunit_apply",
+    "task_claim",
+    "task_creation",
+    "task_pr_creation",
+    "generic_queue_apply",
+    "remote_execution",
+    "arbitrary_command_dispatch"
+  ],
+  "token_printed": false
+}

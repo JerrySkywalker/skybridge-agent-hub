@@ -389,7 +389,9 @@ function LocalSessionPage() {
       </section>
       <section className="dashboard-grid">
         <div className="dashboard-grid__main">
+          <WebLauncherSupervisorPanel />
           <WebLocalSessionPanel />
+          <WebOperatorWalkthroughPanel />
           <ProductTable
             title="Local session components"
             rows={[
@@ -429,6 +431,54 @@ function LocalSessionPage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function WebLauncherSupervisorPanel() {
+  return (
+    <section className="skybridge-panel web-launcher-supervisor-panel" aria-label="Web launcher and session supervisor panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Repo Launcher</p>
+          <h2>Launcher / Supervisor</h2>
+        </div>
+        <span className={badgeClass("ok")}>router safe</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Launcher status panel</dt><dd>skybridge.repo_local_launcher.v1; status=ready</dd></div>
+        <div><dt>Session supervisor panel</dt><dd>fixed allowlist routes only; arbitrary shell rejected</dd></div>
+        <div><dt>Demo mode panel</dt><dd>fixtures/demo safe bundle; no raw logs</dd></div>
+        <div><dt>Next safe action panel</dt><dd>Run start-preview, doctor, walkthrough, or demo</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>Codex worker, workunit apply, task claim and queue apply remain false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Launcher start disabled</button>
+        <button type="button" disabled aria-disabled="true">Supervisor route preview disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebOperatorWalkthroughPanel() {
+  return (
+    <section className="skybridge-panel web-operator-walkthrough-panel" aria-label="Web operator walkthrough panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Walkthrough</p>
+          <h2>Operator Walkthrough</h2>
+        </div>
+        <span className={badgeClass("ok")}>safe flow</span>
+      </div>
+      <ul className="summary-lines">
+        <li>bootstrap complete check</li>
+        <li>productization RC check</li>
+        <li>local config, doctor, start preview and demo mode</li>
+        <li>diagnostics, smoke fast and next safe action</li>
+        <li>token_printed=false</li>
+      </ul>
+    </section>
   );
 }
 
