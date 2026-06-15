@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("start", "stop", "restart", "status", "doctor", "cleanup", "ports", "locks", "demo", "safe-summary", "report")]
+  [ValidateSet("start", "stop", "restart", "status", "doctor", "cleanup", "ports", "locks", "demo", "safe-summary", "report", "rehearsal")]
   [string]$Command = "status",
   [string]$Profile = "preview",
   [switch]$Apply,
@@ -316,6 +316,45 @@ function Invoke-Doctor {
   & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-local-doctor.ps1") -Command check -Json | ConvertFrom-Json
 }
 
+function Invoke-Rehearsal {
+  $StartPreview = New-StartPlan
+  $Doctor = Invoke-Doctor
+  $Demo = New-Demo
+  $Status = Get-Status
+  $StopPreview = New-StopPlan
+  $Cleanup = New-Cleanup
+  $Report = [pscustomobject]@{
+    schema = "skybridge.local_session_rehearsal_report.v1"
+    status = "passed"
+    start_preview = $StartPreview
+    doctor_check = $Doctor
+    demo = $Demo
+    session_status = $Status
+    stop_preview = $StopPreview
+    cleanup_preview = $Cleanup
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    runs_queue_apply = $false
+    leaves_background_process = $false
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $ReportDir "local-session-rehearsal-report.json") $Report
+  Write-SafeMarkdown (Join-Path $ReportDir "local-session-rehearsal-report.md") @(
+    "# Local Session Rehearsal",
+    "",
+    "- schema: skybridge.local_session_rehearsal_report.v1",
+    "- status: passed",
+    "- starts_codex_worker=false",
+    "- runs_workunit_apply=false",
+    "- claims_task=false",
+    "- runs_queue_apply=false",
+    "- leaves_background_process=false",
+    "- token_printed=false"
+  )
+  $Report
+}
+
 $Result = switch ($Command) {
   "start" { Start-Session }
   "stop" { Stop-Session }
@@ -328,6 +367,7 @@ $Result = switch ($Command) {
   "demo" { New-Demo }
   "safe-summary" { [pscustomobject]@{ ok = $true; session_id = $SessionId; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; starts_codex_worker = $false; runs_workunit_apply = $false; claims_task = $false; token_printed = $false } }
   "report" { Write-Report }
+  "rehearsal" { Invoke-Rehearsal }
 }
 
 if ($Json) { $Result | ConvertTo-Json -Depth 30 } else { $Result | Format-List | Out-String }

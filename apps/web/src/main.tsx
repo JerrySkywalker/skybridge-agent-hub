@@ -390,6 +390,7 @@ function LocalSessionPage() {
       <section className="dashboard-grid">
         <div className="dashboard-grid__main">
           <WebLauncherSupervisorPanel />
+          <WebPortableBundlePanel />
           <WebLocalSessionPanel />
           <WebOperatorWalkthroughPanel />
           <ProductTable
@@ -431,6 +432,33 @@ function LocalSessionPage() {
         </aside>
       </section>
     </div>
+  );
+}
+
+function WebPortableBundlePanel() {
+  return (
+    <section className="skybridge-panel web-portable-bundle-panel" aria-label="Web portable bundle panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Portable Bundle</p>
+          <h2>Portable Local Bundle</h2>
+        </div>
+        <span className={badgeClass("ok")}>manifest safe</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Bundle schema</dt><dd>skybridge.portable_local_bundle.v1</dd></div>
+        <div><dt>Manifest schema</dt><dd>skybridge.portable_bundle_manifest.v1</dd></div>
+        <div><dt>Verification</dt><dd>entrypoints, docs, fixtures and forbidden exclusions checked</dd></div>
+        <div><dt>Excluded content</dt><dd>node_modules, target, caches, raw logs, env dumps, secrets and tokens</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>install, upload, host mutation, worker execution and queue apply remain false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Upload disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
   );
 }
 
