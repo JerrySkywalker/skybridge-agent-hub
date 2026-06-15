@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "safe-summary", "report", "v2-report")]
+  [ValidateSet("status", "safe-summary", "report", "v2-report", "v3-report")]
   [string]$Command = "status",
   [switch]$Json
 )
@@ -106,11 +106,66 @@ function New-AcceptanceV2Report {
   $report
 }
 
+function Invoke-JsonScriptOptional([string]$Script, [string[]]$ScriptArgs) {
+  try {
+    Invoke-JsonScript $Script $ScriptArgs
+  } catch {
+    [pscustomobject]@{ status = "blocked"; error = "safe_summary_unavailable"; token_printed = $false }
+  }
+}
+
+function New-AcceptanceV3Report {
+  $releaseGuard = Invoke-JsonScriptOptional "skybridge-release-workflow-guard.ps1" @("-Command", "report")
+  $installer = Invoke-JsonScriptOptional "skybridge-installer-candidate.ps1" @("-Command", "report")
+  $runtime = Invoke-JsonScriptOptional "skybridge-sandbox-installed-runtime.ps1" @("-Command", "report")
+  $soak = Invoke-JsonScriptOptional "skybridge-install-soak.ps1" @("-Command", "report")
+  $recovery = Invoke-JsonScriptOptional "skybridge-recovery-sandbox.ps1" @("-Command", "report")
+  $releaseStatus = if ($releaseGuard.gate) { $releaseGuard.gate.gate } else { $releaseGuard.status }
+  $installerStatus = $installer.status
+  $runtimeStatus = $runtime.status
+  $soakStatus = $soak.status
+  $recoveryStatus = $recovery.status
+  $report = [pscustomobject]@{
+    schema = "skybridge.operator_acceptance_v3_report.v1"
+    status = $(if ($releaseStatus -eq "passed" -and $installerStatus -eq "passed" -and $runtimeStatus -eq "passed" -and $soakStatus -eq "passed" -and $recoveryStatus -eq "passed") { "passed" } else { "preview" })
+    release_workflow_side_effect_guard_status = $releaseStatus
+    installer_candidate_status = $installerStatus
+    sandbox_installed_runtime_status = $runtimeStatus
+    extended_install_upgrade_rollback_soak_status = $soakStatus
+    crash_recovery_sandbox_status = $recoveryStatus
+    cleanup_hardening_status = $(if ($recovery.cleanup_hardening) { "passed" } else { "preview" })
+    web_status = "read_only_installer_acceptance_panels"
+    desktop_status = "read_only_installer_acceptance_cards"
+    disabled_capabilities = @("codex_worker", "workunit_creation", "workunit_apply", "task_creation", "task_claim", "task_pr_creation", "generic_queue_apply", "start_all", "start_queue", "resume_apply", "remote_execution", "arbitrary_command_dispatch", "host_install", "host_uninstall", "registry", "startup", "scheduled_task", "service", "powercfg", "PATH", "manual_upload", "manual_github_release")
+    known_limitations = @("sandboxed installer candidate only", "unsigned package", "no host install", "no network update", "existing tag workflows may publish images/artifacts after tag")
+    next_safe_action = "Open PR, wait for CI, merge, run post-merge smokes, then run tag safety gate before tagging."
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $ReportDir "operator-acceptance-v3-report.json") $report
+  @(
+    "# Operator Acceptance v3 Report",
+    "",
+    "- schema: skybridge.operator_acceptance_v3_report.v1",
+    "- status: $($report.status)",
+    "- release_workflow_side_effect_guard_status: $($report.release_workflow_side_effect_guard_status)",
+    "- installer_candidate_status: $($report.installer_candidate_status)",
+    "- sandbox_installed_runtime_status: $($report.sandbox_installed_runtime_status)",
+    "- extended_install_upgrade_rollback_soak_status: $($report.extended_install_upgrade_rollback_soak_status)",
+    "- crash_recovery_sandbox_status: $($report.crash_recovery_sandbox_status)",
+    "- cleanup_hardening_status: $($report.cleanup_hardening_status)",
+    "- web_status: $($report.web_status)",
+    "- desktop_status: $($report.desktop_status)",
+    "- token_printed=false"
+  ) | Set-Content -LiteralPath (Join-Path $ReportDir "operator-acceptance-v3-report.md") -Encoding utf8
+  $report
+}
+
 $Result = switch ($Command) {
   "status" { [pscustomobject]@{ schema = "skybridge.operator_acceptance_report.v1"; status = "ready"; token_printed = $false } }
   "safe-summary" { [pscustomobject]@{ ok = $true; execution_enabled = $false; queue_apply_enabled = $false; remote_execution_enabled = $false; arbitrary_command_enabled = $false; token_printed = $false } }
   "report" { New-AcceptanceReport }
   "v2-report" { New-AcceptanceV2Report }
+  "v3-report" { New-AcceptanceV3Report }
 }
 
 if ($Json) { $Result | ConvertTo-Json -Depth 50 } else { $Result | Format-List | Out-String }

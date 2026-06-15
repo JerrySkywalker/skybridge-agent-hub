@@ -393,6 +393,12 @@ function LocalSessionPage() {
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
           <WebSandboxInstallPanel />
+          <WebReleaseWorkflowGuardPanel />
+          <WebInstallerCandidatePanel />
+          <WebSandboxInstalledRuntimePanel />
+          <WebInstallSoakPanel />
+          <WebRecoverySandboxPanel />
+          <WebOperatorAcceptanceV3Panel />
           <WebSandboxUpgradeRollbackPanel />
           <WebSandboxSoakStabilityPanel />
           <WebOperatorAcceptancePanel />
@@ -571,6 +577,160 @@ function WebSandboxSoakStabilityPanel() {
         <button type="button" disabled aria-disabled="true">Worker loop disabled</button>
         <button type="button" disabled aria-disabled="true">Start queue disabled</button>
         <button type="button" disabled aria-disabled="true">Resume apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebReleaseWorkflowGuardPanel() {
+  return (
+    <section className="skybridge-panel web-release-workflow-guard-panel" aria-label="Web release workflow guard panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Release Guard</p>
+          <h2>Release Workflow Guard</h2>
+        </div>
+        <span className={badgeClass("ok")}>tag gate</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Guard schema</dt><dd>skybridge.release_workflow_guard.v1</dd></div>
+        <div><dt>Policy schema</dt><dd>skybridge.tag_publish_policy.v1</dd></div>
+        <div><dt>Side effects</dt><dd>tag workflows may publish GHCR images and upload workflow artifacts after classification</dd></div>
+        <div><dt>Manual release</dt><dd>GitHub Release creation and artifact upload remain disabled</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Create Release disabled</button>
+        <button type="button" disabled aria-disabled="true">Manual upload disabled</button>
+        <button type="button" disabled aria-disabled="true">Force tag disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebInstallerCandidatePanel() {
+  return (
+    <section className="skybridge-panel web-installer-candidate-panel" aria-label="Web installer candidate panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Installer</p>
+          <h2>Installer Candidate</h2>
+        </div>
+        <span className={badgeClass("ok")}>sandbox only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Candidate schema</dt><dd>skybridge.installer_candidate.v1</dd></div>
+        <div><dt>Manifest schema</dt><dd>skybridge.installer_manifest.v1</dd></div>
+        <div><dt>Install root</dt><dd>.agent/tmp/installer-candidate/install-root only</dd></div>
+        <div><dt>Host boundary</dt><dd>registry, startup, scheduled task, service, powercfg and PATH writes disabled</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Real install disabled</button>
+        <button type="button" disabled aria-disabled="true">Uninstall disabled</button>
+        <button type="button" disabled aria-disabled="true">Update disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebSandboxInstalledRuntimePanel() {
+  return (
+    <section className="skybridge-panel web-sandbox-installed-runtime-panel" aria-label="Web sandbox-installed runtime panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Installed Runtime</p>
+          <h2>Sandbox-installed Runtime</h2>
+        </div>
+        <span className={badgeClass("ok")}>rehearsal</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Report schema</dt><dd>skybridge.sandbox_installed_runtime_report.v1</dd></div>
+        <div><dt>Validated commands</dt><dd>launcher status, start-preview, doctor, demo, smoke safe-summary, cleanup-preview</dd></div>
+        <div><dt>Execution boundary</dt><dd>no worker execution, workunit apply, task claim or queue apply</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Start worker disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebInstallSoakPanel() {
+  return (
+    <section className="skybridge-panel web-install-soak-panel" aria-label="Web install soak panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Install Soak</p>
+          <h2>Install / Upgrade / Rollback Soak</h2>
+        </div>
+        <span className={badgeClass("ok")}>bounded</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Soak schema</dt><dd>skybridge.install_soak_report.v1</dd></div>
+        <div><dt>Bounds</dt><dd>default 3 cycles; max duration 240 seconds</dd></div>
+        <div><dt>Metrics</dt><dd>cycle count, phase durations, file count, sandbox size, stale lock/PID counts, cleanup result</dd></div>
+        <div><dt>Background process</dt><dd>background_process_left=false</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Host update disabled</button>
+        <button type="button" disabled aria-disabled="true">Host rollback disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker loop disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebRecoverySandboxPanel() {
+  return (
+    <section className="skybridge-panel web-recovery-sandbox-panel" aria-label="Web recovery sandbox panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Recovery</p>
+          <h2>Recovery Sandbox</h2>
+        </div>
+        <span className={badgeClass("ok")}>preview</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Recovery schema</dt><dd>skybridge.recovery_sandbox_report.v1</dd></div>
+        <div><dt>Markers</dt><dd>fixture crash, interrupted install, interrupted upgrade and interrupted rollback markers under .agent/tmp/install-sandbox</dd></div>
+        <div><dt>Cleanup hardening</dt><dd>orphan lock, stale staging, stale rollback and port conflict metadata</dd></div>
+        <div><dt>Mutation boundary</dt><dd>no host mutation and no process kill</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Cleanup apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Process kill disabled</button>
+        <button type="button" disabled aria-disabled="true">Host repair disabled</button>
+      </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebOperatorAcceptanceV3Panel() {
+  return (
+    <section className="skybridge-panel web-operator-acceptance-v3-panel" aria-label="Web operator acceptance v3 panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Acceptance v3</p>
+          <h2>Operator Acceptance v3</h2>
+        </div>
+        <span className={badgeClass("ok")}>read-only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Acceptance schema</dt><dd>skybridge.operator_acceptance_v3_report.v1</dd></div>
+        <div><dt>Coverage</dt><dd>release guard, installer candidate, runtime rehearsal, soak, recovery and cleanup hardening</dd></div>
+        <div><dt>Next safe action</dt><dd>review PR CI, merge, run post-merge smokes, then tag safety gate</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Start queue disabled</button>
       </div>
       <span>token_printed=false</span>
     </section>
