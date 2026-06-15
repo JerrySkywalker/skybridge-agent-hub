@@ -918,6 +918,81 @@ function ProductReadinessCard() {
   );
 }
 
+function DesktopLocalAuthCard() {
+  return (
+    <section className="panel desktop-local-auth-card" aria-label="Desktop local auth card">
+      <h2>Local Auth Card</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Desktop local auth disabled execution banner">
+        <span>Local auth preview</span>
+        <span>Execution disabled</span>
+        <span>No raw token display; no enabled worker/install controls</span>
+      </div>
+      <dl>
+        <StatusValue label="Auth model schema" value="skybridge.local_auth_model.v1" />
+        <StatusValue label="Auth gate schema" value="skybridge.local_auth_gate.v1" />
+        <StatusValue label="Raw token persisted" value="false" />
+        <StatusValue label="Authorization values persisted" value="false" />
+        <StatusValue label="No real login" value="fixture-only hash preview" />
+        <StatusValue label="token_printed" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Login disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopSessionStateCard() {
+  return (
+    <section className="panel desktop-session-state-card" aria-label="Session State Card">
+      <h2>Session State Card</h2>
+      <dl>
+        <StatusValue label="Store" value=".agent/tmp/local-auth/session-store" />
+        <StatusValue label="Storage mode" value="hash-only fixture state" />
+        <StatusValue label="Stored metadata" value="session id, timestamps, expiry, state, scope and local origin summary" />
+        <StatusValue label="Cookies persisted" value="false" />
+        <StatusValue label="Private keys persisted" value="false" />
+      </dl>
+    </section>
+  );
+}
+
+function DesktopLoopbackOriginCard() {
+  return (
+    <section className="panel desktop-loopback-origin-card" aria-label="Loopback Origin Card">
+      <h2>Loopback Origin Card</h2>
+      <dl>
+        <StatusValue label="Policy schema" value="skybridge.loopback_origin_policy.v1" />
+        <StatusValue label="Allowed origins" value="localhost, 127.0.0.1, ::1 and repo-local dev fixtures" />
+        <StatusValue label="Remote origins allowed" value="false" />
+        <StatusValue label="Read scope" value="safe metadata only" />
+      </dl>
+    </section>
+  );
+}
+
+function DesktopDisabledExecutionCard() {
+  return (
+    <section className="panel desktop-disabled-execution-card" aria-label="Disabled Execution Card">
+      <h2>Disabled Execution Card</h2>
+      <dl>
+        <StatusValue label="Execution enabled" value="false" />
+        <StatusValue label="Queue apply enabled" value="false" />
+        <StatusValue label="Remote execution enabled" value="false" />
+        <StatusValue label="Arbitrary command enabled" value="false" />
+        <StatusValue label="Host mutation through auth" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Host mutation disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function FirstRunWizardCard() {
   const steps = [
     "Bootstrap complete status",
@@ -1461,6 +1536,10 @@ function App() {
       <ServerApprovedTrial226Panel />
       <OperatorCockpitPanel />
       <ProductReadinessCard />
+      <DesktopLocalAuthCard />
+      <DesktopSessionStateCard />
+      <DesktopLoopbackOriginCard />
+      <DesktopDisabledExecutionCard />
       <FirstRunWizardCard />
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
