@@ -74,6 +74,7 @@ function Invoke-SandboxJson([string]$RelativeScript, [string[]]$Args) {
 }
 
 function Get-Plan {
+  $interlock = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-installer-safety-interlock.ps1") -Command safe-summary -Json | ConvertFrom-Json
   [pscustomobject]@{
     schema = "skybridge.install_sandbox_plan.v1"
     sandbox_root_sanitized = ".agent/tmp/install-sandbox/current"
@@ -90,6 +91,7 @@ function Get-Plan {
     powercfg_mutation = $false
     network_update = $false
     upload_allowed = $false
+    safety_interlock = $interlock
     token_printed = $false
   }
 }

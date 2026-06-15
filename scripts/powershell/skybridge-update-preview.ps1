@@ -25,6 +25,7 @@ function New-Channel {
 }
 
 function New-UpdateManifest {
+  $interlock = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-installer-safety-interlock.ps1") -Command safe-summary -Json | ConvertFrom-Json
   [pscustomobject]@{
     schema = "skybridge.update_manifest_preview.v1"
     channel = New-Channel
@@ -32,6 +33,7 @@ function New-UpdateManifest {
     update_check_preview_only = $true
     network_request_planned = $false
     install_planned = $false
+    safety_interlock = $interlock
     token_printed = $false
   }
 }

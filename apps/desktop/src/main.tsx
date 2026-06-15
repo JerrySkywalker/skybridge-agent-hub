@@ -1271,6 +1271,34 @@ function DesktopSandboxSoakStabilityPanel() {
   );
 }
 
+function DesktopReleaseCandidatePanel() {
+  return (
+    <section className="panel desktop-release-candidate-panel" aria-label="Desktop installer promotion release candidate status">
+      <h2>Installer Promotion RC</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>Installer promotion</span>
+        <span>Host mutation disabled</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Installer promotion" value="artifact promotion gate preview; no host install" />
+        <StatusValue label="Release artifact" value="Release artifact manifest and checksum validation staged under .agent/tmp" />
+        <StatusValue label="Update channel" value="offline manifest only; network_update_allowed=false" />
+        <StatusValue label="Host mutation disabled" value="registry/startup/scheduled-task/service/PATH/powercfg=false" />
+        <StatusValue label="Long soak" value="bounded sandbox soak; no background process left" />
+        <StatusValue label="Acceptance v4" value="operator acceptance v4 read-only summary" />
+        <StatusValue label="Next safe action" value="Review PR CI, merge, run post-merge smokes, then tag only after tag safety gate" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Update disabled</button>
+        <button type="button" disabled aria-disabled="true">Upload disabled</button>
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const fixtureOnly = isFixtureMode();
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
@@ -1441,6 +1469,7 @@ function App() {
       <DesktopSandboxInstalledRuntimeCard />
       <DesktopRecoveryCard />
       <DesktopAcceptanceV3Card />
+      <DesktopReleaseCandidatePanel />
       <DesktopSandboxInstallPanel />
       <DesktopSandboxUpgradeRollbackPanel />
       <DesktopSandboxSoakStabilityPanel />

@@ -10,6 +10,7 @@ $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $ReportDir = Join-Path $RepoRoot ".agent\tmp\portable-package"
 
 function New-Plan {
+  $interlock = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-installer-safety-interlock.ps1") -Command safe-summary -Json | ConvertFrom-Json
   [pscustomobject]@{
     schema = "skybridge.manual_install_preview.v1"
     preview_only = $true
@@ -26,6 +27,7 @@ function New-Plan {
     network_used = $false
     install_allowed = $false
     host_mutation_allowed = $false
+    safety_interlock = $interlock
     token_printed = $false
   }
 }
