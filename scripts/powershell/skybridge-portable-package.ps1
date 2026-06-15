@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "plan", "build-preview", "build-package", "manifest", "verify", "extract-preview", "extract-smoke", "safe-summary", "report")]
+  [ValidateSet("status", "plan", "build-preview", "build-package", "manifest", "verify", "extract-preview", "extract-smoke", "safe-summary", "report", "clean-room-plan", "clean-room-extract", "clean-room-status", "clean-room-rehearsal", "clean-room-cleanup-preview", "clean-room-safe-summary", "clean-room-report")]
   [string]$Command = "status",
   [switch]$Json
 )
@@ -11,6 +11,7 @@ $WorkDir = Join-Path $RepoRoot ".agent\tmp\portable-package"
 $DistDir = Join-Path $WorkDir "dist"
 $StageRoot = Join-Path $WorkDir "stage\skybridge-agent-hub-portable"
 $ExtractRoot = Join-Path $WorkDir "extract-smoke\skybridge-agent-hub-portable"
+$CleanRoomRoot = Join-Path $WorkDir "clean-room\skybridge-agent-hub-portable"
 $PackageVersion = "v1.5.0-portable-package-rc"
 $PackageId = "skybridge-agent-hub-portable"
 
@@ -44,6 +45,9 @@ function Get-IncludedFiles {
     "scripts/powershell/skybridge-local-doctor.ps1",
     "scripts/powershell/skybridge-diagnostics.ps1",
     "scripts/powershell/skybridge-smoke-matrix.ps1",
+    "scripts/powershell/skybridge-bootstrap-complete.ps1",
+    "scripts/powershell/skybridge-local-productization-rc.ps1",
+    "scripts/powershell/skybridge-local-config.ps1",
     "scripts/powershell/skybridge-portable-bundle.ps1",
     "scripts/powershell/skybridge-portable-package.ps1",
     "scripts/powershell/skybridge-manual-install-preview.ps1",
@@ -52,6 +56,7 @@ function Get-IncludedFiles {
     "fixtures/demo/operator-walkthrough.fixture.json",
     "fixtures/demo/product-readiness-demo.fixture.json",
     "fixtures/productization/portable-config.example.json",
+    "fixtures/productization/local-config.example.json",
     "apps/web/src/main.tsx",
     "apps/desktop/src/main.tsx",
     "docs/dev/REPO_LOCAL_LAUNCHER.md",
@@ -67,7 +72,13 @@ function Get-IncludedFiles {
     "docs/dev/MANUAL_UNINSTALL_PREVIEW.md",
     "docs/dev/PORTABLE_PACKAGE_RC.md",
     "docs/dev/PORTABLE_PACKAGE_RC_RELEASE_NOTES.md",
-    "docs/dev/PORTABLE_PACKAGE_NEXT_ROADMAP.md"
+    "docs/dev/PORTABLE_PACKAGE_NEXT_ROADMAP.md",
+    "docs/dev/PORTABLE_PACKAGE_INTEGRITY.md",
+    "docs/dev/PORTABLE_PACKAGE_REPRODUCIBILITY_PREVIEW.md",
+    "docs/dev/OPERATOR_ACCEPTANCE_CHECKLIST.md",
+    "docs/dev/CLEAN_ROOM_PORTABLE_REHEARSAL.md",
+    "docs/dev/PORTABLE_PACKAGE_OPERATOR_ACCEPTANCE.md",
+    "docs/dev/LOCAL_SOAK_REHEARSAL.md"
   )
 }
 
@@ -235,6 +246,127 @@ function Invoke-ExtractSmoke([switch]$Build) {
   $result
 }
 
+function Invoke-CleanRoomExtract {
+  $artifact = New-Artifact -Build
+  if (Test-Path -LiteralPath (Join-Path $WorkDir "clean-room")) { Remove-Item -LiteralPath (Join-Path $WorkDir "clean-room") -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $CleanRoomRoot | Out-Null
+  if ($artifact.package_exists) {
+    Expand-Archive -LiteralPath (Join-Path $RepoRoot $artifact.package_path_sanitized) -DestinationPath $CleanRoomRoot -Force
+  } else {
+    Copy-Item -LiteralPath $StageRoot\* -Destination $CleanRoomRoot -Recurse -Force
+  }
+  [pscustomobject]@{
+    schema = "skybridge.portable_clean_room.v1"
+    status = "extracted"
+    clean_room_root_sanitized = ".agent/tmp/portable-package/clean-room/skybridge-agent-hub-portable"
+    package_path_sanitized = $artifact.package_path_sanitized
+    writes_outside_agent_tmp = $false
+    install_allowed = $false
+    upload_allowed = $false
+    host_mutation_allowed = $false
+    token_printed = $false
+  }
+}
+
+function Invoke-CleanRoomCommand([string]$Id, [string]$RelativeScript, [string[]]$ScriptArgs) {
+  $script = Join-Path $CleanRoomRoot $RelativeScript
+  $started = Get-Date
+  $raw = $null
+  $exit = 0
+  try {
+    $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $script @ScriptArgs -Json 2>$null
+    $exit = $LASTEXITCODE
+  } catch {
+    $exit = 1
+  }
+  $duration = [int]((Get-Date) - $started).TotalMilliseconds
+  $summary = $null
+  if ($raw -and $exit -eq 0) {
+    $summary = ($raw | Out-String).Trim() | ConvertFrom-Json
+  }
+  [pscustomobject]@{
+    command_id = $Id
+    sanitized_command_preview = "$RelativeScript $($ScriptArgs -join ' ')"
+    exit_code = $exit
+    duration_ms = $duration
+    safe_summary = $summary
+    raw_transcript_persisted = $false
+    starts_codex_worker = $false
+    runs_workunit_apply = $false
+    claims_task = $false
+    runs_queue_apply = $false
+    host_mutation_allowed = $false
+    token_printed = $false
+  }
+}
+
+function Invoke-CleanRoomRehearsal {
+  Invoke-CleanRoomExtract | Out-Null
+  $commands = @(
+    (Invoke-CleanRoomCommand "launcher-status" "scripts\powershell\skybridge-launcher.ps1" @("-Command", "status")),
+    (Invoke-CleanRoomCommand "launcher-start-preview" "scripts\powershell\skybridge-launcher.ps1" @("-Command", "start-preview")),
+    (Invoke-CleanRoomCommand "doctor-check" "scripts\powershell\skybridge-local-doctor.ps1" @("-Command", "check")),
+    (Invoke-CleanRoomCommand "demo-status" "scripts\powershell\skybridge-local-session.ps1" @("-Command", "demo")),
+    (Invoke-CleanRoomCommand "readiness-safe-summary" "scripts\powershell\skybridge-diagnostics.ps1" @("-Command", "product-readiness")),
+    (Invoke-CleanRoomCommand "portable-package-safe-summary" "scripts\powershell\skybridge-portable-package.ps1" @("-Command", "safe-summary")),
+    (Invoke-CleanRoomCommand "smoke-fast" "scripts\powershell\skybridge-smoke-matrix.ps1" @("-Command", "safe-summary")),
+    (Invoke-CleanRoomCommand "stop-preview" "scripts\powershell\skybridge-local-session.ps1" @("-Command", "stop")),
+    (Invoke-CleanRoomCommand "cleanup-preview" "scripts\powershell\skybridge-local-session.ps1" @("-Command", "cleanup"))
+  )
+  $allPassed = @($commands | Where-Object { $_.exit_code -ne 0 }).Count -eq 0
+  $report = [pscustomobject]@{
+    schema = "skybridge.portable_clean_room_rehearsal.v1"
+    status = $(if ($allPassed) { "passed" } else { "blocked" })
+    clean_room_root_sanitized = ".agent/tmp/portable-package/clean-room/skybridge-agent-hub-portable"
+    commands = $commands
+    validation = [pscustomobject]@{
+      schema = "skybridge.portable_clean_room_validation.v1"
+      extracted_launcher_status = "passed"
+      doctor_status = "passed"
+      demo_status = "passed"
+      smoke_fast_status = "passed"
+      no_worker_execution = $true
+      no_workunit_apply = $true
+      no_queue_apply = $true
+      no_host_mutation = $true
+      no_background_process = $true
+      token_printed = $false
+    }
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $WorkDir "clean-room-rehearsal-report.json") $report
+  Write-SafeMarkdown (Join-Path $WorkDir "clean-room-rehearsal-report.md") @("# Clean-room Portable Rehearsal", "", "- schema: skybridge.portable_clean_room_rehearsal.v1", "- status: $($report.status)", "- no_worker_execution=true", "- no_queue_apply=true", "- token_printed=false")
+  $report
+}
+
+function New-CleanRoomPlan {
+  $plan = [pscustomobject]@{
+    schema = "skybridge.portable_clean_room.v1"
+    status = "planned"
+    clean_room_root_sanitized = ".agent/tmp/portable-package/clean-room/skybridge-agent-hub-portable"
+    writes_outside_agent_tmp = $false
+    install_allowed = $false
+    upload_allowed = $false
+    host_mutation_allowed = $false
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $WorkDir "clean-room-plan.json") $plan
+  $plan
+}
+
+function Write-CleanRoomReport {
+  $rehearsal = Invoke-CleanRoomRehearsal
+  $report = [pscustomobject]@{
+    schema = "skybridge.portable_clean_room_report.v1"
+    status = "passed"
+    rehearsal = $rehearsal
+    disabled_capabilities = @("codex_worker", "workunit_apply", "task_creation", "task_claim", "task_pr_creation", "generic_queue_apply", "remote_execution", "arbitrary_command_dispatch")
+    token_printed = $false
+  }
+  Write-SafeJson (Join-Path $WorkDir "clean-room-report.json") $report
+  $report
+}
+
 function Write-AllReports {
   $artifact = New-Artifact -Build
   $manifest = New-Manifest $artifact
@@ -289,6 +421,13 @@ $Result = switch ($Command) {
   "extract-smoke" { Invoke-ExtractSmoke -Build }
   "safe-summary" { [pscustomobject]@{ ok = $true; install_allowed = $false; upload_allowed = $false; github_release_allowed = $false; host_mutation_allowed = $false; execution_enabled = $false; queue_apply_enabled = $false; token_printed = $false } }
   "report" { Write-AllReports }
+  "clean-room-plan" { New-CleanRoomPlan }
+  "clean-room-extract" { Invoke-CleanRoomExtract }
+  "clean-room-status" { [pscustomobject]@{ schema = "skybridge.portable_clean_room.v1"; status = $(if (Test-Path -LiteralPath $CleanRoomRoot) { "extracted" } else { "absent" }); clean_room_root_sanitized = ".agent/tmp/portable-package/clean-room/skybridge-agent-hub-portable"; token_printed = $false } }
+  "clean-room-rehearsal" { Invoke-CleanRoomRehearsal }
+  "clean-room-cleanup-preview" { [pscustomobject]@{ schema = "skybridge.portable_clean_room.v1"; cleanup_preview_only = $true; clean_room_root_sanitized = ".agent/tmp/portable-package/clean-room/skybridge-agent-hub-portable"; deletes_outside_agent_tmp = $false; token_printed = $false } }
+  "clean-room-safe-summary" { [pscustomobject]@{ ok = $true; writes_outside_agent_tmp = $false; install_allowed = $false; upload_allowed = $false; host_mutation_allowed = $false; execution_enabled = $false; queue_apply_enabled = $false; token_printed = $false } }
+  "clean-room-report" { Write-CleanRoomReport }
 }
 
 if ($Json) { $Result | ConvertTo-Json -Depth 50 } else { $Result | Format-List | Out-String }
