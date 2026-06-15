@@ -1070,6 +1070,103 @@ function DesktopPortablePackagePanel() {
   );
 }
 
+function DesktopInstallerCandidateCard() {
+  return (
+    <section className="panel desktop-installer-candidate-card" aria-label="Installer candidate card">
+      <h2>Installer Candidate</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.installer_candidate.v1</span>
+        <span>SANDBOX ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Manifest" value="skybridge.installer_manifest.v1 verified under .agent/tmp/installer-candidate" />
+        <StatusValue label="Install root" value=".agent/tmp/installer-candidate/install-root only" />
+        <StatusValue label="Host boundary" value="registry=false; startup=false; scheduled_task=false; service=false; powercfg=false; PATH=false" />
+        <StatusValue label="Uploads" value="manual_upload=false; github_release=false" />
+        <StatusValue label="Worker controls" value="execute/apply/start/claim disabled" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Install disabled</button>
+        <button type="button" disabled aria-disabled="true">Uninstall disabled</button>
+        <button type="button" disabled aria-disabled="true">Update disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopSandboxInstalledRuntimeCard() {
+  return (
+    <section className="panel desktop-sandbox-installed-runtime-card" aria-label="Sandbox-installed runtime card">
+      <h2>Sandbox-installed Runtime</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.sandbox_installed_runtime_report.v1</span>
+        <span>REHEARSAL ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Validated commands" value="launcher status; start-preview; doctor; demo; smoke safe-summary; cleanup-preview" />
+        <StatusValue label="Root" value=".agent/tmp/installer-candidate/install-root" />
+        <StatusValue label="Execution boundary" value="no Codex worker; no workunit apply; no task claim; no queue apply" />
+        <StatusValue label="Host mutation" value="false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Worker start disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim disabled</button>
+        <button type="button" disabled aria-disabled="true">Queue apply disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopRecoveryCard() {
+  return (
+    <section className="panel desktop-recovery-card" aria-label="Recovery card">
+      <h2>Recovery Sandbox</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.recovery_sandbox_report.v1</span>
+        <span>PREVIEW ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Markers" value="fixture crash; interrupted install; interrupted upgrade; interrupted rollback" />
+        <StatusValue label="Cleanup hardening" value="orphan lock, stale staging, stale rollback and port conflict metadata" />
+        <StatusValue label="Cleanup apply" value="disabled unless a future explicit sandbox cleanup command authorizes it" />
+        <StatusValue label="Host/process boundary" value="host_mutation=false; process_kill=false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Cleanup apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Process kill disabled</button>
+        <button type="button" disabled aria-disabled="true">Host repair disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopAcceptanceV3Card() {
+  return (
+    <section className="panel desktop-acceptance-v3-card" aria-label="Acceptance v3 card">
+      <h2>Operator Acceptance v3</h2>
+      <div className="mode-strip execution-disabled-banner">
+        <span>skybridge.operator_acceptance_v3_report.v1</span>
+        <span>READ ONLY</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Coverage" value="release guard; installer candidate; runtime rehearsal; soak; recovery; cleanup hardening" />
+        <StatusValue label="Web/Desktop" value="installer acceptance panels/cards are read-only" />
+        <StatusValue label="Next safe action" value="merge after CI, run post-merge smokes, then tag safety gate" />
+        <StatusValue label="Disabled capabilities" value="execute=false; apply=false; start=false; claim=false; manual upload=false; GitHub release=false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Start queue disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function DesktopOperatorAcceptancePanel() {
   return (
     <section className="panel desktop-operator-acceptance-panel" aria-label="Operator acceptance status">
@@ -1340,6 +1437,10 @@ function App() {
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
       <DesktopPortablePackagePanel />
+      <DesktopInstallerCandidateCard />
+      <DesktopSandboxInstalledRuntimeCard />
+      <DesktopRecoveryCard />
+      <DesktopAcceptanceV3Card />
       <DesktopSandboxInstallPanel />
       <DesktopSandboxUpgradeRollbackPanel />
       <DesktopSandboxSoakStabilityPanel />
