@@ -993,6 +993,33 @@ function DesktopDisabledExecutionCard() {
   );
 }
 
+function DesktopLiveLocalServerCard() {
+  return (
+    <section className="panel desktop-live-local-server-card" aria-label="Desktop live-local server card">
+      <h2>Live-local Server Card</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Disabled Execution State">
+        <span>Disabled Execution State</span>
+        <span>No enabled execute/apply/start/claim controls</span>
+        <span>token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Server schema" value="skybridge.live_local_server.v1" />
+        <StatusValue label="Auth Request Card" value="skybridge.live_local_auth_request.v1; fixture hash-only metadata read" />
+        <StatusValue label="Loopback Origin Card" value="localhost, 127.0.0.1 and ::1 only" />
+        <StatusValue label="Route Hardening Card" value="status/readiness/metadata only; command text rejected" />
+        <StatusValue label="Background process" value="stopped after report and E2E preview" />
+        <StatusValue label="Disabled capabilities" value="worker execution, workunit apply, task claim, queue apply, remote execution and host mutation" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">Execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Start disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function FirstRunWizardCard() {
   const steps = [
     "Bootstrap complete status",
@@ -1540,6 +1567,7 @@ function App() {
       <DesktopSessionStateCard />
       <DesktopLoopbackOriginCard />
       <DesktopDisabledExecutionCard />
+      <DesktopLiveLocalServerCard />
       <FirstRunWizardCard />
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
