@@ -393,6 +393,7 @@ function LocalSessionPage() {
           <WebLoopbackOriginPolicyPanel />
           <WebAuthSessionStatePanel />
           <WebAuthRejectionSummaryPanel />
+          <WebLiveLocalServerStatusPanel />
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
@@ -539,6 +540,40 @@ function WebAuthRejectionSummaryPanel() {
         <div><dt>Host mutation</dt><dd>not enabled by local auth</dd></div>
         <div><dt>Gates</dt><dd>release, resource, failure, evidence, audit and human-review gates still required</dd></div>
       </dl>
+    </section>
+  );
+}
+
+function WebLiveLocalServerStatusPanel() {
+  return (
+    <section className="skybridge-panel web-live-local-server-status-panel" aria-label="Web live-local server status panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Live-local Server Status</p>
+          <h2>Live-local Server Status</h2>
+        </div>
+        <span className={badgeClass("ok")}>loopback only</span>
+      </div>
+      <div className="mode-strip execution-disabled-banner" aria-label="Disabled Execution State">
+        <span>Disabled Execution State</span>
+        <span>No enabled execute/apply/start/claim controls</span>
+        <span>safe metadata only</span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Server schema</dt><dd>skybridge.live_local_server.v1</dd></div>
+        <div><dt>Auth Request Status</dt><dd>skybridge.live_local_auth_request.v1; fixture hash-only metadata read</dd></div>
+        <div><dt>Loopback Origin Status</dt><dd>localhost, 127.0.0.1 and ::1 only; remote origins rejected</dd></div>
+        <div><dt>Route Hardening Status</dt><dd>status, readiness and metadata routes only; command text rejected</dd></div>
+        <div><dt>E2E report</dt><dd>.agent/tmp/live-local/live-local-e2e-report.json</dd></div>
+        <div><dt>Background process</dt><dd>stopped after report and E2E preview</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" disabled aria-disabled="true">Execute disabled</button>
+        <button type="button" disabled aria-disabled="true">Apply disabled</button>
+        <button type="button" disabled aria-disabled="true">Start disabled</button>
+        <button type="button" disabled aria-disabled="true">Claim disabled</button>
+      </div>
+      <span>token_printed=false</span>
     </section>
   );
 }
