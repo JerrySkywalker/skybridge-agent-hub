@@ -6,9 +6,10 @@ The MVP is local-only:
 
 - Web and Desktop show a Manual Task Chat panel.
 - The PowerShell queue stores sanitized `input_preview`, `input_hash`, lifecycle metadata and `result_preview`.
-- The only provider is `provider_id=mock`.
+- The default provider is `provider_id=mock`.
 - The mock provider is deterministic and performs no network calls.
-- Hermes live calls remain disabled.
+- Goal 295/296 adds `provider_id=hermes_deepseek` as a disabled-by-default preview provider.
+- Hermes live calls remain disabled by default and disabled in CI.
 - Worker execution, workunit creation, task claim, task PR creation and queue apply remain disabled.
 - `token_printed=false`.
 
@@ -20,6 +21,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-manual-task-qu
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-manual-task-queue.ps1 -Command run-next-mock -Json
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-manual-task-queue.ps1 -Command clear-completed -Json
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-manual-task-queue.ps1 -Command report -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-manual-task-provider.ps1 -Command provider-list -Json
 ```
 
 Reports are written under `.agent/tmp/manual-task/`.
@@ -31,6 +33,7 @@ The Web and Desktop controls are local manual controls:
 - input box
 - Add to queue
 - Run next mock
+- Run next Hermes preview
 - Clear completed
 - task list contract
 - result preview contract

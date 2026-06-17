@@ -241,12 +241,19 @@ export const ManualTaskStatusSchema = z.enum([
 ]);
 export const ManualTaskProviderSchema = z.object({
   schema: z.literal("skybridge.manual_task_provider.v1"),
-  provider_id: z.literal("mock"),
-  deterministic: z.literal(true),
-  network_enabled: z.literal(false),
+  provider_id: z.enum(["mock", "hermes_deepseek"]),
+  status: z.string().min(1).optional(),
+  configured: z.boolean().optional(),
+  deterministic: z.boolean(),
+  network_enabled: z.boolean(),
   hermes_live_call_enabled: z.literal(false),
+  remote_llm_inference_enabled: z.literal(false).optional(),
+  disabled_by_default: z.boolean().optional(),
+  ci_disabled: z.boolean().optional(),
+  config_values_redacted: z.literal(true).optional(),
   raw_request_persisted: z.literal(false),
   raw_response_persisted: z.literal(false),
+  reason: z.string().optional(),
   token_printed: z.literal(false),
 });
 export const ManualTaskSchema = z.object({
@@ -256,7 +263,13 @@ export const ManualTaskSchema = z.object({
   input_preview: z.string().max(200),
   input_hash: z.string().min(12),
   result_preview: z.string().max(240).optional(),
-  provider_id: z.literal("mock").optional(),
+  result_hash: z.string().min(12).optional(),
+  provider_id: z.enum(["mock", "hermes_deepseek"]).optional(),
+  provider_status: z.string().optional(),
+  duration_ms: z.number().nonnegative().optional(),
+  error_summary: z.string().max(240).optional(),
+  live_call_performed: z.boolean().optional(),
+  remote_llm_inference_enabled: z.boolean().optional(),
   command_text_detected: z.boolean(),
   prompt_body_persisted: z.literal(false),
   output_executed: z.literal(false).optional(),
@@ -269,9 +282,15 @@ export const ManualTaskResultSchema = z.object({
   schema: z.literal("skybridge.manual_task_result.v1"),
   task_id: z.string().optional(),
   provider: ManualTaskProviderSchema.optional(),
-  provider_id: z.literal("mock").optional(),
+  provider_id: z.enum(["mock", "hermes_deepseek"]).optional(),
+  provider_status: z.string().optional(),
   status: z.enum(["succeeded", "failed", "blocked"]),
   result_preview: z.string().max(240).optional(),
+  result_hash: z.string().min(12).optional(),
+  duration_ms: z.number().nonnegative().optional(),
+  error_summary: z.string().max(240).optional(),
+  live_call_performed: z.boolean().optional(),
+  remote_llm_inference_enabled: z.boolean().optional(),
   output_executed: z.literal(false),
   command_executed: z.literal(false).optional(),
   workunit_created: z.literal(false).optional(),
@@ -285,6 +304,7 @@ export const ManualTaskQueueSchema = z.object({
   schema: z.literal("skybridge.manual_task_queue.v1"),
   queue_id: z.string().min(1),
   provider: ManualTaskProviderSchema,
+  provider_status: z.string().optional(),
   tasks: z.array(ManualTaskSchema),
   state_machine: z.array(ManualTaskStatusSchema),
   execution_enabled: z.literal(false),
@@ -295,12 +315,42 @@ export const ManualTaskQueueSchema = z.object({
   task_pr_created: z.literal(false),
   queue_apply_enabled: z.literal(false),
   remote_execution_enabled: z.literal(false),
+  remote_llm_inference_enabled: z.literal(false),
   arbitrary_command_enabled: z.literal(false),
   host_mutation_performed: z.literal(false),
   prompt_body_persisted: z.literal(false),
   transcript_body_persisted: z.literal(false),
+  raw_request_persisted: z.literal(false).optional(),
+  raw_response_persisted: z.literal(false).optional(),
   raw_logs_persisted: z.literal(false),
   updated_at: z.string().datetime(),
+  token_printed: z.literal(false),
+});
+export const ManualTaskProviderListSchema = z.object({
+  schema: z.literal("skybridge.manual_task_provider_list.v1"),
+  default_provider_id: z.literal("mock"),
+  providers: z.array(ManualTaskProviderSchema),
+  live_call_disabled_by_default: z.literal(true),
+  token_printed: z.literal(false),
+});
+export const ManualTaskProviderReportSchema = z.object({
+  schema: z.literal("skybridge.manual_task_provider_report.v1"),
+  status: z.string().min(1),
+  default_provider_id: z.literal("mock"),
+  provider_list: ManualTaskProviderListSchema,
+  hermes_disabled_by_default: z.literal(true),
+  no_hermes_live_call_in_ci: z.literal(true),
+  raw_request_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  output_executed: z.literal(false),
+  worker_execution_started: z.literal(false),
+  workunit_created: z.literal(false),
+  task_created: z.literal(false),
+  task_claim_created: z.literal(false),
+  task_pr_created: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
   token_printed: z.literal(false),
 });
 export const ManualTaskAuditSchema = z.object({
@@ -318,6 +368,8 @@ export type ManualTaskProvider = z.infer<typeof ManualTaskProviderSchema>;
 export type ManualTask = z.infer<typeof ManualTaskSchema>;
 export type ManualTaskResult = z.infer<typeof ManualTaskResultSchema>;
 export type ManualTaskQueue = z.infer<typeof ManualTaskQueueSchema>;
+export type ManualTaskProviderList = z.infer<typeof ManualTaskProviderListSchema>;
+export type ManualTaskProviderReport = z.infer<typeof ManualTaskProviderReportSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 export type TaskRisk = "low" | "medium" | "high";
 export type GoalRisk = TaskRisk;

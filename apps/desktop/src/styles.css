@@ -225,6 +225,11 @@ p {
   width: 100%;
 }
 
+select.manual-task-input {
+  min-height: 0;
+  resize: none;
+}
+
 .readiness {
   border: 1px solid #d9e0e4;
   border-radius: 8px;
