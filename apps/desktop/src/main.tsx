@@ -4,9 +4,18 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   type CampaignRunReport,
   type CampaignSafeSummary,
+  createConnectivityDoctorModel,
   createCampaignSafeSummary,
   createAttentionModel,
   createWorkerServiceReadiness,
+  defaultApiBaseForMode,
+  getApiBase,
+  getApiMode,
+  resetApiSettings,
+  setApiBase,
+  setApiMode,
+  type ApiMode,
+  type ConnectivityDoctorModel,
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
@@ -1055,7 +1064,8 @@ function DesktopManualTaskChatCard() {
         <StatusValue label="Task schema" value="skybridge.manual_task.v1" />
         <StatusValue label="Result schema" value="skybridge.manual_task_result.v1" />
         <StatusValue label="Provider schema" value="skybridge.manual_task_provider.v1; provider_id=mock/skybridge_server_hermes/hermes_deepseek; mock default" />
-        <StatusValue label="SkyBridge server Hermes" value="available/configured/disabled/enabled status from server-side HERMES_API_BASE and HERMES_API_KEY or token file" />
+        <StatusValue label="SkyBridge server Hermes" value="available/configured/disabled/enabled status from server-side HERMES_API_BASE and HERMES_API_KEY or token file, fetched from selected API base" />
+        <StatusValue label="Selected API base" value="Manual Task provider panel uses selected API base for server-mediated Hermes status" />
         <StatusValue label="Hermes local-direct" value="hermes_deepseek deprecated preview-only; no local DeepSeek or Hermes secret required" />
         <StatusValue label="State machine" value="queued, running, succeeded, failed, blocked, cancelled" />
         <StatusValue label="Task list" value="input_preview and result_preview only; no raw transcript persistence" />
@@ -1458,6 +1468,14 @@ function DesktopReleaseCandidatePanel() {
 
 function App() {
   const fixtureOnly = isFixtureMode();
+  const apiSettings = useDesktopApiSettings();
+  const [connectivityDoctor, setConnectivityDoctor] = React.useState<ConnectivityDoctorModel>(() =>
+    createConnectivityDoctorModel({
+      apiMode: apiSettings.mode,
+      apiBase: apiSettings.apiBase,
+      sseStreamStatus: "unknown",
+    }),
+  );
   const [status, setStatus] = React.useState<DesktopStatus>(fixtureOnly ? fixtureStatus : emptyStatus);
   const [refreshing, setRefreshing] = React.useState(false);
   const refreshGeneration = React.useRef(0);
@@ -1536,6 +1554,31 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
 
+  React.useEffect(() => {
+    setConnectivityDoctor(
+      createConnectivityDoctorModel({
+        apiMode: apiSettings.mode,
+        apiBase: apiSettings.apiBase,
+        sseStreamStatus: "unknown",
+      }),
+    );
+  }, [apiSettings.mode, apiSettings.apiBase]);
+
+  const refreshConnectivityDoctor = React.useCallback(() => {
+    setConnectivityDoctor(
+      createConnectivityDoctorModel({
+        apiMode: apiSettings.mode,
+        apiBase: apiSettings.apiBase,
+        restHealthOk: false,
+        sseStreamStatus: "unknown",
+        lastErrorSummary:
+          apiSettings.mode === "cloud_operator"
+            ? "Cloud API unreachable / check API base"
+            : "Local dev API unreachable / server not running",
+      }),
+    );
+  }, [apiSettings.mode, apiSettings.apiBase]);
+
   const refreshEpoch = parseUnixTimestamp(status.last_refresh_time);
   const statusAge = refreshEpoch === null ? "unknown" : `${Math.max(0, nowSeconds - refreshEpoch)}s`;
   const readinessState = status.operator_readiness?.state ?? status.pre190_readiness.state;
@@ -1573,7 +1616,19 @@ function App() {
         <span>{status.mode_banner}</span>
         <span>{status.mutation_scope}</span>
         <span>{status.execution_disabled ? "EXECUTION DISABLED" : "EXECUTION STATE UNKNOWN"}</span>
+        <span>Mode: {apiSettings.mode}</span>
+        <span>API base: {apiSettings.apiBase}</span>
       </section>
+
+      <DesktopConnectivityDoctorCard doctor={connectivityDoctor} onRefresh={refreshConnectivityDoctor} />
+      <DesktopApiSettingsCard
+        mode={apiSettings.mode}
+        apiBase={apiSettings.apiBase}
+        envOverride={apiSettings.envOverride}
+        onSetMode={apiSettings.setMode}
+        onSetApiBase={apiSettings.setBase}
+        onReset={apiSettings.reset}
+      />
 
       <section className="toolbar" aria-label="Queue dashboard actions">
         <button type="button" onClick={refresh} disabled={refreshing}>
@@ -2186,6 +2241,133 @@ function containsSecretLookingText(text: string) {
     "-----BEGIN [A-Z ]*" + "PRIVATE " + "KEY-----",
   ];
   return new RegExp(patterns.join("|"), "i").test(text);
+}
+
+function useDesktopApiSettings() {
+  const envApiBase = import.meta.env.VITE_SKYBRIDGE_API_BASE as string | undefined;
+  const envApiMode = import.meta.env.VITE_SKYBRIDGE_API_MODE as string | undefined;
+  const readSettings = () => ({
+    mode: getApiMode({ envApiBase, envApiMode, storage: window.localStorage }),
+    apiBase: getApiBase({ envApiBase, envApiMode, storage: window.localStorage }),
+  });
+  const [settings, setSettings] = React.useState(readSettings);
+  const envOverride = Boolean(envApiBase || envApiMode);
+  return {
+    ...settings,
+    envOverride,
+    setMode: (mode: ApiMode) => {
+      if (envOverride) return;
+      setApiMode(window.localStorage, mode);
+      if (mode === "custom") {
+        window.localStorage.setItem("skybridge.api.base", settings.apiBase);
+      } else {
+        window.localStorage.setItem("skybridge.api.base", defaultApiBaseForMode(mode));
+      }
+      setSettings(readSettings());
+    },
+    setBase: (apiBase: string) => {
+      if (envOverride) return;
+      setApiBase(window.localStorage, apiBase);
+      setSettings(readSettings());
+    },
+    reset: () => {
+      if (envOverride) return;
+      const reset = resetApiSettings(window.localStorage);
+      setSettings({ mode: reset.mode, apiBase: reset.apiBase });
+    },
+  };
+}
+
+function DesktopApiSettingsCard({
+  mode,
+  apiBase,
+  envOverride,
+  onSetMode,
+  onSetApiBase,
+  onReset,
+}: {
+  mode: ApiMode;
+  apiBase: string;
+  envOverride: boolean;
+  onSetMode: (mode: ApiMode) => void;
+  onSetApiBase: (apiBase: string) => void;
+  onReset: () => void;
+}) {
+  const [draftApiBase, setDraftApiBase] = React.useState(apiBase);
+  React.useEffect(() => setDraftApiBase(apiBase), [apiBase]);
+  return (
+    <section className="panel desktop-api-mode-settings" aria-label="Desktop API mode settings">
+      <h2>API Mode Settings</h2>
+      <dl>
+        <StatusValue label="Mode" value={mode} />
+        <StatusValue label="API base" value={apiBase} />
+        <StatusValue label="Storage" value={envOverride ? "VITE_SKYBRIDGE_API_BASE / VITE_SKYBRIDGE_API_MODE override" : "Desktop frontend localStorage keys skybridge.api.mode and skybridge.api.base only"} />
+        <StatusValue label="Secrets stored" value="false" />
+        <StatusValue label="Backend auto-start" value="false" />
+        <StatusValue label="Host mutation" value="false" />
+      </dl>
+      <label className="manual-task-input-label" htmlFor="desktop-api-mode">
+        API mode
+      </label>
+      <select
+        id="desktop-api-mode"
+        className="manual-task-input"
+        value={mode}
+        disabled={envOverride}
+        onChange={(event) => onSetMode(event.currentTarget.value as ApiMode)}
+      >
+        <option value="cloud_operator">cloud_operator</option>
+        <option value="local_dev">local_dev</option>
+        <option value="custom">custom</option>
+      </select>
+      <label className="manual-task-input-label" htmlFor="desktop-api-base">
+        API base
+      </label>
+      <input
+        id="desktop-api-base"
+        className="manual-task-input"
+        value={draftApiBase}
+        disabled={envOverride}
+        onChange={(event) => setDraftApiBase(event.currentTarget.value)}
+        onBlur={() => onSetApiBase(draftApiBase)}
+      />
+      <div className="queue-action-grid">
+        <button type="button" disabled={envOverride} onClick={() => onSetApiBase(draftApiBase)}>Save API base</button>
+        <button type="button" disabled={envOverride} onClick={onReset}>Reset API settings</button>
+        <button type="button" disabled aria-disabled="true">Start server disabled</button>
+      </div>
+    </section>
+  );
+}
+
+function DesktopConnectivityDoctorCard({
+  doctor,
+  onRefresh,
+}: {
+  doctor: ConnectivityDoctorModel;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="panel desktop-connectivity-doctor-card" aria-label="Desktop Connectivity Doctor">
+      <h2>Connectivity Doctor</h2>
+      <dl>
+        <StatusValue label="Schema" value={doctor.schema} />
+        <StatusValue label="Mode" value={doctor.api_mode} />
+        <StatusValue label="API base" value={doctor.api_base} />
+        <StatusValue label="REST health status" value={doctor.rest_health_status} />
+        <StatusValue label="SSE stream status" value={doctor.sse_stream_status} />
+        <StatusValue label="Server online" value={String(doctor.server_online)} />
+        <StatusValue label="Stream degraded" value={String(doctor.stream_degraded)} />
+        <StatusValue label="Last successful health check" value={doctor.last_health_time ?? "none"} />
+        <StatusValue label="Last error summary" value={doctor.last_error_summary ?? "none"} />
+        <StatusValue label="Recommended action" value={doctor.recommended_action} />
+        <StatusValue label="token_printed" value={String(doctor.token_printed)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" onClick={onRefresh}>Manual refresh</button>
+      </div>
+    </section>
+  );
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(<App />);

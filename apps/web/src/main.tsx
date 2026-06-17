@@ -13,9 +13,18 @@ import {
 } from "@skybridge-agent-hub/react-widgets";
 import {
   SkyBridgeClient,
+  createConnectivityDoctorModel,
+  defaultApiBaseForMode,
+  getApiBase,
+  getApiMode,
+  resetApiSettings,
+  setApiBase,
+  setApiMode,
   type AutoMergeSummary,
+  type ApiMode,
   type AuditEntry,
   type CampaignRunReport,
+  type ConnectivityDoctorModel,
   createCampaignSafeSummary,
   createAttentionModel,
   createWorkerServiceReadiness,
@@ -166,8 +175,9 @@ const navItems: Array<{ route: Route; label: string }> = [
 ];
 
 function App() {
-  const apiBase =
-    import.meta.env.VITE_SKYBRIDGE_API_BASE || "http://127.0.0.1:8787";
+  const apiSettings = useApiSettings();
+  const apiBase = apiSettings.apiBase;
+  const apiMode = apiSettings.mode;
   const route = useHashRoute();
   const [filters, setFilters] = useState<SourceFilters>({
     platform: "all",
@@ -214,11 +224,12 @@ function App() {
             <h1>{titleForRoute(route)}</h1>
           </div>
           <div className="topbar__meta">
+            <span className="api-mode-pill">Mode: {apiMode}</span>
             <code>{apiBase}</code>
           </div>
         </header>
 
-        {route === "overview" ? <OverviewPage apiBase={apiBase} /> : null}
+        {route === "overview" ? <OverviewPage apiBase={apiBase} apiMode={apiMode} /> : null}
         {route === "runs" ? (
           <RunsPage
             apiBase={apiBase}
@@ -245,14 +256,23 @@ function App() {
         {route === "hermes" ? <HermesPage apiBase={apiBase} /> : null}
         {route === "sources" ? <SourcesAuditPage apiBase={apiBase} /> : null}
         {route === "audit" ? <ReliabilityAuditPage /> : null}
-        {route === "settings" ? <SettingsPage apiBase={apiBase} /> : null}
+        {route === "settings" ? (
+          <SettingsPage
+            apiBase={apiBase}
+            apiMode={apiMode}
+            envOverride={apiSettings.envOverride}
+            onSetMode={apiSettings.setMode}
+            onSetApiBase={apiSettings.setBase}
+            onReset={apiSettings.reset}
+          />
+        ) : null}
       </main>
     </div>
   );
 }
 
-function OverviewPage({ apiBase }: { apiBase: string }) {
-  const data = useProductData(apiBase);
+function OverviewPage({ apiBase, apiMode }: { apiBase: string; apiMode: ApiMode }) {
+  const data = useProductData(apiBase, apiMode);
   const summary = data.summary;
 
   return (
@@ -273,6 +293,7 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
       </section>
       <section className="kpi-grid">
         <Kpi label="Health" value={summary?.health.ok ? "online" : "unknown"} />
+        <Kpi label="Stream" value={data.connectivityDoctor.sse_stream_status} />
         <Kpi label="Open PRs" value={summary?.totals.open_prs ?? 0} />
         <Kpi label="Latest CI" value={summary?.latest?.ci_state ?? "unknown"} />
         <Kpi
@@ -322,6 +343,10 @@ function OverviewPage({ apiBase }: { apiBase: string }) {
       <section className="dashboard-grid">
         <div className="dashboard-grid__main">
           <SkyBridgeHealthCard apiBase={apiBase} />
+          <ConnectivityDoctorPanel
+            doctor={data.connectivityDoctor}
+            onRefresh={data.refreshConnectivityDoctor}
+          />
           <FailureList failures={summary?.recent_failures ?? []} />
           <ProductTable
             title="Open PR/CI"
@@ -947,7 +972,8 @@ function WebManualTaskChatPanel() {
         <div><dt>Task schema</dt><dd>skybridge.manual_task.v1</dd></div>
         <div><dt>Result schema</dt><dd>skybridge.manual_task_result.v1</dd></div>
         <div><dt>Provider schema</dt><dd>skybridge.manual_task_provider.v1; provider_id=mock/skybridge_server_hermes/hermes_deepseek; mock default</dd></div>
-        <div><dt>SkyBridge server Hermes</dt><dd>available/configured/disabled/enabled status from server-side HERMES_API_BASE and HERMES_API_KEY or token file</dd></div>
+        <div><dt>SkyBridge server Hermes</dt><dd>available/configured/disabled/enabled status from server-side HERMES_API_BASE and HERMES_API_KEY or token file, fetched from selected API base</dd></div>
+        <div><dt>Selected API base</dt><dd>Manual Task provider panel uses selected API base for server-mediated Hermes status</dd></div>
         <div><dt>Hermes local-direct</dt><dd>hermes_deepseek deprecated preview-only; no local DeepSeek or Hermes secret required</dd></div>
         <div><dt>State machine</dt><dd>queued, running, succeeded, failed, blocked, cancelled</dd></div>
         <div><dt>Task list</dt><dd>input_preview and result_preview only; no raw transcript persistence</dd></div>
@@ -3496,24 +3522,83 @@ function V1ReadinessGapPanel() {
   );
 }
 
-function SettingsPage({ apiBase }: { apiBase: string }) {
-  const data = useProductData(apiBase);
+function SettingsPage({
+  apiBase,
+  apiMode,
+  envOverride,
+  onSetMode,
+  onSetApiBase,
+  onReset,
+}: {
+  apiBase: string;
+  apiMode: ApiMode;
+  envOverride: boolean;
+  onSetMode: (mode: ApiMode) => void;
+  onSetApiBase: (apiBase: string) => void;
+  onReset: () => void;
+}) {
+  const data = useProductData(apiBase, apiMode);
+  const [draftApiBase, setDraftApiBase] = useState(apiBase);
+  useEffect(() => setDraftApiBase(apiBase), [apiBase]);
   return (
     <div className="route-stack">
       <section className="skybridge-panel">
         <div className="skybridge-card__header">
           <div>
             <p className="skybridge-kicker">Settings</p>
-            <h2>Local product console</h2>
+            <h2>Web/Desktop API mode</h2>
           </div>
           <span className="skybridge-state">
-            {data.summary?.health.persistence ?? "unknown"}
+            {apiMode}
           </span>
+        </div>
+        <div className="settings-controls" aria-label="API mode settings">
+          <label>
+            API mode
+            <select
+              value={apiMode}
+              disabled={envOverride}
+              onChange={(event) => onSetMode(event.currentTarget.value as ApiMode)}
+            >
+              <option value="cloud_operator">cloud_operator</option>
+              <option value="local_dev">local_dev</option>
+              <option value="custom">custom</option>
+            </select>
+          </label>
+          <label>
+            API base
+            <input
+              value={draftApiBase}
+              disabled={envOverride}
+              onChange={(event) => setDraftApiBase(event.currentTarget.value)}
+              onBlur={() => onSetApiBase(draftApiBase)}
+            />
+          </label>
+          <div className="queue-placeholder-controls">
+            <button type="button" disabled={envOverride} onClick={() => onSetApiBase(draftApiBase)}>
+              Save API base
+            </button>
+            <button type="button" disabled={envOverride} onClick={onReset}>
+              Reset API settings
+            </button>
+          </div>
         </div>
         <dl className="settings-list">
           <div>
+            <dt>Mode</dt>
+            <dd>{apiMode}</dd>
+          </div>
+          <div>
             <dt>API base</dt>
             <dd>{apiBase}</dd>
+          </div>
+          <div>
+            <dt>Storage</dt>
+            <dd>{envOverride ? "VITE_SKYBRIDGE_API_BASE / VITE_SKYBRIDGE_API_MODE override" : "browser localStorage keys skybridge.api.mode and skybridge.api.base only"}</dd>
+          </div>
+          <div>
+            <dt>Connectivity Doctor</dt>
+            <dd>{data.connectivityDoctor.recommended_action}</dd>
           </div>
           <div>
             <dt>Database</dt>
@@ -3936,7 +4021,90 @@ function useControlPlaneData(apiBase: string) {
   return { workers, approvals, error };
 }
 
-function useProductData(apiBase: string) {
+function useApiSettings() {
+  const envApiBase = import.meta.env.VITE_SKYBRIDGE_API_BASE as string | undefined;
+  const envApiMode = import.meta.env.VITE_SKYBRIDGE_API_MODE as string | undefined;
+  const readSettings = () => ({
+    mode: getApiMode({ envApiBase, envApiMode, storage: window.localStorage }),
+    apiBase: getApiBase({ envApiBase, envApiMode, storage: window.localStorage }),
+  });
+  const [settings, setSettings] = useState(readSettings);
+  const envOverride = Boolean(envApiBase || envApiMode);
+  return {
+    ...settings,
+    envOverride,
+    setMode: (mode: ApiMode) => {
+      if (envOverride) return;
+      setApiMode(window.localStorage, mode);
+      if (mode === "custom") {
+        window.localStorage.setItem("skybridge.api.base", settings.apiBase);
+      } else {
+        window.localStorage.setItem("skybridge.api.base", defaultApiBaseForMode(mode));
+      }
+      setSettings(readSettings());
+    },
+    setBase: (apiBase: string) => {
+      if (envOverride) return;
+      setApiBase(window.localStorage, apiBase);
+      setSettings(readSettings());
+    },
+    reset: () => {
+      if (envOverride) return;
+      const reset = resetApiSettings(window.localStorage);
+      setSettings({ mode: reset.mode, apiBase: reset.apiBase });
+    },
+  };
+}
+
+function ConnectivityDoctorPanel({
+  doctor,
+  onRefresh,
+}: {
+  doctor: ConnectivityDoctorModel;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="skybridge-panel connectivity-doctor-panel" aria-label="Connectivity Doctor">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Connectivity Doctor</p>
+          <h2>REST and stream health</h2>
+        </div>
+        <span className={badgeClass(doctor.server_online ? "ok" : "bad")}>
+          {doctor.server_online ? "server online" : "server offline"}
+        </span>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Schema</dt><dd>{doctor.schema}</dd></div>
+        <div><dt>Mode</dt><dd>{doctor.api_mode}</dd></div>
+        <div><dt>API base</dt><dd>{doctor.api_base}</dd></div>
+        <div><dt>REST health status</dt><dd>{doctor.rest_health_status}</dd></div>
+        <div><dt>SSE stream status</dt><dd>{doctor.sse_stream_status}</dd></div>
+        <div><dt>Server online</dt><dd>{String(doctor.server_online)}</dd></div>
+        <div><dt>Stream degraded</dt><dd>{String(doctor.stream_degraded)}</dd></div>
+        <div><dt>Last successful health check</dt><dd>{doctor.last_health_time ?? "none"}</dd></div>
+        <div><dt>Last error summary</dt><dd>{doctor.last_error_summary ?? "none"}</dd></div>
+        <div><dt>Recommended action</dt><dd>{doctor.recommended_action}</dd></div>
+        <div><dt>token_printed</dt><dd>{String(doctor.token_printed)}</dd></div>
+      </dl>
+      <div className="queue-placeholder-controls">
+        <button type="button" onClick={onRefresh}>Manual refresh</button>
+      </div>
+    </section>
+  );
+}
+
+function settledValue<T>(result: PromiseSettledResult<T>, fallback: T): T {
+  return result.status === "fulfilled" ? result.value : fallback;
+}
+
+function settledError(label: string, result: PromiseSettledResult<unknown>): string | undefined {
+  if (result.status === "fulfilled") return undefined;
+  const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+  return `${label}: ${message.slice(0, 180)}`;
+}
+
+function useProductData(apiBase: string, apiMode: ApiMode = "local_dev") {
   const client = useMemo(() => new SkyBridgeClient(apiBase), [apiBase]);
   const [summary, setSummary] = useState<SummaryResponse | undefined>();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -3957,11 +4125,15 @@ function useProductData(apiBase: string) {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [tasksSummary, setTasksSummary] = useState<TaskSummary | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const [connectivityDoctor, setConnectivityDoctor] = useState<ConnectivityDoctorModel>(() =>
+    createConnectivityDoctorModel({ apiMode, apiBase }),
+  );
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const projectsPromise = client.listProjects();
-    void Promise.all([
+    void Promise.allSettled([
       client.getSummary(),
       projectsPromise,
       client.getIterationsSummary(),
@@ -3976,42 +4148,82 @@ function useProductData(apiBase: string) {
       client.listTasks(),
       client.getTasksSummary(),
       projectsPromise.then((items) =>
-        Promise.all(items.map((project) => client.listGoals(project.project_id))),
+        Promise.allSettled(items.map((project) => client.listGoals(project.project_id))),
       ),
     ])
       .then(
-        ([
-          nextSummary,
-          nextProjects,
-          nextIterations,
-          nextPrs,
-          nextNotifications,
-          nextHermes,
-          nextAutoMerge,
-          nextAudit,
-          nextAdapters,
-          nextWorkers,
-          nextWorkersSummary,
-          nextTasks,
-          nextTasksSummary,
-          nextGoalsByProject,
-        ]) => {
+        (results) => {
           if (cancelled) return;
-          setSummary(nextSummary);
-          setProjects(nextProjects);
-          setGoals(nextGoalsByProject.flat());
-          setIterations(nextIterations);
-          setPrs(nextPrs);
-          setNotifications(nextNotifications);
-          setHermes(nextHermes);
-          setAutoMerge(nextAutoMerge);
-          setAudit(nextAudit);
-          setAdapters(nextAdapters);
-          setWorkers(nextWorkers);
-          setWorkersSummary(nextWorkersSummary);
-          setTasks(nextTasks);
-          setTasksSummary(nextTasksSummary);
-          setError(undefined);
+          const [
+            nextSummary,
+            nextProjects,
+            nextIterations,
+            nextPrs,
+            nextNotifications,
+            nextHermes,
+            nextAutoMerge,
+            nextAudit,
+            nextAdapters,
+            nextWorkers,
+            nextWorkersSummary,
+            nextTasks,
+            nextTasksSummary,
+            nextGoalsByProject,
+          ] = results;
+          const projectsValue = settledValue(nextProjects, projects);
+          const goalsByProject =
+            nextGoalsByProject.status === "fulfilled"
+              ? nextGoalsByProject.value.flatMap((item) => settledValue(item, [] as GoalRecord[]))
+              : goals;
+          const safeErrors = results
+            .map((result, index) =>
+              settledError(
+                [
+                  "summary",
+                  "projects",
+                  "iterations",
+                  "prs",
+                  "notifications",
+                  "hermes",
+                  "automerge",
+                  "audit",
+                  "adapters",
+                  "workers",
+                  "workersSummary",
+                  "tasks",
+                  "tasksSummary",
+                  "goals",
+                ][index],
+                result,
+              ),
+            )
+            .filter(Boolean);
+          const restOk = nextSummary.status === "fulfilled" ? Boolean(nextSummary.value.health.ok) : false;
+          setConnectivityDoctor(
+            createConnectivityDoctorModel({
+              apiMode,
+              apiBase,
+              restHealthOk: restOk,
+              sseStreamStatus: restOk ? "reconnecting" : "unknown",
+              lastHealthTime: restOk ? new Date().toISOString() : connectivityDoctor.last_health_time,
+              lastErrorSummary: safeErrors[0],
+            }),
+          );
+          setSummary(settledValue(nextSummary, summary));
+          setProjects(projectsValue);
+          setGoals(goalsByProject);
+          setIterations(settledValue(nextIterations, iterations));
+          setPrs(settledValue(nextPrs, prs));
+          setNotifications(settledValue(nextNotifications, notifications));
+          setHermes(settledValue(nextHermes, hermes));
+          setAutoMerge(settledValue(nextAutoMerge, automerge));
+          setAudit(settledValue(nextAudit, audit));
+          setAdapters(settledValue(nextAdapters, adapters));
+          setWorkers(settledValue(nextWorkers, workers));
+          setWorkersSummary(settledValue(nextWorkersSummary, workersSummary));
+          setTasks(settledValue(nextTasks, tasks));
+          setTasksSummary(settledValue(nextTasksSummary, tasksSummary));
+          setError(safeErrors.join("; ") || undefined);
         },
       )
       .catch((err) => {
@@ -4021,7 +4233,7 @@ function useProductData(apiBase: string) {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [client, apiBase, apiMode, refreshTick]);
 
   return {
     summary,
@@ -4038,6 +4250,8 @@ function useProductData(apiBase: string) {
     workersSummary,
     tasks,
     tasksSummary,
+    connectivityDoctor,
+    refreshConnectivityDoctor: () => setRefreshTick((tick) => tick + 1),
     error,
   };
 }

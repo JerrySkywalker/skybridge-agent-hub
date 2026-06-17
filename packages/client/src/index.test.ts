@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAttentionModel,
+  createConnectivityDoctorModel,
   createWorkerServiceReadiness,
   createWorkerRoutePreview,
+  DEFAULT_CLOUD_OPERATOR_API_BASE,
   deriveAttentionEvents,
+  getApiBase,
+  getApiMode,
+  LOCAL_DEV_API_BASE,
+  LOCAL_DEV_START_COMMAND,
+  resetApiSettings,
   SkyBridgeClient,
+  setApiBase,
+  setApiMode,
   fixtureCampaignRunReport,
   fixtureCampaignLock,
   fixtureCampaignPriorityQueue,
@@ -40,6 +49,66 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("SkyBridgeClient", () => {
+  it("models explicit API modes with safe local storage and env overrides", () => {
+    const map = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        map.set(key, value);
+      },
+      removeItem: (key: string) => {
+        map.delete(key);
+      },
+    };
+
+    expect(getApiMode({ storage })).toBe("cloud_operator");
+    expect(getApiBase({ storage })).toBe(DEFAULT_CLOUD_OPERATOR_API_BASE);
+    expect(setApiMode(storage, "cloud_operator")).toBe("cloud_operator");
+    expect(getApiBase({ storage })).toBe(DEFAULT_CLOUD_OPERATOR_API_BASE);
+    expect(setApiBase(storage, "http://127.0.0.1:8787/")).toBe(LOCAL_DEV_API_BASE);
+    expect(getApiMode({ storage })).toBe("local_dev");
+    expect(getApiMode({ envApiMode: "custom", envApiBase: "https://operator.example.test/api", storage })).toBe("custom");
+    expect(getApiBase({ envApiMode: "custom", envApiBase: "https://operator.example.test/api", storage })).toBe("https://operator.example.test/api");
+    expect(resetApiSettings(storage)).toMatchObject({ mode: "cloud_operator", apiBase: DEFAULT_CLOUD_OPERATOR_API_BASE, source: "default" });
+    expect([...map.values()].join(" ")).not.toMatch(/token|secret|authorization|cookie/i);
+  });
+
+  it("splits REST health from SSE stream status in the connectivity doctor", () => {
+    const onlineDegraded = createConnectivityDoctorModel({
+      apiMode: "cloud_operator",
+      apiBase: "https://skybridge.example.test",
+      restHealthOk: true,
+      sseStreamStatus: "reconnecting",
+      lastHealthTime: "2026-06-17T00:00:00.000Z",
+    });
+
+    expect(onlineDegraded).toMatchObject({
+      schema: "skybridge.connectivity_doctor.v1",
+      rest_health_status: "online",
+      sse_stream_status: "reconnecting",
+      server_online: true,
+      stream_degraded: true,
+      token_printed: false,
+    });
+
+    const localOffline = createConnectivityDoctorModel({
+      apiMode: "local_dev",
+      apiBase: LOCAL_DEV_API_BASE,
+      restHealthOk: false,
+      lastErrorSummary: "Authorization: bearer secret-value",
+    });
+    expect(localOffline.recommended_action).toContain(LOCAL_DEV_START_COMMAND);
+    expect(localOffline.last_error_summary).not.toContain("secret-value");
+
+    const cloudOffline = createConnectivityDoctorModel({
+      apiMode: "cloud_operator",
+      apiBase: "https://skybridge.example.test",
+      restHealthOk: false,
+    });
+    expect(cloudOffline.recommended_action).toContain("Cloud API unreachable");
+    expect(cloudOffline.recommended_action).not.toContain("pnpm --filter @skybridge-agent-hub/server dev");
+  });
+
   it("classifies queue-control actions and lock previews for Goal 198", () => {
     const byAction = new Map(queueControlActionMatrix.map((entry) => [entry.action, entry]));
 

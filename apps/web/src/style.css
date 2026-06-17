@@ -100,6 +100,17 @@ body {
   padding: 6px 8px;
 }
 
+.api-mode-pill {
+  background: #e9f7ef;
+  border: 1px solid #bfe8cf;
+  border-radius: 999px;
+  color: #1f6b3d;
+  font-size: 12px;
+  font-weight: 750;
+  padding: 5px 9px;
+  text-transform: uppercase;
+}
+
 .eyebrow,
 .skybridge-kicker {
   color: #52627a;
@@ -616,6 +627,32 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.settings-controls {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(160px, 0.4fr) minmax(240px, 1fr) auto;
+  margin-bottom: 18px;
+}
+
+.settings-controls label {
+  color: #52627a;
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.settings-controls input,
+.settings-controls select {
+  background: #f8fbff;
+  border: 1px solid #d4deeb;
+  border-radius: 6px;
+  color: #172033;
+  font: inherit;
+  min-width: 0;
+  padding: 8px 9px;
+}
+
 .queue-definition-list {
   display: grid;
   gap: 10px;
@@ -766,6 +803,7 @@ select.manual-task-input {
   .dashboard-grid,
   .kpi-grid,
   .product-row,
+  .settings-controls,
   .skybridge-filterbar,
   .skybridge-metrics,
   .queue-definition-list div {

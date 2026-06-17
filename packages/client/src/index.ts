@@ -94,6 +94,195 @@ export interface SkyBridgeHealth {
   time: string;
 }
 
+export type ApiMode = "cloud_operator" | "local_dev" | "custom";
+
+export interface ApiSettings {
+  mode: ApiMode;
+  apiBase: string;
+  source: "env" | "storage" | "default";
+}
+
+export interface ApiSettingsStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface ConnectivityDoctorModel {
+  schema: "skybridge.connectivity_doctor.v1";
+  api_mode: ApiMode;
+  api_base: string;
+  rest_health_status: "online" | "offline" | "unknown";
+  sse_stream_status: "connected" | "reconnecting" | "closed" | "unsupported" | "unknown";
+  server_online: boolean;
+  stream_degraded: boolean;
+  last_health_time: string | null;
+  last_error_summary: string | null;
+  recommended_action: string;
+  token_printed: false;
+}
+
+export const LOCAL_DEV_API_BASE = "http://127.0.0.1:8787";
+export const DEFAULT_CLOUD_OPERATOR_API_BASE = "https://skybridge.jerryskywalker.space";
+export const LOCAL_DEV_START_COMMAND = "corepack pnpm --filter @skybridge-agent-hub/server dev";
+export const API_MODE_STORAGE_KEY = "skybridge.api.mode";
+export const API_BASE_STORAGE_KEY = "skybridge.api.base";
+
+const API_MODES: ApiMode[] = ["cloud_operator", "local_dev", "custom"];
+
+export function classifyApiBase(apiBase: string): ApiMode {
+  const value = apiBase.trim();
+  if (!value) return "local_dev";
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (
+      host === "127.0.0.1" ||
+      host === "localhost" ||
+      host === "::1" ||
+      host.endsWith(".localhost")
+    ) {
+      return "local_dev";
+    }
+    if (url.protocol === "https:") return "cloud_operator";
+  } catch {
+    return "custom";
+  }
+  return "custom";
+}
+
+export function normalizeApiMode(value: string | undefined | null): ApiMode | undefined {
+  return API_MODES.includes(value as ApiMode) ? (value as ApiMode) : undefined;
+}
+
+export function resolveApiSettings(input: {
+  envApiBase?: string;
+  envApiMode?: string;
+  storage?: ApiSettingsStorage;
+} = {}): ApiSettings {
+  const envApiBase = sanitizeApiBase(input.envApiBase);
+  const envApiMode = normalizeApiMode(input.envApiMode);
+  if (envApiBase || envApiMode) {
+    const apiBase = envApiBase ?? defaultApiBaseForMode(envApiMode ?? "cloud_operator");
+    return {
+      mode: envApiMode ?? classifyApiBase(apiBase),
+      apiBase,
+      source: "env",
+    };
+  }
+
+  const storedMode = normalizeApiMode(input.storage?.getItem(API_MODE_STORAGE_KEY));
+  const storedBase = sanitizeApiBase(input.storage?.getItem(API_BASE_STORAGE_KEY));
+  if (storedMode || storedBase) {
+    const apiBase = storedBase ?? defaultApiBaseForMode(storedMode ?? "cloud_operator");
+    return {
+      mode: storedMode ?? classifyApiBase(apiBase),
+      apiBase,
+      source: "storage",
+    };
+  }
+
+  return {
+    mode: "cloud_operator",
+    apiBase: DEFAULT_CLOUD_OPERATOR_API_BASE,
+    source: "default",
+  };
+}
+
+export function getApiMode(input: {
+  envApiBase?: string;
+  envApiMode?: string;
+  storage?: ApiSettingsStorage;
+} = {}): ApiMode {
+  return resolveApiSettings(input).mode;
+}
+
+export function getApiBase(input: {
+  envApiBase?: string;
+  envApiMode?: string;
+  storage?: ApiSettingsStorage;
+} = {}): string {
+  return resolveApiSettings(input).apiBase;
+}
+
+export function setApiMode(storage: ApiSettingsStorage, mode: ApiMode): ApiMode {
+  storage.setItem(API_MODE_STORAGE_KEY, mode);
+  if (mode !== "custom") storage.setItem(API_BASE_STORAGE_KEY, defaultApiBaseForMode(mode));
+  return mode;
+}
+
+export function setApiBase(storage: ApiSettingsStorage, apiBase: string): string {
+  const safeApiBase = sanitizeApiBase(apiBase) ?? LOCAL_DEV_API_BASE;
+  storage.setItem(API_BASE_STORAGE_KEY, safeApiBase);
+  storage.setItem(API_MODE_STORAGE_KEY, classifyApiBase(safeApiBase));
+  return safeApiBase;
+}
+
+export function resetApiSettings(storage: ApiSettingsStorage): ApiSettings {
+  storage.removeItem(API_MODE_STORAGE_KEY);
+  storage.removeItem(API_BASE_STORAGE_KEY);
+  return resolveApiSettings({ storage });
+}
+
+export function defaultApiBaseForMode(mode: ApiMode): string {
+  if (mode === "cloud_operator") return DEFAULT_CLOUD_OPERATOR_API_BASE;
+  return LOCAL_DEV_API_BASE;
+}
+
+export function createConnectivityDoctorModel(input: {
+  apiMode: ApiMode;
+  apiBase: string;
+  restHealthOk?: boolean;
+  sseStreamStatus?: ConnectivityDoctorModel["sse_stream_status"];
+  lastHealthTime?: string | null;
+  lastErrorSummary?: string | null;
+}): ConnectivityDoctorModel {
+  const restStatus = input.restHealthOk === undefined ? "unknown" : input.restHealthOk ? "online" : "offline";
+  const sseStatus = input.sseStreamStatus ?? "unknown";
+  const serverOnline = restStatus === "online";
+  const streamDegraded = serverOnline && (sseStatus === "reconnecting" || sseStatus === "closed" || sseStatus === "unsupported");
+  return {
+    schema: "skybridge.connectivity_doctor.v1",
+    api_mode: input.apiMode,
+    api_base: input.apiBase,
+    rest_health_status: restStatus,
+    sse_stream_status: sseStatus,
+    server_online: serverOnline,
+    stream_degraded: streamDegraded,
+    last_health_time: input.lastHealthTime ?? null,
+    last_error_summary: sanitizeErrorSummary(input.lastErrorSummary),
+    recommended_action: recommendedConnectivityAction(input.apiMode, restStatus, streamDegraded),
+    token_printed: false,
+  };
+}
+
+export function recommendedConnectivityAction(
+  mode: ApiMode,
+  restStatus: ConnectivityDoctorModel["rest_health_status"],
+  streamDegraded: boolean,
+): string {
+  if (restStatus === "online" && streamDegraded) return "Server online; SSE stream degraded, reconnecting, or unsupported.";
+  if (restStatus === "online") return "Server online.";
+  if (mode === "local_dev") return `Local dev API unreachable. Start it with: ${LOCAL_DEV_START_COMMAND}`;
+  if (mode === "cloud_operator") return "Cloud API unreachable. Check API base and network access.";
+  return "Custom API unreachable. Check API base.";
+}
+
+function sanitizeApiBase(value: string | undefined | null): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/\/+$/, "");
+}
+
+function sanitizeErrorSummary(value: string | undefined | null): string | null {
+  if (!value) return null;
+  return value
+    .replace(/bearer\s+[A-Za-z0-9._-]+/gi, "bearer [redacted]")
+    .replace(/authorization\s*[:=]\s*\S+/gi, "authorization=[redacted]")
+    .replace(/(token|secret|password|cookie|key)\s*[:=]\s*\S+/gi, "$1=[redacted]")
+    .slice(0, 240);
+}
+
 export interface StoredNotification {
   id: string;
   category?: string;
