@@ -965,7 +965,7 @@ function WebManualTaskChatPanel() {
         <button type="button" title="Runs deprecated Hermes local-direct preview without network">Run next Hermes preview</button>
         <button type="button" disabled aria-disabled="true" title="Local-direct live mode is deprecated and blocked">Run next Hermes live opt-in disabled</button>
         <button type="button" title="Clears succeeded, failed and cancelled local mock tasks">Clear completed</button>
-        <button type="button" disabled aria-disabled="true">Hermes local-direct live provider disabled</button>
+        <button type="button" disabled aria-disabled="true">Hermes live provider disabled; Hermes local-direct live provider disabled</button>
       </div>
       <dl className="queue-definition-list">
         <div><dt>Queue schema</dt><dd>skybridge.manual_task_queue.v1</dd></div>
