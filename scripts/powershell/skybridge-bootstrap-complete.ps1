@@ -76,7 +76,13 @@ function Get-GitOutput([string[]]$GitArgs) {
 }
 
 function Get-PrMergeState([int]$Number) {
-  $raw = & gh pr view $Number --json number,state,mergedAt,mergeCommit,url,title 2>$null
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $raw = & gh pr view $Number --json number,state,mergedAt,mergeCommit,url,title 2>$null
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) {
     return [pscustomobject]@{ number = $Number; merged = $false; merge_commit = ""; url = ""; title = ""; token_printed = $false }
   }
@@ -92,7 +98,13 @@ function Get-PrMergeState([int]$Number) {
 }
 
 function Get-OpenTaskPrCount {
-  $raw = & gh pr list --state open --json number,title,headRefName,url 2>$null
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $raw = & gh pr list --state open --json number,title,headRefName,url 2>$null
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
   if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($raw | Out-String).Trim())) { return 0 }
   $prs = @((($raw | Out-String).Trim() | ConvertFrom-Json))
   @($prs | Where-Object {
