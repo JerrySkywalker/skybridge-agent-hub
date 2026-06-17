@@ -92,6 +92,23 @@ export interface SkyBridgeHealth {
   dbFile?: string;
   jsonMigrationFile?: string;
   time: string;
+  server_version?: string;
+  commit_sha?: string;
+  image_tag?: string;
+  build_time?: string;
+  route_set_version?: string;
+  token_printed?: false;
+}
+
+export interface ServerVersion {
+  schema: "skybridge.server_version.v1";
+  service: "skybridge-server";
+  server_version: string;
+  commit_sha: string;
+  image_tag: string;
+  build_time: string;
+  route_set_version: string;
+  token_printed: false;
 }
 
 export type ApiMode = "cloud_operator" | "local_dev" | "custom";
@@ -116,6 +133,12 @@ export interface ConnectivityDoctorModel {
   sse_stream_status: "connected" | "reconnecting" | "closed" | "unsupported" | "unknown";
   server_online: boolean;
   stream_degraded: boolean;
+  server_version: string;
+  commit_sha: string;
+  image_tag: string;
+  route_set_version: string;
+  manual_task_routes_available: boolean | null;
+  deployment_parity_status: "ok" | "server_online_but_outdated" | "failed" | "unknown";
   last_health_time: string | null;
   last_error_summary: string | null;
   recommended_action: string;
@@ -234,6 +257,8 @@ export function createConnectivityDoctorModel(input: {
   apiBase: string;
   restHealthOk?: boolean;
   sseStreamStatus?: ConnectivityDoctorModel["sse_stream_status"];
+  health?: Partial<SkyBridgeHealth>;
+  manualTaskRoutesAvailable?: boolean | null;
   lastHealthTime?: string | null;
   lastErrorSummary?: string | null;
 }): ConnectivityDoctorModel {
@@ -241,6 +266,15 @@ export function createConnectivityDoctorModel(input: {
   const sseStatus = input.sseStreamStatus ?? "unknown";
   const serverOnline = restStatus === "online";
   const streamDegraded = serverOnline && (sseStatus === "reconnecting" || sseStatus === "closed" || sseStatus === "unsupported");
+  const manualTaskRoutesAvailable = input.manualTaskRoutesAvailable ?? null;
+  const deploymentParityStatus =
+    serverOnline && manualTaskRoutesAvailable === false
+      ? "server_online_but_outdated"
+      : serverOnline && manualTaskRoutesAvailable === true
+        ? "ok"
+        : restStatus === "offline"
+          ? "failed"
+          : "unknown";
   return {
     schema: "skybridge.connectivity_doctor.v1",
     api_mode: input.apiMode,
@@ -249,9 +283,15 @@ export function createConnectivityDoctorModel(input: {
     sse_stream_status: sseStatus,
     server_online: serverOnline,
     stream_degraded: streamDegraded,
+    server_version: input.health?.server_version ?? "unknown",
+    commit_sha: input.health?.commit_sha ?? "unknown",
+    image_tag: input.health?.image_tag ?? "unknown",
+    route_set_version: input.health?.route_set_version ?? "unknown",
+    manual_task_routes_available: manualTaskRoutesAvailable,
+    deployment_parity_status: deploymentParityStatus,
     last_health_time: input.lastHealthTime ?? null,
     last_error_summary: sanitizeErrorSummary(input.lastErrorSummary),
-    recommended_action: recommendedConnectivityAction(input.apiMode, restStatus, streamDegraded),
+    recommended_action: recommendedConnectivityAction(input.apiMode, restStatus, streamDegraded, deploymentParityStatus),
     token_printed: false,
   };
 }
@@ -260,7 +300,9 @@ export function recommendedConnectivityAction(
   mode: ApiMode,
   restStatus: ConnectivityDoctorModel["rest_health_status"],
   streamDegraded: boolean,
+  deploymentParityStatus: ConnectivityDoctorModel["deployment_parity_status"] = "unknown",
 ): string {
+  if (deploymentParityStatus === "server_online_but_outdated") return "Cloud server online but outdated; deploy server >= v2.4.";
   if (restStatus === "online" && streamDegraded) return "Server online; SSE stream degraded, reconnecting, or unsupported.";
   if (restStatus === "online") return "Server online.";
   if (mode === "local_dev") return `Local dev API unreachable. Start it with: ${LOCAL_DEV_START_COMMAND}`;
@@ -649,6 +691,10 @@ export class SkyBridgeClient {
 
   async getHealth(): Promise<SkyBridgeHealth> {
     return this.getJson<SkyBridgeHealth>("/v1/health");
+  }
+
+  async getVersion(): Promise<ServerVersion> {
+    return this.getJson<ServerVersion>("/v1/version");
   }
 
   async sendEvent(event: SkyBridgeEvent): Promise<{ ok: boolean; id: string }> {

@@ -91,6 +91,27 @@ describe("SkyBridgeClient", () => {
       token_printed: false,
     });
 
+    const outdatedCloud = createConnectivityDoctorModel({
+      apiMode: "cloud_operator",
+      apiBase: DEFAULT_CLOUD_OPERATOR_API_BASE,
+      restHealthOk: true,
+      health: {
+        server_version: "v2.3.0",
+        commit_sha: "old123",
+        image_tag: "sha-old123",
+        route_set_version: "pre-manual-tasks",
+      },
+      manualTaskRoutesAvailable: false,
+    });
+    expect(outdatedCloud).toMatchObject({
+      server_version: "v2.3.0",
+      commit_sha: "old123",
+      image_tag: "sha-old123",
+      manual_task_routes_available: false,
+      deployment_parity_status: "server_online_but_outdated",
+      recommended_action: "Cloud server online but outdated; deploy server >= v2.4.",
+    });
+
     const localOffline = createConnectivityDoctorModel({
       apiMode: "local_dev",
       apiBase: LOCAL_DEV_API_BASE,
@@ -443,10 +464,25 @@ describe("SkyBridgeClient", () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ ok: true, service: "skybridge-server", persistence: "memory", time: "2026-05-21T00:00:00.000Z" }))
+      .mockResolvedValueOnce(jsonResponse({
+        schema: "skybridge.server_version.v1",
+        service: "skybridge-server",
+        server_version: "v2.6.0-test",
+        commit_sha: "abc123",
+        image_tag: "sha-abc123",
+        build_time: "2026-06-17T00:00:00Z",
+        route_set_version: "2026-06-17.goal-301-cloud-deploy-parity",
+        token_printed: false,
+      }))
       .mockResolvedValueOnce(jsonResponse({ health: {}, totals: { events: 0 }, sources: [] }));
     const client = new SkyBridgeClient("http://localhost:8787");
 
     await expect(client.getHealth()).resolves.toMatchObject({ service: "skybridge-server" });
+    await expect(client.getVersion()).resolves.toMatchObject({
+      schema: "skybridge.server_version.v1",
+      commit_sha: "abc123",
+      token_printed: false,
+    });
     await expect(client.getSummary()).resolves.toMatchObject({ sources: [] });
   });
 

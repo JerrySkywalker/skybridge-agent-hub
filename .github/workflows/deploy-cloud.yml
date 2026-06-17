@@ -1,0 +1,171 @@
+name: Deploy Cloud
+
+on:
+  workflow_run:
+    workflows: ["Docker Images"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: Full immutable skybridge-server image ref. Defaults to sha tag for the selected commit.
+        required: false
+      commit_sha:
+        description: Commit SHA expected in the deployed image.
+        required: false
+      expected_tag:
+        description: Expected image tag, usually sha-<commit_sha>.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-cloud:
+    name: Deploy skybridge-server to Tencent
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_branch == 'main')
+      }}
+    env:
+      TENCENT_DEPLOY_HOST: ${{ secrets.TENCENT_DEPLOY_HOST }}
+      TENCENT_DEPLOY_USER: ${{ secrets.TENCENT_DEPLOY_USER }}
+      TENCENT_DEPLOY_SSH_KEY: ${{ secrets.TENCENT_DEPLOY_SSH_KEY }}
+      TENCENT_DEPLOY_PORT: ${{ secrets.TENCENT_DEPLOY_PORT }}
+      SKYBRIDGE_DEPLOY_PATH: ${{ secrets.SKYBRIDGE_DEPLOY_PATH }}
+      SKYBRIDGE_DEPLOY_COMPOSE_FILE: ${{ secrets.SKYBRIDGE_DEPLOY_COMPOSE_FILE }}
+      SKYBRIDGE_DEPLOY_SERVICE: ${{ secrets.SKYBRIDGE_DEPLOY_SERVICE }}
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      PUBLIC_API_BASE: https://skybridge.jerryskywalker.space
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deploy inputs
+        id: deploy-inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .agent/tmp/deploy
+          commit_sha="${{ github.event.inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}"
+          expected_tag="${{ github.event.inputs.expected_tag || '' }}"
+          if [[ -z "$expected_tag" ]]; then expected_tag="sha-$commit_sha"; fi
+          image_ref="${{ github.event.inputs.image_ref || '' }}"
+          if [[ -z "$image_ref" ]]; then
+            image_ref="ghcr.io/${{ github.repository_owner }}/skybridge-agent-hub-server:$expected_tag"
+          fi
+          {
+            echo "commit_sha=$commit_sha"
+            echo "expected_tag=$expected_tag"
+            echo "image_ref=$image_ref"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check deploy secrets
+        id: secrets-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .agent/tmp/deploy
+          missing=()
+          for name in TENCENT_DEPLOY_HOST TENCENT_DEPLOY_USER TENCENT_DEPLOY_SSH_KEY; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            {
+              echo '{'
+              echo '  "schema": "skybridge.cloud_deploy_report.v1",'
+              echo '  "status": "skipped",'
+              echo '  "reason": "missing_required_secrets",'
+              printf '  "missing_secrets": ['
+              for i in "${!missing[@]}"; do
+                if [[ "$i" -gt 0 ]]; then printf ', '; fi
+                printf '"%s"' "${missing[$i]}"
+              done
+              echo '],'
+              echo '  "deploy_scope": "skybridge-server-only",'
+              echo '  "secrets_included": false,'
+              echo '  "raw_logs_included": false,'
+              echo '  "token_printed": false'
+              echo '}'
+            } > .agent/tmp/deploy/cloud-deploy-report.json
+            {
+              echo "# SkyBridge Cloud Deploy Report"
+              echo
+              echo "- status: skipped"
+              echo "- reason: missing_required_secrets"
+              echo "- missing_secrets: ${missing[*]}"
+              echo "- token_printed: false"
+            } > .agent/tmp/deploy/cloud-deploy-report.md
+            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=" >> "$GITHUB_OUTPUT"
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install SSH key
+        if: steps.secrets-check.outputs.should_deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$TENCENT_DEPLOY_SSH_KEY" > ~/.ssh/skybridge_deploy_key
+          chmod 600 ~/.ssh/skybridge_deploy_key
+
+      - name: Optional GHCR login
+        if: steps.secrets-check.outputs.should_deploy == 'true' && env.GHCR_USERNAME != '' && env.GHCR_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null
+
+      - name: Upload fixed deploy script
+        if: steps.secrets-check.outputs.should_deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          port="${TENCENT_DEPLOY_PORT:-22}"
+          scp -q -P "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
+            scripts/deploy/deploy-skybridge-server.sh \
+            "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST:/tmp/deploy-skybridge-server.sh"
+
+      - name: Run fixed-scope deploy
+        if: steps.secrets-check.outputs.should_deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          port="${TENCENT_DEPLOY_PORT:-22}"
+          deploy_path="${SKYBRIDGE_DEPLOY_PATH:-/opt/skybridge-agent-hub}"
+          compose_file="${SKYBRIDGE_DEPLOY_COMPOSE_FILE:-compose.yaml}"
+          service="${SKYBRIDGE_DEPLOY_SERVICE:-skybridge-server}"
+          ssh -p "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
+            "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST" \
+            "SKYBRIDGE_DEPLOY_PATH='$deploy_path' SKYBRIDGE_DEPLOY_COMPOSE_FILE='$compose_file' SKYBRIDGE_DEPLOY_SERVICE='$service' SKYBRIDGE_PUBLIC_API_BASE='$PUBLIC_API_BASE' bash /tmp/deploy-skybridge-server.sh --image-ref '${{ steps.deploy-inputs.outputs.image_ref }}' --commit-sha '${{ steps.deploy-inputs.outputs.commit_sha }}' --expected-tag '${{ steps.deploy-inputs.outputs.expected_tag }}'"
+
+      - name: Download sanitized deploy report
+        if: always() && steps.secrets-check.outputs.should_deploy == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          port="${TENCENT_DEPLOY_PORT:-22}"
+          deploy_path="${SKYBRIDGE_DEPLOY_PATH:-/opt/skybridge-agent-hub}"
+          mkdir -p .agent/tmp/deploy
+          scp -q -P "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
+            "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST:$deploy_path/.agent/tmp/deploy/cloud-deploy-report.json" \
+            .agent/tmp/deploy/cloud-deploy-report.json || true
+          scp -q -P "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
+            "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST:$deploy_path/.agent/tmp/deploy/cloud-deploy-report.md" \
+            .agent/tmp/deploy/cloud-deploy-report.md || true
+
+      - name: Upload deploy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-deploy-report
+          path: .agent/tmp/deploy/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -16,10 +16,18 @@ COPY packages/notification-providers/ntfy packages/notification-providers/ntfy
 RUN pnpm --filter @skybridge-agent-hub/server build
 
 FROM node:22-bookworm-slim AS runtime
+ARG SKYBRIDGE_COMMIT_SHA=unknown
+ARG SKYBRIDGE_IMAGE_TAG=local
+ARG SKYBRIDGE_BUILD_TIME=unknown
+ARG SKYBRIDGE_SERVER_VERSION=0.1.0
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
-    SKYBRIDGE_DB_FILE=/app/data/skybridge.sqlite
+    SKYBRIDGE_DB_FILE=/app/data/skybridge.sqlite \
+    SKYBRIDGE_COMMIT_SHA=$SKYBRIDGE_COMMIT_SHA \
+    SKYBRIDGE_IMAGE_TAG=$SKYBRIDGE_IMAGE_TAG \
+    SKYBRIDGE_BUILD_TIME=$SKYBRIDGE_BUILD_TIME \
+    SKYBRIDGE_SERVER_VERSION=$SKYBRIDGE_SERVER_VERSION
 WORKDIR /workspace
 RUN corepack enable && mkdir -p /app/data
 COPY --from=build /workspace /workspace

@@ -405,14 +405,58 @@ describe("server api", () => {
 
   it("returns v1 health, dashboard summary and filtered notifications", async () => {
     const previousTopic = process.env.NTFY_TOPIC_URL;
+    const previousCommit = process.env.SKYBRIDGE_COMMIT_SHA;
+    const previousImageTag = process.env.SKYBRIDGE_IMAGE_TAG;
+    const previousBuildTime = process.env.SKYBRIDGE_BUILD_TIME;
+    const previousServerVersion = process.env.SKYBRIDGE_SERVER_VERSION;
     delete process.env.NTFY_TOPIC_URL;
+    process.env.SKYBRIDGE_COMMIT_SHA = "abc123";
+    process.env.SKYBRIDGE_IMAGE_TAG = "sha-abc123";
+    process.env.SKYBRIDGE_BUILD_TIME = "2026-06-17T00:00:00Z";
+    process.env.SKYBRIDGE_SERVER_VERSION = "v2.6.0-test";
     try {
       const server = await testServer();
       const health = await server.inject({ method: "GET", url: "/v1/health" });
       expect(health.statusCode).toBe(200);
-      expect(health.json<{ service: string }>().service).toBe(
-        "skybridge-server",
-      );
+      expect(
+        health.json<{
+          service: string;
+          commit_sha: string;
+          image_tag: string;
+          build_time: string;
+          server_version: string;
+          route_set_version: string;
+          token_printed: boolean;
+        }>(),
+      ).toMatchObject({
+        service: "skybridge-server",
+        commit_sha: "abc123",
+        image_tag: "sha-abc123",
+        build_time: "2026-06-17T00:00:00Z",
+        server_version: "v2.6.0-test",
+        token_printed: false,
+      });
+      expect(health.json<{ route_set_version: string }>().route_set_version).toContain("goal-301");
+
+      const version = await server.inject({ method: "GET", url: "/v1/version" });
+      expect(version.statusCode).toBe(200);
+      expect(
+        version.json<{
+          schema: string;
+          service: string;
+          commit_sha: string;
+          image_tag: string;
+          server_version: string;
+          token_printed: boolean;
+        }>(),
+      ).toMatchObject({
+        schema: "skybridge.server_version.v1",
+        service: "skybridge-server",
+        commit_sha: "abc123",
+        image_tag: "sha-abc123",
+        server_version: "v2.6.0-test",
+        token_printed: false,
+      });
 
       await server.inject({
         method: "POST",
@@ -458,6 +502,14 @@ describe("server api", () => {
     } finally {
       if (previousTopic === undefined) delete process.env.NTFY_TOPIC_URL;
       else process.env.NTFY_TOPIC_URL = previousTopic;
+      if (previousCommit === undefined) delete process.env.SKYBRIDGE_COMMIT_SHA;
+      else process.env.SKYBRIDGE_COMMIT_SHA = previousCommit;
+      if (previousImageTag === undefined) delete process.env.SKYBRIDGE_IMAGE_TAG;
+      else process.env.SKYBRIDGE_IMAGE_TAG = previousImageTag;
+      if (previousBuildTime === undefined) delete process.env.SKYBRIDGE_BUILD_TIME;
+      else process.env.SKYBRIDGE_BUILD_TIME = previousBuildTime;
+      if (previousServerVersion === undefined) delete process.env.SKYBRIDGE_SERVER_VERSION;
+      else process.env.SKYBRIDGE_SERVER_VERSION = previousServerVersion;
     }
   });
 
