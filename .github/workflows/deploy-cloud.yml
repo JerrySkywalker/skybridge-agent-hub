@@ -54,9 +54,10 @@ jobs:
           commit_sha="${{ github.event.inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}"
           expected_tag="${{ github.event.inputs.expected_tag || '' }}"
           if [[ -z "$expected_tag" ]]; then expected_tag="sha-$commit_sha"; fi
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
           image_ref="${{ github.event.inputs.image_ref || '' }}"
           if [[ -z "$image_ref" ]]; then
-            image_ref="ghcr.io/${{ github.repository_owner }}/skybridge-agent-hub-server:$expected_tag"
+            image_ref="ghcr.io/$owner/skybridge-agent-hub-server:$expected_tag"
           fi
           {
             echo "commit_sha=$commit_sha"
