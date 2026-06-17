@@ -92,6 +92,23 @@ export interface SkyBridgeHealth {
   dbFile?: string;
   jsonMigrationFile?: string;
   time: string;
+  server_version?: string;
+  commit_sha?: string;
+  image_tag?: string;
+  build_time?: string;
+  route_set_version?: string;
+  token_printed?: false;
+}
+
+export interface ServerVersion {
+  schema: "skybridge.server_version.v1";
+  service: "skybridge-server";
+  server_version: string;
+  commit_sha: string;
+  image_tag: string;
+  build_time: string;
+  route_set_version: string;
+  token_printed: false;
 }
 
 export type ApiMode = "cloud_operator" | "local_dev" | "custom";
@@ -649,6 +666,10 @@ export class SkyBridgeClient {
 
   async getHealth(): Promise<SkyBridgeHealth> {
     return this.getJson<SkyBridgeHealth>("/v1/health");
+  }
+
+  async getVersion(): Promise<ServerVersion> {
+    return this.getJson<ServerVersion>("/v1/version");
   }
 
   async sendEvent(event: SkyBridgeEvent): Promise<{ ok: boolean; id: string }> {

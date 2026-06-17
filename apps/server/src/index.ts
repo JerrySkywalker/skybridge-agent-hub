@@ -95,6 +95,19 @@ interface CreateServerOptions {
   logger?: boolean;
 }
 
+const ROUTE_SET_VERSION = "2026-06-17.goal-301-cloud-deploy-parity";
+
+interface ServerVersionMetadata {
+  schema: "skybridge.server_version.v1";
+  service: "skybridge-server";
+  server_version: string;
+  commit_sha: string;
+  image_tag: string;
+  build_time: string;
+  route_set_version: string;
+  token_printed: false;
+}
+
 const ITERATION_STATES: IterationState[] = [
   "idle",
   "queued",
@@ -256,6 +269,25 @@ function getConfiguredWorkerTokens(): string[] {
 
 function isWorkerAuthRequired(): boolean {
   return getConfiguredWorkerTokens().length > 0 || process.env.SKYBRIDGE_REQUIRE_WORKER_AUTH === "true";
+}
+
+function safeVersionValue(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return fallback;
+  return trimmed.replace(/[^A-Za-z0-9._:@/+~-]/g, "_").slice(0, 160);
+}
+
+function serverVersionMetadata(): ServerVersionMetadata {
+  return {
+    schema: "skybridge.server_version.v1",
+    service: "skybridge-server",
+    server_version: safeVersionValue(process.env.SKYBRIDGE_SERVER_VERSION, "0.1.0"),
+    commit_sha: safeVersionValue(process.env.SKYBRIDGE_COMMIT_SHA, "unknown"),
+    image_tag: safeVersionValue(process.env.SKYBRIDGE_IMAGE_TAG, "local"),
+    build_time: safeVersionValue(process.env.SKYBRIDGE_BUILD_TIME, "unknown"),
+    route_set_version: ROUTE_SET_VERSION,
+    token_printed: false,
+  };
 }
 
 function getProposalDependencies(proposal: StoredTaskProposal): string[] {
@@ -621,10 +653,12 @@ export async function createServer(
     dbFile: persistence.dbFile,
     jsonMigrationFile: persistence.jsonMigrationFile,
     time: new Date().toISOString(),
+    ...serverVersionMetadata(),
   });
 
   app.get("/health", async () => healthResponse());
   app.get("/v1/health", async () => healthResponse());
+  app.get("/v1/version", async () => serverVersionMetadata());
   app.get("/v1/sources", async () => ({ sources: SOURCE_CAPABILITIES }));
   app.get<{ Querystring: { role?: string } }>(
     "/v1/adapters",

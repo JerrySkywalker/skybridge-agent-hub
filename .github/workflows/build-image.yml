@@ -50,6 +50,11 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SKYBRIDGE_COMMIT_SHA=${{ github.sha }}
+            SKYBRIDGE_IMAGE_TAG=sha-${{ github.sha }}
+            SKYBRIDGE_BUILD_TIME=${{ github.event.head_commit.timestamp || github.run_id }}
+            SKYBRIDGE_SERVER_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
       - name: Write build summary

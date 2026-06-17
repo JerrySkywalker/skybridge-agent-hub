@@ -443,10 +443,25 @@ describe("SkyBridgeClient", () => {
     vi.stubGlobal("fetch", fetchMock);
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ ok: true, service: "skybridge-server", persistence: "memory", time: "2026-05-21T00:00:00.000Z" }))
+      .mockResolvedValueOnce(jsonResponse({
+        schema: "skybridge.server_version.v1",
+        service: "skybridge-server",
+        server_version: "v2.6.0-test",
+        commit_sha: "abc123",
+        image_tag: "sha-abc123",
+        build_time: "2026-06-17T00:00:00Z",
+        route_set_version: "2026-06-17.goal-301-cloud-deploy-parity",
+        token_printed: false,
+      }))
       .mockResolvedValueOnce(jsonResponse({ health: {}, totals: { events: 0 }, sources: [] }));
     const client = new SkyBridgeClient("http://localhost:8787");
 
     await expect(client.getHealth()).resolves.toMatchObject({ service: "skybridge-server" });
+    await expect(client.getVersion()).resolves.toMatchObject({
+      schema: "skybridge.server_version.v1",
+      commit_sha: "abc123",
+      token_printed: false,
+    });
     await expect(client.getSummary()).resolves.toMatchObject({ sources: [] });
   });
 
