@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,7 @@ const servers: Awaited<ReturnType<typeof createServer>>[] = [];
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(servers.map((server) => server.close()));
   servers.length = 0;
   await Promise.all(
@@ -55,6 +56,30 @@ async function withWorkerToken<T>(token: string | undefined, fn: () => Promise<T
     else process.env.SKYBRIDGE_WORKER_TOKENS_FILE = previousFile;
     if (previousRemoteApiBase === undefined) delete process.env.SKYBRIDGE_REMOTE_API_BASE;
     else process.env.SKYBRIDGE_REMOTE_API_BASE = previousRemoteApiBase;
+  }
+}
+
+async function withHermesConfig<T>(
+  config: { apiBase?: string; apiKey?: string },
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previousBase = process.env.HERMES_API_BASE;
+  const previousKey = process.env.HERMES_API_KEY;
+  const previousKeyFile = process.env.HERMES_API_KEY_FILE;
+  try {
+    if (config.apiBase === undefined) delete process.env.HERMES_API_BASE;
+    else process.env.HERMES_API_BASE = config.apiBase;
+    if (config.apiKey === undefined) delete process.env.HERMES_API_KEY;
+    else process.env.HERMES_API_KEY = config.apiKey;
+    delete process.env.HERMES_API_KEY_FILE;
+    return await fn();
+  } finally {
+    if (previousBase === undefined) delete process.env.HERMES_API_BASE;
+    else process.env.HERMES_API_BASE = previousBase;
+    if (previousKey === undefined) delete process.env.HERMES_API_KEY;
+    else process.env.HERMES_API_KEY = previousKey;
+    if (previousKeyFile === undefined) delete process.env.HERMES_API_KEY_FILE;
+    else process.env.HERMES_API_KEY_FILE = previousKeyFile;
   }
 }
 
@@ -482,6 +507,155 @@ describe("server api", () => {
       ]),
       dedupe: true,
     });
+  });
+
+  it("exposes manual task providers with mock default and deprecated local-direct Hermes", async () => {
+    await withHermesConfig({}, async () => {
+      const server = await testServer();
+      const response = await server.inject({
+        method: "GET",
+        url: "/v1/manual-tasks/providers",
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.body).not.toContain("server-secret");
+      expect(
+        response.json<{
+          default_provider_id: string;
+          client_secret_required: boolean;
+          providers: Array<{
+            provider_id: string;
+            status: string;
+            deprecated?: boolean;
+            preview_only?: boolean;
+            hermes_live_call_enabled: boolean;
+            raw_request_persisted: boolean;
+            raw_response_persisted: boolean;
+            token_printed: boolean;
+          }>;
+        }>(),
+      ).toMatchObject({
+        default_provider_id: "mock",
+        client_secret_required: false,
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            provider_id: "mock",
+            status: "enabled",
+            hermes_live_call_enabled: false,
+            raw_request_persisted: false,
+            raw_response_persisted: false,
+            token_printed: false,
+          }),
+          expect.objectContaining({
+            provider_id: "skybridge_server_hermes",
+            status: "disabled_missing_server_config",
+          }),
+          expect.objectContaining({
+            provider_id: "hermes_deepseek",
+            deprecated: true,
+            preview_only: true,
+          }),
+        ]),
+      });
+    });
+  });
+
+  it("blocks server-mediated Hermes without server config and never executes output", async () => {
+    await withHermesConfig({}, async () => {
+      const server = await testServer();
+      const response = await server.inject({
+        method: "POST",
+        url: "/v1/manual-tasks/run-next/skybridge-hermes",
+        payload: {
+          task_id: "manual-server-missing-config",
+          input_preview: "command: pwsh Get-ChildItem",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json<{
+        provider_id: string;
+        status: string;
+        live_call_performed: boolean;
+        output_executed: boolean;
+        remote_execution_enabled: boolean;
+        arbitrary_command_enabled: boolean;
+        queue_apply_enabled: boolean;
+        token_printed: boolean;
+      }>()).toMatchObject({
+        provider_id: "skybridge_server_hermes",
+        status: "blocked",
+        live_call_performed: false,
+        output_executed: false,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        queue_apply_enabled: false,
+        token_printed: false,
+      });
+    });
+  });
+
+  it("calls only Hermes capabilities and responses endpoints for server-mediated manual tasks", async () => {
+    await withHermesConfig(
+      { apiBase: "https://hermes.example.invalid", apiKey: "server-secret-token" },
+      async () => {
+        const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+          async (input, init) => {
+            const url = String(input);
+            if (url.endsWith("/v1/capabilities")) {
+              expect(init?.method).toBe("GET");
+              return new Response(JSON.stringify({ status: "ok", model: "hermes-fixture" }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            }
+            if (url.endsWith("/v1/responses")) {
+              expect(init?.method).toBe("POST");
+              expect(String(init?.body)).toContain("output_execution_enabled");
+              return new Response(JSON.stringify({ output_text: "Safe Hermes answer. token=redacted-by-server" }), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              });
+            }
+            throw new Error(`unexpected_url_${url}`);
+          },
+        );
+        const server = await testServer();
+        const response = await server.inject({
+          method: "POST",
+          url: "/v1/manual-tasks/run-next/skybridge-hermes",
+          payload: {
+            task_id: "manual-server-hermes",
+            input_preview: "Summarize the next safe check.",
+          },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+          "https://hermes.example.invalid/v1/capabilities",
+          "https://hermes.example.invalid/v1/responses",
+        ]);
+        expect(response.body).not.toContain("server-secret-token");
+        expect(response.json<{
+          provider_id: string;
+          status: string;
+          server_mediated_llm_inference_enabled: boolean;
+          cloud_hermes_provider_enabled: boolean;
+          live_call_performed: boolean;
+          output_executed: boolean;
+          token_printed: boolean;
+        }>()).toMatchObject({
+          provider_id: "skybridge_server_hermes",
+          status: "succeeded",
+          server_mediated_llm_inference_enabled: true,
+          cloud_hermes_provider_enabled: true,
+          live_call_performed: true,
+          output_executed: false,
+          token_printed: false,
+        });
+      },
+    );
   });
 
   it("exposes source capability metadata", async () => {

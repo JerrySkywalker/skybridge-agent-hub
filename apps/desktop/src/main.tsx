@@ -1025,8 +1025,9 @@ function DesktopManualTaskChatCard() {
     <section className="panel desktop-manual-task-chat-card" aria-label="Desktop manual task chat card">
       <h2>Manual Task Chat</h2>
       <div className="mode-strip execution-disabled-banner" aria-label="Desktop manual task disabled execution state">
-        <span>Hermes live provider disabled</span>
-        <span>Hermes DeepSeek preview no-network</span>
+        <span>skybridge_server_hermes server-mediated</span>
+        <span>server Hermes disabled until configured</span>
+        <span>hermes_deepseek deprecated preview-only</span>
         <span>No enabled worker/apply/start/claim controls</span>
         <span>token_printed=false</span>
       </div>
@@ -1035,6 +1036,7 @@ function DesktopManualTaskChatCard() {
       </label>
       <select id="desktop-manual-task-provider" className="manual-task-input" defaultValue="mock" aria-label="Manual task provider selector">
         <option value="mock">mock</option>
+        <option value="skybridge_server_hermes">skybridge_server_hermes</option>
         <option value="hermes_deepseek">hermes_deepseek</option>
       </select>
       <label className="manual-task-input-label" htmlFor="desktop-manual-task-input">
@@ -1052,21 +1054,22 @@ function DesktopManualTaskChatCard() {
         <StatusValue label="Queue schema" value="skybridge.manual_task_queue.v1" />
         <StatusValue label="Task schema" value="skybridge.manual_task.v1" />
         <StatusValue label="Result schema" value="skybridge.manual_task_result.v1" />
-        <StatusValue label="Provider schema" value="skybridge.manual_task_provider.v1; provider_id=mock/hermes_deepseek; mock default" />
-        <StatusValue label="Hermes config" value=".agent/local/hermes-deepseek.local.json ignored; placeholders only tracked" />
-        <StatusValue label="Hermes live opt-in" value="disabled by default, disabled in CI, requires local config live_enabled=true" />
+        <StatusValue label="Provider schema" value="skybridge.manual_task_provider.v1; provider_id=mock/skybridge_server_hermes/hermes_deepseek; mock default" />
+        <StatusValue label="SkyBridge server Hermes" value="available/configured/disabled/enabled status from server-side HERMES_API_BASE and HERMES_API_KEY or token file" />
+        <StatusValue label="Hermes local-direct" value="hermes_deepseek deprecated preview-only; no local DeepSeek or Hermes secret required" />
         <StatusValue label="State machine" value="queued, running, succeeded, failed, blocked, cancelled" />
         <StatusValue label="Task list" value="input_preview and result_preview only; no raw transcript persistence" />
-        <StatusValue label="Result preview" value="safe result_preview, result_hash, duration_ms and error_summary only" />
-        <StatusValue label="Disabled capabilities" value="Hermes live call, Codex worker, workunit creation, task claim, task PR creation and queue apply remain false" />
+        <StatusValue label="Result preview" value="safe provider_id, provider_status, server_mediated_llm_inference_enabled, cloud_hermes_provider_enabled, result_hash, duration_ms and error_summary only" />
+        <StatusValue label="Disabled capabilities" value="model output execution, Codex worker, workunit creation, task claim, task PR creation and queue apply remain false" />
       </dl>
       <div className="queue-action-grid">
         <button type="button" title="Adds sanitized input_preview to the local manual queue">Add to queue</button>
         <button type="button" title="Runs the deterministic local mock provider">Run next mock</button>
-        <button type="button" title="Runs Hermes DeepSeek preview without network">Run next Hermes preview</button>
-        <button type="button" disabled aria-disabled="true" title="Requires ignored local config with live_enabled=true">Run next Hermes live opt-in disabled</button>
+        <button type="button" title="Calls SkyBridge server route; server calls Hermes only when configured">Run next SkyBridge Hermes</button>
+        <button type="button" title="Runs deprecated Hermes local-direct preview without network">Run next Hermes preview</button>
+        <button type="button" disabled aria-disabled="true" title="Local-direct live mode is deprecated and blocked">Run next Hermes live opt-in disabled</button>
         <button type="button" title="Clears succeeded, failed and cancelled local mock tasks">Clear completed</button>
-        <button type="button" disabled aria-disabled="true">Hermes live provider disabled</button>
+        <button type="button" disabled aria-disabled="true">Hermes local-direct live provider disabled</button>
       </div>
     </section>
   );

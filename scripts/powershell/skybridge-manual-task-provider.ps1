@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("status", "provider-list", "provider-check", "run-next-mock", "run-next-hermes-preview", "run-next-hermes-live-optin", "safe-summary", "report")]
+  [ValidateSet("status", "provider-list", "provider-check", "run-next-mock", "run-next-hermes-preview", "run-next-hermes-live-optin", "run-next-skybridge-hermes", "safe-summary", "report")]
   [string]$Command = "status",
   [switch]$AllowLive,
   [switch]$Json
@@ -11,9 +11,12 @@ $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $ManualTaskDir = Join-Path $RepoRoot ".agent\tmp\manual-task"
 $QueuePath = Join-Path $ManualTaskDir "manual-task-queue.json"
 $ProviderReportJson = Join-Path $ManualTaskDir "manual-task-provider-report.json"
+$ServerHermesProviderReportJson = Join-Path $ManualTaskDir "server-hermes-provider-report.json"
+$ServerHermesProviderReportMarkdown = Join-Path $ManualTaskDir "server-hermes-provider-report.md"
+$ServerHermesPreviewReportJson = Join-Path $ManualTaskDir "server-hermes-preview-report.json"
+$ServerHermesLiveOptInReportJson = Join-Path $ManualTaskDir "server-hermes-live-optin-report.json"
 $HermesPreviewReportJson = Join-Path $ManualTaskDir "manual-task-hermes-preview-report.json"
 $HermesLiveReportJson = Join-Path $ManualTaskDir "manual-task-hermes-live-optin-report.json"
-$LocalConfigPath = Join-Path $RepoRoot ".agent\local\hermes-deepseek.local.json"
 
 function Test-ProviderUnsafeText([string]$Text) {
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
@@ -60,11 +63,15 @@ function New-ProviderRecord([string]$ProviderId, [string]$Status, [bool]$Configu
     configured = $Configured
     deterministic = ($ProviderId -eq "mock")
     network_enabled = $NetworkEnabled
-    hermes_live_call_enabled = ($ProviderId -eq "hermes_deepseek" -and $LiveEnabled)
-    remote_llm_inference_enabled = ($ProviderId -eq "hermes_deepseek" -and $LiveEnabled)
-    disabled_by_default = ($ProviderId -eq "hermes_deepseek")
+    hermes_live_call_enabled = $false
+    server_mediated_llm_inference_enabled = ($ProviderId -eq "skybridge_server_hermes" -and $Configured)
+    cloud_hermes_provider_enabled = ($ProviderId -eq "skybridge_server_hermes" -and $LiveEnabled)
+    remote_llm_inference_enabled = $false
+    disabled_by_default = ($ProviderId -ne "mock")
+    deprecated = ($ProviderId -eq "hermes_deepseek")
+    preview_only = ($ProviderId -eq "hermes_deepseek")
     ci_disabled = (Test-Ci)
-    config_path = if ($ProviderId -eq "hermes_deepseek") { ".agent/local/hermes-deepseek.local.json" } else { $null }
+    config_path = if ($ProviderId -eq "skybridge_server_hermes") { "server-side HERMES_API_BASE + HERMES_API_KEY or token file" } elseif ($ProviderId -eq "hermes_deepseek") { "deprecated local-direct preview only" } else { $null }
     config_values_redacted = $true
     raw_request_persisted = $false
     raw_response_persisted = $false
@@ -77,52 +84,36 @@ function Test-Ci {
   ($env:CI -eq "true" -or $env:GITHUB_ACTIONS -eq "true" -or $env:SKYBRIDGE_CI -eq "true")
 }
 
-function Get-HermesConfig {
-  $config = [pscustomobject]@{
-    provider_id = "hermes_deepseek"
-    endpoint = $env:HERMES_DEEPSEEK_ENDPOINT
-    model = $env:HERMES_DEEPSEEK_MODEL
+function Get-ServerHermesConfigSummary {
+  [pscustomobject]@{
+    schema = "skybridge.manual_task_provider_config.v1"
+    provider_id = "skybridge_server_hermes"
+    server_config_only = $true
+    api_base_configured = -not [string]::IsNullOrWhiteSpace($env:HERMES_API_BASE)
+    api_key_present = (-not [string]::IsNullOrWhiteSpace($env:HERMES_API_KEY)) -or (-not [string]::IsNullOrWhiteSpace($env:HERMES_API_KEY_FILE))
+    client_secret_required = $false
     timeout_seconds = 60
     max_response_chars = 2000
-    live_enabled = $false
-    api_key = $env:HERMES_DEEPSEEK_API_KEY
+    credential_values_exposed = $false
     raw_request_persisted = $false
     raw_response_persisted = $false
     token_printed = $false
   }
-  if (Test-Path -LiteralPath $LocalConfigPath) {
-    $text = Get-Content -Raw -LiteralPath $LocalConfigPath
-    if (Test-ProviderUnsafeText $text) { throw "Unsafe Hermes provider config text." }
-    $fileConfig = $text | ConvertFrom-Json
-    foreach ($name in @("provider_id", "endpoint", "model", "timeout_seconds", "max_response_chars", "live_enabled", "api_key", "raw_request_persisted", "raw_response_persisted")) {
-      if ($fileConfig.PSObject.Properties[$name]) {
-        $config | Add-Member -NotePropertyName $name -NotePropertyValue $fileConfig.$name -Force
-      }
-    }
-  }
-  if ([string]::IsNullOrWhiteSpace($config.model)) { $config.model = "deepseek-chat" }
-  if (-not $config.timeout_seconds) { $config.timeout_seconds = 60 }
-  if (-not $config.max_response_chars) { $config.max_response_chars = 2000 }
-  $config.live_enabled = [bool]$config.live_enabled
-  $config.raw_request_persisted = $false
-  $config.raw_response_persisted = $false
-  $config.token_printed = $false
-  $config
 }
 
 function Get-HermesConfigSummary {
-  $config = Get-HermesConfig
   [pscustomobject]@{
     schema = "skybridge.manual_task_provider_config.v1"
     provider_id = "hermes_deepseek"
-    config_path = ".agent/local/hermes-deepseek.local.json"
-    config_present = (Test-Path -LiteralPath $LocalConfigPath)
-    endpoint_configured = -not [string]::IsNullOrWhiteSpace($config.endpoint)
-    model_configured = -not [string]::IsNullOrWhiteSpace($config.model)
-    model = ConvertTo-ProviderSafePreview $config.model 80
-    timeout_seconds = [int]$config.timeout_seconds
-    max_response_chars = [int]$config.max_response_chars
-    live_enabled = [bool]$config.live_enabled
+    deprecated = $true
+    preview_only = $true
+    config_path = "deprecated local-direct config ignored"
+    config_present = $false
+    endpoint_configured = $false
+    model_configured = $false
+    timeout_seconds = 60
+    max_response_chars = 2000
+    live_enabled = $false
     ci_disabled = Test-Ci
     credential_values_exposed = $false
     raw_request_persisted = $false
@@ -208,6 +199,8 @@ function Set-TaskResult([object]$Task, [object]$Result) {
   $Task | Add-Member -NotePropertyName error_summary -NotePropertyValue $Result.error_summary -Force
   $Task | Add-Member -NotePropertyName duration_ms -NotePropertyValue $Result.duration_ms -Force
   $Task | Add-Member -NotePropertyName live_call_performed -NotePropertyValue $Result.live_call_performed -Force
+  $Task | Add-Member -NotePropertyName server_mediated_llm_inference_enabled -NotePropertyValue $Result.server_mediated_llm_inference_enabled -Force
+  $Task | Add-Member -NotePropertyName cloud_hermes_provider_enabled -NotePropertyValue $Result.cloud_hermes_provider_enabled -Force
   $Task | Add-Member -NotePropertyName remote_llm_inference_enabled -NotePropertyValue $Result.remote_llm_inference_enabled -Force
   $Task | Add-Member -NotePropertyName output_executed -NotePropertyValue $false -Force
   $Task | Add-Member -NotePropertyName command_executed -NotePropertyValue $false -Force
@@ -228,7 +221,11 @@ function Invoke-ProviderMock {
       error_summary = "no_queued_task"
       duration_ms = 0
       live_call_performed = $false
+      server_mediated_llm_inference_enabled = $false
+      cloud_hermes_provider_enabled = $false
       remote_llm_inference_enabled = $false
+      remote_execution_enabled = $false
+      arbitrary_command_enabled = $false
       output_executed = $false
       token_printed = $false
     }
@@ -251,6 +248,8 @@ function Invoke-ProviderMock {
     error_summary = ""
     duration_ms = [int]((Get-Date) - $started).TotalMilliseconds
     live_call_performed = $false
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
     remote_llm_inference_enabled = $false
     output_executed = $false
     command_executed = $false
@@ -284,7 +283,11 @@ function Invoke-HermesPreview {
       error_summary = "no_queued_task"
       duration_ms = 0
       live_call_performed = $false
+      server_mediated_llm_inference_enabled = $false
+      cloud_hermes_provider_enabled = $false
       remote_llm_inference_enabled = $false
+      remote_execution_enabled = $false
+      arbitrary_command_enabled = $false
       output_executed = $false
       token_printed = $false
     }
@@ -293,7 +296,7 @@ function Invoke-HermesPreview {
   $task.status = "running"
   $task.updated_at = $started.ToUniversalTime().ToString("o")
   $promptHash = ConvertTo-ProviderHash (New-PromptWrapper $task)
-  $preview = "Hermes DeepSeek preview $($promptHash.Substring(0, 12)): live call disabled; sanitized manual task would be sent only after explicit local opt-in."
+  $preview = "Hermes DeepSeek preview $($promptHash.Substring(0, 12)): deprecated local-direct provider; preview_no_network; use skybridge_server_hermes for server-mediated Hermes."
   $result = [pscustomobject]@{
     schema = "skybridge.manual_task_result.v1"
     task_id = $task.task_id
@@ -305,6 +308,8 @@ function Invoke-HermesPreview {
     error_summary = ""
     duration_ms = [int]((Get-Date) - $started).TotalMilliseconds
     live_call_performed = $false
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
     remote_llm_inference_enabled = $false
     output_executed = $false
     command_executed = $false
@@ -312,6 +317,8 @@ function Invoke-HermesPreview {
     task_created = $false
     task_claim_created = $false
     task_pr_created = $false
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
     queue_apply_enabled = $false
     raw_request_persisted = $false
     raw_response_persisted = $false
@@ -327,25 +334,53 @@ function Invoke-HermesPreview {
 }
 
 function Invoke-HermesLiveOptIn {
-  $config = Get-HermesConfig
   $configSummary = Get-HermesConfigSummary
-  $blockedReason = ""
-  if (-not $AllowLive) { $blockedReason = "allow_live_switch_required" }
-  elseif (Test-Ci) { $blockedReason = "ci_disables_hermes_live_call" }
-  elseif (-not $config.live_enabled) { $blockedReason = "local_config_live_enabled_false" }
-  elseif ([string]::IsNullOrWhiteSpace($config.endpoint)) { $blockedReason = "endpoint_missing" }
-  elseif ([string]::IsNullOrWhiteSpace($config.api_key)) { $blockedReason = "api_key_missing" }
-  if ($blockedReason) {
+  $result = [pscustomobject]@{
+    schema = "skybridge.manual_task_result.v1"
+    provider_id = "hermes_deepseek"
+    provider_status = "deprecated_local_direct_live_blocked"
+    status = "blocked"
+    result_preview = "Hermes local-direct live opt-in is deprecated and blocked; use provider_id=skybridge_server_hermes through the SkyBridge server."
+    result_hash = ConvertTo-ProviderHash "deprecated_local_direct_live_blocked"
+    error_summary = "deprecated_local_direct_live_blocked"
+    config = $configSummary
+    duration_ms = 0
+    live_call_performed = $false
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
+    remote_llm_inference_enabled = $false
+    output_executed = $false
+    command_executed = $false
+    workunit_created = $false
+    task_created = $false
+    task_claim_created = $false
+    task_pr_created = $false
+    remote_execution_enabled = $false
+    arbitrary_command_enabled = $false
+    queue_apply_enabled = $false
+    raw_request_persisted = $false
+    raw_response_persisted = $false
+    token_printed = $false
+  }
+  Write-ProviderSafeJson $HermesLiveReportJson $result
+  $result
+}
+
+function Invoke-SkyBridgeHermes {
+  $queue = Read-ProviderQueue
+  $task = Get-NextQueuedTask $queue
+  if ($null -eq $task) {
     $result = [pscustomobject]@{
       schema = "skybridge.manual_task_result.v1"
       status = "blocked"
-      provider_id = "hermes_deepseek"
-      provider_status = "live_optin_blocked"
-      result_preview = "Hermes live opt-in blocked: $blockedReason."
-      error_summary = $blockedReason
-      config = $configSummary
+      provider_id = "skybridge_server_hermes"
+      provider_status = "server_no_queued_task"
+      result_preview = "SkyBridge server Hermes blocked: no queued manual task."
+      error_summary = "no_queued_task"
       duration_ms = 0
       live_call_performed = $false
+      server_mediated_llm_inference_enabled = $false
+      cloud_hermes_provider_enabled = $false
       remote_llm_inference_enabled = $false
       output_executed = $false
       command_executed = $false
@@ -353,90 +388,78 @@ function Invoke-HermesLiveOptIn {
       task_created = $false
       task_claim_created = $false
       task_pr_created = $false
+      remote_execution_enabled = $false
+      arbitrary_command_enabled = $false
       queue_apply_enabled = $false
       raw_request_persisted = $false
       raw_response_persisted = $false
       token_printed = $false
     }
-    Write-ProviderSafeJson $HermesLiveReportJson $result
+    Write-ProviderSafeJson $ServerHermesPreviewReportJson $result
     return $result
   }
-
-  $queue = Read-ProviderQueue
-  $task = Get-NextQueuedTask $queue
-  if ($null -eq $task) {
-    return [pscustomobject]@{ schema = "skybridge.manual_task_result.v1"; status = "blocked"; provider_id = "hermes_deepseek"; provider_status = "live_no_queued_task"; error_summary = "no_queued_task"; output_executed = $false; live_call_performed = $false; token_printed = $false }
-  }
-  $started = Get-Date
-  $task.status = "running"
-  $task.updated_at = $started.ToUniversalTime().ToString("o")
-  $prompt = New-PromptWrapper $task
+  $apiBase = ($env:SKYBRIDGE_API_BASE ?? "http://127.0.0.1:8787").TrimEnd("/")
   $body = @{
-    model = $config.model
-    messages = @(
-      @{ role = "system"; content = "You are a safe manual-task queue provider. Never execute commands." },
-      @{ role = "user"; content = $prompt }
-    )
-    temperature = 0
-    max_tokens = 512
-  } | ConvertTo-Json -Depth 20
-  try {
-    $headerName = "Author" + "ization"
-    $scheme = "Bear" + "er"
-    $headers = @{ $headerName = "$scheme $($config.api_key)" }
-    $response = Invoke-RestMethod -Method Post -Uri $config.endpoint -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec ([int]$config.timeout_seconds)
-    $content = [string]$response.choices[0].message.content
-    if ([string]::IsNullOrWhiteSpace($content)) { $content = "Hermes DeepSeek returned an empty safe response." }
-    $preview = ConvertTo-ProviderSafePreview $content ([int]$config.max_response_chars)
-    $status = "succeeded"
-    $errorSummary = ""
-  } catch {
-    $preview = "Hermes live opt-in failed safely: $($_.Exception.GetType().Name)."
-    $status = "failed"
-    $errorSummary = ConvertTo-ProviderSafePreview $_.Exception.GetType().Name 120
-  }
-  $result = [pscustomobject]@{
-    schema = "skybridge.manual_task_result.v1"
     task_id = $task.task_id
-    provider_id = "hermes_deepseek"
-    provider_status = "live_optin_local_only"
-    status = $status
-    result_preview = $preview
-    result_hash = ConvertTo-ProviderHash $preview
-    error_summary = $errorSummary
-    duration_ms = [int]((Get-Date) - $started).TotalMilliseconds
-    live_call_performed = $true
-    remote_llm_inference_enabled = $true
-    output_executed = $false
-    command_executed = $false
-    workunit_created = $false
-    task_created = $false
-    task_claim_created = $false
-    task_pr_created = $false
-    queue_apply_enabled = $false
-    raw_request_persisted = $false
-    raw_response_persisted = $false
-    token_printed = $false
+    input_preview = $task.input_preview
+  } | ConvertTo-Json -Depth 10
+  try {
+    $result = Invoke-RestMethod -Method Post -Uri "$apiBase/v1/manual-tasks/run-next/skybridge-hermes" -ContentType "application/json" -Body $body -TimeoutSec 70
+  } catch {
+    $summary = ConvertTo-ProviderSafePreview $_.Exception.GetType().Name 120
+    $result = [pscustomobject]@{
+      schema = "skybridge.manual_task_result.v1"
+      task_id = $task.task_id
+      status = "blocked"
+      provider_id = "skybridge_server_hermes"
+      provider_status = "server_unavailable_or_disabled"
+      result_preview = "SkyBridge server Hermes blocked safely: $summary."
+      result_hash = ConvertTo-ProviderHash "server_unavailable_or_disabled"
+      error_summary = $summary
+      duration_ms = 0
+      live_call_performed = $false
+      server_mediated_llm_inference_enabled = $false
+      cloud_hermes_provider_enabled = $false
+      remote_llm_inference_enabled = $false
+      output_executed = $false
+      command_executed = $false
+      workunit_created = $false
+      task_created = $false
+      task_claim_created = $false
+      task_pr_created = $false
+      remote_execution_enabled = $false
+      arbitrary_command_enabled = $false
+      queue_apply_enabled = $false
+      raw_request_persisted = $false
+      raw_response_persisted = $false
+      token_printed = $false
+    }
   }
   Set-TaskResult $task $result
-  $queue.provider = New-ProviderRecord "hermes_deepseek" "live_optin_local_only" $true $true $true
-  $queue.provider_status = "hermes_live_optin_local_only"
-  $queue.remote_llm_inference_enabled = $true
+  $queue.provider = New-ProviderRecord "skybridge_server_hermes" $result.provider_status $true $result.cloud_hermes_provider_enabled $result.live_call_performed
+  $queue.provider_status = $result.provider_status
+  $queue.remote_llm_inference_enabled = $false
   Save-ProviderQueue $queue | Out-Null
-  Write-ProviderSafeJson $HermesLiveReportJson $result
+  if ($result.live_call_performed -eq $true) { Write-ProviderSafeJson $ServerHermesLiveOptInReportJson $result } else { Write-ProviderSafeJson $ServerHermesPreviewReportJson $result }
   $result
 }
 
 function Get-ProviderList {
   $configSummary = Get-HermesConfigSummary
+  $serverConfig = Get-ServerHermesConfigSummary
   [pscustomobject]@{
     schema = "skybridge.manual_task_provider_list.v1"
     default_provider_id = "mock"
     providers = @(
       (New-ProviderRecord "mock" "enabled" $true $false $false),
-      (New-ProviderRecord "hermes_deepseek" $(if ($configSummary.config_present) { "configured_disabled_by_default" } else { "missing_config_disabled_by_default" }) $configSummary.config_present $configSummary.live_enabled $false)
+      (New-ProviderRecord "skybridge_server_hermes" $(if ($serverConfig.api_base_configured -and $serverConfig.api_key_present) { "configured_disabled_until_requested" } else { "disabled_missing_server_config" }) ($serverConfig.api_base_configured -and $serverConfig.api_key_present) ($serverConfig.api_base_configured -and $serverConfig.api_key_present) ($serverConfig.api_base_configured -and $serverConfig.api_key_present)),
+      (New-ProviderRecord "hermes_deepseek" "deprecated_preview_no_network" $false $false $false)
     )
     hermes_config = $configSummary
+    server_hermes_config = $serverConfig
+    server_mediated_provider_id = "skybridge_server_hermes"
+    local_direct_deprecated = $true
+    client_secret_required = $false
     live_call_disabled_by_default = $true
     token_printed = $false
   }
@@ -453,6 +476,9 @@ function New-ProviderReport {
     provider_list = $list
     queue_provider_status = $queue.provider_status
     hermes_disabled_by_default = $true
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
+    local_direct_deprecated = $true
     no_hermes_live_call_in_ci = $true
     raw_request_persisted = $false
     raw_response_persisted = $false
@@ -469,7 +495,30 @@ function New-ProviderReport {
     token_printed = $false
   }
   Write-ProviderSafeJson $ProviderReportJson $report
+  Write-ProviderSafeJson $ServerHermesProviderReportJson $report
+  Write-SafeProviderMarkdown $ServerHermesProviderReportMarkdown @(
+    "# Server-mediated Hermes Manual Task Provider",
+    "",
+    "- provider_id: skybridge_server_hermes",
+    "- default_provider_id: mock",
+    "- local_direct_hermes_deepseek: deprecated preview-only",
+    "- client_secret_required: false",
+    "- raw_request_persisted: false",
+    "- raw_response_persisted: false",
+    "- output_executed: false",
+    "- remote_execution_enabled: false",
+    "- arbitrary_command_enabled: false",
+    "- queue_apply_enabled: false",
+    "- token_printed=false"
+  )
   $report
+}
+
+function Write-SafeProviderMarkdown([string]$Path, [string[]]$Lines) {
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+  $text = $Lines -join "`n"
+  if (Test-ProviderUnsafeText $text) { throw "Refusing unsafe manual task provider markdown." }
+  Set-Content -LiteralPath $Path -Value $text -Encoding utf8
 }
 
 function Invoke-ProviderCommand {
@@ -480,7 +529,8 @@ function Invoke-ProviderCommand {
     "run-next-mock" { Invoke-ProviderMock }
     "run-next-hermes-preview" { Invoke-HermesPreview }
     "run-next-hermes-live-optin" { Invoke-HermesLiveOptIn }
-    "safe-summary" { [pscustomobject]@{ ok = $true; default_provider_id = "mock"; hermes_disabled_by_default = $true; hermes_live_call_enabled = $false; ci_disables_live_call = $true; raw_request_persisted = $false; raw_response_persisted = $false; output_executed = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
+    "run-next-skybridge-hermes" { Invoke-SkyBridgeHermes }
+    "safe-summary" { [pscustomobject]@{ ok = $true; default_provider_id = "mock"; server_mediated_provider_id = "skybridge_server_hermes"; local_direct_deprecated = $true; client_secret_required = $false; hermes_disabled_by_default = $true; hermes_live_call_enabled = $false; server_mediated_llm_inference_enabled = $false; cloud_hermes_provider_enabled = $false; ci_disables_live_call = $true; raw_request_persisted = $false; raw_response_persisted = $false; output_executed = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
     "report" { New-ProviderReport }
   }
 }
