@@ -701,6 +701,11 @@ h2 {
   width: 100%;
 }
 
+select.manual-task-input {
+  min-height: 0;
+  resize: none;
+}
+
 .reason-field {
   display: grid;
   gap: 6px;

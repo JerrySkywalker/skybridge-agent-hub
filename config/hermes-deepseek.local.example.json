@@ -1,0 +1,11 @@
+{
+  "provider_id": "hermes_deepseek",
+  "endpoint": "https://api.deepseek.example/v1/chat/completions",
+  "model": "deepseek-chat",
+  "timeout_seconds": 60,
+  "max_response_chars": 2000,
+  "live_enabled": false,
+  "raw_request_persisted": false,
+  "raw_response_persisted": false,
+  "token_printed": false
+}

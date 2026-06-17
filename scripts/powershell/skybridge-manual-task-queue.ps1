@@ -2,6 +2,8 @@
 param(
   [ValidateSet("status", "add-question", "list", "run-next-mock", "clear-completed", "safe-summary", "report")]
   [string]$Command = "status",
+  [ValidateSet("mock", "hermes_deepseek")]
+  [string]$ProviderId = "mock",
   [string]$Question = "",
   [switch]$Json
 )
@@ -55,10 +57,13 @@ function New-EmptyQueue {
       deterministic = $true
       network_enabled = $false
       hermes_live_call_enabled = $false
+      remote_llm_inference_enabled = $false
+      disabled_by_default = $false
       raw_request_persisted = $false
       raw_response_persisted = $false
       token_printed = $false
     }
+    provider_status = "mock_default"
     tasks = @()
     state_machine = @("queued", "running", "succeeded", "failed", "blocked", "cancelled")
     execution_enabled = $false
@@ -77,6 +82,9 @@ function New-EmptyQueue {
     prompt_body_persisted = $false
     transcript_body_persisted = $false
     raw_logs_persisted = $false
+    raw_request_persisted = $false
+    raw_response_persisted = $false
+    remote_llm_inference_enabled = $false
     token_printed = $false
     updated_at = (Get-Date).ToUniversalTime().ToString("o")
   }
@@ -88,6 +96,8 @@ function Read-Queue {
   if (Test-UnsafeText $text) { throw "Unsafe manual task queue state." }
   $queue = $text | ConvertFrom-Json
   if (-not $queue.PSObject.Properties["tasks"]) { $queue | Add-Member -NotePropertyName tasks -NotePropertyValue @() -Force }
+  if (-not $queue.PSObject.Properties["provider_status"]) { $queue | Add-Member -NotePropertyName provider_status -NotePropertyValue "mock_default" -Force }
+  if (-not $queue.PSObject.Properties["remote_llm_inference_enabled"]) { $queue | Add-Member -NotePropertyName remote_llm_inference_enabled -NotePropertyValue $false -Force }
   $queue
 }
 
@@ -118,6 +128,7 @@ function Get-QueueSummary($Queue) {
     schema = "skybridge.manual_task_queue.v1"
     queue_id = $Queue.queue_id
     provider_id = $Queue.provider.provider_id
+    provider_status = $Queue.provider_status
     total = $tasks.Count
     queued = @($tasks | Where-Object { $_.status -eq "queued" }).Count
     running = @($tasks | Where-Object { $_.status -eq "running" }).Count
@@ -127,6 +138,8 @@ function Get-QueueSummary($Queue) {
     cancelled = @($tasks | Where-Object { $_.status -eq "cancelled" }).Count
     hermes_live_call_enabled = $false
     mock_provider_enabled = $true
+    hermes_deepseek_provider_available = $true
+    default_provider_id = "mock"
     network_enabled = $false
     prompt_body_persisted = $false
     transcript_body_persisted = $false
@@ -137,6 +150,7 @@ function Get-QueueSummary($Queue) {
     task_pr_created = $false
     queue_apply_enabled = $false
     remote_execution_enabled = $false
+    remote_llm_inference_enabled = [bool]$Queue.remote_llm_inference_enabled
     arbitrary_command_enabled = $false
     host_mutation_performed = $false
     token_printed = $false
@@ -154,6 +168,8 @@ function Add-Question {
     status = "queued"
     input_preview = ConvertTo-SafePreview $Question
     input_hash = $hash
+    provider_id = $ProviderId
+    provider_status = if ($ProviderId -eq "mock") { "mock_default" } else { "hermes_deepseek_disabled_by_default" }
     command_text_detected = Test-CommandText $Question
     prompt_body_persisted = $false
     created_at = $now
@@ -175,6 +191,7 @@ function Add-Question {
 function Invoke-MockProvider([object]$Task) {
   $prefix = ([string]$Task.input_hash).Substring(0, 12)
   $classification = if ($Task.command_text_detected -eq $true) { "command_text_detected_no_execution" } else { "safe_question" }
+  $preview = "Mock reply ${prefix}: recorded sanitized local question; classification=$classification."
   [pscustomobject]@{
     schema = "skybridge.manual_task_result.v1"
     task_id = $Task.task_id
@@ -189,7 +206,14 @@ function Invoke-MockProvider([object]$Task) {
       token_printed = $false
     }
     status = "succeeded"
-    result_preview = "Mock reply ${prefix}: recorded sanitized local question; classification=$classification."
+    provider_id = "mock"
+    provider_status = "mock_default"
+    result_preview = $preview
+    result_hash = ConvertTo-Hash $preview
+    duration_ms = 0
+    error_summary = ""
+    live_call_performed = $false
+    remote_llm_inference_enabled = $false
     output_executed = $false
     command_executed = $false
     workunit_created = $false
@@ -220,14 +244,24 @@ function Run-NextMock {
   $now = (Get-Date).ToUniversalTime().ToString("o")
   $task.status = "running"
   $task.updated_at = $now
+  $started = Get-Date
   $result = Invoke-MockProvider $task
+  $result.duration_ms = [int]((Get-Date) - $started).TotalMilliseconds
   $task.status = "succeeded"
   $task | Add-Member -NotePropertyName result_preview -NotePropertyValue $result.result_preview -Force
+  $task | Add-Member -NotePropertyName result_hash -NotePropertyValue $result.result_hash -Force
   $task | Add-Member -NotePropertyName provider_id -NotePropertyValue "mock" -Force
+  $task | Add-Member -NotePropertyName provider_status -NotePropertyValue "mock_default" -Force
+  $task | Add-Member -NotePropertyName duration_ms -NotePropertyValue $result.duration_ms -Force
+  $task | Add-Member -NotePropertyName error_summary -NotePropertyValue "" -Force
+  $task | Add-Member -NotePropertyName live_call_performed -NotePropertyValue $false -Force
+  $task | Add-Member -NotePropertyName remote_llm_inference_enabled -NotePropertyValue $false -Force
   $task | Add-Member -NotePropertyName completed_at -NotePropertyValue (Get-Date).ToUniversalTime().ToString("o") -Force
   $task.updated_at = $task.completed_at
   $task | Add-Member -NotePropertyName output_executed -NotePropertyValue $false -Force
   $task | Add-Member -NotePropertyName command_executed -NotePropertyValue $false -Force
+  $queue.provider_status = "mock_default"
+  $queue.remote_llm_inference_enabled = $false
   Save-Queue $queue | Out-Null
   $result
 }
@@ -291,7 +325,7 @@ function Invoke-CommandBody {
     "list" { Read-Queue }
     "run-next-mock" { Run-NextMock }
     "clear-completed" { Clear-Completed }
-    "safe-summary" { [pscustomobject]@{ ok = $true; provider_id = "mock"; hermes_live_call_enabled = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
+    "safe-summary" { [pscustomobject]@{ ok = $true; provider_id = "mock"; default_provider_id = "mock"; hermes_deepseek_available = $true; hermes_live_call_enabled = $false; remote_llm_inference_enabled = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
     "report" { New-Report }
   }
 }

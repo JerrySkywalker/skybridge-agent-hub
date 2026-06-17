@@ -48,6 +48,7 @@ logs/
 .agent/locks/
 .agent/spool/
 .agent/tmp/
+.agent/local/
 .agent/workers/
 .agent/self-bootstrap/
 .agent/codex-phone-smoke/
