@@ -2,7 +2,7 @@
 param(
   [ValidateSet("status", "add-question", "list", "run-next-mock", "clear-completed", "safe-summary", "report")]
   [string]$Command = "status",
-  [ValidateSet("mock", "hermes_deepseek")]
+  [ValidateSet("mock", "hermes_deepseek", "skybridge_server_hermes")]
   [string]$ProviderId = "mock",
   [string]$Question = "",
   [switch]$Json
@@ -85,6 +85,8 @@ function New-EmptyQueue {
     raw_request_persisted = $false
     raw_response_persisted = $false
     remote_llm_inference_enabled = $false
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
     token_printed = $false
     updated_at = (Get-Date).ToUniversalTime().ToString("o")
   }
@@ -139,6 +141,7 @@ function Get-QueueSummary($Queue) {
     hermes_live_call_enabled = $false
     mock_provider_enabled = $true
     hermes_deepseek_provider_available = $true
+    skybridge_server_hermes_provider_available = $true
     default_provider_id = "mock"
     network_enabled = $false
     prompt_body_persisted = $false
@@ -151,6 +154,8 @@ function Get-QueueSummary($Queue) {
     queue_apply_enabled = $false
     remote_execution_enabled = $false
     remote_llm_inference_enabled = [bool]$Queue.remote_llm_inference_enabled
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
     arbitrary_command_enabled = $false
     host_mutation_performed = $false
     token_printed = $false
@@ -169,7 +174,7 @@ function Add-Question {
     input_preview = ConvertTo-SafePreview $Question
     input_hash = $hash
     provider_id = $ProviderId
-    provider_status = if ($ProviderId -eq "mock") { "mock_default" } else { "hermes_deepseek_disabled_by_default" }
+    provider_status = if ($ProviderId -eq "mock") { "mock_default" } elseif ($ProviderId -eq "skybridge_server_hermes") { "server_mediated_disabled_until_server_configured" } else { "hermes_deepseek_deprecated_preview_no_network" }
     command_text_detected = Test-CommandText $Question
     prompt_body_persisted = $false
     created_at = $now
@@ -213,6 +218,8 @@ function Invoke-MockProvider([object]$Task) {
     duration_ms = 0
     error_summary = ""
     live_call_performed = $false
+    server_mediated_llm_inference_enabled = $false
+    cloud_hermes_provider_enabled = $false
     remote_llm_inference_enabled = $false
     output_executed = $false
     command_executed = $false
@@ -325,7 +332,7 @@ function Invoke-CommandBody {
     "list" { Read-Queue }
     "run-next-mock" { Run-NextMock }
     "clear-completed" { Clear-Completed }
-    "safe-summary" { [pscustomobject]@{ ok = $true; provider_id = "mock"; default_provider_id = "mock"; hermes_deepseek_available = $true; hermes_live_call_enabled = $false; remote_llm_inference_enabled = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
+    "safe-summary" { [pscustomobject]@{ ok = $true; provider_id = "mock"; default_provider_id = "mock"; skybridge_server_hermes_available = $true; hermes_deepseek_available = $true; hermes_deepseek_deprecated = $true; hermes_live_call_enabled = $false; server_mediated_llm_inference_enabled = $false; cloud_hermes_provider_enabled = $false; remote_llm_inference_enabled = $false; worker_execution_started = $false; workunit_created = $false; task_created = $false; task_pr_created = $false; queue_apply_enabled = $false; token_printed = $false } }
     "report" { New-Report }
   }
 }

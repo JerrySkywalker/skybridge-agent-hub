@@ -319,6 +319,64 @@ export interface HermesSummary {
   related_iterations: IterationRun[];
 }
 
+export interface ManualTaskProviderStatus {
+  schema: "skybridge.manual_task_provider.v1";
+  provider_id: "mock" | "hermes_deepseek" | "skybridge_server_hermes";
+  status: string;
+  configured: boolean;
+  deterministic: boolean;
+  network_enabled: boolean;
+  hermes_live_call_enabled: false;
+  server_mediated_llm_inference_enabled?: boolean;
+  cloud_hermes_provider_enabled?: boolean;
+  remote_llm_inference_enabled?: false;
+  disabled_by_default?: boolean;
+  deprecated?: boolean;
+  preview_only?: boolean;
+  credential_values_exposed?: false;
+  raw_request_persisted: false;
+  raw_response_persisted: false;
+  token_printed: false;
+}
+
+export interface ManualTaskProviderList {
+  schema: "skybridge.manual_task_provider_list.v1";
+  default_provider_id: "mock";
+  providers: ManualTaskProviderStatus[];
+  server_mediated_provider_id?: "skybridge_server_hermes";
+  local_direct_provider_id?: "hermes_deepseek";
+  local_direct_deprecated?: boolean;
+  client_secret_required?: false;
+  live_call_disabled_by_default: true;
+  token_printed: false;
+}
+
+export interface ManualTaskResult {
+  schema: "skybridge.manual_task_result.v1";
+  task_id?: string;
+  provider_id: "mock" | "hermes_deepseek" | "skybridge_server_hermes";
+  provider_status: string;
+  status: "succeeded" | "failed" | "blocked";
+  result_preview: string;
+  result_hash: string;
+  duration_ms: number;
+  error_summary: string;
+  server_mediated_llm_inference_enabled?: boolean;
+  cloud_hermes_provider_enabled?: boolean;
+  live_call_performed: boolean;
+  remote_llm_inference_enabled?: false;
+  output_executed: false;
+  command_executed?: false;
+  workunit_created?: false;
+  task_created?: false;
+  task_claim_created?: false;
+  task_pr_created?: false;
+  remote_execution_enabled?: false;
+  arbitrary_command_enabled?: false;
+  queue_apply_enabled?: false;
+  token_printed: false;
+}
+
 export interface AutoMergeSummary {
   enabled_by_default: false;
   dry_run_default: true;
@@ -755,6 +813,34 @@ export class SkyBridgeClient {
     return this.getJson<HermesSummary>("/v1/hermes/summary");
   }
 
+  async listManualTaskProviders(): Promise<ManualTaskProviderList> {
+    return this.getJson<ManualTaskProviderList>("/v1/manual-tasks/providers");
+  }
+
+  async runNextManualTaskMock(input: {
+    task_id?: string;
+    input_preview?: string;
+    question?: string;
+  } = {}): Promise<ManualTaskResult> {
+    return this.postManualTaskProvider("/v1/manual-tasks/run-next/mock", input);
+  }
+
+  async runNextManualTaskHermesPreview(input: {
+    task_id?: string;
+    input_preview?: string;
+    question?: string;
+  } = {}): Promise<ManualTaskResult> {
+    return this.postManualTaskProvider("/v1/manual-tasks/run-next/hermes-preview", input);
+  }
+
+  async runNextManualTaskSkyBridgeHermes(input: {
+    task_id?: string;
+    input_preview?: string;
+    question?: string;
+  } = {}): Promise<ManualTaskResult> {
+    return this.postManualTaskProvider("/v1/manual-tasks/run-next/skybridge-hermes", input);
+  }
+
   async getAutoMergeSummary(): Promise<AutoMergeSummary> {
     return this.getJson<AutoMergeSummary>("/v1/automerge/summary");
   }
@@ -981,6 +1067,19 @@ export class SkyBridgeClient {
 
   private url(path: string): string {
     return `${this.apiBase.replace(/\/$/, "")}${path}`;
+  }
+
+  private async postManualTaskProvider(
+    path: string,
+    input: Record<string, unknown>,
+  ): Promise<ManualTaskResult> {
+    const response = await fetch(this.url(path), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    await assertOk(response, "manual task provider");
+    return response.json() as Promise<ManualTaskResult>;
   }
 
   private async postTaskAction(

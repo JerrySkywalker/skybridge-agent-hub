@@ -166,6 +166,77 @@ const TASK_SOURCES: TaskSource[] = [
 ];
 const DEFAULT_TASK_LEASE_SECONDS = 30 * 60;
 const DEFAULT_TASK_MAX_ATTEMPTS = 1;
+const MANUAL_TASK_PROVIDER_IDS = [
+  "mock",
+  "hermes_deepseek",
+  "skybridge_server_hermes",
+] as const;
+type ManualTaskProviderId = (typeof MANUAL_TASK_PROVIDER_IDS)[number];
+
+interface ManualTaskRunInput {
+  question?: unknown;
+  input_preview?: unknown;
+  task_id?: unknown;
+}
+
+interface ManualTaskProviderRecord {
+  schema: "skybridge.manual_task_provider.v1";
+  provider_id: ManualTaskProviderId;
+  status: string;
+  configured: boolean;
+  deterministic: boolean;
+  network_enabled: boolean;
+  hermes_live_call_enabled: false;
+  server_mediated_llm_inference_enabled: boolean;
+  cloud_hermes_provider_enabled: boolean;
+  remote_llm_inference_enabled: false;
+  disabled_by_default: boolean;
+  deprecated?: boolean;
+  preview_only?: boolean;
+  ci_disabled: boolean;
+  config_values_redacted: true;
+  raw_request_persisted: false;
+  raw_response_persisted: false;
+  reason: string;
+  token_printed: false;
+}
+
+interface ManualTaskResultRecord {
+  schema: "skybridge.manual_task_result.v1";
+  task_id?: string;
+  provider_id: ManualTaskProviderId;
+  provider_status: string;
+  status: "succeeded" | "failed" | "blocked";
+  result_preview: string;
+  result_hash: string;
+  duration_ms: number;
+  error_summary: string;
+  server_mediated_llm_inference_enabled: boolean;
+  cloud_hermes_provider_enabled: boolean;
+  live_call_performed: boolean;
+  remote_llm_inference_enabled: false;
+  output_executed: false;
+  command_executed: false;
+  workunit_created: false;
+  task_created: false;
+  task_claim_created: false;
+  task_pr_created: false;
+  remote_execution_enabled: false;
+  arbitrary_command_enabled: false;
+  queue_apply_enabled: false;
+  raw_request_persisted: false;
+  raw_response_persisted: false;
+  token_printed: false;
+}
+
+interface ServerHermesConfig {
+  configured: boolean;
+  apiBase?: string;
+  apiKey?: string;
+  timeoutMs: number;
+  maxResponseChars: number;
+  reason: string;
+}
 
 function getConfiguredWorkerTokens(): string[] {
   const tokens: string[] = [];
@@ -1850,6 +1921,20 @@ export async function createServer(
   app.get("/v1/notifications/rules", async () => ({
     rules: notificationRules(),
   }));
+
+  app.get("/v1/manual-tasks/providers", async () => manualTaskProviderList());
+  app.post<{ Body: ManualTaskRunInput }>(
+    "/v1/manual-tasks/run-next/mock",
+    async (request) => runManualTaskMock(request.body),
+  );
+  app.post<{ Body: ManualTaskRunInput }>(
+    "/v1/manual-tasks/run-next/hermes-preview",
+    async (request) => runManualTaskHermesPreview(request.body),
+  );
+  app.post<{ Body: ManualTaskRunInput }>(
+    "/v1/manual-tasks/run-next/skybridge-hermes",
+    async (request) => runManualTaskSkyBridgeHermes(request.body),
+  );
 
   app.get("/v1/nodes", async () => ({
     nodes: summarizeNodes(store.listEvents()),
@@ -3536,6 +3621,325 @@ function latestMessageSummary(events: StoredEvent[]): string | undefined {
     }
   }
   return undefined;
+}
+
+function manualTaskProviderList() {
+  const config = getServerHermesConfig();
+  return {
+    schema: "skybridge.manual_task_provider_list.v1",
+    default_provider_id: "mock" as const,
+    providers: [
+      manualTaskProviderRecord("mock", "enabled", true, false, false, "mock_default"),
+      manualTaskProviderRecord(
+        "skybridge_server_hermes",
+        config.configured ? "configured_disabled_until_requested" : "disabled_missing_server_config",
+        config.configured,
+        config.configured,
+        config.configured,
+        config.reason,
+      ),
+      manualTaskProviderRecord(
+        "hermes_deepseek",
+        "deprecated_preview_no_network",
+        false,
+        false,
+        false,
+        "deprecated_local_direct_provider_preview_only",
+      ),
+    ],
+    server_mediated_provider_id: "skybridge_server_hermes",
+    local_direct_provider_id: "hermes_deepseek",
+    local_direct_deprecated: true,
+    client_secret_required: false,
+    live_call_disabled_by_default: true as const,
+    token_printed: false as const,
+  };
+}
+
+function manualTaskProviderRecord(
+  providerId: ManualTaskProviderId,
+  status: string,
+  configured: boolean,
+  networkEnabled: boolean,
+  cloudHermesEnabled: boolean,
+  reason: string,
+): ManualTaskProviderRecord {
+  return {
+    schema: "skybridge.manual_task_provider.v1",
+    provider_id: providerId,
+    status,
+    configured,
+    deterministic: providerId === "mock",
+    network_enabled: networkEnabled,
+    hermes_live_call_enabled: false,
+    server_mediated_llm_inference_enabled:
+      providerId === "skybridge_server_hermes" && configured,
+    cloud_hermes_provider_enabled:
+      providerId === "skybridge_server_hermes" && cloudHermesEnabled,
+    remote_llm_inference_enabled: false,
+    disabled_by_default: providerId !== "mock",
+    deprecated: providerId === "hermes_deepseek" ? true : undefined,
+    preview_only: providerId === "hermes_deepseek" ? true : undefined,
+    ci_disabled: process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true",
+    config_values_redacted: true,
+    raw_request_persisted: false,
+    raw_response_persisted: false,
+    reason,
+    token_printed: false,
+  };
+}
+
+function runManualTaskMock(input: ManualTaskRunInput | undefined): ManualTaskResultRecord {
+  const started = Date.now();
+  const prompt = manualTaskInputPreview(input);
+  const preview = `Mock reply ${sha256Text(prompt).slice(0, 12)}: recorded sanitized server manual task; classification=${commandTextDetected(prompt) ? "command_text_detected_no_execution" : "safe_question"}.`;
+  return manualTaskResult({
+    providerId: "mock",
+    providerStatus: "mock_default",
+    status: "succeeded",
+    resultPreview: preview,
+    durationMs: Date.now() - started,
+    taskId: safeString(input?.task_id),
+  });
+}
+
+function runManualTaskHermesPreview(input: ManualTaskRunInput | undefined): ManualTaskResultRecord {
+  const started = Date.now();
+  const prompt = manualTaskInputPreview(input);
+  const preview = `Hermes local-direct preview ${sha256Text(prompt).slice(0, 12)}: deprecated preview-only provider; no network call performed.`;
+  return manualTaskResult({
+    providerId: "hermes_deepseek",
+    providerStatus: "deprecated_preview_no_network",
+    status: "succeeded",
+    resultPreview: preview,
+    durationMs: Date.now() - started,
+    taskId: safeString(input?.task_id),
+  });
+}
+
+async function runManualTaskSkyBridgeHermes(input: ManualTaskRunInput | undefined): Promise<ManualTaskResultRecord> {
+  const started = Date.now();
+  const config = getServerHermesConfig();
+  if (!config.configured || !config.apiBase || !config.apiKey) {
+    return manualTaskResult({
+      providerId: "skybridge_server_hermes",
+      providerStatus: "disabled_missing_server_config",
+      status: "blocked",
+      resultPreview: `SkyBridge server Hermes blocked: ${config.reason}.`,
+      durationMs: Date.now() - started,
+      errorSummary: config.reason,
+      taskId: safeString(input?.task_id),
+      serverMediated: false,
+      cloudHermesEnabled: false,
+    });
+  }
+  const hermesConfig = {
+    ...config,
+    apiBase: config.apiBase,
+    apiKey: config.apiKey,
+  };
+
+  try {
+    const capabilities = await callHermesJson(hermesConfig, "/v1/capabilities", { method: "GET" });
+    const prompt = buildManualTaskHermesPrompt(manualTaskInputPreview(input));
+    const response = await callHermesJson(hermesConfig, "/v1/responses", {
+      method: "POST",
+      body: {
+        input: prompt,
+        max_response_chars: config.maxResponseChars,
+        metadata: {
+          caller: "skybridge_manual_task_queue",
+          output_execution_enabled: false,
+        },
+      },
+    });
+    const content = extractHermesResponseText(response) ?? "Hermes returned no text content.";
+    const preview = safePreview(content, config.maxResponseChars);
+    return manualTaskResult({
+      providerId: "skybridge_server_hermes",
+      providerStatus: `cloud_hermes_${safePreview(extractHermesCapabilityStatus(capabilities), 60)}`,
+      status: "succeeded",
+      resultPreview: preview,
+      durationMs: Date.now() - started,
+      taskId: safeString(input?.task_id),
+      liveCallPerformed: true,
+      serverMediated: true,
+      cloudHermesEnabled: true,
+    });
+  } catch (error) {
+    const summary = safeErrorSummary(error);
+    return manualTaskResult({
+      providerId: "skybridge_server_hermes",
+      providerStatus: "cloud_hermes_error",
+      status: "failed",
+      resultPreview: `SkyBridge server Hermes failed safely: ${summary}.`,
+      durationMs: Date.now() - started,
+      errorSummary: summary,
+      taskId: safeString(input?.task_id),
+      liveCallPerformed: false,
+      serverMediated: true,
+      cloudHermesEnabled: true,
+    });
+  }
+}
+
+function manualTaskResult(input: {
+  providerId: ManualTaskProviderId;
+  providerStatus: string;
+  status: "succeeded" | "failed" | "blocked";
+  resultPreview: string;
+  durationMs: number;
+  taskId?: string;
+  errorSummary?: string;
+  liveCallPerformed?: boolean;
+  serverMediated?: boolean;
+  cloudHermesEnabled?: boolean;
+}): ManualTaskResultRecord {
+  const preview = safePreview(input.resultPreview, 240);
+  return {
+    schema: "skybridge.manual_task_result.v1",
+    task_id: input.taskId,
+    provider_id: input.providerId,
+    provider_status: input.providerStatus,
+    status: input.status,
+    result_preview: preview,
+    result_hash: sha256Text(preview),
+    duration_ms: Math.max(0, input.durationMs),
+    error_summary: safePreview(input.errorSummary ?? "", 200),
+    server_mediated_llm_inference_enabled: input.serverMediated === true,
+    cloud_hermes_provider_enabled: input.cloudHermesEnabled === true,
+    live_call_performed: input.liveCallPerformed === true,
+    remote_llm_inference_enabled: false,
+    output_executed: false,
+    command_executed: false,
+    workunit_created: false,
+    task_created: false,
+    task_claim_created: false,
+    task_pr_created: false,
+    remote_execution_enabled: false,
+    arbitrary_command_enabled: false,
+    queue_apply_enabled: false,
+    raw_request_persisted: false,
+    raw_response_persisted: false,
+    token_printed: false,
+  };
+}
+
+function getServerHermesConfig(): ServerHermesConfig {
+  const apiBase = process.env.HERMES_API_BASE?.trim().replace(/\/+$/, "");
+  const tokenFile = process.env.HERMES_API_KEY_FILE?.trim() ?? process.env.HERMES_TOKEN_FILE?.trim();
+  let apiKey = process.env.HERMES_API_KEY?.trim();
+  if (!apiKey && tokenFile && existsSync(tokenFile)) {
+    apiKey = readFileSync(tokenFile, "utf8").split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  }
+  const timeoutMs = Number.parseInt(process.env.HERMES_TIMEOUT_MS ?? "", 10);
+  const maxResponseChars = Number.parseInt(process.env.HERMES_MAX_RESPONSE_CHARS ?? "", 10);
+  const boundedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.min(timeoutMs, 120_000) : 60_000;
+  const boundedMaxChars = Number.isFinite(maxResponseChars) && maxResponseChars > 0 ? Math.min(maxResponseChars, 8000) : 2000;
+  const missing = [
+    apiBase ? "" : "HERMES_API_BASE",
+    apiKey ? "" : tokenFile ? "HERMES_API_KEY_FILE_VALUE" : "HERMES_API_KEY_OR_FILE",
+  ].filter(Boolean);
+  return {
+    configured: missing.length === 0,
+    apiBase,
+    apiKey,
+    timeoutMs: boundedTimeoutMs,
+    maxResponseChars: boundedMaxChars,
+    reason: missing.length === 0 ? "server_configured_secret_redacted" : `missing_${missing.join("_")}`,
+  };
+}
+
+async function callHermesJson(
+  config: ServerHermesConfig & { apiBase: string; apiKey: string },
+  path: "/v1/capabilities" | "/v1/responses",
+  options: { method: "GET" } | { method: "POST"; body: Record<string, unknown> },
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    const response = await fetch(`${config.apiBase}${path}`, {
+      method: options.method,
+      headers: {
+        authorization: `Bearer ${config.apiKey}`,
+        "content-type": "application/json",
+      },
+      body: options.method === "POST" ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`hermes_http_${response.status}`);
+    return await response.json() as unknown;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildManualTaskHermesPrompt(inputPreview: string): string {
+  return [
+    "You are answering a SkyBridge Manual Task Queue request through the SkyBridge server Hermes adapter.",
+    "Do not execute commands or claim that a command ran.",
+    "Do not request or reveal secrets.",
+    "Return a concise safe answer for a human operator.",
+    "",
+    "Sanitized manual task input preview:",
+    inputPreview,
+  ].join("\n");
+}
+
+function manualTaskInputPreview(input: ManualTaskRunInput | undefined): string {
+  return safePreview(safeString(input?.input_preview) ?? safeString(input?.question) ?? "No manual task input provided.", 200);
+}
+
+function commandTextDetected(value: string): boolean {
+  return /(cmd|command|shell|powershell|pwsh|bash|curl|wget)\s*[:=]|[;&|`$<>]/i.test(value);
+}
+
+function extractHermesResponseText(input: unknown): string | undefined {
+  if (typeof input === "string") return input;
+  const record = safeRecord(input);
+  if (!record) return undefined;
+  const direct = safeString(record.output_text) ?? safeString(record.text) ?? safeString(record.content);
+  if (direct) return direct;
+  const output = Array.isArray(record.output) ? record.output : undefined;
+  const textParts = output
+    ?.flatMap((item) => {
+      const itemRecord = safeRecord(item);
+      const content = Array.isArray(itemRecord?.content) ? itemRecord.content : [];
+      return content.map((part) => {
+        const partRecord = safeRecord(part);
+        return safeString(partRecord?.text);
+      });
+    })
+    .filter((value): value is string => !!value);
+  return textParts && textParts.length > 0 ? textParts.join(" ") : undefined;
+}
+
+function extractHermesCapabilityStatus(input: unknown): string {
+  const record = safeRecord(input);
+  return safeString(record?.status) ?? safeString(record?.model) ?? "capabilities_ok";
+}
+
+function safeErrorSummary(error: unknown): string {
+  if (error instanceof Error && error.name === "AbortError") return "timeout";
+  if (error instanceof Error) return safePreview(error.message, 120);
+  return "unknown_error";
+}
+
+function safePreview(input: string, maxLength: number): string {
+  const redacted = input
+    .replace(/authorization\s*[:=]\s*bearer\s+\S+/gi, "authorization=[REDACTED]")
+    .replace(/bearer\s+[A-Za-z0-9_.-]{12,}/gi, "bearer [REDACTED]")
+    .replace(/sk-[A-Za-z0-9_-]{20,}/gi, "[REDACTED]")
+    .replace(/gh[pousr]_[A-Za-z0-9_]{20,}/gi, "[REDACTED]")
+    .replace(/(token|password|secret|cookie|api[_-]?key)\s*[:=]\s*\S+/gi, "$1=[REDACTED]")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (redacted.length <= maxLength) return redacted;
+  return `${redacted.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function sha256Text(input: string): string {
+  return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
 function safeString(input: unknown): string | undefined {

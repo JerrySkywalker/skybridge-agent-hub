@@ -1,37 +1,23 @@
 # Manual Task Provider Config
 
-Real Hermes DeepSeek config is local-only and ignored by git:
+Manual Task Queue live inference is server-mediated. The active live-capable provider is:
 
 ```text
-.agent/local/hermes-deepseek.local.json
+provider_id=skybridge_server_hermes
 ```
 
-Start from the placeholder file:
+Configure it only on the SkyBridge server:
 
 ```text
-config/hermes-deepseek.local.example.json
+HERMES_API_BASE=
+HERMES_API_KEY=
+HERMES_API_KEY_FILE=
+HERMES_TIMEOUT_MS=60000
+HERMES_MAX_RESPONSE_CHARS=2000
 ```
 
-The local config fields are:
+Tracked examples must keep placeholders empty. Client apps and local queue helpers do not require backend keys.
 
-- `provider_id=hermes_deepseek`
-- `endpoint`
-- `model`
-- `timeout_seconds`, default `60`
-- `max_response_chars`, default `2000`
-- `live_enabled=false` by default
-- `raw_request_persisted=false`
-- `raw_response_persisted=false`
-- `token_printed=false`
+`provider_id=hermes_deepseek` is now deprecated preview-only compatibility. Local-direct live mode is blocked and does not read local backend secrets.
 
-Credential values must stay out of tracked files and reports. The provider script reads the credential from local environment variable `HERMES_DEEPSEEK_API_KEY` when live opt-in is explicitly requested.
-
-Live calls are blocked unless all are true:
-
-- the command is `run-next-hermes-live-optin`
-- the operator passes `-AllowLive`
-- local config has `live_enabled=true`
-- endpoint and credential are configured locally
-- CI environment markers are absent
-
-The provider report only exposes booleans such as `endpoint_configured`, `config_present` and `credential_values_exposed=false`.
+The provider report only exposes booleans such as `api_base_configured`, `api_key_present`, `client_secret_required=false` and `credential_values_exposed=false`.

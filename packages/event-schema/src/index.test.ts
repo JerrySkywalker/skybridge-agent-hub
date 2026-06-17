@@ -401,6 +401,103 @@ describe("event schema", () => {
     ).toMatchObject({ hermes_disabled_by_default: true });
   });
 
+  it("models server-mediated Hermes manual task provider without local secrets or execution", () => {
+    const serverProvider = {
+      schema: "skybridge.manual_task_provider.v1",
+      provider_id: "skybridge_server_hermes",
+      status: "disabled_missing_server_config",
+      configured: false,
+      deterministic: false,
+      network_enabled: false,
+      hermes_live_call_enabled: false,
+      server_mediated_llm_inference_enabled: false,
+      cloud_hermes_provider_enabled: false,
+      remote_llm_inference_enabled: false,
+      disabled_by_default: true,
+      config_values_redacted: true,
+      raw_request_persisted: false,
+      raw_response_persisted: false,
+      token_printed: false,
+    } as const;
+    const providerList = ManualTaskProviderListSchema.parse({
+      schema: "skybridge.manual_task_provider_list.v1",
+      default_provider_id: "mock",
+      providers: [
+        {
+          schema: "skybridge.manual_task_provider.v1",
+          provider_id: "mock",
+          status: "enabled",
+          configured: true,
+          deterministic: true,
+          network_enabled: false,
+          hermes_live_call_enabled: false,
+          remote_llm_inference_enabled: false,
+          disabled_by_default: false,
+          config_values_redacted: true,
+          raw_request_persisted: false,
+          raw_response_persisted: false,
+          token_printed: false,
+        },
+        serverProvider,
+        {
+          schema: "skybridge.manual_task_provider.v1",
+          provider_id: "hermes_deepseek",
+          status: "deprecated_preview_no_network",
+          configured: false,
+          deterministic: false,
+          network_enabled: false,
+          hermes_live_call_enabled: false,
+          remote_llm_inference_enabled: false,
+          disabled_by_default: true,
+          deprecated: true,
+          preview_only: true,
+          config_values_redacted: true,
+          raw_request_persisted: false,
+          raw_response_persisted: false,
+          token_printed: false,
+        },
+      ],
+      live_call_disabled_by_default: true,
+      token_printed: false,
+    });
+    expect(providerList.providers.map((provider) => provider.provider_id)).toEqual([
+      "mock",
+      "skybridge_server_hermes",
+      "hermes_deepseek",
+    ]);
+    expect(
+      ManualTaskResultSchema.parse({
+        schema: "skybridge.manual_task_result.v1",
+        task_id: "manual_fixture",
+        provider_id: "skybridge_server_hermes",
+        provider_status: "disabled_missing_server_config",
+        status: "blocked",
+        result_preview: "SkyBridge server Hermes blocked: missing server config.",
+        result_hash: "abc123abc123",
+        duration_ms: 1,
+        error_summary: "missing_server_config",
+        server_mediated_llm_inference_enabled: false,
+        cloud_hermes_provider_enabled: false,
+        live_call_performed: false,
+        remote_llm_inference_enabled: false,
+        output_executed: false,
+        command_executed: false,
+        workunit_created: false,
+        task_created: false,
+        task_claim_created: false,
+        task_pr_created: false,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        queue_apply_enabled: false,
+        token_printed: false,
+      }),
+    ).toMatchObject({
+      provider_id: "skybridge_server_hermes",
+      output_executed: false,
+      token_printed: false,
+    });
+  });
+
   it("models Goal 218 worker control-plane contracts without execution", () => {
     expect(parseWorkerRegistration(fixtureWorkerRegistration)).toMatchObject({
       schema: "skybridge.worker_registration.v1",
