@@ -29,7 +29,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/skybridge-agent-hub-${{ matrix.app }}
           tags: |
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=ref,event=branch
             type=ref,event=tag
       - name: Login to GHCR for trusted pushes
