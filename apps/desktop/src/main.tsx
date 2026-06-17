@@ -1565,19 +1565,37 @@ function App() {
   }, [apiSettings.mode, apiSettings.apiBase]);
 
   const refreshConnectivityDoctor = React.useCallback(() => {
-    setConnectivityDoctor(
-      createConnectivityDoctorModel({
-        apiMode: apiSettings.mode,
-        apiBase: apiSettings.apiBase,
-        restHealthOk: false,
-        sseStreamStatus: "unknown",
-        lastErrorSummary:
-          apiSettings.mode === "cloud_operator"
-            ? "Cloud API unreachable / check API base"
-            : "Local dev API unreachable / server not running",
+    const apiBase = apiSettings.apiBase.replace(/\/+$/, "");
+    Promise.allSettled([
+      fetch(`${apiBase}/v1/health`).then((response) => {
+        if (!response.ok) throw new Error(`health HTTP ${response.status}`);
+        return response.json();
       }),
-    );
-  }, [apiSettings.mode, apiSettings.apiBase]);
+      fetch(`${apiBase}/v1/manual-tasks/providers`).then((response) => {
+        if (!response.ok) throw new Error(`manual-task providers HTTP ${response.status}`);
+        return response.json();
+      }),
+    ]).then(([healthResult, manualTaskResult]) => {
+      const restHealthOk = healthResult.status === "fulfilled";
+      setConnectivityDoctor(
+        createConnectivityDoctorModel({
+          apiMode: apiSettings.mode,
+          apiBase: apiSettings.apiBase,
+          restHealthOk,
+          sseStreamStatus: "unknown",
+          health: restHealthOk ? healthResult.value : undefined,
+          manualTaskRoutesAvailable: manualTaskResult.status === "fulfilled",
+          lastHealthTime: restHealthOk ? new Date().toISOString() : connectivityDoctor.last_health_time,
+          lastErrorSummary:
+            healthResult.status === "rejected"
+              ? String(healthResult.reason)
+              : manualTaskResult.status === "rejected"
+                ? String(manualTaskResult.reason)
+                : undefined,
+        }),
+      );
+    });
+  }, [apiSettings.mode, apiSettings.apiBase, connectivityDoctor.last_health_time]);
 
   const refreshEpoch = parseUnixTimestamp(status.last_refresh_time);
   const statusAge = refreshEpoch === null ? "unknown" : `${Math.max(0, nowSeconds - refreshEpoch)}s`;
@@ -2358,11 +2376,20 @@ function DesktopConnectivityDoctorCard({
         <StatusValue label="SSE stream status" value={doctor.sse_stream_status} />
         <StatusValue label="Server online" value={String(doctor.server_online)} />
         <StatusValue label="Stream degraded" value={String(doctor.stream_degraded)} />
+        <StatusValue label="Server version" value={doctor.server_version} />
+        <StatusValue label="Commit SHA" value={doctor.commit_sha} />
+        <StatusValue label="Image tag" value={doctor.image_tag} />
+        <StatusValue label="Route set version" value={doctor.route_set_version} />
+        <StatusValue label="Manual task routes available" value={String(doctor.manual_task_routes_available)} />
+        <StatusValue label="Deployment parity status" value={doctor.deployment_parity_status} />
         <StatusValue label="Last successful health check" value={doctor.last_health_time ?? "none"} />
         <StatusValue label="Last error summary" value={doctor.last_error_summary ?? "none"} />
         <StatusValue label="Recommended action" value={doctor.recommended_action} />
         <StatusValue label="token_printed" value={String(doctor.token_printed)} />
       </dl>
+      {doctor.deployment_parity_status === "server_online_but_outdated" ? (
+        <p>Cloud server online but outdated; deploy server &gt;= v2.4.</p>
+      ) : null}
       <div className="queue-action-grid">
         <button type="button" onClick={onRefresh}>Manual refresh</button>
       </div>

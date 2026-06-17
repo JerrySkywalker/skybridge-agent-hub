@@ -648,12 +648,11 @@ export async function createServer(
 
   const healthResponse = () => ({
     ok: true,
-    service: "skybridge-server",
+    ...serverVersionMetadata(),
     persistence: store.kind,
     dbFile: persistence.dbFile,
     jsonMigrationFile: persistence.jsonMigrationFile,
     time: new Date().toISOString(),
-    ...serverVersionMetadata(),
   });
 
   app.get("/health", async () => healthResponse());

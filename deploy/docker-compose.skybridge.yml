@@ -5,7 +5,7 @@
 
 services:
   skybridge-server:
-    image: ${SKYBRIDGE_IMAGE_REGISTRY:-ghcr.io/jerry1999-main}/skybridge-agent-hub-server:${SKYBRIDGE_IMAGE_TAG:-latest}
+    image: ${SKYBRIDGE_SERVER_IMAGE:-${SKYBRIDGE_IMAGE_REGISTRY:-ghcr.io/jerry1999-main}/skybridge-agent-hub-server:${SKYBRIDGE_IMAGE_TAG:-latest}}
     restart: unless-stopped
     env_file:
       - path: ${SKYBRIDGE_ENV_FILE:-../config/skybridge-server.env.example}

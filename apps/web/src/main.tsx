@@ -4082,11 +4082,20 @@ function ConnectivityDoctorPanel({
         <div><dt>SSE stream status</dt><dd>{doctor.sse_stream_status}</dd></div>
         <div><dt>Server online</dt><dd>{String(doctor.server_online)}</dd></div>
         <div><dt>Stream degraded</dt><dd>{String(doctor.stream_degraded)}</dd></div>
+        <div><dt>Server version</dt><dd>{doctor.server_version}</dd></div>
+        <div><dt>Commit SHA</dt><dd>{doctor.commit_sha}</dd></div>
+        <div><dt>Image tag</dt><dd>{doctor.image_tag}</dd></div>
+        <div><dt>Route set version</dt><dd>{doctor.route_set_version}</dd></div>
+        <div><dt>Manual task routes available</dt><dd>{String(doctor.manual_task_routes_available)}</dd></div>
+        <div><dt>Deployment parity status</dt><dd>{doctor.deployment_parity_status}</dd></div>
         <div><dt>Last successful health check</dt><dd>{doctor.last_health_time ?? "none"}</dd></div>
         <div><dt>Last error summary</dt><dd>{doctor.last_error_summary ?? "none"}</dd></div>
         <div><dt>Recommended action</dt><dd>{doctor.recommended_action}</dd></div>
         <div><dt>token_printed</dt><dd>{String(doctor.token_printed)}</dd></div>
       </dl>
+      {doctor.deployment_parity_status === "server_online_but_outdated" ? (
+        <p className="skybridge-state-note">Cloud server online but outdated; deploy server &gt;= v2.4.</p>
+      ) : null}
       <div className="queue-placeholder-controls">
         <button type="button" onClick={onRefresh}>Manual refresh</button>
       </div>
@@ -4147,6 +4156,7 @@ function useProductData(apiBase: string, apiMode: ApiMode = "local_dev") {
       client.getWorkersSummary(),
       client.listTasks(),
       client.getTasksSummary(),
+      client.listManualTaskProviders(),
       projectsPromise.then((items) =>
         Promise.allSettled(items.map((project) => client.listGoals(project.project_id))),
       ),
@@ -4168,6 +4178,7 @@ function useProductData(apiBase: string, apiMode: ApiMode = "local_dev") {
             nextWorkersSummary,
             nextTasks,
             nextTasksSummary,
+            nextManualTaskProviders,
             nextGoalsByProject,
           ] = results;
           const projectsValue = settledValue(nextProjects, projects);
@@ -4192,6 +4203,7 @@ function useProductData(apiBase: string, apiMode: ApiMode = "local_dev") {
                   "workersSummary",
                   "tasks",
                   "tasksSummary",
+                  "manualTaskProviders",
                   "goals",
                 ][index],
                 result,
@@ -4199,12 +4211,15 @@ function useProductData(apiBase: string, apiMode: ApiMode = "local_dev") {
             )
             .filter(Boolean);
           const restOk = nextSummary.status === "fulfilled" ? Boolean(nextSummary.value.health.ok) : false;
+          const manualTaskRoutesAvailable = nextManualTaskProviders.status === "fulfilled";
           setConnectivityDoctor(
             createConnectivityDoctorModel({
               apiMode,
               apiBase,
               restHealthOk: restOk,
               sseStreamStatus: restOk ? "reconnecting" : "unknown",
+              health: nextSummary.status === "fulfilled" ? nextSummary.value.health : undefined,
+              manualTaskRoutesAvailable,
               lastHealthTime: restOk ? new Date().toISOString() : connectivityDoctor.last_health_time,
               lastErrorSummary: safeErrors[0],
             }),

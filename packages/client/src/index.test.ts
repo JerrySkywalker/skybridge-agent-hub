@@ -91,6 +91,27 @@ describe("SkyBridgeClient", () => {
       token_printed: false,
     });
 
+    const outdatedCloud = createConnectivityDoctorModel({
+      apiMode: "cloud_operator",
+      apiBase: DEFAULT_CLOUD_OPERATOR_API_BASE,
+      restHealthOk: true,
+      health: {
+        server_version: "v2.3.0",
+        commit_sha: "old123",
+        image_tag: "sha-old123",
+        route_set_version: "pre-manual-tasks",
+      },
+      manualTaskRoutesAvailable: false,
+    });
+    expect(outdatedCloud).toMatchObject({
+      server_version: "v2.3.0",
+      commit_sha: "old123",
+      image_tag: "sha-old123",
+      manual_task_routes_available: false,
+      deployment_parity_status: "server_online_but_outdated",
+      recommended_action: "Cloud server online but outdated; deploy server >= v2.4.",
+    });
+
     const localOffline = createConnectivityDoctorModel({
       apiMode: "local_dev",
       apiBase: LOCAL_DEV_API_BASE,
