@@ -206,6 +206,25 @@ p {
   color: #5c6870;
 }
 
+.manual-task-input-label {
+  color: #5c6870;
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 12px;
+}
+
+.manual-task-input {
+  border: 1px solid #c7d7df;
+  border-radius: 6px;
+  color: #18232b;
+  font: inherit;
+  min-height: 84px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
 .readiness {
   border: 1px solid #d9e0e4;
   border-radius: 8px;

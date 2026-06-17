@@ -23,6 +23,9 @@ import {
   fixtureWorkerRegistration,
   isNotificationTrigger,
   listAdapterCapabilities,
+  ManualTaskAuditSchema,
+  ManualTaskQueueSchema,
+  ManualTaskResultSchema,
   parseOperatorApprovalRequest,
   parseAuditReport,
   parseBoincV1ControlledTrialStatus,
@@ -200,6 +203,92 @@ describe("event schema", () => {
     expect(result.pr_number).toBe(27);
     expect(result.events[0]?.source.adapter).toBe("manual-executor");
     expect(result.events[0]?.payload.manual_result).toBe(true);
+  });
+
+  it("models manual task chat and mock queue without execution", () => {
+    const now = "2026-06-17T00:00:00.000Z";
+    const provider = {
+      schema: "skybridge.manual_task_provider.v1",
+      provider_id: "mock",
+      deterministic: true,
+      network_enabled: false,
+      hermes_live_call_enabled: false,
+      raw_request_persisted: false,
+      raw_response_persisted: false,
+      token_printed: false,
+    } as const;
+    const task = {
+      schema: "skybridge.manual_task.v1",
+      task_id: "manual_fixture",
+      status: "succeeded",
+      input_preview: "What should be checked next?",
+      input_hash: "abc123abc123",
+      result_preview: "Mock reply abc123abc123: recorded sanitized local question.",
+      provider_id: "mock",
+      command_text_detected: false,
+      prompt_body_persisted: false,
+      output_executed: false,
+      command_executed: false,
+      created_at: now,
+      updated_at: now,
+      token_printed: false,
+    } as const;
+    expect(
+      ManualTaskQueueSchema.parse({
+        schema: "skybridge.manual_task_queue.v1",
+        queue_id: "local-manual-task-queue",
+        provider,
+        tasks: [task],
+        state_machine: ["queued", "running", "succeeded", "failed", "blocked", "cancelled"],
+        execution_enabled: false,
+        worker_execution_started: false,
+        workunit_created: false,
+        task_created: false,
+        task_claim_created: false,
+        task_pr_created: false,
+        queue_apply_enabled: false,
+        remote_execution_enabled: false,
+        arbitrary_command_enabled: false,
+        host_mutation_performed: false,
+        prompt_body_persisted: false,
+        transcript_body_persisted: false,
+        raw_logs_persisted: false,
+        updated_at: now,
+        token_printed: false,
+      }),
+    ).toMatchObject({
+      provider: { provider_id: "mock", hermes_live_call_enabled: false },
+      execution_enabled: false,
+      queue_apply_enabled: false,
+      token_printed: false,
+    });
+    expect(
+      ManualTaskResultSchema.parse({
+        schema: "skybridge.manual_task_result.v1",
+        task_id: "manual_fixture",
+        provider,
+        status: "succeeded",
+        result_preview: "Mock reply abc123abc123: recorded sanitized local question.",
+        output_executed: false,
+        command_executed: false,
+        workunit_created: false,
+        task_created: false,
+        task_claim_created: false,
+        task_pr_created: false,
+        queue_apply_enabled: false,
+        token_printed: false,
+      }),
+    ).toMatchObject({ output_executed: false });
+    expect(
+      ManualTaskAuditSchema.parse({
+        schema: "skybridge.manual_task_audit.v1",
+        action: "add-question",
+        accepted: true,
+        task,
+        prompt_body_persisted: false,
+        token_printed: false,
+      }),
+    ).toMatchObject({ accepted: true });
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

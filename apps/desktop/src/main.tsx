@@ -1020,6 +1020,46 @@ function DesktopLiveLocalServerCard() {
   );
 }
 
+function DesktopManualTaskChatCard() {
+  return (
+    <section className="panel desktop-manual-task-chat-card" aria-label="Desktop manual task chat card">
+      <h2>Manual Task Chat</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Desktop manual task disabled execution state">
+        <span>Hermes live provider disabled</span>
+        <span>No enabled worker/apply/start/claim controls</span>
+        <span>token_printed=false</span>
+      </div>
+      <label className="manual-task-input-label" htmlFor="desktop-manual-task-input">
+        Local sanitized question
+      </label>
+      <textarea
+        id="desktop-manual-task-input"
+        className="manual-task-input"
+        rows={3}
+        placeholder="Ask a local mock-provider question"
+        aria-label="Manual task input box"
+        defaultValue="What should the operator inspect next?"
+      />
+      <dl>
+        <StatusValue label="Queue schema" value="skybridge.manual_task_queue.v1" />
+        <StatusValue label="Task schema" value="skybridge.manual_task.v1" />
+        <StatusValue label="Result schema" value="skybridge.manual_task_result.v1" />
+        <StatusValue label="Provider schema" value="skybridge.manual_task_provider.v1; provider_id=mock; network=false" />
+        <StatusValue label="State machine" value="queued, running, succeeded, failed, blocked, cancelled" />
+        <StatusValue label="Task list" value="input_preview and result_preview only; no raw transcript persistence" />
+        <StatusValue label="Result preview" value="Mock reply hash prefix with safe deterministic classification" />
+        <StatusValue label="Disabled capabilities" value="Hermes live call, Codex worker, workunit creation, task claim, task PR creation and queue apply remain false" />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" title="Adds sanitized input_preview to the local manual queue">Add to queue</button>
+        <button type="button" title="Runs the deterministic local mock provider">Run next mock</button>
+        <button type="button" title="Clears succeeded, failed and cancelled local mock tasks">Clear completed</button>
+        <button type="button" disabled aria-disabled="true">Hermes live provider disabled</button>
+      </div>
+    </section>
+  );
+}
+
 function FirstRunWizardCard() {
   const steps = [
     "Bootstrap complete status",
@@ -1568,6 +1608,7 @@ function App() {
       <DesktopLoopbackOriginCard />
       <DesktopDisabledExecutionCard />
       <DesktopLiveLocalServerCard />
+      <DesktopManualTaskChatCard />
       <FirstRunWizardCard />
       <DesktopLauncherSupervisorPanel />
       <DesktopPortableBundlePanel />
