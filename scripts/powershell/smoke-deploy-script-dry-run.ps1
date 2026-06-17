@@ -12,7 +12,7 @@ if ($repoRootText -match "^([A-Za-z]):\\(.*)$") {
 } else {
   $bashRepoRoot = $repoRootText -replace "\\", "/"
 }
-& bash -lc "cd '$bashRepoRoot' && ./scripts/deploy/deploy-skybridge-server.sh --dry-run --image-ref 'ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123' --commit-sha 'abc123' --expected-tag 'sha-abc123'" | Out-Null
+& bash -lc "cd '$bashRepoRoot' && SKYBRIDGE_DEPLOY_REPORT_DIR='.agent/tmp/deploy' ./scripts/deploy/deploy-skybridge-server.sh --dry-run --image-ref 'ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123' --commit-sha 'abc123' --expected-tag 'sha-abc123'" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Deploy dry-run failed." }
 $reportPath = Join-Path $repoRoot ".agent\tmp\deploy\cloud-deploy-report.json"
 $report = Get-Content -Raw $reportPath | ConvertFrom-Json
