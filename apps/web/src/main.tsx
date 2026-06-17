@@ -394,6 +394,7 @@ function LocalSessionPage() {
           <WebAuthSessionStatePanel />
           <WebAuthRejectionSummaryPanel />
           <WebLiveLocalServerStatusPanel />
+          <WebManualTaskChatPanel />
           <WebLauncherSupervisorPanel />
           <WebPortableBundlePanel />
           <WebPortablePackagePanel />
@@ -891,6 +892,53 @@ function WebPortableBundlePanel() {
         <button type="button" disabled aria-disabled="true">Upload disabled</button>
         <button type="button" disabled aria-disabled="true">Worker execute disabled</button>
       </div>
+      <span>token_printed=false</span>
+    </section>
+  );
+}
+
+function WebManualTaskChatPanel() {
+  return (
+    <section className="skybridge-panel web-manual-task-chat-panel" aria-label="Web manual task chat panel">
+      <div className="skybridge-card__header">
+        <div>
+          <p className="skybridge-kicker">Manual Task Chat</p>
+          <h2>Manual Task Chat</h2>
+        </div>
+        <span className={badgeClass("ok")}>mock only</span>
+      </div>
+      <div className="mode-strip execution-disabled-banner" aria-label="Manual task disabled execution state">
+        <span>Hermes live provider disabled</span>
+        <span>No enabled worker/apply/start/claim controls</span>
+        <span>token_printed=false</span>
+      </div>
+      <label className="manual-task-input-label" htmlFor="manual-task-chat-input">
+        Local sanitized question
+      </label>
+      <textarea
+        id="manual-task-chat-input"
+        className="manual-task-input"
+        rows={3}
+        placeholder="Ask a local mock-provider question"
+        aria-label="Manual task input box"
+        defaultValue="What should the operator inspect next?"
+      />
+      <div className="queue-placeholder-controls">
+        <button type="button" title="Adds sanitized input_preview to the local manual queue">Add to queue</button>
+        <button type="button" title="Runs the deterministic local mock provider">Run next mock</button>
+        <button type="button" title="Clears succeeded, failed and cancelled local mock tasks">Clear completed</button>
+        <button type="button" disabled aria-disabled="true">Hermes live provider disabled</button>
+      </div>
+      <dl className="queue-definition-list">
+        <div><dt>Queue schema</dt><dd>skybridge.manual_task_queue.v1</dd></div>
+        <div><dt>Task schema</dt><dd>skybridge.manual_task.v1</dd></div>
+        <div><dt>Result schema</dt><dd>skybridge.manual_task_result.v1</dd></div>
+        <div><dt>Provider schema</dt><dd>skybridge.manual_task_provider.v1; provider_id=mock; network=false</dd></div>
+        <div><dt>State machine</dt><dd>queued, running, succeeded, failed, blocked, cancelled</dd></div>
+        <div><dt>Task list</dt><dd>input_preview and result_preview only; no raw transcript persistence</dd></div>
+        <div><dt>Result preview</dt><dd>Mock reply hash prefix with safe deterministic classification</dd></div>
+        <div><dt>Disabled capabilities</dt><dd>Hermes live call, Codex worker, workunit creation, task claim, task PR creation and queue apply remain false</dd></div>
+      </dl>
       <span>token_printed=false</span>
     </section>
   );

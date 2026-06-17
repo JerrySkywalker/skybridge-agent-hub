@@ -231,6 +231,94 @@ export type TaskStatus =
   | "blocked"
   | "cancelled"
   | "stale";
+export const ManualTaskStatusSchema = z.enum([
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "blocked",
+  "cancelled",
+]);
+export const ManualTaskProviderSchema = z.object({
+  schema: z.literal("skybridge.manual_task_provider.v1"),
+  provider_id: z.literal("mock"),
+  deterministic: z.literal(true),
+  network_enabled: z.literal(false),
+  hermes_live_call_enabled: z.literal(false),
+  raw_request_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const ManualTaskSchema = z.object({
+  schema: z.literal("skybridge.manual_task.v1"),
+  task_id: z.string().min(1),
+  status: ManualTaskStatusSchema,
+  input_preview: z.string().max(200),
+  input_hash: z.string().min(12),
+  result_preview: z.string().max(240).optional(),
+  provider_id: z.literal("mock").optional(),
+  command_text_detected: z.boolean(),
+  prompt_body_persisted: z.literal(false),
+  output_executed: z.literal(false).optional(),
+  command_executed: z.literal(false).optional(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+  token_printed: z.literal(false),
+});
+export const ManualTaskResultSchema = z.object({
+  schema: z.literal("skybridge.manual_task_result.v1"),
+  task_id: z.string().optional(),
+  provider: ManualTaskProviderSchema.optional(),
+  provider_id: z.literal("mock").optional(),
+  status: z.enum(["succeeded", "failed", "blocked"]),
+  result_preview: z.string().max(240).optional(),
+  output_executed: z.literal(false),
+  command_executed: z.literal(false).optional(),
+  workunit_created: z.literal(false).optional(),
+  task_created: z.literal(false).optional(),
+  task_claim_created: z.literal(false).optional(),
+  task_pr_created: z.literal(false).optional(),
+  queue_apply_enabled: z.literal(false).optional(),
+  token_printed: z.literal(false),
+});
+export const ManualTaskQueueSchema = z.object({
+  schema: z.literal("skybridge.manual_task_queue.v1"),
+  queue_id: z.string().min(1),
+  provider: ManualTaskProviderSchema,
+  tasks: z.array(ManualTaskSchema),
+  state_machine: z.array(ManualTaskStatusSchema),
+  execution_enabled: z.literal(false),
+  worker_execution_started: z.literal(false),
+  workunit_created: z.literal(false),
+  task_created: z.literal(false),
+  task_claim_created: z.literal(false),
+  task_pr_created: z.literal(false),
+  queue_apply_enabled: z.literal(false),
+  remote_execution_enabled: z.literal(false),
+  arbitrary_command_enabled: z.literal(false),
+  host_mutation_performed: z.literal(false),
+  prompt_body_persisted: z.literal(false),
+  transcript_body_persisted: z.literal(false),
+  raw_logs_persisted: z.literal(false),
+  updated_at: z.string().datetime(),
+  token_printed: z.literal(false),
+});
+export const ManualTaskAuditSchema = z.object({
+  schema: z.literal("skybridge.manual_task_audit.v1"),
+  action: z.enum(["add-question", "clear-completed"]),
+  accepted: z.boolean().optional(),
+  task: ManualTaskSchema.optional(),
+  cleared: z.number().optional(),
+  remaining: z.number().optional(),
+  prompt_body_persisted: z.literal(false).optional(),
+  token_printed: z.literal(false),
+});
+export type ManualTaskStatus = z.infer<typeof ManualTaskStatusSchema>;
+export type ManualTaskProvider = z.infer<typeof ManualTaskProviderSchema>;
+export type ManualTask = z.infer<typeof ManualTaskSchema>;
+export type ManualTaskResult = z.infer<typeof ManualTaskResultSchema>;
+export type ManualTaskQueue = z.infer<typeof ManualTaskQueueSchema>;
+export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 export type TaskRisk = "low" | "medium" | "high";
 export type GoalRisk = TaskRisk;
 export type GoalPriority = "low" | "normal" | "high" | "urgent";

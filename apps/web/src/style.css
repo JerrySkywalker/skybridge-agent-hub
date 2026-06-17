@@ -684,6 +684,23 @@ h2 {
   cursor: default;
 }
 
+.manual-task-input-label {
+  color: #52627a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.manual-task-input {
+  border: 1px solid #cbd7e6;
+  border-radius: 6px;
+  color: #213047;
+  font: inherit;
+  min-height: 84px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
 .reason-field {
   display: grid;
   gap: 6px;
