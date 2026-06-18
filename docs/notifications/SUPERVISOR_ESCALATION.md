@@ -44,7 +44,26 @@ The readiness probe for the current path is:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-admin-escalation-readiness.ps1 -Json
 ```
 
-The probe is read-only by default. It may verify Hermes health and safe configuration booleans, but it must not send a real WeChat or WeCom message by default. A future real-send path must use an explicit `-Send` or `-Apply` style flag and remain outside readiness smokes.
+The probe is read-only by default. It may verify Hermes health and safe configuration booleans, but it must not send a real WeChat or WeCom message by default. Goal 308 established this readiness contract.
+
+Goal 309 adds the explicit send-test path:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-admin-escalation-test.ps1 `
+  -Title "SkyBridge admin escalation test" `
+  -Message "Operator-triggered bootstrap-test admin escalation dry run." `
+  -Severity warning `
+  -Json
+```
+
+The send-test is no-send by default. Real delivery requires `-Send`; it performs at most one admin escalation send and only after readiness is green. If the repository has no direct Hermes WeChat send endpoint contract, the script reports `delivery_status=send_endpoint_not_available`, `ok=false` and `send_performed=false`.
+
+The future Hermes contract is:
+
+- endpoint path: `POST /v1/admin/escalations/wechat/send` or an equivalent path supplied as `HERMES_ADMIN_ESCALATION_SEND_PATH`;
+- request schema: `{ project_id, environment, severity, short_reason, timestamp }`;
+- response schema: `{ ok, delivery_status, delivery_confirmed }` plus optional safety booleans;
+- safety: no raw prompts, logs, stdout/stderr, patches, tokens, cookies, auth headers, webhooks, private keys, raw Hermes responses or raw notification payloads.
 
 ## Event Examples
 

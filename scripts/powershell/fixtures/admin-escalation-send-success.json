@@ -1,0 +1,31 @@
+{
+  "admin_readiness": {
+    "schema": "skybridge.admin_escalation_readiness.v1",
+    "ok": true,
+    "primary_current": "hermes-wechat",
+    "long_term_primary": "skybridge-notify-gateway",
+    "fallback": "bootstrap-notifier",
+    "hermes_available": true,
+    "hermes_direct_https": true,
+    "hermes_platform": "hermes-agent",
+    "hermes_runtime_mode": "server_agent",
+    "hermes_responses_api": true,
+    "wechat_escalation_configured": true,
+    "can_send_blocker_notice": true,
+    "dry_run_supported": true,
+    "real_send_performed": false,
+    "credential_values_exposed": false,
+    "raw_response_included": false,
+    "token_printed": false
+  },
+  "send_endpoint_path": "/v1/admin/escalations/wechat/send",
+  "send_response": {
+    "ok": true,
+    "delivery_status": "sent",
+    "delivery_confirmed": true,
+    "credential_values_exposed": false,
+    "raw_response_included": false,
+    "raw_notification_payload_included": false,
+    "token_printed": false
+  }
+}
