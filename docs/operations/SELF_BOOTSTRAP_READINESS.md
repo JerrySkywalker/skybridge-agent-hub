@@ -48,6 +48,7 @@ It also includes safe summaries for:
 - worker online/stale/offline counts;
 - campaign queue counts;
 - Hermes health with a redacted endpoint only;
+- administrator escalation readiness;
 - notification provider status.
 
 The report intentionally excludes raw prompts, raw Hermes responses, raw logs, token values, cookies, credentials and environment dumps.
@@ -66,8 +67,21 @@ The report intentionally excludes raw prompts, raw Hermes responses, raw logs, t
 - at least one worker is online;
 - at least one campaign is ready or paused;
 - Hermes health is OK over direct HTTPS;
-- at least one notification provider is ready;
+- administrator escalation through the current Hermes WeChat or WeCom path is ready;
 - `token_printed=false`.
+
+The current bootstrap administrator escalation path is:
+
+```text
+SkyBridge hold / ask_human / blocker
+-> safe escalation summary
+-> cloud Hermes
+-> WeChat / WeCom notification to the administrator
+```
+
+SkyBridge Notification Center providers and Jerry's future custom notify gateway remain the long-term primary notification path. They are not the current hard blocker for self-bootstrap start-one readiness when Hermes administrator escalation is available. If native providers such as ntfy, Apprise, Gotify, Bark, WeCom, FCM or Xiaomi Push are all skipped while admin escalation is ready, readiness reports `skybridge_notification_center_not_ready` as a warning instead of `notification_provider_unavailable` as a blocker.
+
+If admin escalation is unavailable, readiness blocks with `admin_escalation_unavailable`. `can_start_one` and `can_run_until_hold` both require admin escalation readiness. `can_run_until_hold` additionally requires no blockers plus Hermes OK over direct HTTPS.
 
 `blocked` means at least one hard gate failed. The script reports a concise `required_human_action`; use the relevant operator flow to repair the condition. This script must not be used to repair or apply anything.
 
@@ -87,6 +101,17 @@ The smoke covers:
 - blocked report when the worker is offline;
 - blocked report when stale leases are present;
 - blocked report when Hermes is unavailable;
+- warning-only skipped SkyBridge Notification Center providers when admin escalation is ready;
+- blocked report when admin escalation is unavailable;
+- blocked report when admin escalation credential exposure is detected;
 - `token_printed=false` and no secret-like output.
 
 These smokes write only ignored fixture files under `.agent/tmp/self-bootstrap-readiness-smoke/`.
+
+Run the focused admin escalation probe smoke:
+
+```powershell
+corepack pnpm smoke:admin-escalation-readiness
+```
+
+The admin escalation probe is dry-run/read-only by default. It does not send a real WeChat or WeCom message unless a future explicit send/apply flag is introduced and authorized. Readiness and probe output must not include secrets, raw Hermes responses, raw prompts, raw logs, raw notification payloads, webhooks, tokens, cookies, private keys, auth headers or production config values.
