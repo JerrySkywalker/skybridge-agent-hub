@@ -46,6 +46,7 @@ databaseId,headSha,status,conclusion,event,createdAt
 ```
 
 Workflow selection is done with `gh run list -w "Docker Images"` and `gh run list -w "Deploy Cloud"` rather than parsing title fields.
+GitHub Actions `databaseId` values are large identifiers and must be treated as 64-bit values or strings, not 32-bit integers.
 
 ## Release Workflow Note
 
