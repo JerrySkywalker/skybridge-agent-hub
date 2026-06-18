@@ -64,7 +64,8 @@ and report the missing variable name only.
 GitHub-hosted `ubuntu-latest` runners are supported. If this workflow is moved
 to self-hosted runners, update the runner to at least `v2.327.1` before using
 official Node 24 actions such as `actions/checkout@v6`,
-`actions/setup-node@v6` or `actions/upload-artifact@v6`. Do not use
+`actions/setup-node@v6` or `actions/upload-artifact@v6`. CI workflows that
+install pnpm should also use `pnpm/action-setup@v6` or newer. Do not use
 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
 
 Manual dry-run:

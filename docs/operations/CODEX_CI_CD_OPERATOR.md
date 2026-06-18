@@ -83,9 +83,10 @@ GitHub Actions `databaseId` values are large identifiers and must be treated as 
 
 Keep official actions on Node 24-compatible major versions. Current workflow
 baselines use `actions/checkout@v6`, `actions/setup-node@v6` and
-`actions/upload-artifact@v6`. GitHub-hosted `ubuntu-latest` is supported. If a
-trusted workflow later moves to self-hosted runners, the runner must be at
-least `v2.327.1`; do not add `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
+`actions/upload-artifact@v6`; CI helper setup uses `pnpm/action-setup@v6`.
+GitHub-hosted `ubuntu-latest` is supported. If a trusted workflow later moves
+to self-hosted runners, the runner must be at least `v2.327.1`; do not add
+`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
 
 ## Release Workflow Note
 

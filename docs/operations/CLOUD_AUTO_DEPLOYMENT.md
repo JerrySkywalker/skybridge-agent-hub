@@ -65,6 +65,8 @@ Runtime hygiene:
 - Official GitHub Actions should stay on Node 24-compatible major versions,
   currently `actions/checkout@v6`, `actions/setup-node@v6` and
   `actions/upload-artifact@v6`.
+- CI helper actions should also stay on Node 24-compatible majors, including
+  `pnpm/action-setup@v6`.
 - GitHub-hosted `ubuntu-latest` is acceptable for these workflows.
 - If a future trusted workflow uses self-hosted runners, those runners must be
   at least `v2.327.1` before Node 24 official actions are used.

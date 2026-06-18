@@ -51,6 +51,7 @@ $rules = @(
   @{ id = "checkout_v4_forbidden"; pattern = [regex]'(?i)\bactions/checkout@v4\b' },
   @{ id = "upload_artifact_v4_forbidden"; pattern = [regex]'(?i)\bactions/upload-artifact@v4\b' },
   @{ id = "setup_node_v4_forbidden"; pattern = [regex]'(?i)\bactions/setup-node@v4\b' },
+  @{ id = "pnpm_action_setup_v4_forbidden"; pattern = [regex]'(?i)\bpnpm/action-setup@v4\b' },
   @{ id = "unsecure_node_escape_hatch_forbidden"; pattern = [regex]'(?i)\bACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION\b' },
   @{ id = "jerry_domain_forbidden"; pattern = [regex]'(?i)\bjerryskywalker\.space\b' },
   @{ id = "private_ip_prefix_forbidden"; pattern = [regex]'\b43\.138\.' },
