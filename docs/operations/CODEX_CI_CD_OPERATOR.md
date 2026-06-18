@@ -18,6 +18,26 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-verify-cloud-a
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-create-rc-tag.ps1
 ```
 
+For a private operator cloud, load the SkyBridge API endpoint from a local,
+untracked file before running the verifier:
+
+```powershell
+. "$HOME\.skybridge\skybridge.env.ps1"
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-verify-cloud-autodeploy.ps1
+```
+
+`$HOME\.skybridge\skybridge.env.ps1` should contain `SKYBRIDGE_API_BASE` and
+point to the SkyBridge Server API. It must not contain the Hermes API key.
+`$HOME\.skybridge\hermes.env.ps1` is separate; it contains `HERMES_API_BASE`
+and `HERMES_API_KEY` for Hermes. `SKYBRIDGE_API_BASE` is not
+`HERMES_API_BASE`.
+
+The verifier resolves ApiBase in this order: explicit `-ApiBase`,
+`$env:SKYBRIDGE_API_BASE`, then the public placeholder
+`https://skybridge.example.com`. Placeholder, empty and invalid values fail
+early for live runs. The verifier also probes `/v1/version` and fails early if
+the endpoint looks like Hermes instead of SkyBridge.
+
 ## Evidence Rules
 
 `Deploy Cloud` evidence must come from the `workflow_run` trigger after `Docker Images` succeeds on `main`. Do not manually trigger `Deploy Cloud` for release evidence, because the goal is to prove the main-branch auto deploy chain.
@@ -36,6 +56,12 @@ The verifier checks the deploy report artifact and `/v1/version`. Release eviden
 - every checked surface reports `token_printed=false`.
 
 The verifier also runs `skybridge-cloud-parity-check.ps1` and fails if cloud route parity is not `ok`.
+In non-JSON mode it prints the verification stages from repository/commit
+resolution through workflow waits, deploy report validation, route parity and
+`/v1/version`. In `-Json` mode stdout remains parseable JSON only. Failure
+reports include the stage and a sanitized error summary; they must not include
+tokens, cookies, private keys, auth headers, webhooks, raw logs, env dumps or
+private endpoint values.
 
 ## GitHub Field Compatibility
 

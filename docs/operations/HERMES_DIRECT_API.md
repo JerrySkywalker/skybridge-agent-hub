@@ -16,6 +16,25 @@ publish the real Hermes API hostname, raw env file, bearer token, auth header,
 webhook, tunnel host, provider hostname or production topology in issues, PRs,
 docs or examples.
 
+SkyBridge has a separate local env file:
+
+```powershell
+$HOME\.skybridge\skybridge.env.ps1
+```
+
+That file should contain `SKYBRIDGE_API_BASE` and point to the SkyBridge Server
+API. It should not contain `HERMES_API_KEY`.
+
+Hermes uses:
+
+```powershell
+$HOME\.skybridge\hermes.env.ps1
+```
+
+That file contains `HERMES_API_BASE` and `HERMES_API_KEY` and points to the
+Hermes API. `SKYBRIDGE_API_BASE` is not `HERMES_API_BASE`; setting them equal
+will make SkyBridge operator verification fail early.
+
 The old local SSH tunnel path, `http://127.0.0.1:18642`, is still useful as a rollback path, but it is deprecated for routine preview work because it depends on an operator-local tunnel process.
 
 Current tunnel mode can be inspected without printing secrets:
@@ -57,6 +76,17 @@ $env:HERMES_MODEL = "<optional model>"
 
 Keep this in `$HOME\.skybridge\hermes.env.ps1`. Do not commit the file, paste it
 into a PR/issue/doc, or print the key.
+
+Keep the SkyBridge server base in `$HOME\.skybridge\skybridge.env.ps1`:
+
+```powershell
+$env:SKYBRIDGE_API_BASE = "<PRIVATE_SKYBRIDGE_API_BASE>"
+```
+
+SkyBridge operator scripts resolve explicit `-ApiBase` first, then
+`$env:SKYBRIDGE_API_BASE`, then the public placeholder
+`https://skybridge.example.com`. Live runs reject placeholders and Hermes-like
+metadata before route probing.
 
 ## Verification
 

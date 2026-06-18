@@ -1,12 +1,32 @@
 [CmdletBinding()]
 param(
-  [string]$ApiBase = "https://skybridge.example.com",
+  [string]$ApiBase,
   [switch]$Json,
   [switch]$FixtureMissingManualTaskRoute,
-  [switch]$FixtureHealthy
+  [switch]$FixtureHealthy,
+  [string]$FixtureVersionFile
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "lib\Skybridge.ApiBase.psm1") -Force
+
+$ApiBase = Resolve-SkybridgeApiBase -ApiBase $ApiBase -ParameterWasBound $PSBoundParameters.ContainsKey("ApiBase")
+$fixtureMode = ($FixtureHealthy -or $FixtureMissingManualTaskRoute -or -not [string]::IsNullOrWhiteSpace($FixtureVersionFile))
+Assert-SkybridgeApiBaseUsable -ApiBase $ApiBase -AllowPlaceholder $fixtureMode
+
+function Read-JsonFile {
+  param([string]$Path)
+  if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "JSON fixture file not found."
+  }
+  return (Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json)
+}
+
+if (-not $fixtureMode) {
+  Assert-SkybridgeApiBaseService -ApiBase $ApiBase -TimeoutSeconds 20 | Out-Null
+} elseif (-not [string]::IsNullOrWhiteSpace($FixtureVersionFile)) {
+  Assert-SkybridgeVersionService -Version (Read-JsonFile -Path $FixtureVersionFile)
+}
 
 function Join-ApiRoute {
   param([string]$Base, [string]$Path)
@@ -65,10 +85,8 @@ function Invoke-ParityRoute {
     if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
       $status = [int]$_.Exception.Response.StatusCode
     }
-    $message = $_.Exception.Message
-    $message = $message -replace "(?i)bearer\s+[A-Za-z0-9._-]+", "bearer [redacted]"
-    $message = $message -replace "(?i)(token|secret|password|cookie|key)\s*[:=]\s*\S+", '$1=[redacted]'
-    return New-RouteResult -Path $Path -Method $Method -StatusCode $status -Ok $false -Error ($message.Substring(0, [Math]::Min(180, $message.Length)))
+    $message = ConvertTo-SkybridgeSafeText -Text $_.Exception.Message -MaxLength 180
+    return New-RouteResult -Path $Path -Method $Method -StatusCode $status -Ok $false -Error $message
   }
 }
 
@@ -98,7 +116,7 @@ $status = if ($missing.Count -eq 0) {
 
 $report = [pscustomobject]@{
   schema = "skybridge.cloud_route_parity.v1"
-  api_base = $ApiBase.TrimEnd("/")
+  api_base = "configured"
   status = $status
   ok = ($missing.Count -eq 0)
   server_online = $healthOk
