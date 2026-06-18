@@ -20,6 +20,7 @@ param(
   [string]$FixtureDeployEvidenceFile,
   [string]$FixtureStatusFile,
   [string]$FixtureHermesHealthFile,
+  [string]$FixtureAdminEscalationFile,
   [string]$FixtureNotificationsFile
 )
 
@@ -391,6 +392,64 @@ function Get-HermesReadiness {
   }
 }
 
+function Get-AdminEscalationReadiness {
+  if ($FixtureAdminEscalationFile) {
+    $admin = Read-JsonFile -Path $FixtureAdminEscalationFile
+  } else {
+    try {
+      $args = @(
+        "-File", (Join-Path $PSScriptRoot "skybridge-admin-escalation-readiness.ps1"),
+        "-TimeoutSeconds", [string]$TimeoutSeconds,
+        "-Json"
+      )
+      if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+      if ($HermesApiBase) { $args += @("-HermesApiBase", $HermesApiBase) }
+      $admin = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        primary_current = "hermes-wechat"
+        long_term_primary = "skybridge-notify-gateway"
+        fallback = "bootstrap-notifier"
+        hermes_available = $false
+        hermes_direct_https = $false
+        hermes_platform = $null
+        hermes_runtime_mode = $null
+        hermes_responses_api = $false
+        wechat_escalation_configured = $false
+        can_send_blocker_notice = $false
+        dry_run_supported = $true
+        real_send_performed = $false
+        credential_values_exposed = $false
+        raw_response_included = $false
+        error_summary = ConvertTo-SafeText -Text $_.Exception.Message
+        token_printed = $false
+      }
+    }
+  }
+
+  return [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $admin -Name "ok" -Default $false)
+    primary_current = [string](Get-Prop -Object $admin -Name "primary_current" -Default "hermes-wechat")
+    long_term_primary = [string](Get-Prop -Object $admin -Name "long_term_primary" -Default "skybridge-notify-gateway")
+    fallback = [string](Get-Prop -Object $admin -Name "fallback" -Default "bootstrap-notifier")
+    hermes_available = [bool](Get-Prop -Object $admin -Name "hermes_available" -Default $false)
+    hermes_direct_https = [bool](Get-Prop -Object $admin -Name "hermes_direct_https" -Default $false)
+    hermes_platform = Get-Prop -Object $admin -Name "hermes_platform"
+    hermes_runtime_mode = Get-Prop -Object $admin -Name "hermes_runtime_mode"
+    hermes_responses_api = [bool](Get-Prop -Object $admin -Name "hermes_responses_api" -Default $false)
+    wechat_escalation_configured = [bool](Get-Prop -Object $admin -Name "wechat_escalation_configured" -Default $false)
+    can_send_blocker_notice = [bool](Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default $false)
+    dry_run_supported = [bool](Get-Prop -Object $admin -Name "dry_run_supported" -Default $true)
+    real_send_performed = [bool](Get-Prop -Object $admin -Name "real_send_performed" -Default $false)
+    credential_values_exposed = [bool](Get-Prop -Object $admin -Name "credential_values_exposed" -Default $false)
+    raw_response_included = [bool](Get-Prop -Object $admin -Name "raw_response_included" -Default $false)
+    token_printed = [bool](Get-Prop -Object $admin -Name "token_printed" -Default $false)
+  }
+}
+
 function Get-NotificationReadiness {
   if ($FixtureNotificationsFile) {
     $payload = Read-JsonFile -Path $FixtureNotificationsFile
@@ -455,8 +514,11 @@ function Get-HumanAction {
   if ($Blockers -contains "hermes_unavailable" -or $Blockers -contains "hermes_direct_https_unavailable") {
     return "Restore Hermes direct HTTPS health or hold for manual planning and audit."
   }
-  if ($Blockers -contains "notification_provider_unavailable") {
-    return "Configure and verify at least one notification provider so blockers can reach the administrator."
+  if ($Blockers -contains "admin_escalation_unavailable") {
+    return "Restore the Hermes WeChat or WeCom administrator escalation path before any start-one or run-until-hold attempt."
+  }
+  if ($Blockers -contains "admin_escalation_credentials_exposed") {
+    return "Stop and inspect the admin escalation probe for credential exposure; do not run self-bootstrap until outputs are sanitized."
   }
   if ($Blockers -contains "campaign_queue_not_ready") {
     return "Prepare or import a reviewed campaign queue in a separate authorized goal; this audit must not create tasks or advance metadata."
@@ -471,6 +533,7 @@ $parity = Get-ParityReadiness
 $deploy = Get-DeployEvidenceReadiness -MainCommit $git.main_commit
 $statusProbe = Get-StatusReadiness
 $hermes = Get-HermesReadiness
+$adminEscalation = Get-AdminEscalationReadiness
 $notifications = Get-NotificationReadiness
 
 $blockers = [System.Collections.Generic.List[string]]::new()
@@ -530,8 +593,24 @@ if ($hermes.available -and $hermes.tool_execution -and [string]$hermes.tool_exec
   Add-Warning $warnings "hermes_tool_execution_not_disabled"
 }
 
+if (-not $adminEscalation.available -or -not $adminEscalation.ok -or -not $adminEscalation.can_send_blocker_notice) {
+  Add-Blocker $blockers "admin_escalation_unavailable"
+}
+if ($adminEscalation.credential_values_exposed -or $adminEscalation.raw_response_included -or $adminEscalation.token_printed) {
+  Add-Blocker $blockers "admin_escalation_credentials_exposed"
+}
+if ($adminEscalation.real_send_performed) {
+  Add-Blocker $blockers "admin_escalation_real_send_performed"
+}
+
 if (-not $notifications.available) { Add-Warning $warnings "notification_provider_status_unavailable" }
-elseif (-not $notifications.ok) { Add-Blocker $blockers "notification_provider_unavailable" }
+elseif (-not $notifications.ok) {
+  if ($adminEscalation.ok) {
+    Add-Warning $warnings "skybridge_notification_center_not_ready"
+  } else {
+    Add-Warning $warnings "notification_provider_unavailable"
+  }
+}
 foreach ($provider in @($notifications.providers)) {
   if ($provider.credential_values_exposed) { Add-Blocker $blockers "notification_credentials_exposed" }
 }
@@ -539,7 +618,7 @@ foreach ($provider in @($notifications.providers)) {
 $blockerArray = @($blockers.ToArray())
 $warningArray = @($warnings.ToArray())
 $canStartOne = ($blockerArray.Count -eq 0)
-$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $notifications.ok)
+$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $adminEscalation.ok)
 $overallStatus = if ($blockerArray.Count -gt 0) {
   "blocked"
 } elseif ($warningArray.Count -gt 0) {
@@ -584,6 +663,7 @@ $report = [pscustomobject]@{
     }
   } else { $statusProbe }
   hermes = $hermes
+  admin_escalation = $adminEscalation
   notifications = $notifications
   safety = [pscustomobject]@{
     read_only = $true
@@ -593,6 +673,7 @@ $report = [pscustomobject]@{
     deploy_triggered = $false
     tag_or_release_created = $false
     raw_hermes_response_included = $false
+    raw_notification_payload_included = $false
     raw_logs_included = $false
     token_printed = $false
   }
@@ -620,6 +701,7 @@ if ($Json) {
   "Workers:      online=$($report.control_plane.workers.online) stale=$($report.control_plane.workers.stale) offline=$($report.control_plane.workers.offline)"
   "Tasks:        active=$($report.control_plane.tasks.active) queued=$($report.control_plane.tasks.queued) running=$($report.control_plane.tasks.running) stale_leases=$($report.control_plane.tasks.stale_leases)"
   "Hermes:       ok=$($report.hermes.ok) direct_https=$($report.hermes.direct_https) endpoint=$($report.hermes.endpoint)"
+  "AdminEsc:     ok=$($report.admin_escalation.ok) current=$($report.admin_escalation.primary_current) can_notice=$($report.admin_escalation.can_send_blocker_notice)"
   "Notify:       ready=$($report.notifications.ready) total=$($report.notifications.total)"
   "Blockers:     $(if ($report.blockers.Count -gt 0) { $report.blockers -join ', ' } else { 'none' })"
   "Warnings:     $(if ($report.warnings.Count -gt 0) { $report.warnings -join ', ' } else { 'none' })"

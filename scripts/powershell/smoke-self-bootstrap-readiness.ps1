@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "no-secrets")]
+  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")]
   [string]$Scenario = "all",
   [switch]$Json
 )
@@ -138,6 +138,25 @@ function New-BaseFixtures {
       }
     )
   }
+  $adminEscalation = [pscustomobject]@{
+    schema = "skybridge.admin_escalation_readiness.v1"
+    ok = $true
+    primary_current = "hermes-wechat"
+    long_term_primary = "skybridge-notify-gateway"
+    fallback = "bootstrap-notifier"
+    hermes_available = $true
+    hermes_direct_https = $true
+    hermes_platform = "hermes-agent"
+    hermes_runtime_mode = "server_agent"
+    hermes_responses_api = $true
+    wechat_escalation_configured = $true
+    can_send_blocker_notice = $true
+    dry_run_supported = $true
+    real_send_performed = $false
+    credential_values_exposed = $false
+    raw_response_included = $false
+    token_printed = $false
+  }
 
   [pscustomobject]@{
     commit = $commit
@@ -147,6 +166,7 @@ function New-BaseFixtures {
     deploy = $deploy
     status = $status
     hermes = $hermes
+    admin_escalation = $adminEscalation
     notifications = $notifications
   }
 }
@@ -164,6 +184,7 @@ function Invoke-ReadinessFixture {
   $deployPath = Write-Fixture -Dir $dir -Name "deploy.json" -Value $fixtures.deploy
   $statusPath = Write-Fixture -Dir $dir -Name "status.json" -Value $fixtures.status
   $hermesPath = Write-Fixture -Dir $dir -Name "hermes.json" -Value $fixtures.hermes
+  $adminEscalationPath = Write-Fixture -Dir $dir -Name "admin-escalation.json" -Value $fixtures.admin_escalation
   $notificationsPath = Write-Fixture -Dir $dir -Name "notifications.json" -Value $fixtures.notifications
 
   $raw = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-self-bootstrap-readiness.ps1") `
@@ -175,6 +196,7 @@ function Invoke-ReadinessFixture {
     -FixtureDeployEvidenceFile $deployPath `
     -FixtureStatusFile $statusPath `
     -FixtureHermesHealthFile $hermesPath `
+    -FixtureAdminEscalationFile $adminEscalationPath `
     -FixtureNotificationsFile $notificationsPath `
     -Json
   if ($LASTEXITCODE -ne 0) { throw "readiness script failed for $Name." }
@@ -189,6 +211,9 @@ function Invoke-ReadinessFixture {
   Assert-False $result.safety.campaign_metadata_advanced "campaign_metadata_advanced"
   Assert-False $result.safety.deploy_triggered "deploy_triggered"
   Assert-False $result.safety.tag_or_release_created "tag_or_release_created"
+  Assert-False $result.admin_escalation.token_printed "admin_escalation token_printed"
+  Assert-False $result.admin_escalation.real_send_performed "admin_escalation real_send_performed"
+  Assert-False $result.admin_escalation.raw_response_included "admin_escalation raw_response_included"
   return [pscustomobject]@{
     name = $Name
     result = $result
@@ -209,6 +234,7 @@ function Invoke-Scenario {
       if ($case.result.status -ne "ready") { throw "ready fixture should be ready." }
       Assert-True $case.result.can_start_one "can_start_one"
       Assert-True $case.result.can_run_until_hold "can_run_until_hold"
+      Assert-True $case.result.admin_escalation.ok "admin_escalation.ok"
       if (@($case.result.blockers).Count -ne 0) { throw "ready fixture should have no blockers." }
     }
     "worker-offline" {
@@ -238,6 +264,48 @@ function Invoke-Scenario {
       Assert-Contains $case.result.blockers "hermes_unavailable" "hermes-unavailable blockers"
       Assert-False $case.result.can_run_until_hold "hermes-unavailable can_run_until_hold"
     }
+    "admin-ready-notifications-skipped" {
+      $case = Invoke-ReadinessFixture -Name $Name -Mutate {
+        param($fixtures)
+        $fixtures.notifications.providers = @(
+          [pscustomobject]@{ provider = "ntfy"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "apprise"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "gotify"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "bark"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "wecom"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "fcm"; status = "skipped"; credential_values_exposed = $false },
+          [pscustomobject]@{ provider = "xiaomi-push"; status = "skipped"; credential_values_exposed = $false }
+        )
+      }
+      if ($case.result.status -ne "partial") { throw "admin-ready-notifications-skipped fixture should be partial." }
+      Assert-True $case.result.admin_escalation.ok "admin_escalation.ok"
+      Assert-True $case.result.can_start_one "admin-ready-notifications-skipped can_start_one"
+      Assert-True $case.result.can_run_until_hold "admin-ready-notifications-skipped can_run_until_hold"
+      Assert-Contains $case.result.warnings "skybridge_notification_center_not_ready" "admin-ready-notifications-skipped warnings"
+      if (@($case.result.blockers) -contains "notification_provider_unavailable") { throw "notification_provider_unavailable must not block when admin escalation is ready." }
+      if (@($case.result.notifications.providers).Count -ne 7) { throw "Expected all long-term notification providers to remain visible." }
+    }
+    "admin-unavailable" {
+      $case = Invoke-ReadinessFixture -Name $Name -Mutate {
+        param($fixtures)
+        $fixtures.admin_escalation.ok = $false
+        $fixtures.admin_escalation.can_send_blocker_notice = $false
+        $fixtures.admin_escalation.wechat_escalation_configured = $false
+      }
+      if ($case.result.status -ne "blocked") { throw "admin-unavailable fixture should be blocked." }
+      Assert-Contains $case.result.blockers "admin_escalation_unavailable" "admin-unavailable blockers"
+      Assert-False $case.result.can_start_one "admin-unavailable can_start_one"
+      Assert-False $case.result.can_run_until_hold "admin-unavailable can_run_until_hold"
+    }
+    "admin-credentials-exposed" {
+      $case = Invoke-ReadinessFixture -Name $Name -Mutate {
+        param($fixtures)
+        $fixtures.admin_escalation.credential_values_exposed = $true
+      }
+      if ($case.result.status -ne "blocked") { throw "admin-credentials-exposed fixture should be blocked." }
+      Assert-Contains $case.result.blockers "admin_escalation_credentials_exposed" "admin-credentials-exposed blockers"
+      Assert-False $case.result.can_start_one "admin-credentials-exposed can_start_one"
+    }
     "no-secrets" {
       $case = Invoke-ReadinessFixture -Name $Name -Mutate {
         param($fixtures)
@@ -251,6 +319,8 @@ function Invoke-Scenario {
         }
       }
       Assert-False $case.result.token_printed "no-secrets token_printed"
+      Assert-False $case.result.admin_escalation.token_printed "no-secrets admin token_printed"
+      Assert-False $case.result.admin_escalation.raw_response_included "no-secrets admin raw_response_included"
       Assert-NoUnsafeText $case.text
       if ($case.text -match "THIS_SHOULD_NOT_APPEAR") { throw "Secret marker leaked in no-secrets fixture." }
       if ($case.result.hermes.endpoint -ne "https://[redacted-host]") { throw "Hermes endpoint was not redacted." }
@@ -263,7 +333,7 @@ function Invoke-Scenario {
 }
 
 $scenarioNames = if ($Scenario -eq "all") {
-  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "no-secrets")
+  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")
 } else {
   @($Scenario)
 }
