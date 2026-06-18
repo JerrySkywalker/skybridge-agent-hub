@@ -22,7 +22,7 @@ jobs:
         app: [server, web]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -67,9 +67,10 @@ jobs:
           } > .agent/ci/docker-${{ matrix.app }}-summary.txt
       - name: Upload docker build summary
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: docker-${{ matrix.app }}-summary
           path: .agent/ci/docker-${{ matrix.app }}-summary.txt
           if-no-files-found: ignore
           retention-days: 7
+          include-hidden-files: true

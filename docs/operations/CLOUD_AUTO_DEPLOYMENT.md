@@ -12,6 +12,9 @@ Gate:
 - Docker Images must succeed on `main`.
 - Required deploy secrets must exist in GitHub repository settings. The workflow
   validates names only and must not print values.
+- `SKYBRIDGE_PUBLIC_API_BASE` must exist as a GitHub repository variable or
+  secret-backed workflow value. Public workflows must not commit
+  Jerry-specific deployment hostnames.
 - The image reference must include commit evidence through a digest, `sha-<commit>` tag, or expected immutable tag.
 
 Repository secret bootstrap:
@@ -21,8 +24,13 @@ Repository secret bootstrap:
 - Optional settings may be added only when the default is wrong: deploy SSH port,
   `SKYBRIDGE_DEPLOY_PATH`, `SKYBRIDGE_DEPLOY_COMPOSE_FILE`,
   `SKYBRIDGE_DEPLOY_SERVICE`, `GHCR_USERNAME`, `GHCR_TOKEN`.
+- Add `SKYBRIDGE_PUBLIC_API_BASE` as a repository variable for the public
+  SkyBridge Server API base used by Deploy Cloud parity checks. A repository
+  secret may be used instead if the workflow is intentionally changed to read
+  from `secrets.*`.
 - Do not paste secret values into issues, PRs, logs, docs or deploy reports.
-- If the workflow skips with `missing_required_secrets`, the expected safe report lists names only and no SSH step runs.
+- If the workflow skips with `missing_required_configuration`, the expected
+  safe report lists missing secret or variable names only and no SSH step runs.
 
 Current private deployment settings:
 
@@ -51,6 +59,18 @@ Reports:
 - `.agent/tmp/deploy/cloud-deploy-report.md`
 
 Reports are sanitized and include `token_printed=false`.
+
+Runtime hygiene:
+
+- Official GitHub Actions should stay on Node 24-compatible major versions,
+  currently `actions/checkout@v6`, `actions/setup-node@v6` and
+  `actions/upload-artifact@v6`.
+- CI helper actions should also stay on Node 24-compatible majors, including
+  `pnpm/action-setup@v6`.
+- GitHub-hosted `ubuntu-latest` is acceptable for these workflows.
+- If a future trusted workflow uses self-hosted runners, those runners must be
+  at least `v2.327.1` before Node 24 official actions are used.
+- Do not add `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
 
 Version evidence:
 

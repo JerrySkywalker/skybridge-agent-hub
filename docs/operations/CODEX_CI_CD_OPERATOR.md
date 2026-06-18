@@ -38,6 +38,11 @@ The verifier resolves ApiBase in this order: explicit `-ApiBase`,
 early for live runs. The verifier also probes `/v1/version` and fails early if
 the endpoint looks like Hermes instead of SkyBridge.
 
+For GitHub Actions deploy runs, the public SkyBridge API base belongs in the
+repository variable `SKYBRIDGE_PUBLIC_API_BASE` or an equivalent secret-backed
+workflow expression. Public workflow files should use `vars.*` or `secrets.*`
+indirection and must not commit Jerry-specific deployment hostnames.
+
 ## Evidence Rules
 
 `Deploy Cloud` evidence must come from the `workflow_run` trigger after `Docker Images` succeeds on `main`. Do not manually trigger `Deploy Cloud` for release evidence, because the goal is to prove the main-branch auto deploy chain.
@@ -73,6 +78,15 @@ databaseId,headSha,status,conclusion,event,createdAt
 
 Workflow selection is done with `gh run list -w "Docker Images"` and `gh run list -w "Deploy Cloud"` rather than parsing title fields.
 GitHub Actions `databaseId` values are large identifiers and must be treated as 64-bit values or strings, not 32-bit integers.
+
+## GitHub Actions Runtime Hygiene
+
+Keep official actions on Node 24-compatible major versions. Current workflow
+baselines use `actions/checkout@v6`, `actions/setup-node@v6` and
+`actions/upload-artifact@v6`; CI helper setup uses `pnpm/action-setup@v6`.
+GitHub-hosted `ubuntu-latest` is supported. If a trusted workflow later moves
+to self-hosted runners, the runner must be at least `v2.327.1`; do not add
+`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
 
 ## Release Workflow Note
 
