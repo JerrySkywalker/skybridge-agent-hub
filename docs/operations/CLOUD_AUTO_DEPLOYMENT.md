@@ -29,6 +29,13 @@ Current Tencent deployment settings:
 
 After secrets are configured, re-run `Deploy Cloud` with `workflow_dispatch` or wait for the next successful `Docker Images` run on `main`. Use an image reference with commit evidence, for example `ghcr.io/<owner>/skybridge-agent-hub-server:sha-<commit>`.
 
+Compose contract sync:
+
+- Cloud Auto Deploy uploads only two fixed assets before the remote deploy command: `scripts/deploy/deploy-skybridge-server.sh` and `deploy/docker-compose.skybridge.yml`.
+- The compose file is uploaded to a temporary remote path and passed as `--compose-source`; the deploy script installs it to `SKYBRIDGE_DEPLOY_PATH/SKYBRIDGE_DEPLOY_COMPOSE_FILE` after verifying the target resolves under `SKYBRIDGE_DEPLOY_PATH`.
+- The previous compose file is backed up under the sanitized deploy report area and restored on deploy failure where possible.
+- Do not use `rsync` or sync the full repository for this deploy path.
+
 Scope:
 
 - Allowed mutation: `docker compose up -d skybridge-server`.
@@ -45,5 +52,6 @@ Reports are sanitized and include `token_printed=false`.
 Version evidence:
 
 - `/v1/version` must report immutable deployed image metadata: `commit_sha=<commit>`, `image_tag=sha-<commit>` and the full image ref when available.
+- Release evidence is valid only when `/v1/version.commit_sha` equals the deployed main commit, `/v1/version.image_tag` equals `sha-<deployed main commit>`, `/v1/version.image_ref` equals the immutable GHCR ref and `token_printed=false`.
 - `SKYBRIDGE_SERVER_IMAGE` selects the image. Deploy-only variables `SKYBRIDGE_DEPLOY_COMMIT_SHA`, `SKYBRIDGE_DEPLOY_IMAGE_TAG` and `SKYBRIDGE_DEPLOY_IMAGE_REF` are mapped into the container runtime as `SKYBRIDGE_COMMIT_SHA`, `SKYBRIDGE_IMAGE_TAG` and `SKYBRIDGE_IMAGE_REF`.
 - Server-local `.env` image defaults are compose defaults only. They are not release evidence and must not override deploy-provided runtime version metadata.
