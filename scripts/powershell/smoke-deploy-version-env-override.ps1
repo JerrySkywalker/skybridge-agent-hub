@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $composePath = Join-Path $repoRoot "deploy\docker-compose.skybridge.yml"
 $compose = Get-Content -Raw $composePath
+$workflow = Get-Content -Raw (Join-Path $repoRoot ".github\workflows\deploy-cloud.yml")
 
 foreach ($needle in @(
   "env_file:",
@@ -59,6 +60,10 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
     }
     Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
   }
+}
+
+foreach ($needle in @("deploy/docker-compose.skybridge.yml", "--compose-source /tmp/docker-compose.skybridge.yml")) {
+  if ($workflow -notmatch [regex]::Escape($needle)) { throw "Workflow does not synchronize the fixed compose contract: $needle" }
 }
 
 $summary = [pscustomobject]@{

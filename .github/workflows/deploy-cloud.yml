@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin >/dev/null
 
-      - name: Upload fixed deploy script
+      - name: Upload fixed deploy assets
         if: steps.secrets-check.outputs.should_deploy == 'true'
         shell: bash
         run: |
@@ -133,6 +133,9 @@ jobs:
           scp -q -P "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
             scripts/deploy/deploy-skybridge-server.sh \
             "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST:/tmp/deploy-skybridge-server.sh"
+          scp -q -P "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
+            deploy/docker-compose.skybridge.yml \
+            "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST:/tmp/docker-compose.skybridge.yml"
 
       - name: Run fixed-scope deploy
         if: steps.secrets-check.outputs.should_deploy == 'true'
@@ -145,7 +148,7 @@ jobs:
           service="${SKYBRIDGE_DEPLOY_SERVICE:-skybridge-server}"
           ssh -p "$port" -i ~/.ssh/skybridge_deploy_key -o StrictHostKeyChecking=accept-new \
             "$TENCENT_DEPLOY_USER@$TENCENT_DEPLOY_HOST" \
-            "SKYBRIDGE_DEPLOY_PATH='$deploy_path' SKYBRIDGE_DEPLOY_COMPOSE_FILE='$compose_file' SKYBRIDGE_DEPLOY_SERVICE='$service' SKYBRIDGE_PUBLIC_API_BASE='$PUBLIC_API_BASE' bash /tmp/deploy-skybridge-server.sh --image-ref '${{ steps.deploy-inputs.outputs.image_ref }}' --commit-sha '${{ steps.deploy-inputs.outputs.commit_sha }}' --expected-tag '${{ steps.deploy-inputs.outputs.expected_tag }}'"
+            "SKYBRIDGE_DEPLOY_PATH='$deploy_path' SKYBRIDGE_DEPLOY_COMPOSE_FILE='$compose_file' SKYBRIDGE_DEPLOY_SERVICE='$service' SKYBRIDGE_PUBLIC_API_BASE='$PUBLIC_API_BASE' bash /tmp/deploy-skybridge-server.sh --compose-source /tmp/docker-compose.skybridge.yml --image-ref '${{ steps.deploy-inputs.outputs.image_ref }}' --commit-sha '${{ steps.deploy-inputs.outputs.commit_sha }}' --expected-tag '${{ steps.deploy-inputs.outputs.expected_tag }}'"
 
       - name: Download sanitized deploy report
         if: always() && steps.secrets-check.outputs.should_deploy == 'true'

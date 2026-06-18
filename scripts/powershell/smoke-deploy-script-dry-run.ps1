@@ -12,7 +12,7 @@ if ($repoRootText -match "^([A-Za-z]):\\(.*)$") {
 } else {
   $bashRepoRoot = $repoRootText -replace "\\", "/"
 }
-& bash -lc "cd '$bashRepoRoot' && SKYBRIDGE_DEPLOY_REPORT_DIR='.agent/tmp/deploy' ./scripts/deploy/deploy-skybridge-server.sh --dry-run --image-ref 'ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123' --commit-sha 'abc123' --expected-tag 'sha-abc123'" | Out-Null
+& bash -lc "cd '$bashRepoRoot' && SKYBRIDGE_DEPLOY_REPORT_DIR='.agent/tmp/deploy' ./scripts/deploy/deploy-skybridge-server.sh --dry-run --compose-source './deploy/docker-compose.skybridge.yml' --image-ref 'ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123' --commit-sha 'abc123' --expected-tag 'sha-abc123'" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Deploy dry-run failed." }
 $reportPath = Join-Path $repoRoot ".agent\tmp\deploy\cloud-deploy-report.json"
 $report = Get-Content -Raw $reportPath | ConvertFrom-Json
@@ -20,4 +20,5 @@ if ($report.status -ne "skipped" -or $report.reason -ne "dry_run" -or $report.to
 if ($report.runtime_metadata.commit_sha -ne "abc123" -or $report.runtime_metadata.image_tag -ne "sha-abc123" -or $report.runtime_metadata.image_ref -ne "ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123") {
   throw "Deploy dry-run report missing immutable runtime metadata."
 }
+if ($report.compose_source_provided -ne $true -or $report.compose_install_status -ne "dry_run") { throw "Deploy dry-run did not accept compose source." }
 if ($Json) { $report | ConvertTo-Json -Depth 8 -Compress } else { $report | Format-List }

@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE_REF=""
 COMMIT_SHA=""
 EXPECTED_TAG=""
+COMPOSE_SOURCE=""
 DRY_RUN="false"
 
 while [[ $# -gt 0 ]]; do
@@ -18,6 +19,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --expected-tag)
       EXPECTED_TAG="${2:-}"
+      shift 2
+      ;;
+    --compose-source)
+      COMPOSE_SOURCE="${2:-}"
       shift 2
       ;;
     --dry-run)
@@ -40,6 +45,10 @@ REPORT_DIR="${SKYBRIDGE_DEPLOY_REPORT_DIR:-$DEPLOY_PATH/.agent/tmp/deploy}"
 PLAN_JSON="$REPORT_DIR/cloud-deploy-plan.json"
 REPORT_JSON="$REPORT_DIR/cloud-deploy-report.json"
 REPORT_MD="$REPORT_DIR/cloud-deploy-report.md"
+COMPOSE_TARGET=""
+COMPOSE_BACKUP_PATH=""
+COMPOSE_INSTALL_STATUS="not_requested"
+COMPOSE_RESTORE_STATUS="not_needed"
 
 mkdir -p "$REPORT_DIR"
 
@@ -54,6 +63,9 @@ write_plan() {
   "deploy_scope": "skybridge-server-only",
   "deploy_path": "$(json_escape "$DEPLOY_PATH")",
   "compose_file": "$(json_escape "$COMPOSE_FILE")",
+  "compose_source_provided": $([[ -n "$COMPOSE_SOURCE" ]] && echo true || echo false),
+  "compose_target": "$(json_escape "$COMPOSE_TARGET")",
+  "compose_backup_path": "$(json_escape "$COMPOSE_BACKUP_PATH")",
   "service": "$(json_escape "$SERVICE")",
   "image_ref": "$(json_escape "$IMAGE_REF")",
   "commit_sha": "$(json_escape "$COMMIT_SHA")",
@@ -86,6 +98,11 @@ write_report() {
   "reason": "$(json_escape "$reason")",
   "deploy_scope": "skybridge-server-only",
   "service": "$(json_escape "$SERVICE")",
+  "compose_source_provided": $([[ -n "$COMPOSE_SOURCE" ]] && echo true || echo false),
+  "compose_target": "$(json_escape "$COMPOSE_TARGET")",
+  "compose_backup_path": "$(json_escape "$COMPOSE_BACKUP_PATH")",
+  "compose_install_status": "$(json_escape "$COMPOSE_INSTALL_STATUS")",
+  "compose_restore_status": "$(json_escape "$COMPOSE_RESTORE_STATUS")",
   "image_ref": "$(json_escape "$IMAGE_REF")",
   "commit_sha": "$(json_escape "$COMMIT_SHA")",
   "expected_tag": "$(json_escape "$EXPECTED_TAG")",
@@ -110,6 +127,9 @@ JSON
 - reason: $reason
 - deploy_scope: skybridge-server-only
 - service: $SERVICE
+- compose_source_provided: $([[ -n "$COMPOSE_SOURCE" ]] && echo true || echo false)
+- compose_install_status: $COMPOSE_INSTALL_STATUS
+- compose_restore_status: $COMPOSE_RESTORE_STATUS
 - image_ref: $IMAGE_REF
 - commit_sha: $COMMIT_SHA
 - expected_tag: $EXPECTED_TAG
@@ -150,6 +170,77 @@ compose_cmd() {
   docker compose -f "$COMPOSE_FILE" "$@"
 }
 
+resolve_path_under_deploy_path() {
+  local candidate="$1"
+  local deploy_root
+  local resolved
+  deploy_root="$(realpath -m -- "$DEPLOY_PATH")"
+  if [[ "$candidate" = /* ]]; then
+    resolved="$(realpath -m -- "$candidate")"
+  else
+    resolved="$(realpath -m -- "$DEPLOY_PATH/$candidate")"
+  fi
+  case "$resolved" in
+    "$deploy_root"/*)
+      printf '%s' "$resolved"
+      ;;
+    *)
+      fail_report "compose_target_outside_deploy_path"
+      ;;
+  esac
+}
+
+prepare_compose_sync() {
+  COMPOSE_TARGET="$(resolve_path_under_deploy_path "$COMPOSE_FILE")"
+  if [[ -z "$COMPOSE_SOURCE" ]]; then
+    COMPOSE_INSTALL_STATUS="not_requested"
+    return 0
+  fi
+  if [[ "$DRY_RUN" == "true" ]]; then
+    COMPOSE_INSTALL_STATUS="dry_run"
+    return 0
+  fi
+  if [[ ! -f "$COMPOSE_SOURCE" ]]; then
+    fail_report "compose_source_not_found"
+  fi
+  local backup_dir
+  backup_dir="$REPORT_DIR/compose-backups"
+  mkdir -p "$backup_dir"
+  mkdir -p "$(dirname "$COMPOSE_TARGET")"
+  if [[ -f "$COMPOSE_TARGET" ]]; then
+    COMPOSE_BACKUP_PATH="$backup_dir/$(basename "$COMPOSE_TARGET").$(date -u +%Y%m%dT%H%M%SZ).bak"
+    if ! cp "$COMPOSE_TARGET" "$COMPOSE_BACKUP_PATH"; then
+      fail_report "compose_backup_failed"
+    fi
+  else
+    COMPOSE_BACKUP_PATH="none"
+  fi
+  if ! cp "$COMPOSE_SOURCE" "$COMPOSE_TARGET"; then
+    fail_report "compose_install_failed"
+  fi
+  COMPOSE_INSTALL_STATUS="installed"
+}
+
+restore_compose_if_needed() {
+  if [[ "$COMPOSE_INSTALL_STATUS" != "installed" ]]; then
+    COMPOSE_RESTORE_STATUS="not_needed"
+    return 0
+  fi
+  if [[ -n "$COMPOSE_BACKUP_PATH" && "$COMPOSE_BACKUP_PATH" != "none" && -f "$COMPOSE_BACKUP_PATH" ]]; then
+    if cp "$COMPOSE_BACKUP_PATH" "$COMPOSE_TARGET"; then
+      COMPOSE_RESTORE_STATUS="restored"
+    else
+      COMPOSE_RESTORE_STATUS="failed"
+    fi
+    return 0
+  fi
+  if rm -f "$COMPOSE_TARGET"; then
+    COMPOSE_RESTORE_STATUS="removed_installed_file"
+  else
+    COMPOSE_RESTORE_STATUS="failed"
+  fi
+}
+
 wait_for_health() {
   for _ in $(seq 1 30); do
     if curl -fsS "$HEALTH_URL" >/dev/null; then
@@ -170,8 +261,9 @@ run_route_parity() {
   fi
 }
 
-write_plan
 require_image_evidence
+prepare_compose_sync
+write_plan
 
 if [[ "$SERVICE" != "skybridge-server" ]]; then
   fail_report "service_scope_not_skybridge_server"
@@ -186,6 +278,7 @@ fi
 cd "$DEPLOY_PATH"
 
 if ! compose_cmd config --services | grep -Fx "$SERVICE" >/dev/null; then
+  restore_compose_if_needed
   fail_report "compose_service_not_found"
 fi
 
@@ -196,6 +289,7 @@ if [[ -n "$previous_container" ]]; then
 fi
 
 if ! docker pull "$IMAGE_REF"; then
+  restore_compose_if_needed
   fail_report "docker_pull_failed" "$previous_image"
 fi
 
@@ -206,6 +300,7 @@ export SKYBRIDGE_DEPLOY_IMAGE_TAG="$EXPECTED_TAG"
 
 if ! compose_cmd up -d "$SERVICE"; then
   rollback_status="not_used"
+  restore_compose_if_needed
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
     export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
@@ -220,6 +315,7 @@ fi
 
 if ! wait_for_health; then
   rollback_status="not_used"
+  restore_compose_if_needed
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
     export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
@@ -234,6 +330,7 @@ fi
 
 if ! run_route_parity; then
   rollback_status="not_used"
+  restore_compose_if_needed
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
     export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
