@@ -10,6 +10,19 @@ The audit answers one question: can a later, explicitly authorized operator comm
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-self-bootstrap-readiness.ps1 -Json
 ```
 
+For a cloud readiness audit, load the SkyBridge API base from the local
+SkyBridge operator env file first:
+
+```powershell
+. "$HOME\.skybridge\skybridge.env.ps1"
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-self-bootstrap-readiness.ps1 -Json
+```
+
+`$HOME\.skybridge\skybridge.env.ps1` contains `SKYBRIDGE_API_BASE` and points
+to the SkyBridge Server API. `$HOME\.skybridge\hermes.env.ps1` contains
+`HERMES_API_BASE` and `HERMES_API_KEY` and points to Hermes. Keep them separate:
+`SKYBRIDGE_API_BASE` is not `HERMES_API_BASE`.
+
 Useful options:
 
 ```powershell
@@ -21,6 +34,9 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-self-bootstrap
 ```
 
 For authenticated read-only status endpoints, pass `-TokenFile` or `-TokenEnvVar`. For Hermes, pass `-HermesEnvFile` or `-HermesApiBase` when the default local Hermes environment loader is not enough.
+SkyBridge ApiBase resolution uses explicit `-ApiBase`, then
+`$env:SKYBRIDGE_API_BASE`, then the public placeholder. Live runs fail early
+when the resolved value is a placeholder, empty, invalid, or points to Hermes.
 
 ## Output Contract
 

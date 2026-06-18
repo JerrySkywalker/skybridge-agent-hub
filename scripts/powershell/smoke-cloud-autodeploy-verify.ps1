@@ -44,6 +44,7 @@ $deployReport = [pscustomobject]@{
 }
 $version = [pscustomobject]@{
   schema = "skybridge.server_version.v1"
+  service = "skybridge-server"
   commit_sha = $commit
   image_tag = "sha-$commit"
   image_ref = $imageRef

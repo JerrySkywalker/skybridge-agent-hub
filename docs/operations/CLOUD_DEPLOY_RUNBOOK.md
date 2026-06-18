@@ -28,8 +28,24 @@ Safe preflight:
 ```powershell
 gh secret list --repo JerrySkywalker/skybridge-agent-hub
 gh run list --workflow deploy-cloud.yml --limit 5
+. "$HOME\.skybridge\skybridge.env.ps1"
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-cloud-parity-check.ps1
 ```
+
+`$HOME\.skybridge\skybridge.env.ps1` is the local, untracked SkyBridge operator
+env file. It should set `SKYBRIDGE_API_BASE` to the SkyBridge Server API base.
+Do not put Hermes credentials in this file.
+
+Keep Hermes configuration in `$HOME\.skybridge\hermes.env.ps1` instead:
+
+```powershell
+$env:HERMES_API_BASE = "<PRIVATE_HERMES_API_BASE>"
+$env:HERMES_API_KEY = "<local Hermes key>"
+```
+
+`SKYBRIDGE_API_BASE` is not `HERMES_API_BASE`. SkyBridge deployment and parity
+scripts use `SKYBRIDGE_API_BASE` or explicit `-ApiBase`; Hermes health and
+planning scripts use `HERMES_API_BASE` plus `HERMES_API_KEY`.
 
 If no repository secrets are configured, `Deploy Cloud` must stop before SSH and upload a sanitized skipped report with missing secret names only.
 
@@ -56,8 +72,15 @@ Compose contract sync:
 Post-deploy public checks:
 
 ```powershell
+. "$HOME\.skybridge\skybridge.env.ps1"
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-cloud-parity-check.ps1
 ```
+
+For live checks, placeholder values such as `https://skybridge.example.com`,
+`<PRIVATE_SKYBRIDGE_API_BASE>`, empty values and invalid URIs fail before route
+probing. If `/v1/version` looks like Hermes metadata or capabilities, the
+script fails with a SkyBridge-vs-Hermes endpoint diagnostic and does not print
+the private URL.
 
 Version evidence:
 

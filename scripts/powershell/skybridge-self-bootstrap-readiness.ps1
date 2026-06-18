@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.example.com" }),
+  [string]$ApiBase,
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$Repo,
   [string]$MainRef = "origin/main",
@@ -27,6 +27,16 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
+Import-Module (Join-Path $PSScriptRoot "lib\Skybridge.ApiBase.psm1") -Force
+
+$ApiBase = Resolve-SkybridgeApiBase -ApiBase $ApiBase -ParameterWasBound $PSBoundParameters.ContainsKey("ApiBase")
+$fixtureMode = ($FixtureGitFile -or $FixtureVersionFile -or $FixtureParityFile -or $FixtureDeployEvidenceFile -or $FixtureStatusFile -or $FixtureHermesHealthFile -or $FixtureAdminEscalationFile -or $FixtureNotificationsFile)
+Assert-SkybridgeApiBaseUsable -ApiBase $ApiBase -AllowPlaceholder $fixtureMode
+if (-not $fixtureMode) {
+  Assert-SkybridgeApiBaseService -ApiBase $ApiBase -TimeoutSeconds $TimeoutSeconds | Out-Null
+} elseif ($FixtureVersionFile) {
+  Assert-SkybridgeVersionService -Version (Get-Content -Raw -LiteralPath $FixtureVersionFile | ConvertFrom-Json)
+}
 
 function Read-JsonFile {
   param([Parameter(Mandatory = $true)][string]$Path)
@@ -174,6 +184,7 @@ function Get-VersionReadiness {
   }
   try {
     $version = Invoke-RestMethod -Method GET -Uri "$($ApiBase.TrimEnd('/'))/v1/version" -TimeoutSec $TimeoutSeconds
+    Assert-SkybridgeVersionService -Version $version
     return [pscustomobject]@{
       available = $true
       ok = $true
@@ -640,7 +651,7 @@ $report = [pscustomobject]@{
   ok = $true
   generated_at = $generatedAt
   project_id = $ProjectId
-  api_base = $ApiBase.TrimEnd("/")
+  api_base = "configured"
   status = $overallStatus
   can_start_one = $canStartOne
   can_run_until_hold = $canRunUntilHold
