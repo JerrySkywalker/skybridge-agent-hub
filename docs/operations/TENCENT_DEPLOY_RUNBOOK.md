@@ -4,8 +4,8 @@ The GitHub workflow uploads and runs only `scripts/deploy/deploy-skybridge-serve
 
 Default remote settings:
 
-- `SKYBRIDGE_DEPLOY_PATH=/opt/skybridge-agent-hub`
-- `SKYBRIDGE_DEPLOY_COMPOSE_FILE=compose.yaml`
+- `SKYBRIDGE_DEPLOY_PATH=/opt/skybridge/repo`
+- `SKYBRIDGE_DEPLOY_COMPOSE_FILE=deploy/docker-compose.skybridge.yml`
 - `SKYBRIDGE_DEPLOY_SERVICE=skybridge-server`
 
 Required GitHub repository secrets:
@@ -49,5 +49,13 @@ Post-deploy public checks:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-cloud-parity-check.ps1
 ```
+
+Version evidence:
+
+- `/v1/version` is the release evidence endpoint for the deployed server image.
+- Expected values after a commit deploy are `commit_sha=<commit>` and `image_tag=sha-<commit>`.
+- `SKYBRIDGE_SERVER_IMAGE` remains the full immutable image ref used for image selection.
+- Deploy-only variables `SKYBRIDGE_DEPLOY_COMMIT_SHA`, `SKYBRIDGE_DEPLOY_IMAGE_TAG` and `SKYBRIDGE_DEPLOY_IMAGE_REF` are mapped into container runtime variables `SKYBRIDGE_COMMIT_SHA`, `SKYBRIDGE_IMAGE_TAG` and `SKYBRIDGE_IMAGE_REF`.
+- Server-local `.env` values such as `SKYBRIDGE_IMAGE_TAG=main` are defaults or legacy local state, not release evidence.
 
 Do not run broad remote shell commands, package installs, Docker prune commands or any Hermes/OpenResty/Authelia/DNS/TLS/firewall changes as part of this runbook.

@@ -103,6 +103,7 @@ interface ServerVersionMetadata {
   server_version: string;
   commit_sha: string;
   image_tag: string;
+  image_ref: string;
   build_time: string;
   route_set_version: string;
   token_printed: false;
@@ -284,6 +285,7 @@ function serverVersionMetadata(): ServerVersionMetadata {
     server_version: safeVersionValue(process.env.SKYBRIDGE_SERVER_VERSION, "0.1.0"),
     commit_sha: safeVersionValue(process.env.SKYBRIDGE_COMMIT_SHA, "unknown"),
     image_tag: safeVersionValue(process.env.SKYBRIDGE_IMAGE_TAG, "local"),
+    image_ref: safeVersionValue(process.env.SKYBRIDGE_IMAGE_REF, "unknown"),
     build_time: safeVersionValue(process.env.SKYBRIDGE_BUILD_TIME, "unknown"),
     route_set_version: ROUTE_SET_VERSION,
     token_printed: false,

@@ -17,4 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw "Deploy dry-run failed." }
 $reportPath = Join-Path $repoRoot ".agent\tmp\deploy\cloud-deploy-report.json"
 $report = Get-Content -Raw $reportPath | ConvertFrom-Json
 if ($report.status -ne "skipped" -or $report.reason -ne "dry_run" -or $report.token_printed -ne $false) { throw "Unexpected deploy dry-run report." }
+if ($report.runtime_metadata.commit_sha -ne "abc123" -or $report.runtime_metadata.image_tag -ne "sha-abc123" -or $report.runtime_metadata.image_ref -ne "ghcr.io/jerry1999-main/skybridge-agent-hub-server:sha-abc123") {
+  throw "Deploy dry-run report missing immutable runtime metadata."
+}
 if ($Json) { $report | ConvertTo-Json -Depth 8 -Compress } else { $report | Format-List }
