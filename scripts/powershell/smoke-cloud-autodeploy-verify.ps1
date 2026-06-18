@@ -7,9 +7,11 @@ $tmp = Join-Path $RepoRoot ".agent\tmp\goal-305-smoke"
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 $commit = "6df9dd689cacbe7ceae00087e30feea3c86b53ef"
 $imageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-$commit"
+$dockerRunId = [Int64]27737428712
+$deployRunId = [Int64]27737428713
 
 $dockerRuns = @([pscustomobject]@{
-  databaseId = 101
+  databaseId = $dockerRunId
   headSha = $commit
   status = "completed"
   conclusion = "success"
@@ -17,7 +19,7 @@ $dockerRuns = @([pscustomobject]@{
   createdAt = "2026-06-18T01:00:00Z"
 })
 $deployRuns = @([pscustomobject]@{
-  databaseId = 202
+  databaseId = $deployRunId
   headSha = $commit
   status = "completed"
   conclusion = "success"
@@ -71,5 +73,7 @@ Assert-False $result.token_printed "token_printed"
 Assert-False $result.triggered_deploy "triggered_deploy"
 Assert-False $result.mutated_server "mutated_server"
 if ($result.version_image_ref -ne $imageRef) { throw "version image ref mismatch." }
+if ([Int64]$result.docker_images_run_id -ne $dockerRunId) { throw "docker run id mismatch." }
+if ([Int64]$result.deploy_cloud_run_id -ne $deployRunId) { throw "deploy run id mismatch." }
 
 if ($Json) { $result | ConvertTo-Json -Depth 8 -Compress } else { Complete-Smoke "cloud-autodeploy-verify" }

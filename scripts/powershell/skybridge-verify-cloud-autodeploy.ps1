@@ -102,7 +102,7 @@ function Find-DeployReport {
 
 function Get-DeployReport {
   param(
-    [int]$RunId,
+    [Int64]$RunId,
     [string]$ExpectedRepo
   )
   if (-not [string]::IsNullOrWhiteSpace($FixtureDeployReportFile)) {
@@ -187,7 +187,7 @@ if ($Commit -notmatch "^[0-9a-f]{40}$") { throw "Commit must be a full 40-charac
 $expectedImageRef = "ghcr.io/$ExpectedOwner/$ExpectedImageName`:sha-$Commit"
 $dockerRun = Wait-WorkflowSuccess -Workflow "Docker Images" -ExpectedCommit $Commit -ExpectedRepo $Repo -ExpectedEvent "push" -FixtureFile $FixtureDockerRunsFile
 $deployRun = Wait-WorkflowSuccess -Workflow "Deploy Cloud" -ExpectedCommit $Commit -ExpectedRepo $Repo -ExpectedEvent "workflow_run" -FixtureFile $FixtureDeployRunsFile
-$deployReport = Get-DeployReport -RunId ([int]$deployRun.databaseId) -ExpectedRepo $Repo
+$deployReport = Get-DeployReport -RunId ([Int64]$deployRun.databaseId) -ExpectedRepo $Repo
 Assert-DeployReport -Report $deployReport.value -ExpectedCommit $Commit -ExpectedImageRef $expectedImageRef
 $parity = Invoke-ParityCheck
 if ($parity.ok -ne $true -or [string]$parity.deployment_parity_status -ne "ok") { throw "Cloud parity check failed." }
@@ -200,8 +200,8 @@ $summary = [pscustomobject]@{
   schema = "skybridge.cloud_autodeploy_verification.v1"
   repo = $Repo
   commit_sha = $Commit
-  docker_images_run_id = [int]$dockerRun.databaseId
-  deploy_cloud_run_id = [int]$deployRun.databaseId
+  docker_images_run_id = [Int64]$dockerRun.databaseId
+  deploy_cloud_run_id = [Int64]$deployRun.databaseId
   deploy_report_path = $deployReport.path
   deploy_report_status = $deployReport.value.status
   deploy_report_reason = $deployReport.value.reason
