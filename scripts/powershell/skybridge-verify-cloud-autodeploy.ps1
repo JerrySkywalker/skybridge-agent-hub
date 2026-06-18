@@ -2,7 +2,7 @@
 param(
   [string]$Repo,
   [string]$Commit,
-  [string]$ApiBase = "https://skybridge.jerryskywalker.space",
+  [string]$ApiBase = "https://skybridge.example.com",
   [int]$TimeoutSeconds = 1800,
   [int]$PollSeconds = 30,
   [switch]$Json,

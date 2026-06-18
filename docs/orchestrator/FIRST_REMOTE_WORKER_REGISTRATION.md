@@ -3,14 +3,14 @@
 This runbook validates the first remote worker registration and heartbeat against a SkyBridge Server API endpoint such as:
 
 ```text
-https://skybridge.jerryskywalker.space
+https://skybridge.example.com
 ```
 
 No real token belongs in this repository. Prefer a local token file outside the repository so worker commands do not depend on inherited shell environment.
 
 ## Server Prerequisites
 
-- DNS points `skybridge.jerryskywalker.space` to the server.
+- DNS points `skybridge.example.com` to the server.
 - HTTPS is active and trusted by the worker machine.
 - SkyBridge Server is running behind the reverse proxy.
 - `/v1/health` returns a healthy response.
@@ -44,7 +44,7 @@ Copy-Item .\docs\orchestrator\worker.homepc.remote.example.json `
 
 Edit the local copy so that:
 
-- `skybridge_api_base` is `https://skybridge.jerryskywalker.space`;
+- `skybridge_api_base` is `https://skybridge.example.com`;
 - `auth_mode` is `bearer_token`;
 - `allow_remote_server` is `true`;
 - `reject_insecure_http_for_remote` is `true`;
@@ -73,7 +73,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-a
 Real remote registration and heartbeat, only after local token setup:
 
 ```powershell
-$env:SKYBRIDGE_REMOTE_API_BASE = "https://skybridge.jerryskywalker.space"
+$env:SKYBRIDGE_REMOTE_API_BASE = "https://skybridge.example.com"
 $env:SKYBRIDGE_WORKER_TOKEN = "<local-only worker token>"
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 `
@@ -97,7 +97,7 @@ Inspect compact project state without printing the token:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
@@ -106,7 +106,7 @@ After registration works, submit and execution should use the one-shot operator 
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
   -TaskId remote-docs-task-001 `
@@ -118,7 +118,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
   -DryRun
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -WorkerProfile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
@@ -156,7 +156,7 @@ Expected success shape:
 
 `502 Bad Gateway`: the reverse proxy cannot reach SkyBridge Server. Check the container/process, loopback bind, port and upstream address.
 
-TLS errors: confirm the certificate is valid for `skybridge.jerryskywalker.space`, the full chain is installed and the worker machine trusts it.
+TLS errors: confirm the certificate is valid for `skybridge.example.com`, the full chain is installed and the worker machine trusts it.
 
 Proxy/SSE issues: preserve `Authorization`, `Host`, `X-Forwarded-Proto`, disable buffering for `/v1/stream`, and keep long read timeouts.
 

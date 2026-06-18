@@ -8,7 +8,7 @@ Generate the JSON and Markdown artifacts:
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 `
   runner-report `
   -CampaignId dev-queue-189-200 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -Json
 ```
 

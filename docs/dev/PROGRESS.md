@@ -253,7 +253,7 @@
 ## 2026-05-29 Super Goal 178R Hermes Preview 504 Recovery
 
 - Continued on `ai/super-178-hermes-assisted-multiround-reliability-sprint` after the prior Phase 178A stop. The branch started clean.
-- Hermes direct HTTPS health succeeded at `https://api.hermes.jerryskywalker.space` with `ok=true`, `direct_https=true`, platform/model `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`, and `token_printed=false`.
+- Hermes direct HTTPS health succeeded at `https://api.hermes.example.com` with `ok=true`, `direct_https=true`, platform/model `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`, and `token_printed=false`.
 - A tiny direct HTTPS `/v1/responses` probe succeeded in 2.8 seconds, confirming bearer auth, DNS/TLS/proxy routing and basic responses handling.
 - The real multi-round `hermes-preview` initially recovered once, producing 6 proposals with 4 accepted docs proposals and 2 local-smoke `ask_human` proposals. The hardening retry using compact state, `MaxHermesAttempts=3`, `RetryDelaySeconds=10` and `TimeoutSeconds=600` still ended in OpenResty `504 Gateway Time-out` during `/v1/responses`.
 - Added bounded Hermes preview retry for transient proxy/transport failures only, default compact planner state, a configurable Hermes planner timeout, and smokes for retry and compact-state behavior.
@@ -264,7 +264,7 @@
 ## 2026-05-29 Super Goal 177 Hermes-assisted Single Apply Sprint
 
 - Preflight passed on branch `ai/super-177-hermes-proposal-persistence-single-apply`: `main` was up to date at Super 176 merge commit `0252f37`, no open PRs were listed, SkyBridge cloud health was OK, project control was `paused`, and no queued/running task residue existed.
-- Hermes health used direct HTTPS at `https://api.hermes.jerryskywalker.space` with `direct_https=true`, platform `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`; SkyBridge planner metadata still records `tool_execution_mode=disabled` for safety.
+- Hermes health used direct HTTPS at `https://api.hermes.example.com` with `direct_https=true`, platform `hermes-agent`, runtime mode `server_agent`, tool execution mode `server`; SkyBridge planner metadata still records `tool_execution_mode=disabled` for safety.
 - Real `hermes-preview` succeeded with planner mode `hermes-preview`, runtime mode `real-api`, 4 proposals, 3 accepted low-risk docs proposals, and 1 local-smoke `ask_human` proposal. Tokens were not printed.
 - Real `hermes-apply` persisted master goal `master-goal-hermes-assisted-self-bootstrap-preview`, planning session `planning-session-36e4ecc246bc2996`, and 3 executable-policy docs proposals. It created no executable task and did not run a worker.
 - Selected exactly one low-risk docs proposal: `proposal-4212a5e1447212c0`, `Update sprint progress after master goal doc merged`, dedupe key `proposal-progress-after-pr69-20260529`, expected file `docs/dev/PROGRESS.md`.
@@ -288,7 +288,7 @@
 - Preflight on branch `ai/super-176-hermes-direct-api-preview-hardening` confirmed `main` was up to date at PR #71 merge commit `131f01c`, `gh pr list` returned no open PRs, and SkyBridge cloud status was read-only healthy.
 - Cloud project `skybridge-agent-hub` remained `paused` with `stop_requested=false`; status showed one historical blocked task and no running task. No project-control mutation, task conversion, worker PollOnce or real cloud task creation was run.
 - Current Hermes env still pointed at tunnel mode, `http://127.0.0.1:18642`, with a 64-character key. The tunnel capabilities check was refused in this session, so direct HTTPS is documented but not proven configured.
-- Added direct HTTPS Hermes API runbook and OpenResty example for `https://hermes-api.jerryskywalker.space -> 127.0.0.1:8642`, preserving bearer auth, avoiding Dashboard exposure, and supporting long planning responses/streaming.
+- Added direct HTTPS Hermes API runbook and OpenResty example for `https://api.hermes.example.com -> 127.0.0.1:8642`, preserving bearer auth, avoiding Dashboard exposure, and supporting long planning responses/streaming.
 - Added `skybridge-hermes-health.ps1` and `skybridge-hermes-preview.ps1`. Preview wrapper defaults to `hermes-preview`, dry-run only, no proposal persistence, no task creation, no worker run, no project-control mutation, and `token_printed=false`.
 - Hardened constraints with `-ConstraintsFile` and `-ConstraintsJson`; wrappers pass merged constraints as JSON to avoid PowerShell `pwsh -File` array-binding drift into acceptance criteria or stop conditions.
 - Normalized Hermes proposal output so top-level `proposals` and `planning_session.proposals` contain the same policy-validated proposals during preview. The preview wrapper emits a compact proposal table and a quality summary/report.
@@ -304,7 +304,7 @@
 
 ## 2026-05-27 Super Goal 174 Dogfood Self-Bootstrap Sprint
 
-- Preflight against `https://skybridge.jerryskywalker.space` succeeded: project control was paused, `laptop-zenbookduo` heartbeated online through token-file auth, no queued/running tasks were visible, and supervisor dry-run selected low-risk docs proposal `proposal-d90d09da925d2cf0`.
+- Preflight against `https://skybridge.example.com` succeeded: project control was paused, `laptop-zenbookduo` heartbeated online through token-file auth, no queued/running tasks were visible, and supervisor dry-run selected low-risk docs proposal `proposal-d90d09da925d2cf0`.
 - The selected proposal was `Record master goal plan` for `master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint`, with expected files limited to `docs/dev/MASTER_GOAL_PREPARE_SKYBRIDGE_DOGFOOD_SELF_BOOTSTRAP_SPRINT.md` and `docs/dev/PROGRESS.md`.
 - Added supervisor UX polish so `skybridge-supervise.ps1` and guided supervisor modes can derive a deterministic `master-goal-*` id from `-GoalTitle` when `-MasterGoalId` is omitted.
 - Real supervisor apply was attempted with `MaxRounds=1`. Structured run `supervisor-run-20260527045305-6522d2e0a752` failed with `stop_reason=supervisor_error` because the cloud server returned `404 Not Found` for `POST /v1/master-goals`. This indicates the deployed cloud server does not yet expose the planner persistence routes required for supervisor apply.
@@ -349,7 +349,7 @@
 
 - Polished the v0.37 operator UX: `skybridge-submit.ps1` now emits a copyable `skybridge-run-once.ps1` next command with API, project, goal, task and token-file/env context, and `skybridge-run-once.ps1` reports clearer submit-mode parameter errors.
 - Fixed compact worker timestamp handling for PowerShell-converted JSON dates. Online and stale worker heartbeats now display fresh relative times instead of local-timezone-skewed values.
-- Preflight against `https://skybridge.jerryskywalker.space` confirmed project control was `paused`, `laptop-zenbookduo` could register-heartbeat online through token-file auth, and no queued/claimed/running historical task would interfere.
+- Preflight against `https://skybridge.example.com` confirmed project control was `paused`, `laptop-zenbookduo` could register-heartbeat online through token-file auth, and no queued/claimed/running historical task would interfere.
 - `skybridge-submit.ps1 -Apply` created real low-risk docs-only task `operator-real-docs-task-170` under goal `operator-real-goal-170`; token values were not printed.
 - `skybridge-run-once.ps1 -NoSubmit -Apply` started control with `max_tasks=1`, heartbeat-registered `laptop-zenbookduo`, ran the edge worker with `-PollOnce`, and restored control to `paused`.
 - Worker-created child PR #60 changed only `docs/dev/OPERATOR_SUBMIT_RUN_WORKFLOW.md`. GitHub Actions passed: AI branch validation, PR CI, Docker server and Docker web. Merge coordinator marked it ready, classified it low-risk/eligible, and enabled auto-merge; PR #60 merged with commit `536837c28870daeab84b5e438e1e3b3700879fda`.
@@ -378,7 +378,7 @@
 
 ## 2026-05-26 Goal 167B First Remote Worker Execution Pilot
 
-- Remote preflight used `$HOME\.skybridge\worker.laptop-zenbookduo.json` with `token_file_configured=true`; token values were not printed. `laptop-zenbookduo` registered and heartbeated through `https://skybridge.jerryskywalker.space` using direct bearer-token worker auth.
+- Remote preflight used `$HOME\.skybridge\worker.laptop-zenbookduo.json` with `token_file_configured=true`; token values were not printed. `laptop-zenbookduo` registered and heartbeated through `https://skybridge.example.com` using direct bearer-token worker auth.
 - Initial compact status showed project `skybridge-agent-hub` paused, `remote-claim-smoke-001` blocked, `remote-claim-smoke-002` completed and no queued stale smoke task. Snapshots were written under `.agent/tmp/remote-status-before-167b.json` and `.agent/tmp/remote-status-after-167b.json`.
 - `remote-docs-exec-pilot-001` already existed from the first failed attempt, so the second run created docs-only task `remote-docs-exec-pilot-002` for goal `remote-worker-smoke-goal` with `required_capabilities=["codex"]`, then started project control with `state=running`, `stop_requested=false`, `max_tasks=1`.
 - `-PollOnce` proved remote heartbeat, control read, task claim/start and Codex docs execution. Validation was skipped because no validation commands were configured, using the worker fix that ignores empty validation commands.
@@ -394,13 +394,13 @@
 
 - Added `scripts/powershell/skybridge-status.ps1`, a compact cloud status command for narrow terminals. It queries `/v1/health`, project control, workers and project tasks, renders compact worker/task tables, and can write full JSON snapshots to `.agent/tmp` without printing worker tokens.
 - Added `smoke-skybridge-status.ps1`, which starts a temporary local SkyBridge server, seeds paused project control, online/offline workers and queued/running/completed/failed/blocked tasks, then verifies compact and JSON status output.
-- Remote preflight confirmed `$HOME\.skybridge\worker.laptop-zenbookduo.json` exists and loads as a bearer-token remote worker profile for `https://skybridge.jerryskywalker.space` without printing token values.
+- Remote preflight confirmed `$HOME\.skybridge\worker.laptop-zenbookduo.json` exists and loads as a bearer-token remote worker profile for `https://skybridge.example.com` without printing token values.
 - Blocker: `SKYBRIDGE_WORKER_TOKEN` was not present in this Codex process, user environment or machine environment, and the profile has no configured token file. Because worker-sensitive routes require bearer auth, the real remote register/heartbeat, cloud docs task creation, `-PollOnce` execution, child PR packaging and EvidenceSummary reporting were not run.
 - Safety state: project control was not changed by this run, so no start/resume operation needed rollback; the project was expected to remain paused from the prior safe state.
 
 ## 2026-05-26 Super Goal 166 Cloud Server Remote Worker Smoke
 
-- Added safe cloud deployment wiring templates for `https://skybridge.jerryskywalker.space`: topology doc, server env example, SkyBridge compose template, OpenResty reverse proxy example and remote home PC worker profile example.
+- Added safe cloud deployment wiring templates for `https://skybridge.example.com`: topology doc, server env example, SkyBridge compose template, OpenResty reverse proxy example and remote home PC worker profile example.
 - Added `smoke-remote-skybridge-api.ps1` for dry-run request construction, remote `/v1/health`, optional worker register/heartbeat and optional missing/wrong token rejection checks without printing tokens.
 - Added first remote worker registration runbook with DNS, HTTPS, token, profile, smoke command and 401/403/502/TLS troubleshooting.
 - Real remote smoke was skipped in this session because `SKYBRIDGE_REMOTE_API_BASE` and `SKYBRIDGE_WORKER_TOKEN` were not present in the local environment.
@@ -716,7 +716,7 @@
 
 ## 2026-05-31
 
-- Super 183 deployed the latest merged SkyBridge Server image from `main` to the existing server container only. Health passed on localhost and `https://skybridge.jerryskywalker.space/v1/health`; no OpenResty, DNS, Authelia, ntfy, Halo, firewall, server root configuration, secret or GitHub settings changes were made.
+- Super 183 deployed the latest merged SkyBridge Server image from `main` to the existing server container only. Health passed on localhost and `https://skybridge.example.com/v1/health`; no OpenResty, DNS, Authelia, ntfy, Halo, firewall, server root configuration, secret or GitHub settings changes were made.
 - Hermes persisted a docs-only Super 183 proposal batch. Approved proposals `proposal-3ebb79b2b20a2d64` and `proposal-a3d7d8d55b54455e` converted to `task_proposal-3ebb79b2b20a2d64` and `task_proposal-a3d7d8d55b54455e`; deferred proposal `proposal-c6349c43ccbdcf98` and an unapproved proposal were refused conversion.
 - The lease-backed worker loop ran on `laptop-zenbookduo` only. Task `task_proposal-a3d7d8d55b54455e` used lease `lease_xWVPzMr5ztjvHLKheYCJa` and created child PR #86; task `task_proposal-3ebb79b2b20a2d64` used lease `lease_B3Jh_y7YhYcqGPoEWtPhq` and created child PR #87.
 - Both child PRs changed only their expected docs files, all checks passed, both PRs merged, both task leases were released, both local repo locks were cleaned up, and cloud evidence was repaired to recovered status after the CI guardian initially stopped on draft/pending checks.

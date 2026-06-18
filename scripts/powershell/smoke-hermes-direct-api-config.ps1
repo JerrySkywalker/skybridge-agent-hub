@@ -7,9 +7,11 @@ $runbook = Get-Content -Raw -LiteralPath .\docs\operations\HERMES_DIRECT_API.md
 $config = Get-Content -Raw -LiteralPath .\docs\operations\openresty-hermes-api.example.conf
 
 foreach ($expected in @(
-  "api.hermes.jerryskywalker.space",
+  "<PRIVATE_HERMES_API_BASE>",
+  "api.hermes.example.com",
   "127.0.0.1:8642",
   "Authorization: Bearer",
+  "publish the real Hermes API hostname",
   "skybridge-hermes-health.ps1",
   "skybridge-hermes-preview.ps1",
   "http://127.0.0.1:18642"

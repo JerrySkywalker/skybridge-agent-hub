@@ -14,7 +14,7 @@ Useful options:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-self-bootstrap-readiness.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId dev-queue-189-200 `
   -Json

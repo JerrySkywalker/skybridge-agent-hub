@@ -109,7 +109,7 @@ Status operators can inspect lease-aware task views with:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ShowLeases
 ```
@@ -134,13 +134,13 @@ Campaign status is metadata-only and does not start workers. Operators can inspe
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ShowCampaigns `
   -CampaignLimit 10
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 advance-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId bootstrap-mvp
 ```
@@ -151,14 +151,14 @@ Super 186 adds Hermes advisory gate commands for campaign metadata advance:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 hermes-gate-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId bootstrap-mvp `
   -UseHermesGate `
   -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 advance-with-gate `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId bootstrap-mvp `
   -UseHermesGate `
@@ -181,12 +181,12 @@ Before executing work derived from a campaign step, confirm the status view show
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ActiveOnly
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -Hygiene
 ```
@@ -272,7 +272,7 @@ For the first real remote registration/heartbeat, use `docs/orchestrator/FIRST_R
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -TokenEnvVar SKYBRIDGE_WORKER_TOKEN `
   -WorkerSmoke `
   -AuthFailureCheck `
@@ -292,13 +292,13 @@ Use compact status and project control helpers instead of ad hoc `Invoke-RestMet
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-control.ps1 `
   -Command pause `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
@@ -309,40 +309,40 @@ Use `skybridge-status.ps1` for safe compact views. It prints task and worker sum
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -ActiveOnly
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -RecentTasks 10
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -WorkerId laptop-zenbookduo `
   -TaskLimit 20
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -TaskId remote-docs-task-001 `
   -EventLimit 10
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -TaskStatus failed `
   -ExcludeRecovered
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -RecoveredOnly `
@@ -354,7 +354,7 @@ For guided operator use, prefer `skybridge-guide.ps1`. It wraps the same safe pr
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -Mode status `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
@@ -367,7 +367,7 @@ Proposal queue status is opt-in:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
   -ShowProposals `
@@ -397,7 +397,7 @@ Status:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 ```
@@ -406,7 +406,7 @@ Submit is dry-run by default. Add `-Apply` only when the task body and IDs are c
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-submit.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
   -TaskId remote-docs-task-001 `
@@ -422,7 +422,7 @@ Run one worker pass. This starts project control with `max_tasks=1`, registers/h
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -WorkerProfile "$HOME\.skybridge\worker.$env:COMPUTERNAME.json" `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt" `
@@ -439,7 +439,7 @@ Guided equivalent:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -Mode submit-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
   -GoalTitle "Remote worker smoke goal" `
@@ -455,7 +455,7 @@ The Hermes/SkyBridge facade can call the same guided workflow through the `opera
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-cli.ps1 `
   -Area operator `
   -Command submit-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -GoalId remote-worker-smoke-goal `
   -GoalTitle "Remote worker smoke goal" `
@@ -470,7 +470,7 @@ Proposal review flow:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -Mode proposal-list `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -TokenFile "$HOME\.skybridge\secrets\worker-token.txt"
 
@@ -507,12 +507,12 @@ Operator sequence:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ActiveOnly
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   approve `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id `
   -Reason "approved low-risk docs scope" `
@@ -520,7 +520,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   convert `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id `
   -Apply
@@ -569,13 +569,13 @@ Campaign steps stay metadata-only until an operator explicitly previews and appl
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 execute-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId bootstrap-mvp `
   -WorkerId laptop-zenbookduo
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-campaign.ps1 execute-step `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -CampaignId bootstrap-mvp `
   -WorkerId laptop-zenbookduo `

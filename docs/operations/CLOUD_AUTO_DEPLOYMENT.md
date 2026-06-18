@@ -10,18 +10,21 @@ Trigger:
 Gate:
 
 - Docker Images must succeed on `main`.
-- Required deploy secrets must exist: `TENCENT_DEPLOY_HOST`, `TENCENT_DEPLOY_USER`, `TENCENT_DEPLOY_SSH_KEY`.
+- Required deploy secrets must exist in GitHub repository settings. The workflow
+  validates names only and must not print values.
 - The image reference must include commit evidence through a digest, `sha-<commit>` tag, or expected immutable tag.
 
 Repository secret bootstrap:
 
 - Verify configured secret names with `gh secret list --repo JerrySkywalker/skybridge-agent-hub`.
 - Add the required secrets through GitHub repository settings or `gh secret set`.
-- Optional settings may be added only when the default is wrong: `TENCENT_DEPLOY_PORT`, `SKYBRIDGE_DEPLOY_PATH`, `SKYBRIDGE_DEPLOY_COMPOSE_FILE`, `SKYBRIDGE_DEPLOY_SERVICE`, `GHCR_USERNAME`, `GHCR_TOKEN`.
+- Optional settings may be added only when the default is wrong: deploy SSH port,
+  `SKYBRIDGE_DEPLOY_PATH`, `SKYBRIDGE_DEPLOY_COMPOSE_FILE`,
+  `SKYBRIDGE_DEPLOY_SERVICE`, `GHCR_USERNAME`, `GHCR_TOKEN`.
 - Do not paste secret values into issues, PRs, logs, docs or deploy reports.
 - If the workflow skips with `missing_required_secrets`, the expected safe report lists names only and no SSH step runs.
 
-Current Tencent deployment settings:
+Current private deployment settings:
 
 - `SKYBRIDGE_DEPLOY_PATH=/opt/skybridge/repo`
 - `SKYBRIDGE_DEPLOY_COMPOSE_FILE=deploy/docker-compose.skybridge.yml`

@@ -7,7 +7,7 @@ The first cloud topology keeps SkyBridge Server public through a narrow HTTPS AP
 Planned public endpoint:
 
 ```text
-https://skybridge.jerryskywalker.space
+https://skybridge.example.com
 ```
 
 Local development remains:
@@ -20,7 +20,7 @@ http://127.0.0.1:8787
 
 ```text
 remote worker
-  -> HTTPS skybridge.jerryskywalker.space
+  -> HTTPS skybridge.example.com
   -> OpenResty reverse proxy
   -> SkyBridge Server container/process on loopback/internal network
   -> SQLite volume
@@ -42,7 +42,7 @@ Workers use local profiles with:
 
 ```json
 {
-  "skybridge_api_base": "https://skybridge.jerryskywalker.space",
+  "skybridge_api_base": "https://skybridge.example.com",
   "auth_mode": "bearer_token",
   "allow_remote_server": true,
   "reject_insecure_http_for_remote": true
@@ -63,7 +63,7 @@ To disable remote workers:
 To disable public SkyBridge API access:
 
 1. Remove or disable the OpenResty SkyBridge location/server block.
-2. Confirm `https://skybridge.jerryskywalker.space/v1/health` no longer reaches SkyBridge.
+2. Confirm `https://skybridge.example.com/v1/health` no longer reaches SkyBridge.
 3. Keep Hermes private; do not expose it as a fallback.
 
 No GitHub settings, branch protection, production deploy automation or unattended auto-merge behavior is changed by this topology.

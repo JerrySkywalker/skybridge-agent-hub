@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $output = Join-Path ".agent\tmp\campaign-reports" "smoke-campaign-report.md"
-$result = & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\skybridge-campaign.ps1" runner-report -CampaignId dev-queue-189-200 -ApiBase https://skybridge.jerryskywalker.space -OutputFile $output -Json | ConvertFrom-Json
+$result = & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\skybridge-campaign.ps1" runner-report -CampaignId dev-queue-189-200 -ApiBase https://skybridge.example.com -OutputFile $output -Json | ConvertFrom-Json
 if (-not $result.ok) { throw "Expected runner-report ok." }
 if ($result.token_printed -ne $false -or $result.report.token_printed -ne $false) { throw "Expected token_printed=false." }
 if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw "Expected Markdown output file." }

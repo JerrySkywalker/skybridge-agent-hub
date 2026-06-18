@@ -126,7 +126,7 @@ Hermes-assisted preview can also be run without entering the supervisor apply pa
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-guide.ps1 `
   -Mode hermes-preview `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -MasterGoalId master-goal-hermes-assisted-self-bootstrap-preview `
   -GoalTitle "Hermes-assisted SkyBridge self-bootstrap preview" `

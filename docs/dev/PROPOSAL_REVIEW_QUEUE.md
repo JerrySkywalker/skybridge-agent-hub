@@ -39,12 +39,12 @@ List and inspect proposals:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -Command list `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -Command show `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id
 ```
@@ -54,7 +54,7 @@ Review mutations require `-Apply`:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -Command approve `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id `
   -Reason "low-risk docs proposal reviewed" `
@@ -76,7 +76,7 @@ Convert only after approval:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-proposal.ps1 `
   -Command convert `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ProposalId proposal-id `
   -Apply
@@ -101,7 +101,7 @@ Proposal visibility is opt-in:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -ShowProposals `
   -ProposalLimit 10

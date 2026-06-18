@@ -42,6 +42,7 @@
     "smoke:hermes-evaluate-result": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-hermes-evaluate-result.ps1 -DryRun",
     "smoke:self-bootstrap-loop": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-loop.ps1 -DryRun",
     "smoke:self-bootstrap-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-readiness.ps1",
+    "smoke:public-docs-no-private-endpoints": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-public-docs-no-private-endpoints.ps1",
     "smoke:goal-305": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-cloud-autodeploy-verify.ps1 && pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-cloud-autodeploy-create-rc-tag.ps1 && pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-current-pr-status.ps1 && pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-goal-305-script-safety.ps1",
     "nightly:local-validation": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/nightly-local-validation.ps1",
     "check": "corepack pnpm lint && corepack pnpm typecheck && corepack pnpm test && corepack pnpm build"

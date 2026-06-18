@@ -28,7 +28,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-hermes-tunnel.ps1 
 The command shape is:
 
 ```powershell
-ssh -N -L 18642:127.0.0.1:8642 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 beijing
+ssh -N -L 18642:127.0.0.1:8642 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 <PRIVATE_DEPLOY_HOST>
 ```
 
 The script does not start a duplicate tunnel when the local port is already listening.
@@ -39,7 +39,7 @@ If health checks fail after sleep or a network transition:
 
 1. Run the check-only smoke.
 2. Restart the tunnel with `start-hermes-tunnel.ps1 -Restart`.
-3. Verify SSH access with `ssh beijing` if restart fails.
+3. Verify SSH access with `ssh <PRIVATE_DEPLOY_HOST>` if restart fails.
 4. Re-run the Hermes health smoke.
 
 Keep the tunnel bound to loopback. Do not publish the Hermes API port on the server firewall, OpenResty, Authelia or 1Panel.
