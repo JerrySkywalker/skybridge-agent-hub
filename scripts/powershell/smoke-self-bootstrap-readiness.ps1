@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")]
+  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")]
   [string]$Scenario = "all",
   [switch]$Json
 )
@@ -286,6 +286,18 @@ function Invoke-Scenario {
       if (@($case.result.blockers) -contains "notification_provider_unavailable") { throw "notification_provider_unavailable must not block when admin escalation is ready." }
       if (@($case.result.notifications.providers).Count -ne 7) { throw "Expected all long-term notification providers to remain visible." }
     }
+    "hermes-server-tool-execution" {
+      $case = Invoke-ReadinessFixture -Name $Name -Mutate {
+        param($fixtures)
+        $fixtures.hermes.runtime.tool_execution = "server"
+      }
+      if ($case.result.status -ne "partial") { throw "hermes-server-tool-execution fixture should be partial." }
+      Assert-Contains $case.result.warnings "hermes_server_tool_execution_enabled" "hermes-server-tool-execution warnings"
+      Assert-False $case.result.can_start_one "hermes-server-tool-execution can_start_one"
+      Assert-False $case.result.can_run_until_hold "hermes-server-tool-execution can_run_until_hold"
+      Assert-True $case.result.allow_worker_heartbeat "hermes-server-tool-execution allow_worker_heartbeat"
+      if ($case.result.hermes_exposure.risk_level -ne "high") { throw "Expected high Hermes exposure risk." }
+    }
     "admin-unavailable" {
       $case = Invoke-ReadinessFixture -Name $Name -Mutate {
         param($fixtures)
@@ -334,7 +346,7 @@ function Invoke-Scenario {
 }
 
 $scenarioNames = if ($Scenario -eq "all") {
-  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")
+  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")
 } else {
   @($Scenario)
 }
