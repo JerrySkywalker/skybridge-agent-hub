@@ -1,4 +1,4 @@
-# Tencent Deploy Runbook
+# Cloud Deploy Runbook
 
 The GitHub workflow uploads only the fixed deploy script and skybridge-server compose contract, then runs `scripts/deploy/deploy-skybridge-server.sh`.
 
@@ -10,13 +10,13 @@ Default remote settings:
 
 Required GitHub repository secrets:
 
-- `TENCENT_DEPLOY_HOST`
-- `TENCENT_DEPLOY_USER`
-- `TENCENT_DEPLOY_SSH_KEY`
+- deploy host
+- deploy user
+- deploy SSH key
 
 Optional GitHub repository secrets:
 
-- `TENCENT_DEPLOY_PORT`
+- deploy SSH port
 - `SKYBRIDGE_DEPLOY_PATH`
 - `SKYBRIDGE_DEPLOY_COMPOSE_FILE`
 - `SKYBRIDGE_DEPLOY_SERVICE`

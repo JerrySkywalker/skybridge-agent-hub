@@ -70,7 +70,7 @@ docs-only file list.
 ## Planned Execution Flow
 
 1. Preflight cloud state:
-   - check `https://skybridge.jerryskywalker.space`;
+   - check `https://skybridge.example.com`;
    - confirm project control is paused;
    - confirm `laptop-zenbookduo` can heartbeat through token-file auth;
    - confirm no queued or running tasks would interfere.
@@ -110,7 +110,7 @@ Stop the sprint immediately if any of these occur:
 
 ## Preflight Result
 
-Preflight against `https://skybridge.jerryskywalker.space` succeeded:
+Preflight against `https://skybridge.example.com` succeeded:
 
 - project `skybridge-agent-hub` was paused;
 - `laptop-zenbookduo` registered and heartbeated online through token-file auth;
@@ -127,7 +127,7 @@ The dry-run supervisor output showed it would run:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-run-once.ps1 `
-  -ApiBase "https://skybridge.jerryskywalker.space" `
+  -ApiBase "https://skybridge.example.com" `
   -ProjectId "skybridge-agent-hub" `
   -TaskId "task_proposal-d90d09da925d2cf0" `
   -GoalId "master-goal-prepare-skybridge-dogfood-self-bootstrap-sprint" `

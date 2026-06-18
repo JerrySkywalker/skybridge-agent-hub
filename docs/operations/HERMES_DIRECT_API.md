@@ -1,13 +1,20 @@
 # Hermes Direct API
 
-Hermes preview should use a direct HTTPS API endpoint for daily operation:
+Hermes preview can use a private direct HTTPS API endpoint for daily operation.
+Public docs must show placeholders only:
 
 ```text
 Windows / Codex / SkyBridge scripts
-  -> https://api.hermes.jerryskywalker.space
+  -> <PRIVATE_HERMES_API_BASE> or https://api.hermes.example.com
   -> OpenResty
   -> 127.0.0.1:8642 Hermes API server
 ```
+
+The real private endpoint belongs in a local, untracked environment file such as
+`$HOME\.skybridge\hermes.env.ps1`, or in process environment variables. Do not
+publish the real Hermes API hostname, raw env file, bearer token, auth header,
+webhook, tunnel host, provider hostname or production topology in issues, PRs,
+docs or examples.
 
 The old local SSH tunnel path, `http://127.0.0.1:18642`, is still useful as a rollback path, but it is deprecated for routine preview work because it depends on an operator-local tunnel process.
 
@@ -20,14 +27,19 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
 
 ## Requirements
 
-- DNS: `api.hermes.jerryskywalker.space` must resolve to the SkyBridge host.
-- TLS: terminate HTTPS in OpenResty with a valid certificate for `api.hermes.jerryskywalker.space`.
+- Endpoint: `HERMES_API_BASE` must come from `$HOME\.skybridge\hermes.env.ps1`
+  or an equivalent local environment source.
+- DNS/TLS: configure them privately for the real endpoint. Public docs use
+  `https://api.hermes.example.com` or `<PRIVATE_HERMES_API_BASE>` only.
 - Backend: proxy only the Hermes API server at `127.0.0.1:8642`.
-- Dashboard: do not expose the Hermes Dashboard through this hostname.
+- Dashboard: do not expose the Hermes Dashboard through the Hermes API host.
 - Auth: preserve `Authorization: Bearer <HERMES_API_KEY>` and keep bearer auth mandatory.
+- Optional second gate: an IP allowlist and/or private shared header is
+  recommended when the client set is known.
 - Streaming: keep long proxy timeouts and disable buffering for planning calls and SSE-style responses. The example uses `proxy_read_timeout 600s`, `proxy_send_timeout 600s`, `proxy_connect_timeout 60s`, `send_timeout 600s`, `proxy_buffering off` and `proxy_request_buffering off`.
 
-Authelia is not required for API clients because Hermes bearer authentication is the API-level gate. An optional IP allowlist is recommended. An optional extra shared header can be added later if Hermes clients need a second gate.
+Authelia is not required for API clients because Hermes bearer authentication is
+the API-level gate. Do not use the API hostname as a Dashboard hostname.
 
 ## OpenResty Example
 
@@ -38,12 +50,13 @@ Use [openresty-hermes-api.example.conf](openresty-hermes-api.example.conf) as th
 Update the local Hermes env file after the HTTPS route is configured:
 
 ```powershell
-$env:HERMES_API_BASE = "https://api.hermes.jerryskywalker.space"
+$env:HERMES_API_BASE = "<PRIVATE_HERMES_API_BASE>"
 $env:HERMES_API_KEY = "<existing local key value>"
 $env:HERMES_MODEL = "<optional model>"
 ```
 
-Keep this in `$HOME\.skybridge\hermes.env.ps1`. Do not commit the file or print the key.
+Keep this in `$HOME\.skybridge\hermes.env.ps1`. Do not commit the file, paste it
+into a PR/issue/doc, or print the key.
 
 ## Verification
 
@@ -80,7 +93,7 @@ Preview wrapper:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase <PRIVATE_SKYBRIDGE_API_BASE> `
   -ProjectId skybridge-agent-hub `
   -MasterGoalId master-goal-hermes-assisted-self-bootstrap-preview `
   -Title "Hermes-assisted SkyBridge self-bootstrap preview" `

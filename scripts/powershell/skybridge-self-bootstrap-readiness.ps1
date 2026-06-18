@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.jerryskywalker.space" }),
+  [string]$ApiBase = $(if ($env:SKYBRIDGE_API_BASE) { $env:SKYBRIDGE_API_BASE } else { "https://skybridge.example.com" }),
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$Repo,
   [string]$MainRef = "origin/main",

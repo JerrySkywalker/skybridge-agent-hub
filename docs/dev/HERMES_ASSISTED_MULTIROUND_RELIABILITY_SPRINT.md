@@ -10,7 +10,7 @@ Use Hermes as an advisory planner, SkyBridge as the deterministic policy/control
 
 The sprint did not proceed to proposal persistence or task execution because the real Hermes preview path remained unstable at `/v1/responses`.
 
-- Hermes endpoint: `https://api.hermes.jerryskywalker.space`.
+- Hermes endpoint: `https://api.hermes.example.com`.
 - Direct HTTPS: `true`.
 - Hermes health: `ok=true`.
 - Capabilities route: succeeded.
@@ -43,7 +43,7 @@ Hermes-assisted multi-round reliability sprint is not yet proven. The recovery P
 Goal 178T resumed the sprint after the direct HTTPS `/v1/responses` path recovered.
 
 - Branch: `ai/goal-178t-hermes-capability-normalization-resume`.
-- Hermes endpoint: `https://api.hermes.jerryskywalker.space`.
+- Hermes endpoint: `https://api.hermes.example.com`.
 - Direct HTTPS: `true`.
 - Hermes health: `ok=true`.
 - Hermes runtime mode: `server_agent`.

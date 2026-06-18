@@ -15,7 +15,7 @@
   "allow_production_deploy": false,
   "allow_remote_server": true,
   "reject_insecure_http_for_remote": true,
-  "skybridge_api_base": "https://skybridge.jerryskywalker.space",
+  "skybridge_api_base": "https://skybridge.example.com",
   "auth_mode": "bearer_token",
   "token_env_var": "SKYBRIDGE_WORKER_TOKEN",
   "token_file": "C:\\Users\\operator\\.skybridge\\worker-token.txt",

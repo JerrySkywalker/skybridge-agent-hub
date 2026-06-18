@@ -1,6 +1,6 @@
 # Proposal Review Queue Cloud Pilot
 
-Super Goal 182 ran a real cloud proposal review pilot against `https://skybridge.jerryskywalker.space` for project `skybridge-agent-hub`.
+Super Goal 182 ran a real cloud proposal review pilot against `https://skybridge.example.com` for project `skybridge-agent-hub`.
 
 ## Scope
 

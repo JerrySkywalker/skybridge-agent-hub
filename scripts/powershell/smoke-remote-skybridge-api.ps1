@@ -65,7 +65,7 @@ function Invoke-ExpectedAuthFailure {
 }
 
 if ([string]::IsNullOrWhiteSpace($ApiBase)) {
-  $ApiBase = "https://skybridge.jerryskywalker.space"
+  $ApiBase = "https://skybridge.example.com"
   $DryRun = $true
 }
 

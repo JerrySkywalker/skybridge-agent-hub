@@ -7,7 +7,7 @@ This document describes the deployment shape for direct worker connectivity. It 
 Use a dedicated HTTPS subdomain for SkyBridge Server. The first planned endpoint is:
 
 ```text
-https://skybridge.jerryskywalker.space
+https://skybridge.example.com
 ```
 
 Generic examples may use:
@@ -67,7 +67,7 @@ Use the remote smoke script for the first registration test:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\smoke-remote-skybridge-api.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -TokenEnvVar SKYBRIDGE_WORKER_TOKEN `
   -WorkerSmoke `
   -AuthFailureCheck `

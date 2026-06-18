@@ -19,7 +19,7 @@ param(
 
   [int]$RemotePort = 8642,
 
-  [string]$SshTarget = "beijing"
+  [string]$SshTarget = "<PRIVATE_DEPLOY_HOST>"
 )
 
 $ErrorActionPreference = "Stop"
@@ -135,7 +135,7 @@ $processesAfter = @(Get-HermesTunnelProcess)
 if (-not $listeningAfter) {
   $recovery += "Hermes tunnel is not listening on $HostName`:$LocalPort."
   $recovery += "If the laptop just slept or changed networks, rerun: pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\start-hermes-tunnel.ps1 -Restart"
-  $recovery += "If restart fails, verify SSH access with: ssh beijing"
+  $recovery += "If restart fails, verify SSH access with: ssh <PRIVATE_DEPLOY_HOST>"
   $recovery += "Keep Hermes private; do not expose the remote API port publicly."
 }
 

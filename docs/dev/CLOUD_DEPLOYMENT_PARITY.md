@@ -3,7 +3,7 @@
 Cloud route parity checks the public API base, defaulting to:
 
 ```text
-https://skybridge.jerryskywalker.space
+https://skybridge.example.com
 ```
 
 Required routes:

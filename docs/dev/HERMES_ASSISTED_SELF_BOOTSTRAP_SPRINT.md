@@ -57,7 +57,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
   -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
 
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -ProjectId skybridge-agent-hub `
   -MasterGoalId master-goal-hermes-assisted-self-bootstrap-preview `
   -Title "Hermes-assisted SkyBridge self-bootstrap preview" `
@@ -72,13 +72,13 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
 
 Preview JSON now exposes policy-validated proposals in both top-level `proposals` and `planning_session.proposals`. `project_state` remains state-only and is not the only place proposals appear. Hermes proposal task types are normalized before policy validation: `smoke` becomes `local-smoke`, `doc` and `documentation` become `docs`, and unsafe task types such as deploy, production, secrets, GitHub settings, branch protection and server config remain blocked or human-gated.
 
-Daily operation should move from the SSH tunnel to the direct HTTPS API described in `docs/operations/HERMES_DIRECT_API.md`. Super Goal 177 verified `https://api.hermes.jerryskywalker.space`; tunnel mode remains a fallback only.
+Daily operation should move from the SSH tunnel to the direct HTTPS API described in `docs/operations/HERMES_DIRECT_API.md`. Super Goal 177 verified `https://api.hermes.example.com`; tunnel mode remains a fallback only.
 
 ## Apply Sprint
 
 Super Goal 177 proved the first Hermes-assisted proposal persistence and single apply sprint. This was intentionally not a multi-round supervisor run.
 
-- Hermes endpoint: `https://api.hermes.jerryskywalker.space`.
+- Hermes endpoint: `https://api.hermes.example.com`.
 - Direct HTTPS: `true`.
 - Hermes health: `ok=true`.
 - Hermes platform/model: `hermes-agent` health; planner request model recorded as `default`.

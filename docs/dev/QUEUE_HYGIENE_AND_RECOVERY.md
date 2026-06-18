@@ -28,7 +28,7 @@ Use `-Hygiene` for a compact governance view:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -Hygiene
 ```
 
@@ -97,7 +97,7 @@ This fixes the confusing case where raw proposal status remains `converted` even
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 audit `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -Json
 ```
 
@@ -125,7 +125,7 @@ Dry-run example:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 recover-lease `
-  -ApiBase https://skybridge.jerryskywalker.space `
+  -ApiBase https://skybridge.example.com `
   -TaskId task-id `
   -LeaseId lease-id `
   -Reason "operator reviewed stale lease" `
@@ -137,10 +137,10 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 re
 Read-only audit commands:
 
 ```powershell
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.jerryskywalker.space -Hygiene -Json
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.jerryskywalker.space -ShowLeases -ShowLocks -Json
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.jerryskywalker.space -ShowProposals -ProposalLimit 20 -Json
-pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 audit -ApiBase https://skybridge.jerryskywalker.space -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.example.com -Hygiene -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.example.com -ShowLeases -ShowLocks -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-status.ps1 -ApiBase https://skybridge.example.com -ShowProposals -ProposalLimit 20 -Json
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hygiene.ps1 audit -ApiBase https://skybridge.example.com -Json
 ```
 
 Findings:

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$ApiBase = "https://skybridge.jerryskywalker.space",
+  [string]$ApiBase = "https://skybridge.example.com",
   [switch]$Json,
   [switch]$FixtureMissingManualTaskRoute,
   [switch]$FixtureHealthy

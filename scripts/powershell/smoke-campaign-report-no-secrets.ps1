@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $jsonOutput = Join-Path ".agent\tmp\campaign-reports" "smoke-campaign-report-no-secrets.json"
-$result = & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\skybridge-campaign.ps1" runner-report -CampaignId dev-queue-189-200 -ApiBase https://skybridge.jerryskywalker.space -OutputFile $jsonOutput -Json | ConvertFrom-Json
+$result = & pwsh -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\skybridge-campaign.ps1" runner-report -CampaignId dev-queue-189-200 -ApiBase https://skybridge.example.com -OutputFile $jsonOutput -Json | ConvertFrom-Json
 if (-not $result.ok) { throw "Expected runner-report ok." }
 $paths = @($result.report.artifact_paths | Where-Object { $_ })
 $texts = @($result | ConvertTo-Json -Depth 100)

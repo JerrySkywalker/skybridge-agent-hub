@@ -8,7 +8,7 @@ Super Goal 183 proved a cloud lease-backed approved proposal batch loop with two
 - Deployed commit: `69c6a02` (`Merge pull request #85`)
 - Container image: `ghcr.io/jerryskywalker/skybridge-agent-hub-server:main`
 - Container image ID: `sha256:d20dfdf38d92da1fd71faf13bbd1288cf087ce092364462a412ad58521725890`
-- Health: `https://skybridge.jerryskywalker.space/v1/health` returned `ok=true`
+- Health: `https://skybridge.example.com/v1/health` returned `ok=true`
 - Persistence: SQLite
 - Migration: no manual migration was required
 

@@ -146,7 +146,7 @@ export interface ConnectivityDoctorModel {
 }
 
 export const LOCAL_DEV_API_BASE = "http://127.0.0.1:8787";
-export const DEFAULT_CLOUD_OPERATOR_API_BASE = "https://skybridge.jerryskywalker.space";
+export const DEFAULT_CLOUD_OPERATOR_API_BASE = "https://skybridge.example.com";
 export const LOCAL_DEV_START_COMMAND = "corepack pnpm --filter @skybridge-agent-hub/server dev";
 export const API_MODE_STORAGE_KEY = "skybridge.api.mode";
 export const API_BASE_STORAGE_KEY = "skybridge.api.base";
