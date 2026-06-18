@@ -8,6 +8,31 @@ Default remote settings:
 - `SKYBRIDGE_DEPLOY_COMPOSE_FILE=compose.yaml`
 - `SKYBRIDGE_DEPLOY_SERVICE=skybridge-server`
 
+Required GitHub repository secrets:
+
+- `TENCENT_DEPLOY_HOST`
+- `TENCENT_DEPLOY_USER`
+- `TENCENT_DEPLOY_SSH_KEY`
+
+Optional GitHub repository secrets:
+
+- `TENCENT_DEPLOY_PORT`
+- `SKYBRIDGE_DEPLOY_PATH`
+- `SKYBRIDGE_DEPLOY_COMPOSE_FILE`
+- `SKYBRIDGE_DEPLOY_SERVICE`
+- `GHCR_USERNAME`
+- `GHCR_TOKEN`
+
+Safe preflight:
+
+```powershell
+gh secret list --repo JerrySkywalker/skybridge-agent-hub
+gh run list --workflow deploy-cloud.yml --limit 5
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-cloud-parity-check.ps1
+```
+
+If no repository secrets are configured, `Deploy Cloud` must stop before SSH and upload a sanitized skipped report with missing secret names only.
+
 Manual dry-run:
 
 ```bash
