@@ -42,6 +42,7 @@ Hermes can run on a schedule, for example hourly health checks and nightly queue
 - Auto-merge sweep: classifies open PRs, reports eligible/blocked/draft/non-AI/missing-check/pending-check counts and remains dry-run unless `-EnableAutoMerge` is explicit.
 - Hermes cloud supervisor: stays private behind the local SSH tunnel and supervises health, reports and sweep decisions through JSON commands.
 - Bootstrap ntfy fallback: sends concise non-urgent phone summaries when `-Send` is explicit; urgent remains reserved for hard safety boundaries.
+- Hermes WeChat admin escalation: current bootstrap path for SkyBridge blocker, hold and `ask_human` notices. Goal 308 proves readiness semantics; Goal 309 adds a bounded operator-triggered send-test.
 - Human-only controls: production deployment, server root configuration, GitHub branch protection/repository settings, secret changes, public Hermes exposure and scheduled real auto-merge.
 
 ## Supervision Model
@@ -94,3 +95,19 @@ Dry-run sweep only:
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-supervisor.ps1 -Mode NightlySweep -UseHermesApi -DryRun -Json
 ```
+
+## Admin Escalation Send-Test
+
+Use the Goal 309 send-test before any self-bootstrap start-one or run-until-hold attempt that depends on administrator escalation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-admin-escalation-test.ps1 `
+  -Title "SkyBridge admin escalation test" `
+  -Message "Operator-triggered bootstrap-test admin escalation dry run." `
+  -Severity warning `
+  -Json
+```
+
+The command is dry-run/no-send by default. A real WeChat or WeCom delivery requires `-Send` and a configured Hermes send endpoint path through `HERMES_ADMIN_ESCALATION_SEND_PATH`. Until Hermes exposes that endpoint, send mode returns `delivery_status=send_endpoint_not_available` and does not claim delivery.
+
+Hermes should expose a contract equivalent to `POST /v1/admin/escalations/wechat/send` with a request body limited to `project_id`, `environment=bootstrap-test`, `severity`, `short_reason` and `timestamp`. The response should report `ok`, `delivery_status` and `delivery_confirmed`, and must not include raw provider payloads, credentials, auth headers, prompts, logs, command output or patches.

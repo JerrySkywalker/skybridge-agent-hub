@@ -26,6 +26,7 @@
     "smoke:browser-visual-qa": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-browser-visual-qa.ps1 -SkipWhenUnavailable",
     "smoke:bootstrap-notification": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-notification.ps1",
     "smoke:admin-escalation-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-admin-escalation-readiness.ps1",
+    "smoke:admin-escalation-test": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-admin-escalation-test.ps1",
     "smoke:bootstrap-env-loading": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-env-loading.ps1",
     "smoke:codex-phone-notification": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-codex-phone-notification.ps1 -DryRun",
     "smoke:iteration-controller": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-iteration-controller.ps1",
