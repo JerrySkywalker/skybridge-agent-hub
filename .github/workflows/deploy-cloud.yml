@@ -40,10 +40,10 @@ jobs:
       SKYBRIDGE_DEPLOY_SERVICE: ${{ secrets.SKYBRIDGE_DEPLOY_SERVICE }}
       GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-      PUBLIC_API_BASE: https://skybridge.jerryskywalker.space
+      PUBLIC_API_BASE: ${{ vars.SKYBRIDGE_PUBLIC_API_BASE }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve deploy inputs
         id: deploy-inputs
@@ -75,16 +75,24 @@ jobs:
           for name in TENCENT_DEPLOY_HOST TENCENT_DEPLOY_USER TENCENT_DEPLOY_SSH_KEY; do
             if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
           done
-          if [[ ${#missing[@]} -gt 0 ]]; then
+          missing_vars=()
+          if [[ -z "${PUBLIC_API_BASE:-}" ]]; then missing_vars+=("SKYBRIDGE_PUBLIC_API_BASE"); fi
+          if [[ ${#missing[@]} -gt 0 || ${#missing_vars[@]} -gt 0 ]]; then
             {
               echo '{'
               echo '  "schema": "skybridge.cloud_deploy_report.v1",'
               echo '  "status": "skipped",'
-              echo '  "reason": "missing_required_secrets",'
+              echo '  "reason": "missing_required_configuration",'
               printf '  "missing_secrets": ['
               for i in "${!missing[@]}"; do
                 if [[ "$i" -gt 0 ]]; then printf ', '; fi
                 printf '"%s"' "${missing[$i]}"
+              done
+              echo '],'
+              printf '  "missing_variables": ['
+              for i in "${!missing_vars[@]}"; do
+                if [[ "$i" -gt 0 ]]; then printf ', '; fi
+                printf '"%s"' "${missing_vars[$i]}"
               done
               echo '],'
               echo '  "deploy_scope": "skybridge-server-only",'
@@ -97,8 +105,9 @@ jobs:
               echo "# SkyBridge Cloud Deploy Report"
               echo
               echo "- status: skipped"
-              echo "- reason: missing_required_secrets"
+              echo "- reason: missing_required_configuration"
               echo "- missing_secrets: ${missing[*]}"
+              echo "- missing_variables: ${missing_vars[*]}"
               echo "- token_printed: false"
             } > .agent/tmp/deploy/cloud-deploy-report.md
             echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
@@ -167,9 +176,10 @@ jobs:
 
       - name: Upload deploy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cloud-deploy-report
           path: .agent/tmp/deploy/
           if-no-files-found: ignore
           retention-days: 14
+          include-hidden-files: true

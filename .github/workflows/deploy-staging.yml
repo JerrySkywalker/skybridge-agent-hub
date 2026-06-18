@@ -19,16 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Render staging compose plan
         run: |
           mkdir -p .agent/ci
           SKYBRIDGE_IMAGE_TAG="${{ inputs.image_tag || 'main' }}" bash deploy/scripts/staging-dry-run.sh "${{ inputs.image_tag || 'main' }}" 2>&1 | tee .agent/ci/staging-dry-run.log
       - name: Upload dry-run log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: staging-dry-run-log
           path: .agent/ci/staging-dry-run.log
           if-no-files-found: ignore
           retention-days: 7
+          include-hidden-files: true

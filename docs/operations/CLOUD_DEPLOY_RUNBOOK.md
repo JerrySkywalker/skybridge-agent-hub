@@ -23,6 +23,16 @@ Optional GitHub repository secrets:
 - `GHCR_USERNAME`
 - `GHCR_TOKEN`
 
+Required GitHub repository variables:
+
+- `SKYBRIDGE_PUBLIC_API_BASE`
+
+`SKYBRIDGE_PUBLIC_API_BASE` is the public SkyBridge Server API base used for
+post-deploy parity checks. Keep it in GitHub repository variables or secrets;
+do not hard-code Jerry-specific hostnames in public workflow files. If the
+variable is empty, `Deploy Cloud` stops before SSH and uploads a sanitized
+`missing_required_configuration` report with variable names only.
+
 Safe preflight:
 
 ```powershell
@@ -48,6 +58,14 @@ scripts use `SKYBRIDGE_API_BASE` or explicit `-ApiBase`; Hermes health and
 planning scripts use `HERMES_API_BASE` plus `HERMES_API_KEY`.
 
 If no repository secrets are configured, `Deploy Cloud` must stop before SSH and upload a sanitized skipped report with missing secret names only.
+If `SKYBRIDGE_PUBLIC_API_BASE` is not configured, it must also stop before SSH
+and report the missing variable name only.
+
+GitHub-hosted `ubuntu-latest` runners are supported. If this workflow is moved
+to self-hosted runners, update the runner to at least `v2.327.1` before using
+official Node 24 actions such as `actions/checkout@v6`,
+`actions/setup-node@v6` or `actions/upload-artifact@v6`. Do not use
+`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION`.
 
 Manual dry-run:
 
