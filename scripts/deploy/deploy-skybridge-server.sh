@@ -58,6 +58,11 @@ write_plan() {
   "image_ref": "$(json_escape "$IMAGE_REF")",
   "commit_sha": "$(json_escape "$COMMIT_SHA")",
   "expected_tag": "$(json_escape "$EXPECTED_TAG")",
+  "runtime_metadata": {
+    "commit_sha": "$(json_escape "$COMMIT_SHA")",
+    "image_tag": "$(json_escape "$EXPECTED_TAG")",
+    "image_ref": "$(json_escape "$IMAGE_REF")"
+  },
   "health_url": "$(json_escape "$HEALTH_URL")",
   "public_api_base": "$(json_escape "$PUBLIC_API_BASE")",
   "dry_run": $DRY_RUN,
@@ -84,6 +89,11 @@ write_report() {
   "image_ref": "$(json_escape "$IMAGE_REF")",
   "commit_sha": "$(json_escape "$COMMIT_SHA")",
   "expected_tag": "$(json_escape "$EXPECTED_TAG")",
+  "runtime_metadata": {
+    "commit_sha": "$(json_escape "$COMMIT_SHA")",
+    "image_tag": "$(json_escape "$EXPECTED_TAG")",
+    "image_ref": "$(json_escape "$IMAGE_REF")"
+  },
   "previous_image_ref": "$(json_escape "$previous_image")",
   "rollback_status": "$(json_escape "$rollback_status")",
   "health_url": "$(json_escape "$HEALTH_URL")",
@@ -190,15 +200,15 @@ if ! docker pull "$IMAGE_REF"; then
 fi
 
 export SKYBRIDGE_SERVER_IMAGE="$IMAGE_REF"
-export SKYBRIDGE_IMAGE_REF="$IMAGE_REF"
-export SKYBRIDGE_COMMIT_SHA="$COMMIT_SHA"
-export SKYBRIDGE_IMAGE_TAG="$EXPECTED_TAG"
+export SKYBRIDGE_DEPLOY_IMAGE_REF="$IMAGE_REF"
+export SKYBRIDGE_DEPLOY_COMMIT_SHA="$COMMIT_SHA"
+export SKYBRIDGE_DEPLOY_IMAGE_TAG="$EXPECTED_TAG"
 
 if ! compose_cmd up -d "$SERVICE"; then
   rollback_status="not_used"
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
-    export SKYBRIDGE_IMAGE_REF="$previous_image"
+    export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
     if compose_cmd up -d "$SERVICE" && wait_for_health; then
       rollback_status="succeeded"
     else
@@ -212,7 +222,7 @@ if ! wait_for_health; then
   rollback_status="not_used"
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
-    export SKYBRIDGE_IMAGE_REF="$previous_image"
+    export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
     if compose_cmd up -d "$SERVICE" && wait_for_health; then
       rollback_status="succeeded"
     else
@@ -226,7 +236,7 @@ if ! run_route_parity; then
   rollback_status="not_used"
   if [[ "$previous_image" != "unknown" ]]; then
     export SKYBRIDGE_SERVER_IMAGE="$previous_image"
-    export SKYBRIDGE_IMAGE_REF="$previous_image"
+    export SKYBRIDGE_DEPLOY_IMAGE_REF="$previous_image"
     if compose_cmd up -d "$SERVICE" && wait_for_health; then
       rollback_status="succeeded"
     else

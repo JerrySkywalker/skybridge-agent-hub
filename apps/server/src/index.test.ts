@@ -407,11 +407,13 @@ describe("server api", () => {
     const previousTopic = process.env.NTFY_TOPIC_URL;
     const previousCommit = process.env.SKYBRIDGE_COMMIT_SHA;
     const previousImageTag = process.env.SKYBRIDGE_IMAGE_TAG;
+    const previousImageRef = process.env.SKYBRIDGE_IMAGE_REF;
     const previousBuildTime = process.env.SKYBRIDGE_BUILD_TIME;
     const previousServerVersion = process.env.SKYBRIDGE_SERVER_VERSION;
     delete process.env.NTFY_TOPIC_URL;
     process.env.SKYBRIDGE_COMMIT_SHA = "abc123";
     process.env.SKYBRIDGE_IMAGE_TAG = "sha-abc123";
+    process.env.SKYBRIDGE_IMAGE_REF = "ghcr.io/example/skybridge-agent-hub-server:sha-abc123";
     process.env.SKYBRIDGE_BUILD_TIME = "2026-06-17T00:00:00Z";
     process.env.SKYBRIDGE_SERVER_VERSION = "v2.6.0-test";
     try {
@@ -423,6 +425,7 @@ describe("server api", () => {
           service: string;
           commit_sha: string;
           image_tag: string;
+          image_ref: string;
           build_time: string;
           server_version: string;
           route_set_version: string;
@@ -432,6 +435,7 @@ describe("server api", () => {
         service: "skybridge-server",
         commit_sha: "abc123",
         image_tag: "sha-abc123",
+        image_ref: "ghcr.io/example/skybridge-agent-hub-server:sha-abc123",
         build_time: "2026-06-17T00:00:00Z",
         server_version: "v2.6.0-test",
         token_printed: false,
@@ -446,6 +450,7 @@ describe("server api", () => {
           service: string;
           commit_sha: string;
           image_tag: string;
+          image_ref: string;
           server_version: string;
           token_printed: boolean;
         }>(),
@@ -454,6 +459,7 @@ describe("server api", () => {
         service: "skybridge-server",
         commit_sha: "abc123",
         image_tag: "sha-abc123",
+        image_ref: "ghcr.io/example/skybridge-agent-hub-server:sha-abc123",
         server_version: "v2.6.0-test",
         token_printed: false,
       });
@@ -506,6 +512,8 @@ describe("server api", () => {
       else process.env.SKYBRIDGE_COMMIT_SHA = previousCommit;
       if (previousImageTag === undefined) delete process.env.SKYBRIDGE_IMAGE_TAG;
       else process.env.SKYBRIDGE_IMAGE_TAG = previousImageTag;
+      if (previousImageRef === undefined) delete process.env.SKYBRIDGE_IMAGE_REF;
+      else process.env.SKYBRIDGE_IMAGE_REF = previousImageRef;
       if (previousBuildTime === undefined) delete process.env.SKYBRIDGE_BUILD_TIME;
       else process.env.SKYBRIDGE_BUILD_TIME = previousBuildTime;
       if (previousServerVersion === undefined) delete process.env.SKYBRIDGE_SERVER_VERSION;

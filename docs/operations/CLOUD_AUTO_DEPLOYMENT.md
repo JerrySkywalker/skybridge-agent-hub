@@ -21,6 +21,12 @@ Repository secret bootstrap:
 - Do not paste secret values into issues, PRs, logs, docs or deploy reports.
 - If the workflow skips with `missing_required_secrets`, the expected safe report lists names only and no SSH step runs.
 
+Current Tencent deployment settings:
+
+- `SKYBRIDGE_DEPLOY_PATH=/opt/skybridge/repo`
+- `SKYBRIDGE_DEPLOY_COMPOSE_FILE=deploy/docker-compose.skybridge.yml`
+- `SKYBRIDGE_DEPLOY_SERVICE=skybridge-server`
+
 After secrets are configured, re-run `Deploy Cloud` with `workflow_dispatch` or wait for the next successful `Docker Images` run on `main`. Use an image reference with commit evidence, for example `ghcr.io/<owner>/skybridge-agent-hub-server:sha-<commit>`.
 
 Scope:
@@ -35,3 +41,9 @@ Reports:
 - `.agent/tmp/deploy/cloud-deploy-report.md`
 
 Reports are sanitized and include `token_printed=false`.
+
+Version evidence:
+
+- `/v1/version` must report immutable deployed image metadata: `commit_sha=<commit>`, `image_tag=sha-<commit>` and the full image ref when available.
+- `SKYBRIDGE_SERVER_IMAGE` selects the image. Deploy-only variables `SKYBRIDGE_DEPLOY_COMMIT_SHA`, `SKYBRIDGE_DEPLOY_IMAGE_TAG` and `SKYBRIDGE_DEPLOY_IMAGE_REF` are mapped into the container runtime as `SKYBRIDGE_COMMIT_SHA`, `SKYBRIDGE_IMAGE_TAG` and `SKYBRIDGE_IMAGE_REF`.
+- Server-local `.env` image defaults are compose defaults only. They are not release evidence and must not override deploy-provided runtime version metadata.
