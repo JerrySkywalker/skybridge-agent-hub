@@ -20,6 +20,7 @@ param(
   [string]$FixtureDeployEvidenceFile,
   [string]$FixtureStatusFile,
   [string]$FixtureHermesHealthFile,
+  [string]$FixtureHermesExposureFile,
   [string]$FixtureAdminEscalationFile,
   [string]$FixtureNotificationsFile
 )
@@ -30,7 +31,7 @@ Set-Location $RepoRoot
 Import-Module (Join-Path $PSScriptRoot "lib\Skybridge.ApiBase.psm1") -Force
 
 $ApiBase = Resolve-SkybridgeApiBase -ApiBase $ApiBase -ParameterWasBound $PSBoundParameters.ContainsKey("ApiBase")
-$fixtureMode = ($FixtureGitFile -or $FixtureVersionFile -or $FixtureParityFile -or $FixtureDeployEvidenceFile -or $FixtureStatusFile -or $FixtureHermesHealthFile -or $FixtureAdminEscalationFile -or $FixtureNotificationsFile)
+$fixtureMode = ($FixtureGitFile -or $FixtureVersionFile -or $FixtureParityFile -or $FixtureDeployEvidenceFile -or $FixtureStatusFile -or $FixtureHermesHealthFile -or $FixtureHermesExposureFile -or $FixtureAdminEscalationFile -or $FixtureNotificationsFile)
 Assert-SkybridgeApiBaseUsable -ApiBase $ApiBase -AllowPlaceholder $fixtureMode
 if (-not $fixtureMode) {
   Assert-SkybridgeApiBaseService -ApiBase $ApiBase -TimeoutSeconds $TimeoutSeconds | Out-Null
@@ -403,6 +404,91 @@ function Get-HermesReadiness {
   }
 }
 
+function New-HermesExposureFromHealth {
+  param($Health)
+  $runtime = Get-Prop -Object $Health -Name "runtime"
+  $features = Get-Prop -Object $Health -Name "features"
+  $toolExecution = Get-Prop -Object $runtime -Name "tool_execution"
+  $serverToolExecution = ($toolExecution -and [string]$toolExecution -ne "disabled")
+  $warnings = New-Object System.Collections.Generic.List[string]
+  if ($serverToolExecution) { Add-Warning $warnings "hermes_server_tool_execution_enabled" }
+  $status = if ($warnings.Count -gt 0) { "warning" } else { "ok" }
+  [pscustomobject]@{
+    schema = "skybridge.hermes_exposure_readiness.v1"
+    ok = $true
+    status = $status
+    risk_level = if ($serverToolExecution) { "high" } elseif ($warnings.Count -gt 0) { "medium" } else { "low" }
+    blockers = @()
+    warnings = @($warnings.ToArray())
+    recommended_next_safe_action = if ($serverToolExecution) { "Keep start-one and run-until-hold blocked; add a documented second gate before execution-class actions." } else { "Continue with read-only monitoring." }
+    allow_worker_heartbeat = [bool](Get-Prop -Object $Health -Name "ok" -Default $false)
+    allow_start_one = (-not $serverToolExecution)
+    allow_run_until_hold = (-not $serverToolExecution)
+    hermes = [pscustomobject]@{
+      api_base_configured = $true
+      api_key_configured = $true
+      endpoint = ConvertTo-EndpointSummary -Value ([string](Get-Prop -Object $Health -Name "api_base"))
+      endpoint_redacted = $true
+      https_only = [bool](Get-Prop -Object $Health -Name "direct_https" -Default $false)
+      capabilities_reachable = [bool](Get-Prop -Object $Health -Name "ok" -Default $false)
+      platform = Get-Prop -Object $Health -Name "platform"
+      model = Get-Prop -Object $Health -Name "model"
+      runtime_mode = Get-Prop -Object $runtime -Name "mode"
+      tool_execution = $toolExecution
+      responses_api = Get-Prop -Object $features -Name "responses_api"
+      runs = Get-Prop -Object $features -Name "runs"
+      token_printed = $false
+    }
+    safety = [pscustomobject]@{
+      read_only = $true
+      real_send_performed = $false
+      worker_started = $false
+      codex_task_run = $false
+      raw_response_included = $false
+      credential_values_exposed = $false
+      endpoint_redacted = $true
+      token_printed = $false
+    }
+    token_printed = $false
+  }
+}
+
+function Get-HermesExposureReadiness {
+  if ($FixtureHermesExposureFile) {
+    return Read-JsonFile -Path $FixtureHermesExposureFile
+  }
+  if ($FixtureHermesHealthFile) {
+    return New-HermesExposureFromHealth -Health (Read-JsonFile -Path $FixtureHermesHealthFile)
+  }
+  try {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-hermes-exposure-readiness.ps1"),
+      "-AllowServerToolExecution",
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Json"
+    )
+    if ($HermesEnvFile) { $args += @("-HermesEnvFile", $HermesEnvFile) }
+    if ($HermesApiBase) { $args += @("-ApiBase", $HermesApiBase) }
+    return Invoke-ChildJson -Arguments $args -AllowNonZero
+  } catch {
+    return [pscustomobject]@{
+      schema = "skybridge.hermes_exposure_readiness.v1"
+      ok = $false
+      status = "blocked"
+      risk_level = "high"
+      blockers = @("hermes_exposure_readiness_unavailable")
+      warnings = @()
+      recommended_next_safe_action = "Restore the read-only Hermes exposure audit before any worker or execution-class action."
+      allow_worker_heartbeat = $false
+      allow_start_one = $false
+      allow_run_until_hold = $false
+      hermes = [pscustomobject]@{ error_summary = ConvertTo-SafeText -Text $_.Exception.Message; token_printed = $false }
+      safety = [pscustomobject]@{ read_only = $true; raw_response_included = $false; credential_values_exposed = $false; token_printed = $false }
+      token_printed = $false
+    }
+  }
+}
+
 function Get-AdminEscalationReadiness {
   if ($FixtureAdminEscalationFile) {
     $admin = Read-JsonFile -Path $FixtureAdminEscalationFile
@@ -544,6 +630,7 @@ $parity = Get-ParityReadiness
 $deploy = Get-DeployEvidenceReadiness -MainCommit $git.main_commit
 $statusProbe = Get-StatusReadiness
 $hermes = Get-HermesReadiness
+$hermesExposure = Get-HermesExposureReadiness
 $adminEscalation = Get-AdminEscalationReadiness
 $notifications = Get-NotificationReadiness
 
@@ -600,8 +687,14 @@ if (-not $statusProbe.available) {
 
 if (-not $hermes.available -or -not $hermes.ok) { Add-Blocker $blockers "hermes_unavailable" }
 elseif (-not $hermes.direct_https) { Add-Blocker $blockers "hermes_direct_https_unavailable" }
-if ($hermes.available -and $hermes.tool_execution -and [string]$hermes.tool_execution -ne "disabled") {
-  Add-Warning $warnings "hermes_tool_execution_not_disabled"
+if (-not $hermesExposure.ok -and $hermesExposure.status -eq "blocked") {
+  foreach ($blocker in @($hermesExposure.blockers)) { Add-Blocker $blockers ([string]$blocker) }
+}
+foreach ($warning in @($hermesExposure.warnings)) {
+  if ($warning) { Add-Warning $warnings ([string]$warning) }
+}
+if ($hermesExposure.safety.credential_values_exposed -or $hermesExposure.safety.raw_response_included -or $hermesExposure.token_printed) {
+  Add-Blocker $blockers "hermes_exposure_audit_unsafe"
 }
 
 if (-not $adminEscalation.available -or -not $adminEscalation.ok -or -not $adminEscalation.can_send_blocker_notice) {
@@ -628,8 +721,11 @@ foreach ($provider in @($notifications.providers)) {
 
 $blockerArray = @($blockers.ToArray())
 $warningArray = @($warnings.ToArray())
-$canStartOne = ($blockerArray.Count -eq 0)
-$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $adminEscalation.ok)
+$heartbeatBlocking = @($blockerArray | Where-Object { $_ -ne "worker_offline" })
+$allowWorkerHeartbeat = ($heartbeatBlocking.Count -eq 0 -and [bool]$hermesExposure.allow_worker_heartbeat)
+$executionAllowedByHermes = ([bool]$hermesExposure.allow_start_one -and [bool]$hermesExposure.allow_run_until_hold)
+$canStartOne = ($blockerArray.Count -eq 0 -and $executionAllowedByHermes)
+$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $adminEscalation.ok -and $executionAllowedByHermes)
 $overallStatus = if ($blockerArray.Count -gt 0) {
   "blocked"
 } elseif ($warningArray.Count -gt 0) {
@@ -653,6 +749,9 @@ $report = [pscustomobject]@{
   project_id = $ProjectId
   api_base = "configured"
   status = $overallStatus
+  allow_worker_heartbeat = $allowWorkerHeartbeat
+  allow_start_one = $canStartOne
+  allow_run_until_hold = $canRunUntilHold
   can_start_one = $canStartOne
   can_run_until_hold = $canRunUntilHold
   blockers = $blockerArray
@@ -674,6 +773,7 @@ $report = [pscustomobject]@{
     }
   } else { $statusProbe }
   hermes = $hermes
+  hermes_exposure = $hermesExposure
   admin_escalation = $adminEscalation
   notifications = $notifications
   safety = [pscustomobject]@{
@@ -702,6 +802,7 @@ if ($Json) {
 } else {
   "Schema:       $($report.schema)"
   "Status:       $($report.status)"
+  "Heartbeat:    $($report.allow_worker_heartbeat)"
   "CanStartOne:  $($report.can_start_one)"
   "CanUntilHold: $($report.can_run_until_hold)"
   "Branch:       $($report.repo.branch)"
@@ -712,6 +813,7 @@ if ($Json) {
   "Workers:      online=$($report.control_plane.workers.online) stale=$($report.control_plane.workers.stale) offline=$($report.control_plane.workers.offline)"
   "Tasks:        active=$($report.control_plane.tasks.active) queued=$($report.control_plane.tasks.queued) running=$($report.control_plane.tasks.running) stale_leases=$($report.control_plane.tasks.stale_leases)"
   "Hermes:       ok=$($report.hermes.ok) direct_https=$($report.hermes.direct_https) endpoint=$($report.hermes.endpoint)"
+  "HermesRisk:   status=$($report.hermes_exposure.status) risk=$($report.hermes_exposure.risk_level) heartbeat=$($report.hermes_exposure.allow_worker_heartbeat) start_one=$($report.hermes_exposure.allow_start_one)"
   "AdminEsc:     ok=$($report.admin_escalation.ok) current=$($report.admin_escalation.primary_current) can_notice=$($report.admin_escalation.can_send_blocker_notice)"
   "Notify:       ready=$($report.notifications.ready) total=$($report.notifications.total)"
   "Blockers:     $(if ($report.blockers.Count -gt 0) { $report.blockers -join ', ' } else { 'none' })"

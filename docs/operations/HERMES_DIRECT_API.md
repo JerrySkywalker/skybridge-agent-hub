@@ -44,6 +44,19 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
   -HermesEnvFile "$HOME\.skybridge\hermes.env.ps1"
 ```
 
+Run the exposure hardening audit before any live escalation send, worker
+heartbeat proof or execution-class action:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-hermes-exposure-readiness.ps1 `
+  -Json
+```
+
+The audit reads `HERMES_API_BASE` and `HERMES_API_KEY` from the local Hermes env
+loader, calls only `/v1/capabilities`, redacts the endpoint, excludes raw
+Hermes responses and reports `token_printed=false`.
+
 ## Requirements
 
 - Endpoint: `HERMES_API_BASE` must come from `$HOME\.skybridge\hermes.env.ps1`
@@ -53,8 +66,9 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-health.
 - Backend: proxy only the Hermes API server at `127.0.0.1:8642`.
 - Dashboard: do not expose the Hermes Dashboard through the Hermes API host.
 - Auth: preserve `Authorization: Bearer <HERMES_API_KEY>` and keep bearer auth mandatory.
-- Optional second gate: an IP allowlist and/or private shared header is
-  recommended when the client set is known.
+- Second gate: when `runtime_mode=server_agent` and `tool_execution=server`, an
+  IP allowlist, shared internal header, endpoint-specific allowlist or separate
+  low-privilege token is required before execution-class actions.
 - Streaming: keep long proxy timeouts and disable buffering for planning calls and SSE-style responses. The example uses `proxy_read_timeout 600s`, `proxy_send_timeout 600s`, `proxy_connect_timeout 60s`, `send_timeout 600s`, `proxy_buffering off` and `proxy_request_buffering off`.
 
 Authelia is not required for API clients because Hermes bearer authentication is
@@ -138,6 +152,11 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-preview
 ```
 
 Confirm no SSH tunnel is required, `/v1/capabilities` succeeds, `hermes-preview` succeeds, proposals are visible in both `proposals` and `planning_session.proposals`, no cloud task is created, and project control remains paused.
+
+The safe exposure audit must classify `server_agent/tool_execution=server` as
+high risk. That state can be compatible with a documented heartbeat-only proof
+when explicitly allowed, but it does not allow live admin escalation send,
+`start-one` or `run-until-hold` until the second gate is satisfied.
 
 The preview wrapper saves full JSON when `-OutputFile` is supplied. Add:
 

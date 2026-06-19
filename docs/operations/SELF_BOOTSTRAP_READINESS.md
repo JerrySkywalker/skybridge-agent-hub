@@ -47,6 +47,9 @@ schema = skybridge.self_bootstrap_readiness.v1
 status = ready | blocked | partial | unknown
 can_start_one = true | false
 can_run_until_hold = true | false
+allow_worker_heartbeat = true | false
+allow_start_one = true | false
+allow_run_until_hold = true | false
 blockers = [...]
 warnings = [...]
 required_human_action = string
@@ -64,6 +67,7 @@ It also includes safe summaries for:
 - worker online/stale/offline counts;
 - campaign queue counts;
 - Hermes health with a redacted endpoint only;
+- Hermes exposure readiness and execution risk classification;
 - administrator escalation readiness;
 - notification provider status.
 
@@ -83,8 +87,22 @@ The report intentionally excludes raw prompts, raw Hermes responses, raw logs, t
 - at least one worker is online;
 - at least one campaign is ready or paused;
 - Hermes health is OK over direct HTTPS;
+- Hermes exposure readiness allows execution-class actions;
 - administrator escalation through the current Hermes WeChat or WeCom path is ready;
 - `token_printed=false`.
+
+Hermes exposure is reported separately from admin escalation. Admin escalation
+readiness means the current dry-run path can evaluate blocker notice delivery
+semantics. It does not prove live delivery. A real send remains unproven unless
+`skybridge-admin-escalation-test.ps1 -Send` is explicitly authorized and returns
+safe delivery evidence.
+
+If Hermes reports `runtime_mode=server_agent` and `tool_execution=server`,
+self-bootstrap readiness adds `hermes_server_tool_execution_enabled` and treats
+Hermes exposure as high risk. Worker heartbeat may remain allowed only as a
+heartbeat-only proof when no blocker other than `worker_offline` prevents it.
+`start-one` and `run-until-hold` remain blocked until the second gate is
+satisfied and the exposure audit allows execution.
 
 Goal 308 proved the readiness semantics for the current bootstrap administrator escalation path. It verifies that the configured channel is Hermes WeChat or WeCom, that Hermes is reachable over direct HTTPS, and that the path can send blocker notices. It does not send a real message.
 
@@ -133,6 +151,7 @@ The smoke covers:
 - blocked report when the worker is offline;
 - blocked report when stale leases are present;
 - blocked report when Hermes is unavailable;
+- high-risk Hermes exposure when server-side Hermes tool execution is enabled;
 - warning-only skipped SkyBridge Notification Center providers when admin escalation is ready;
 - blocked report when admin escalation is unavailable;
 - blocked report when admin escalation credential exposure is detected;

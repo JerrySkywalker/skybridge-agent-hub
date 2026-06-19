@@ -43,6 +43,7 @@ Hermes can run on a schedule, for example hourly health checks and nightly queue
 - Hermes cloud supervisor: stays private behind the local SSH tunnel and supervises health, reports and sweep decisions through JSON commands.
 - Bootstrap ntfy fallback: sends concise non-urgent phone summaries when `-Send` is explicit; urgent remains reserved for hard safety boundaries.
 - Hermes WeChat admin escalation: current bootstrap path for SkyBridge blocker, hold and `ask_human` notices. Goal 308 proves readiness semantics; Goal 309 adds a bounded operator-triggered send-test.
+- Hermes exposure gate: Goal 313 classifies the direct Hermes API before any live send or worker execution. `server_agent/tool_execution=server` is high risk and requires a second gate before execution-class actions.
 - Human-only controls: production deployment, server root configuration, GitHub branch protection/repository settings, secret changes, public Hermes exposure and scheduled real auto-merge.
 
 ## Supervision Model
@@ -111,3 +112,20 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-admin-escalati
 The command is dry-run/no-send by default. A real WeChat or WeCom delivery requires `-Send` and a configured Hermes send endpoint path through `HERMES_ADMIN_ESCALATION_SEND_PATH`. Until Hermes exposes that endpoint, send mode returns `delivery_status=send_endpoint_not_available` and does not claim delivery.
 
 Hermes should expose a contract equivalent to `POST /v1/admin/escalations/wechat/send` with a request body limited to `project_id`, `environment=bootstrap-test`, `severity`, `short_reason` and `timestamp`. The response should report `ok`, `delivery_status` and `delivery_confirmed`, and must not include raw provider payloads, credentials, auth headers, prompts, logs, command output or patches.
+
+## Exposure Gate
+
+Before a live admin escalation send, local worker heartbeat proof, `start-one`
+or `run-until-hold`, run:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-hermes-exposure-readiness.ps1 `
+  -Json
+```
+
+Heartbeat is a lower-risk liveness signal. It must not claim tasks or execute
+Codex. `start-one` and `run-until-hold` require the exposure audit to allow
+execution and, for `server_agent/tool_execution=server`, a second gate such as
+an IP allowlist, shared internal header, endpoint-specific allowlist or separate
+low-privilege token.
