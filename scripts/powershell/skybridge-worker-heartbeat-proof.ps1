@@ -159,57 +159,64 @@ function Invoke-OptionalApi {
   }
 }
 
-$config = Resolve-HeartbeatConfig
-$WorkerId = [string]$config.worker_id
-Assert-SkyBridgeWorkerApiSafety -Config $config
-
-$tasksBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
-$controlBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($config.project_id))/control"
-
-$registered = Register-Worker -Config $config
-$heartbeat = Send-WorkerHeartbeat -Config $config -StatusNote "heartbeat_only_proof" -Load 0
-$workerAfter = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($config.worker_id))" -ApiBase $config.api_base -Config $config -TimeoutSeconds $TimeoutSeconds
-$workersSummary = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/workers/summary"
-$tasksAfter = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
-$controlAfter = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($config.project_id))/control"
-
-$workerStatus = [string](Get-Prop -Object $workerAfter.worker -Name "status" -Default "unknown")
-$onlineWorkerIds = @()
 try {
-  $allWorkers = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $config.api_base -Config $config -TimeoutSeconds $TimeoutSeconds
-  $onlineWorkerIds = @($allWorkers.workers | Where-Object { [string](Get-Prop -Object $_ -Name "status") -eq "online" } | ForEach-Object { [string](Get-Prop -Object $_ -Name "worker_id") })
-} catch {}
+  $config = Resolve-HeartbeatConfig
+  $WorkerId = [string]$config.worker_id
+  Assert-SkyBridgeWorkerApiSafety -Config $config
 
-$projectStateBefore = [string](Get-Prop -Object (Get-Prop -Object $controlBefore -Name "control_state") -Name "state" -Default (Get-Prop -Object $controlBefore -Name "state"))
-$projectStateAfter = [string](Get-Prop -Object (Get-Prop -Object $controlAfter -Name "control_state") -Name "state" -Default (Get-Prop -Object $controlAfter -Name "state"))
+  $tasksBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
+  $controlBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($config.project_id))/control"
 
-$result = New-BaseProof -Ok ($workerStatus -eq "online")
-$result["worker_id"] = [string]$config.worker_id
-$result["project_id"] = [string]$config.project_id
-$result["registered"] = [bool](Get-Prop -Object $registered -Name "ok" -Default $false)
-$result["heartbeat_sent"] = [bool](Get-Prop -Object $heartbeat -Name "ok" -Default $false)
-$result["worker_status_after"] = $workerStatus
-$result["worker_online_after"] = ($workerStatus -eq "online")
-$result["online_worker_ids"] = @($onlineWorkerIds)
-$result["workers"] = [pscustomobject]@{
-  online = Get-Prop -Object $workersSummary -Name "online" -Default $null
-  stale = Get-Prop -Object $workersSummary -Name "stale" -Default $null
-  offline = Get-Prop -Object $workersSummary -Name "offline" -Default $null
-}
-$result["project_control"] = [pscustomobject]@{
-  before = if ([string]::IsNullOrWhiteSpace($projectStateBefore)) { $null } else { $projectStateBefore }
-  after = if ([string]::IsNullOrWhiteSpace($projectStateAfter)) { $null } else { $projectStateAfter }
-}
-$result["task_summary_before"] = [pscustomobject]@{
-  queued = Get-Prop -Object $tasksBefore -Name "queued" -Default $null
-  claimed = Get-Prop -Object $tasksBefore -Name "claimed" -Default $null
-  running = Get-Prop -Object $tasksBefore -Name "running" -Default $null
-}
-$result["task_summary_after"] = [pscustomobject]@{
-  queued = Get-Prop -Object $tasksAfter -Name "queued" -Default $null
-  claimed = Get-Prop -Object $tasksAfter -Name "claimed" -Default $null
-  running = Get-Prop -Object $tasksAfter -Name "running" -Default $null
-}
-$result["heartbeat_only"] = $true
+  $registered = Register-Worker -Config $config
+  $heartbeat = Send-WorkerHeartbeat -Config $config -StatusNote "heartbeat_only_proof" -Load 0
+  $workerAfter = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($config.worker_id))" -ApiBase $config.api_base -Config $config -TimeoutSeconds $TimeoutSeconds
+  $workersSummary = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/workers/summary"
+  $tasksAfter = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
+  $controlAfter = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($config.project_id))/control"
 
-Write-ProofResult -Result $result
+  $workerStatus = [string](Get-Prop -Object $workerAfter.worker -Name "status" -Default "unknown")
+  $onlineWorkerIds = @()
+  try {
+    $allWorkers = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $config.api_base -Config $config -TimeoutSeconds $TimeoutSeconds
+    $onlineWorkerIds = @($allWorkers.workers | Where-Object { [string](Get-Prop -Object $_ -Name "status") -eq "online" } | ForEach-Object { [string](Get-Prop -Object $_ -Name "worker_id") })
+  } catch {}
+
+  $projectStateBefore = [string](Get-Prop -Object (Get-Prop -Object $controlBefore -Name "control_state") -Name "state" -Default (Get-Prop -Object $controlBefore -Name "state"))
+  $projectStateAfter = [string](Get-Prop -Object (Get-Prop -Object $controlAfter -Name "control_state") -Name "state" -Default (Get-Prop -Object $controlAfter -Name "state"))
+
+  $result = New-BaseProof -Ok ($workerStatus -eq "online")
+  $result["worker_id"] = [string]$config.worker_id
+  $result["project_id"] = [string]$config.project_id
+  $result["registered"] = [bool](Get-Prop -Object $registered -Name "ok" -Default $false)
+  $result["heartbeat_sent"] = [bool](Get-Prop -Object $heartbeat -Name "ok" -Default $false)
+  $result["worker_status_after"] = $workerStatus
+  $result["worker_online_after"] = ($workerStatus -eq "online")
+  $result["online_worker_ids"] = @($onlineWorkerIds)
+  $result["workers"] = [pscustomobject]@{
+    online = Get-Prop -Object $workersSummary -Name "online" -Default $null
+    stale = Get-Prop -Object $workersSummary -Name "stale" -Default $null
+    offline = Get-Prop -Object $workersSummary -Name "offline" -Default $null
+  }
+  $result["project_control"] = [pscustomobject]@{
+    before = if ([string]::IsNullOrWhiteSpace($projectStateBefore)) { $null } else { $projectStateBefore }
+    after = if ([string]::IsNullOrWhiteSpace($projectStateAfter)) { $null } else { $projectStateAfter }
+  }
+  $result["task_summary_before"] = [pscustomobject]@{
+    queued = Get-Prop -Object $tasksBefore -Name "queued" -Default $null
+    claimed = Get-Prop -Object $tasksBefore -Name "claimed" -Default $null
+    running = Get-Prop -Object $tasksBefore -Name "running" -Default $null
+  }
+  $result["task_summary_after"] = [pscustomobject]@{
+    queued = Get-Prop -Object $tasksAfter -Name "queued" -Default $null
+    claimed = Get-Prop -Object $tasksAfter -Name "claimed" -Default $null
+    running = Get-Prop -Object $tasksAfter -Name "running" -Default $null
+  }
+  $result["heartbeat_only"] = $true
+
+  Write-ProofResult -Result $result
+} catch {
+  $result = New-BaseProof -Ok $false
+  $result["error"] = "heartbeat_proof_failed"
+  $result["error_summary"] = ConvertTo-SafeSummary -Text $_.Exception.Message
+  Write-ProofResult -Result $result -ExitCode 1
+}

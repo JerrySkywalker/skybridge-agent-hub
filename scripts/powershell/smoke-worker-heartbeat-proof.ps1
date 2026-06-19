@@ -54,7 +54,7 @@ if ($Port -le 0) { $Port = Get-Random -Minimum 18000 -Maximum 28000 }
 $ApiBase = "http://127.0.0.1:$Port"
 
 try {
-  $serverCommand = "`$env:SKYBRIDGE_DB_FILE = '$dbFile'; `$env:PORT = '$Port'; corepack pnpm --filter @skybridge-agent-hub/server dev"
+  $serverCommand = "`$env:SKYBRIDGE_DB_FILE = '$dbFile'; `$env:PORT = '$Port'; `$env:SKYBRIDGE_WORKER_TOKEN = `$null; `$env:SKYBRIDGE_WORKER_TOKEN_FILE = `$null; `$env:SKYBRIDGE_WORKER_TOKENS_FILE = `$null; `$env:SKYBRIDGE_REQUIRE_WORKER_AUTH = `$null; corepack pnpm --filter @skybridge-agent-hub/server dev"
   $startProcessParams = @{
     FilePath = "pwsh"
     ArgumentList = @("-NoProfile", "-Command", $serverCommand)
@@ -108,6 +108,26 @@ try {
   Assert-False $missingFlag.result.token_printed "missing-flag token_printed"
   Assert-False $missingFlag.result.tasks_claimed "missing-flag tasks_claimed"
   Assert-False $missingFlag.result.codex_run_called "missing-flag codex_run_called"
+
+  $failureConfigFile = Join-Path $tempDir "worker-unreachable.json"
+  @{
+    worker_id = "unreachable-worker"
+    name = "Unreachable Worker"
+    project_id = "skybridge-agent-hub"
+    repo_path = (Resolve-Path ".").Path
+    api_base = "http://127.0.0.1:9"
+    auth_mode = "none"
+    capabilities = @("heartbeat")
+    auto_merge_enabled = $false
+    notification_enabled = $false
+  } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $failureConfigFile -Encoding UTF8
+  $structuredFailure = Invoke-Proof -ExtraArgs @("-ConfigFile", $failureConfigFile, "-HeartbeatOnly", "-TimeoutSeconds", "1") -AllowFailure
+  if ($structuredFailure.exit_code -eq 0) { throw "Unreachable API failure must return non-zero." }
+  if ($structuredFailure.result.schema -ne "skybridge.worker_heartbeat_proof.v1") { throw "Failure did not preserve proof schema." }
+  if ($structuredFailure.result.error -ne "heartbeat_proof_failed") { throw "Failure did not return heartbeat_proof_failed." }
+  Assert-False $structuredFailure.result.token_printed "structured-failure token_printed"
+  Assert-False $structuredFailure.result.tasks_claimed "structured-failure tasks_claimed"
+  Assert-False $structuredFailure.result.codex_run_called "structured-failure codex_run_called"
 
   $beforeTasks = Invoke-SkyBridgeJson "GET" "/v1/tasks/summary"
   $beforeControl = Invoke-SkyBridgeJson "GET" "/v1/projects/skybridge-agent-hub/control"
