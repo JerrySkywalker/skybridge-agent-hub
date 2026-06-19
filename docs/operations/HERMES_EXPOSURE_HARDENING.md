@@ -91,3 +91,5 @@ token_printed = false
 ```
 
 This state is acceptable for read-only audit and an explicitly authorized heartbeat-only proof. It is not acceptable for live admin escalation send, `start-one` or `run-until-hold`.
+
+The heartbeat-only proof command is documented in [WORKER_HEARTBEAT_PROOF.md](WORKER_HEARTBEAT_PROOF.md). It requires `-HeartbeatOnly` and reports `tasks_claimed=false`, `codex_run_called=false`, `queue_apply_called=false`, `campaign_metadata_advanced=false`, `start_one_called=false`, `run_until_hold_called=false`, `project_control_unpaused=false` and `token_printed=false`.
