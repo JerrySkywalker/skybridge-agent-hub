@@ -73,6 +73,48 @@ It also includes safe summaries for:
 
 The report intentionally excludes raw prompts, raw Hermes responses, raw logs, token values, cookies, credentials and environment dumps.
 
+## Task Hygiene Warnings
+
+Goal 315 adds a dedicated read-only task hygiene report:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-task-hygiene-report.ps1 `
+  -ApiBase $env:SKYBRIDGE_API_BASE `
+  -Json
+```
+
+See [TASK_HYGIENE_REPORT.md](TASK_HYGIENE_REPORT.md) for the full
+`skybridge.task_hygiene_report.v1` contract.
+
+Self-bootstrap readiness may be `partial` with no hard blockers when cloud
+deploy evidence, route parity and worker heartbeat are healthy, while task
+residue still produces these warnings:
+
+- `failed_unrecovered_tasks_present`: at least one failed task lacks recovered
+  evidence. Goal 315 reports these as `unsafe-to-requeue` unless a later
+  explicitly authorized recovery plan proves otherwise.
+- `blocked_tasks_present`: at least one task remains blocked. Goal 315 splits
+  these into `blocked-by-policy` or `historical-residue`, then recommends
+  report-only keep-blocked/archive review.
+- `task_evidence_repair_needed`: at least one failed task has related PR
+  context but lacks recovered evidence. Goal 315 reports these as
+  `evidence-repair-only`; the later safe action is evidence reconciliation, not
+  task execution.
+
+An online worker is not enough to allow execution. `workers.online=1` only
+proves that an authorized worker can heartbeat. `can_start_one` and
+`can_run_until_hold` also require clean task hygiene, safe Hermes exposure,
+admin escalation readiness, project control policy, campaign readiness and no
+execution-class blockers. Project control can remain `paused`, and readiness
+can keep `can_start_one=false` even after the worker heartbeat proof passes.
+
+Goal 315 does not repair the warnings. A later Goal 316 may define a
+preview-first plan to repair evidence, keep or archive historical blocked
+tasks, or recover stale leases/claims. That later goal must remain explicit
+about any mutation and must not requeue or run tasks as a side effect of
+classification.
+
 ## Readiness Policy
 
 `ready` requires all of these to be true:
