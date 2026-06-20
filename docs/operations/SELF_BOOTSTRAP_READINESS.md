@@ -104,6 +104,23 @@ heartbeat-only proof when no blocker other than `worker_offline` prevents it.
 `start-one` and `run-until-hold` remain blocked until the second gate is
 satisfied and the exposure audit allows execution.
 
+## Heartbeat-Only Worker Proof
+
+Use [WORKER_HEARTBEAT_PROOF.md](WORKER_HEARTBEAT_PROOF.md) when readiness is
+blocked only because no authorized worker is online. The proof registers or
+refreshes one local worker heartbeat and then stops.
+
+A heartbeat-only proof is not task execution. It must not claim queued tasks,
+run Codex, poll or apply queues, advance campaign metadata, call `start-one`,
+call `run-until-hold` or unpause project control. Its only intended readiness
+effect is that `workers.online` can become at least `1`, the authorized worker
+can appear in `online_worker_ids`, and `worker_offline` can disappear from the
+blocker list.
+
+Project control must remain `paused`. `allow_start_one`,
+`allow_run_until_hold`, `can_start_one` and `can_run_until_hold` remain false
+unless the separate execution-class gates are satisfied.
+
 Goal 308 proved the readiness semantics for the current bootstrap administrator escalation path. It verifies that the configured channel is Hermes WeChat or WeCom, that Hermes is reachable over direct HTTPS, and that the path can send blocker notices. It does not send a real message.
 
 Goal 309 adds an explicit operator-triggered send-test for the same path. The current bootstrap administrator escalation path is:
@@ -143,6 +160,7 @@ Run the fixture-only smoke suite:
 
 ```powershell
 corepack pnpm smoke:self-bootstrap-readiness
+corepack pnpm smoke:worker-heartbeat-proof
 ```
 
 The smoke covers:
