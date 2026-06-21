@@ -79,7 +79,6 @@ function Test-SafePilotTask {
     Get-Prop -Object $Task -Name "body" -Default ""
     Get-Prop -Object $Task -Name "prompt_summary" -Default ""
     @($allowed) -join " "
-    @((Get-Prop -Object $Task -Name "blocked_paths" -Default @())) -join " "
   ) -join " ").ToLowerInvariant()
   return (
     [string](Get-Prop -Object $Task -Name "task_id") -eq $PilotTaskId -and

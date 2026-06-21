@@ -153,7 +153,6 @@ function Test-SafePilotCandidate {
     Get-Prop -Object $Task -Name "body" -Default ""
     Get-Prop -Object $Task -Name "prompt_summary" -Default ""
     @($allowed) -join " "
-    @((Get-Prop -Object $Task -Name "blocked_paths" -Default @())) -join " "
   ) -join " ").ToLowerInvariant()
   if ($taskId -ne $PilotTaskId) { $reasons.Add("task_id_not_pilot") | Out-Null }
   if ($status -ne "queued") { $reasons.Add("${status}_status") | Out-Null }

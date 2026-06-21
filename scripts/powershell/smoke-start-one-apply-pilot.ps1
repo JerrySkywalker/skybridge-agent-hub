@@ -77,6 +77,27 @@ function Invoke-ApplyPilot {
   return $result
 }
 
+function Invoke-SeedFixture {
+  param([string]$Name)
+  $tasksPath = Write-Fixture "$Name-seed-empty-tasks.json" ([pscustomobject]@{ tasks = @() })
+  $stateDir = Join-Path $tmpRoot "$Name-seed-state"
+  $raw = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass `
+    -File .\scripts\powershell\skybridge-seed-start-one-pilot-task.ps1 `
+    -FixtureTasksFile $tasksPath `
+    -FixtureStateDir $stateDir `
+    -Apply `
+    -Confirm I_UNDERSTAND_SEED_ONE_SAFE_START_ONE_PILOT_TASK `
+    -Json
+  if ($LASTEXITCODE -ne 0) { throw "seed fixture failed for $Name." }
+  $text = (($raw | Out-String).Trim())
+  Assert-NoUnsafeText $text
+  $seed = $text | ConvertFrom-Json
+  Assert-True $seed.ok "$Name seed ok"
+  $seededPath = Join-Path $stateDir "seeded-task.json"
+  if (-not (Test-Path -LiteralPath $seededPath -PathType Leaf)) { throw "Seed fixture did not write seeded-task.json." }
+  return $seededPath
+}
+
 $script:Worker = [pscustomobject]@{ worker_id = "jerry-win-local-01"; status = "online"; enabled = $true; capabilities = @("codex", "docs", "windows"); token_printed = $false }
 $script:SecondGate = [pscustomobject]@{
   schema = "skybridge.execution_second_gate_readiness.v1"
@@ -106,6 +127,25 @@ if ($preview.old_residue_exclusion.unsafe_to_requeue_tasks_excluded -ne 12) { th
 if ($preview.old_residue_exclusion.blocked_historical_tasks_excluded -ne 3) { throw "Expected 3 blocked exclusions." }
 Assert-True $preview.old_residue_exclusion.remote_docs_exec_pilot_001_excluded "remote docs excluded"
 Assert-True $preview.old_residue_exclusion.no_old_residue_eligible "old residue eligible"
+
+$seededTaskPath = Invoke-SeedFixture -Name "seeded-pilot"
+$seededPreviewRaw = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-start-one-apply-pilot.ps1 `
+  -FixtureTasksFile $seededTaskPath `
+  -FixtureWorkersFile (Write-Fixture "seeded-pilot-workers.json" ([pscustomobject]@{ workers = @($script:Worker) })) `
+  -FixtureHygieneFile (Write-Fixture "seeded-pilot-hygiene.json" (New-Hygiene)) `
+  -FixtureSecondGateFile (Write-Fixture "seeded-pilot-second-gate.json" $script:SecondGate) `
+  -FixtureStateDir (Join-Path $tmpRoot "seeded-pilot-apply-state") `
+  -Preview `
+  -Json
+if ($LASTEXITCODE -ne 0) { throw "apply preview failed for seeded pilot task." }
+$seededPreviewText = (($seededPreviewRaw | Out-String).Trim())
+Assert-NoUnsafeText $seededPreviewText
+$seededPreview = $seededPreviewText | ConvertFrom-Json
+if ($seededPreview.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Seeded pilot task was not accepted by apply preview." }
+Assert-False $seededPreview.would_claim "seeded preview would_claim"
+Assert-False $seededPreview.would_run_codex "seeded preview would_run_codex"
+Assert-False $seededPreview.would_unpause_project_control "seeded preview would_unpause"
 
 $missingConfirm = Invoke-ApplyPilot -Name "missing-confirm" -Tasks @($pilot) -Extra @("-Apply")
 Assert-False $missingConfirm.ok "apply requires confirmation"
@@ -140,6 +180,7 @@ $summary = [pscustomobject]@{
   smoke = "start-one-apply-pilot"
   scenarios = @(
     "apply_preview_does_not_claim",
+    "seeded_pilot_task_is_accepted_by_apply_preview",
     "apply_requires_confirmation",
     "apply_claims_and_runs_once_fixture",
     "apply_rejects_old_failed_tasks",
