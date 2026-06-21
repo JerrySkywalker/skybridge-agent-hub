@@ -705,6 +705,7 @@ export interface Task {
   claim?: TaskClaim;
   lease?: TaskLease;
   result?: TaskResult;
+  hygiene_metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

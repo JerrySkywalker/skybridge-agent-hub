@@ -154,6 +154,12 @@ const TASK_STATUSES: TaskStatus[] = [
   "cancelled",
   "stale",
 ];
+const HYGIENE_METADATA_OPERATIONS = [
+  "mark_evidence_repair_applied",
+  "mark_keep_blocked",
+  "mark_archived_by_operator_policy",
+  "mark_excluded_from_requeue",
+] as const;
 const TASK_RISKS: TaskRisk[] = ["low", "medium", "high"];
 const PROPOSAL_STATUSES: PlanningProposalStatus[] = [
   "proposed",
@@ -1653,6 +1659,93 @@ export async function createServer(
         updated.result ? { ...updated.result } : {},
       );
       return { ok: true, task: withTaskEvents(updated, store) };
+    },
+  );
+
+  app.post<{ Params: { taskId: string }; Body: Record<string, unknown> }>(
+    "/v1/tasks/:taskId/hygiene-metadata",
+    { preHandler: requireWorkerAuth },
+    async (request, reply) => {
+      const task = store.getTask(decodeURIComponent(request.params.taskId));
+      if (!task) return reply.code(404).send({ ok: false, error: "task_not_found", token_printed: false });
+
+      const projectId = safeString(request.body.project_id);
+      if (!projectId || projectId !== task.project_id) {
+        return reply.code(400).send({ ok: false, error: "project_id_mismatch", token_printed: false });
+      }
+
+      const operation = safeString(request.body.operation);
+      if (!operation || !HYGIENE_METADATA_OPERATIONS.includes(operation as typeof HYGIENE_METADATA_OPERATIONS[number])) {
+        return reply.code(400).send({ ok: false, error: "invalid_hygiene_operation", token_printed: false });
+      }
+
+      const requestedStatus = safeString(request.body.status) ?? safeString(request.body.requested_status);
+      if (requestedStatus && ["queued", "claimed", "running"].includes(requestedStatus)) {
+        return reply.code(400).send({ ok: false, error: "status_transition_forbidden", token_printed: false });
+      }
+      if (
+        "assigned_worker_id" in request.body ||
+        "worker_id" in request.body ||
+        "claim" in request.body ||
+        "lease" in request.body
+      ) {
+        return reply.code(400).send({ ok: false, error: "worker_or_lease_mutation_forbidden", token_printed: false });
+      }
+      if (["queued", "claimed", "running"].includes(task.status)) {
+        return reply.code(409).send({ ok: false, error: "active_task_hygiene_metadata_forbidden", token_printed: false });
+      }
+
+      const now = new Date().toISOString();
+      const reason = safeLongString(request.body.reason) ?? "goal_317_hygiene_metadata_only";
+      const policy = safeString(request.body.policy) ?? "goal_317_fixed_metadata_only";
+      const existingMetadata = safeRecord(task.hygiene_metadata) ?? {};
+      const operationRecord = {
+        operation,
+        applied_at: now,
+        policy,
+        reason,
+        metadata_only: true,
+        no_status_transition: true,
+        no_worker_assignment_change: true,
+        no_claim_created: true,
+        no_lease_created: true,
+        no_requeue: true,
+        no_codex_invocation: true,
+        excluded_from_requeue: operation === "mark_excluded_from_requeue" ? true : undefined,
+      };
+      const history = Array.isArray(existingMetadata.history) ? existingMetadata.history.slice(0, 25) : [];
+      const updated: StoredTask = {
+        ...task,
+        status: task.status,
+        assigned_worker_id: task.assigned_worker_id,
+        claim: task.claim,
+        lease: task.lease,
+        hygiene_metadata: {
+          ...existingMetadata,
+          goal_317_last_operation: operation,
+          goal_317_updated_at: now,
+          excluded_from_worker_scheduling:
+            operation === "mark_excluded_from_requeue" ||
+            operation === "mark_keep_blocked" ||
+            operation === "mark_archived_by_operator_policy" ||
+            existingMetadata.excluded_from_worker_scheduling === true,
+          history: [...history, operationRecord],
+        },
+        updated_at: now,
+      };
+
+      await store.upsertTask(updated);
+      await recordTaskEvent(updated, "task.updated", undefined, "Task hygiene metadata updated.", addStoredEvent, store, {
+        operation,
+        metadata_only: true,
+        no_status_transition: true,
+        no_worker_assignment_change: true,
+        no_claim_created: true,
+        no_lease_created: true,
+        no_requeue: true,
+        no_codex_invocation: true,
+      });
+      return { ok: true, task: withTaskEvents(updated, store), token_printed: false };
     },
   );
 
