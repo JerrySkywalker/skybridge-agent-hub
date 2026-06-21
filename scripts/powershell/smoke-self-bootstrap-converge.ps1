@@ -151,6 +151,11 @@ function New-BaseFixtures {
       dry_run = $true
       provider_count = 2
       ready_provider_count = 1
+      real_provider_count = 2
+      real_ready_provider_count = 1
+      dry_run_safe_provider_count = 1
+      provider_configuration_status = "real_provider_ready"
+      bootstrap_dry_run_available = $true
       blocker_notice_supported = $true
       real_send_performed = $false
       raw_notification_payload_included = $false
@@ -238,6 +243,37 @@ Assert-True $case.result.notification_readiness.available "partial notification_
 Assert-True $case.result.notification_readiness.dry_run "partial notification dry_run"
 Assert-False $case.result.notification_readiness.real_send_performed "partial notification real_send_performed"
 Assert-False $case.result.notification_readiness.credential_values_exposed "partial notification credential_values_exposed"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "bootstrap-notification-only" -Mutate {
+  param($f)
+  $f.readiness.warnings = @("admin_escalation_bootstrap_dry_run_only", "skybridge_notification_center_not_ready")
+  $f.notification = [pscustomobject]@{
+    schema = "skybridge.notification_readiness.v1"
+    ok = $true
+    status = "partial"
+    dry_run = $true
+    provider_count = 1
+    ready_provider_count = 1
+    real_provider_count = 0
+    real_ready_provider_count = 0
+    dry_run_safe_provider_count = 1
+    provider_configuration_status = "no_provider_configured_bootstrap_dry_run_available"
+    bootstrap_dry_run_available = $true
+    blocker_notice_supported = $true
+    real_send_performed = $false
+    raw_notification_payload_included = $false
+    credential_values_exposed = $false
+    token_printed = $false
+  }
+}
+if ($case.result.status -ne "partial") { throw "bootstrap notification fixture should be partial." }
+Assert-True $case.result.notification_readiness.blocker_notice_supported "bootstrap notification blocker_notice_supported"
+Assert-False $case.result.notification_readiness.real_send_performed "bootstrap notification real_send_performed"
+Assert-False $case.result.notification_readiness.raw_notification_payload_included "bootstrap notification raw_notification_payload_included"
+Assert-False $case.result.notification_readiness.credential_values_exposed "bootstrap notification credential_values_exposed"
+if (@($case.result.readiness.blockers) -contains "admin_escalation_unavailable") { throw "bootstrap notification fixture must not report admin_escalation_unavailable." }
+if (@($case.result.blocked_reasons) -contains "admin_escalation_unavailable") { throw "bootstrap notification fixture must not block on admin_escalation_unavailable." }
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "heartbeat-fails" -RefreshHeartbeat -Mutate {

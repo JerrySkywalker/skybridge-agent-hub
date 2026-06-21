@@ -21,7 +21,7 @@ Bootstrap notifier severities are `info`, `warning` and `urgent`; the `high` pol
 ## Notification Routing
 
 Current bootstrap:
-SkyBridge hold, `ask_human` or blocker state emits a safe escalation summary to cloud Hermes. Hermes is responsible for administrator delivery over WeChat or WeCom. Readiness blocks on `admin_escalation_unavailable` when this path cannot send a blocker notice.
+SkyBridge hold, `ask_human` or blocker state emits a safe escalation summary to cloud Hermes. Hermes is responsible for administrator delivery over WeChat or WeCom. Readiness blocks on `admin_escalation_unavailable` only when neither this real path nor the bootstrap notifier dry-run path can support a blocker notice.
 
 Future primary:
 Use SkyBridge Notification Center or Jerry's custom notify gateway after they are ready for self-supervision.

@@ -204,7 +204,20 @@ SkyBridge hold / ask_human / blocker
 
 SkyBridge Notification Center providers and Jerry's future custom notify gateway remain the long-term primary notification path. They are not the current hard blocker for self-bootstrap start-one readiness when Hermes administrator escalation is available. If native providers such as ntfy, Apprise, Gotify, Bark, WeCom, FCM or Xiaomi Push are all skipped while admin escalation is ready, readiness reports `skybridge_notification_center_not_ready` as a warning instead of `notification_provider_unavailable` as a blocker.
 
-If admin escalation is unavailable, readiness blocks with `admin_escalation_unavailable`. `can_start_one` and `can_run_until_hold` both require admin escalation readiness. `can_run_until_hold` additionally requires no blockers plus Hermes OK over direct HTTPS.
+If no real admin escalation provider is ready but the bootstrap notifier
+dry-run path is available, readiness reports
+`admin_escalation_bootstrap_dry_run_only` as a warning instead of blocking with
+`admin_escalation_unavailable`. In that state
+`admin_escalation.blocker_notice_supported=true`,
+`admin_escalation.bootstrap_dry_run_available=true`,
+`admin_escalation.real_provider_ready=false`,
+`can_start_one=false` and `can_run_until_hold=false`.
+
+If neither real admin escalation nor the bootstrap dry-run path is available,
+readiness blocks with `admin_escalation_unavailable`. `can_start_one` and
+`can_run_until_hold` both require real admin escalation readiness.
+`can_run_until_hold` additionally requires no blockers plus Hermes OK over
+direct HTTPS.
 
 The send-test command is dry-run by default:
 
@@ -241,6 +254,8 @@ The smoke covers:
 - blocked report when Hermes is unavailable;
 - high-risk Hermes exposure when server-side Hermes tool execution is enabled;
 - warning-only skipped SkyBridge Notification Center providers when admin escalation is ready;
+- warning-only bootstrap-notifier dry-run readiness when no real admin
+  escalation provider is configured;
 - blocked report when admin escalation is unavailable;
 - blocked report when admin escalation credential exposure is detected;
 - `token_printed=false` and no secret-like output.

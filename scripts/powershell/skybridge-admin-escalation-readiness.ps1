@@ -78,6 +78,11 @@ function Get-SafeEnvBool {
   return $false
 }
 
+function Test-BootstrapNotifierDryRunAvailable {
+  $path = Join-Path $PSScriptRoot "notify-bootstrap.ps1"
+  return (Test-Path -LiteralPath $path -PathType Leaf)
+}
+
 function Get-HermesHealth {
   if ($FixtureHermesHealthFile) {
     return Read-JsonFile -Path $FixtureHermesHealthFile
@@ -95,9 +100,14 @@ function Get-HermesHealth {
 
 if ($FixtureFile) {
   $fixture = Read-JsonFile -Path $FixtureFile
+  $realProviderReady = [bool](Get-Prop -Object $fixture -Name "real_provider_ready" -Default (Get-Prop -Object $fixture -Name "can_send_real_blocker_notice" -Default (Get-Prop -Object $fixture -Name "can_send_blocker_notice" -Default $false)))
+  $bootstrapDryRunAvailable = [bool](Get-Prop -Object $fixture -Name "bootstrap_dry_run_available" -Default (Test-BootstrapNotifierDryRunAvailable))
+  $blockerNoticeSupported = [bool](Get-Prop -Object $fixture -Name "blocker_notice_supported" -Default ($realProviderReady -or $bootstrapDryRunAvailable))
+  $readinessMode = if ($realProviderReady) { "real_provider_ready" } elseif ($bootstrapDryRunAvailable) { "bootstrap_dry_run_available" } else { "unavailable" }
   $result = [pscustomobject]@{
     schema = "skybridge.admin_escalation_readiness.v1"
-    ok = [bool](Get-Prop -Object $fixture -Name "ok" -Default $false)
+    ok = [bool](Get-Prop -Object $fixture -Name "ok" -Default $blockerNoticeSupported)
+    readiness_mode = [string](Get-Prop -Object $fixture -Name "readiness_mode" -Default $readinessMode)
     primary_current = [string](Get-Prop -Object $fixture -Name "primary_current" -Default "hermes-wechat")
     long_term_primary = [string](Get-Prop -Object $fixture -Name "long_term_primary" -Default "skybridge-notify-gateway")
     fallback = [string](Get-Prop -Object $fixture -Name "fallback" -Default "bootstrap-notifier")
@@ -107,7 +117,11 @@ if ($FixtureFile) {
     hermes_runtime_mode = Get-Prop -Object $fixture -Name "hermes_runtime_mode"
     hermes_responses_api = [bool](Get-Prop -Object $fixture -Name "hermes_responses_api" -Default $false)
     wechat_escalation_configured = [bool](Get-Prop -Object $fixture -Name "wechat_escalation_configured" -Default $false)
-    can_send_blocker_notice = [bool](Get-Prop -Object $fixture -Name "can_send_blocker_notice" -Default $false)
+    can_send_real_blocker_notice = $realProviderReady
+    real_provider_ready = $realProviderReady
+    bootstrap_dry_run_available = $bootstrapDryRunAvailable
+    blocker_notice_supported = $blockerNoticeSupported
+    can_send_blocker_notice = $blockerNoticeSupported
     dry_run_supported = [bool](Get-Prop -Object $fixture -Name "dry_run_supported" -Default $true)
     real_send_performed = [bool](Get-Prop -Object $fixture -Name "real_send_performed" -Default $false)
     credential_values_exposed = [bool](Get-Prop -Object $fixture -Name "credential_values_exposed" -Default $false)
@@ -134,10 +148,13 @@ if ($FixtureFile) {
     "HERMES_WECOM_ESCALATION_CONFIGURED"
   )
   $canSend = ($hermesAvailable -and $hermesDirectHttps -and $responsesApi -and $wechatConfigured)
+  $bootstrapDryRunAvailable = Test-BootstrapNotifierDryRunAvailable
+  $blockerNoticeSupported = ($canSend -or $bootstrapDryRunAvailable)
 
   $result = [pscustomobject]@{
     schema = "skybridge.admin_escalation_readiness.v1"
-    ok = $canSend
+    ok = $blockerNoticeSupported
+    readiness_mode = if ($canSend) { "real_provider_ready" } elseif ($bootstrapDryRunAvailable) { "bootstrap_dry_run_available" } else { "unavailable" }
     primary_current = "hermes-wechat"
     long_term_primary = "skybridge-notify-gateway"
     fallback = "bootstrap-notifier"
@@ -147,7 +164,11 @@ if ($FixtureFile) {
     hermes_runtime_mode = Get-Prop -Object $runtime -Name "mode"
     hermes_responses_api = $responsesApi
     wechat_escalation_configured = $wechatConfigured
-    can_send_blocker_notice = $canSend
+    can_send_real_blocker_notice = $canSend
+    real_provider_ready = $canSend
+    bootstrap_dry_run_available = $bootstrapDryRunAvailable
+    blocker_notice_supported = $blockerNoticeSupported
+    can_send_blocker_notice = $blockerNoticeSupported
     dry_run_supported = $true
     real_send_performed = $false
     credential_values_exposed = $false
@@ -160,6 +181,7 @@ if ($FixtureFile) {
 if ($result.real_send_performed -or $result.credential_values_exposed -or $result.raw_response_included -or $result.token_printed) {
   $result.ok = $false
   $result.can_send_blocker_notice = $false
+  $result.blocker_notice_supported = $false
 }
 
 if ($OutputFile) {
@@ -183,6 +205,8 @@ if ($Json) {
   "HermesResponsesApi:$($result.hermes_responses_api)"
   "WechatConfigured:  $($result.wechat_escalation_configured)"
   "CanBlockerNotice:  $($result.can_send_blocker_notice)"
+  "RealNoticeReady:   $($result.can_send_real_blocker_notice)"
+  "BootstrapDryRun:   $($result.bootstrap_dry_run_available)"
   "DryRunSupported:   $($result.dry_run_supported)"
   "RealSendPerformed: false"
   "CredentialExposed: false"

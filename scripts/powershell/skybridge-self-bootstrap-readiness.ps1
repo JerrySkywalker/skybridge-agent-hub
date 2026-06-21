@@ -523,6 +523,10 @@ function Get-AdminEscalationReadiness {
         hermes_runtime_mode = $null
         hermes_responses_api = $false
         wechat_escalation_configured = $false
+        can_send_real_blocker_notice = $false
+        real_provider_ready = $false
+        bootstrap_dry_run_available = $false
+        blocker_notice_supported = $false
         can_send_blocker_notice = $false
         dry_run_supported = $true
         real_send_performed = $false
@@ -546,7 +550,11 @@ function Get-AdminEscalationReadiness {
     hermes_runtime_mode = Get-Prop -Object $admin -Name "hermes_runtime_mode"
     hermes_responses_api = [bool](Get-Prop -Object $admin -Name "hermes_responses_api" -Default $false)
     wechat_escalation_configured = [bool](Get-Prop -Object $admin -Name "wechat_escalation_configured" -Default $false)
-    can_send_blocker_notice = [bool](Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default $false)
+    can_send_real_blocker_notice = [bool](Get-Prop -Object $admin -Name "can_send_real_blocker_notice" -Default (Get-Prop -Object $admin -Name "real_provider_ready" -Default (Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default $false)))
+    real_provider_ready = [bool](Get-Prop -Object $admin -Name "real_provider_ready" -Default (Get-Prop -Object $admin -Name "can_send_real_blocker_notice" -Default (Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default $false)))
+    bootstrap_dry_run_available = [bool](Get-Prop -Object $admin -Name "bootstrap_dry_run_available" -Default $false)
+    blocker_notice_supported = [bool](Get-Prop -Object $admin -Name "blocker_notice_supported" -Default (Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default $false))
+    can_send_blocker_notice = [bool](Get-Prop -Object $admin -Name "can_send_blocker_notice" -Default (Get-Prop -Object $admin -Name "blocker_notice_supported" -Default $false))
     dry_run_supported = [bool](Get-Prop -Object $admin -Name "dry_run_supported" -Default $true)
     real_send_performed = [bool](Get-Prop -Object $admin -Name "real_send_performed" -Default $false)
     credential_values_exposed = [bool](Get-Prop -Object $admin -Name "credential_values_exposed" -Default $false)
@@ -705,8 +713,11 @@ if ($hermesExposure.safety.credential_values_exposed -or $hermesExposure.safety.
   Add-Blocker $blockers "hermes_exposure_audit_unsafe"
 }
 
-if (-not $adminEscalation.available -or -not $adminEscalation.ok -or -not $adminEscalation.can_send_blocker_notice) {
+if (-not $adminEscalation.available -or -not $adminEscalation.ok -or -not $adminEscalation.blocker_notice_supported) {
   Add-Blocker $blockers "admin_escalation_unavailable"
+}
+if ($adminEscalation.blocker_notice_supported -and -not $adminEscalation.real_provider_ready) {
+  Add-Warning $warnings "admin_escalation_bootstrap_dry_run_only"
 }
 if ($adminEscalation.credential_values_exposed -or $adminEscalation.raw_response_included -or $adminEscalation.token_printed) {
   Add-Blocker $blockers "admin_escalation_credentials_exposed"
@@ -732,8 +743,9 @@ $warningArray = @($warnings.ToArray())
 $heartbeatBlocking = @($blockerArray | Where-Object { $_ -ne "worker_offline" })
 $allowWorkerHeartbeat = ($heartbeatBlocking.Count -eq 0 -and [bool]$hermesExposure.allow_worker_heartbeat)
 $executionAllowedByHermes = ([bool]$hermesExposure.allow_start_one -and [bool]$hermesExposure.allow_run_until_hold)
-$canStartOne = ($blockerArray.Count -eq 0 -and $executionAllowedByHermes)
-$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $adminEscalation.ok -and $executionAllowedByHermes)
+$realAdminEscalationReady = ([bool]$adminEscalation.real_provider_ready -and [bool]$adminEscalation.can_send_real_blocker_notice)
+$canStartOne = ($blockerArray.Count -eq 0 -and $executionAllowedByHermes -and $realAdminEscalationReady)
+$canRunUntilHold = ($canStartOne -and $hermes.ok -and $hermes.direct_https -and $realAdminEscalationReady -and $executionAllowedByHermes)
 $overallStatus = if ($blockerArray.Count -gt 0) {
   "blocked"
 } elseif ($warningArray.Count -gt 0) {
@@ -822,7 +834,7 @@ if ($Json) {
   "Tasks:        active=$($report.control_plane.tasks.active) queued=$($report.control_plane.tasks.queued) running=$($report.control_plane.tasks.running) stale_leases=$($report.control_plane.tasks.stale_leases)"
   "Hermes:       ok=$($report.hermes.ok) direct_https=$($report.hermes.direct_https) endpoint=$($report.hermes.endpoint)"
   "HermesRisk:   status=$($report.hermes_exposure.status) risk=$($report.hermes_exposure.risk_level) heartbeat=$($report.hermes_exposure.allow_worker_heartbeat) start_one=$($report.hermes_exposure.allow_start_one)"
-  "AdminEsc:     ok=$($report.admin_escalation.ok) current=$($report.admin_escalation.primary_current) can_notice=$($report.admin_escalation.can_send_blocker_notice)"
+  "AdminEsc:     ok=$($report.admin_escalation.ok) current=$($report.admin_escalation.primary_current) can_notice=$($report.admin_escalation.can_send_blocker_notice) real_ready=$($report.admin_escalation.real_provider_ready) bootstrap_dry_run=$($report.admin_escalation.bootstrap_dry_run_available)"
   "Notify:       ready=$($report.notifications.ready) total=$($report.notifications.total)"
   "Blockers:     $(if ($report.blockers.Count -gt 0) { $report.blockers -join ', ' } else { 'none' })"
   "Warnings:     $(if ($report.warnings.Count -gt 0) { $report.warnings -join ', ' } else { 'none' })"

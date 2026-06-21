@@ -459,6 +459,11 @@ function Get-NotificationDryRunProbe {
       status = "unavailable"
       dry_run = $true
       blocker_notice_supported = $false
+      real_provider_count = 0
+      real_ready_provider_count = 0
+      dry_run_safe_provider_count = 0
+      provider_configuration_status = "unavailable"
+      bootstrap_dry_run_available = $false
       real_send_performed = $false
       raw_notification_payload_included = $false
       credential_values_exposed = $false
@@ -472,6 +477,11 @@ function Get-NotificationDryRunProbe {
     dry_run = Get-BoolProp -Object $notification -Name "dry_run" -Default $true
     provider_count = Get-CountProp -Object $notification -Name "provider_count"
     ready_provider_count = Get-CountProp -Object $notification -Name "ready_provider_count"
+    real_provider_count = Get-CountProp -Object $notification -Name "real_provider_count"
+    real_ready_provider_count = Get-CountProp -Object $notification -Name "real_ready_provider_count"
+    dry_run_safe_provider_count = Get-CountProp -Object $notification -Name "dry_run_safe_provider_count"
+    provider_configuration_status = [string](Get-Prop -Object $notification -Name "provider_configuration_status" -Default "unknown")
+    bootstrap_dry_run_available = Get-BoolProp -Object $notification -Name "bootstrap_dry_run_available"
     blocker_notice_supported = Get-BoolProp -Object $notification -Name "blocker_notice_supported"
     real_send_performed = Get-BoolProp -Object $notification -Name "real_send_performed"
     raw_notification_payload_included = Get-BoolProp -Object $notification -Name "raw_notification_payload_included"

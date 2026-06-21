@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")]
+  [ValidateSet("all", "ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-bootstrap-dry-run", "admin-unavailable", "admin-credentials-exposed", "no-secrets")]
   [string]$Scenario = "all",
   [switch]$Json
 )
@@ -142,6 +142,7 @@ function New-BaseFixtures {
   $adminEscalation = [pscustomobject]@{
     schema = "skybridge.admin_escalation_readiness.v1"
     ok = $true
+    readiness_mode = "real_provider_ready"
     primary_current = "hermes-wechat"
     long_term_primary = "skybridge-notify-gateway"
     fallback = "bootstrap-notifier"
@@ -151,6 +152,10 @@ function New-BaseFixtures {
     hermes_runtime_mode = "server_agent"
     hermes_responses_api = $true
     wechat_escalation_configured = $true
+    can_send_real_blocker_notice = $true
+    real_provider_ready = $true
+    bootstrap_dry_run_available = $true
+    blocker_notice_supported = $true
     can_send_blocker_notice = $true
     dry_run_supported = $true
     real_send_performed = $false
@@ -286,6 +291,30 @@ function Invoke-Scenario {
       if (@($case.result.blockers) -contains "notification_provider_unavailable") { throw "notification_provider_unavailable must not block when admin escalation is ready." }
       if (@($case.result.notifications.providers).Count -ne 7) { throw "Expected all long-term notification providers to remain visible." }
     }
+    "admin-bootstrap-dry-run" {
+      $case = Invoke-ReadinessFixture -Name $Name -Mutate {
+        param($fixtures)
+        $fixtures.admin_escalation.ok = $true
+        $fixtures.admin_escalation.can_send_real_blocker_notice = $false
+        $fixtures.admin_escalation.real_provider_ready = $false
+        $fixtures.admin_escalation.bootstrap_dry_run_available = $true
+        $fixtures.admin_escalation.blocker_notice_supported = $true
+        $fixtures.admin_escalation.can_send_blocker_notice = $true
+        $fixtures.admin_escalation.wechat_escalation_configured = $false
+        $fixtures.admin_escalation.readiness_mode = "bootstrap_dry_run_available"
+        $fixtures.notifications.providers = @()
+      }
+      if ($case.result.status -ne "partial") { throw "admin-bootstrap-dry-run fixture should be partial." }
+      Assert-True $case.result.admin_escalation.ok "admin bootstrap ok"
+      Assert-True $case.result.admin_escalation.blocker_notice_supported "admin bootstrap blocker_notice_supported"
+      Assert-True $case.result.admin_escalation.bootstrap_dry_run_available "admin bootstrap_dry_run_available"
+      Assert-False $case.result.admin_escalation.real_provider_ready "admin real_provider_ready"
+      Assert-False $case.result.admin_escalation.can_send_real_blocker_notice "admin can_send_real_blocker_notice"
+      Assert-False $case.result.can_start_one "admin-bootstrap-dry-run can_start_one"
+      Assert-False $case.result.can_run_until_hold "admin-bootstrap-dry-run can_run_until_hold"
+      if (@($case.result.blockers) -contains "admin_escalation_unavailable") { throw "admin_escalation_unavailable must not block when bootstrap dry-run is available." }
+      Assert-Contains $case.result.warnings "admin_escalation_bootstrap_dry_run_only" "admin-bootstrap-dry-run warnings"
+    }
     "hermes-server-tool-execution" {
       $case = Invoke-ReadinessFixture -Name $Name -Mutate {
         param($fixtures)
@@ -346,7 +375,7 @@ function Invoke-Scenario {
 }
 
 $scenarioNames = if ($Scenario -eq "all") {
-  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-unavailable", "admin-credentials-exposed", "no-secrets")
+  @("ready", "worker-offline", "stale-leases", "hermes-unavailable", "hermes-server-tool-execution", "admin-ready-notifications-skipped", "admin-bootstrap-dry-run", "admin-unavailable", "admin-credentials-exposed", "no-secrets")
 } else {
   @($Scenario)
 }
