@@ -48,20 +48,65 @@ if ($FixtureProvidersFile) {
 $readyStatuses = @("ok", "ready", "configured", "enabled", "active", "sent")
 $providersOut = @($providersRaw | ForEach-Object {
   $status = [string](Get-Prop -Object $_ -Name "status" -Default "unknown")
+  $isReady = ($readyStatuses -contains $status.ToLowerInvariant())
   [pscustomobject]@{
     provider = [string](Get-Prop -Object $_ -Name "provider" -Default (Get-Prop -Object $_ -Name "name" -Default "unknown"))
     status = $status
-    ready = ($readyStatuses -contains $status.ToLowerInvariant())
-    configured = [bool](Get-Prop -Object $_ -Name "configured" -Default ($readyStatuses -contains $status.ToLowerInvariant()))
+    readiness_kind = "real_provider"
+    ready = $isReady
+    configured = [bool](Get-Prop -Object $_ -Name "configured" -Default $isReady)
+    dry_run_safe = $false
+    real_send_capable = $isReady
+    blocker_notice_supported = $isReady
     dry_run_checked = $dryRunMode
     credential_values_exposed = [bool](Get-Prop -Object $_ -Name "credential_values_exposed" -Default $false)
     raw_notification_payload_included = $false
   }
 })
 
+$realProviderCount = $providersOut.Count
+$realReadyCount = @($providersOut | Where-Object { $_.ready }).Count
+$bootstrapNotifierPath = Join-Path $PSScriptRoot "notify-bootstrap.ps1"
+$bootstrapDryRunAvailable = ($dryRunMode -and (Test-Path -LiteralPath $bootstrapNotifierPath -PathType Leaf))
+if ($bootstrapDryRunAvailable) {
+  $providersOut += [pscustomobject]@{
+    provider = "bootstrap-notifier"
+    status = "dry_run_available"
+    readiness_kind = "bootstrap_dry_run"
+    ready = $true
+    configured = $false
+    dry_run_safe = $true
+    real_send_capable = $false
+    blocker_notice_supported = $true
+    dry_run_checked = $true
+    credential_values_exposed = $false
+    raw_notification_payload_included = $false
+  }
+}
+
 $readyCount = @($providersOut | Where-Object { $_.ready }).Count
+$dryRunSafeCount = @($providersOut | Where-Object { $_.dry_run_safe -and $_.blocker_notice_supported }).Count
 $credentialExposed = @($providersOut | Where-Object { $_.credential_values_exposed }).Count -gt 0
-$status = if (-not $available -or $providersOut.Count -eq 0) { "not_ready" } elseif ($readyCount -gt 0) { if ($readyCount -eq $providersOut.Count) { "ready" } else { "partial" } } else { "not_ready" }
+$providerConfigurationStatus = if ($realReadyCount -gt 0) {
+  "real_provider_ready"
+} elseif ($realProviderCount -gt 0 -and $bootstrapDryRunAvailable) {
+  "real_provider_unavailable_bootstrap_dry_run_available"
+} elseif ($realProviderCount -gt 0) {
+  "real_provider_unavailable"
+} elseif ($bootstrapDryRunAvailable) {
+  "no_provider_configured_bootstrap_dry_run_available"
+} else {
+  "no_provider_configured"
+}
+$status = if (-not $available) {
+  "not_ready"
+} elseif ($realReadyCount -gt 0) {
+  if ($realReadyCount -eq $realProviderCount) { "ready" } else { "partial" }
+} elseif ($bootstrapDryRunAvailable) {
+  "partial"
+} else {
+  "not_ready"
+}
 
 $report = [pscustomobject]@{
   schema = "skybridge.notification_readiness.v1"
@@ -72,7 +117,12 @@ $report = [pscustomobject]@{
   providers = @($providersOut)
   provider_count = $providersOut.Count
   ready_provider_count = $readyCount
-  blocker_notice_supported = ($readyCount -gt 0)
+  real_provider_count = $realProviderCount
+  real_ready_provider_count = $realReadyCount
+  dry_run_safe_provider_count = $dryRunSafeCount
+  provider_configuration_status = $providerConfigurationStatus
+  bootstrap_dry_run_available = $bootstrapDryRunAvailable
+  blocker_notice_supported = (($realReadyCount -gt 0) -or ($dryRunSafeCount -gt 0))
   summary_available = ($null -ne $summaryRaw)
   real_send_performed = $false
   raw_notification_payload_included = $false

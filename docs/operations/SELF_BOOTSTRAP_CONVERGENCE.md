@@ -67,10 +67,18 @@ child report indicates token output.
 
 `partial` means there are no hard preview blockers, cloud commit aligns and a
 worker is online or heartbeat was refreshed, but warning-class or
-execution-deferred items remain. Goal 317 reports `not_on_main`,
-`worktree_dirty` and `admin_escalation_unavailable` under
-`deferred_execution_blockers` during PR development instead of treating them as
-preview blockers, because Goal 317 validation does not authorize execution.
+execution-deferred items remain. Goal 317 reports `not_on_main` and
+`worktree_dirty` under `deferred_execution_blockers` during PR development
+instead of treating them as preview blockers, because Goal 317 validation does
+not authorize execution.
+
+When no real notification or admin escalation provider is configured, the
+bootstrap notifier can satisfy blocker notice support for dry-run convergence
+only. In that state convergence should show
+`notification_readiness.blocker_notice_supported=true` and should not report
+`admin_escalation_unavailable`. It still keeps `can_start_one=false` and
+`can_run_until_hold=false` until a later execution-class goal proves real
+admin escalation readiness.
 
 `pass` means no blockers, no readiness warnings, cloud commit aligns, a worker
 is online and all safety flags remain clean.

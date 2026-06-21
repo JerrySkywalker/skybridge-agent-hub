@@ -41,7 +41,13 @@ Automation calls `notify-bootstrap.ps1` for phone delivery and also emits safe S
 Stage 3, SkyBridge primary with bootstrap fallback:
 After the Notification Center is production-ready for SkyBridge's own operations, automation may request notifications through SkyBridge first. The bootstrap notifier remains the fallback for server outage, safety-boundary and repeated-failure alerts.
 
-Readiness should block on `admin_escalation_unavailable` when the current Hermes WeChat or WeCom channel cannot send blocker notices. It should only warn with `skybridge_notification_center_not_ready` when Hermes admin escalation is ready but native SkyBridge providers are skipped.
+Readiness should block on `admin_escalation_unavailable` only when neither the
+current Hermes WeChat or WeCom channel nor the bootstrap notifier dry-run path
+can support blocker notices. If no real provider is configured but
+`notify-bootstrap.ps1` is available for dry-run, readiness should warn with
+`admin_escalation_bootstrap_dry_run_only` and keep execution gates closed. It
+should only warn with `skybridge_notification_center_not_ready` when blocker
+notice support exists but native SkyBridge providers are skipped.
 
 ## Smoke
 
