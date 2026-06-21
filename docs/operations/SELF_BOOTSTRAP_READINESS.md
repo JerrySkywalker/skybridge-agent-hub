@@ -140,8 +140,15 @@ does not send a message and must report `real_send_performed=false`,
 `raw_notification_payload_included=false`, `credential_values_exposed=false`
 and `token_printed=false`.
 
-Even after Goal 317 preview/apply support exists, `start-one` remains forbidden
-until Goal 318. Task hygiene metadata is not execution authorization.
+Even after Goal 317 preview/apply support exists, `start-one` remains
+forbidden. Goal 318 adds a second-gate readiness layer and a start-one preview
+only; it still does not authorize live start-one apply. Task hygiene metadata
+and preview candidate selection are not execution authorization.
+
+Goal 318 preview readiness is documented in
+[EXECUTION_SECOND_GATE.md](EXECUTION_SECOND_GATE.md) and
+[START_ONE_PREVIEW.md](START_ONE_PREVIEW.md). A later Goal 319 would need
+separate explicit operator authorization before claiming exactly one safe task.
 
 ## Readiness Policy
 
