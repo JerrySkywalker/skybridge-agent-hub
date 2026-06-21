@@ -50,7 +50,14 @@ evidence.
 
 The eleven unsafe-to-requeue tasks are listed as
 `excluded_from_requeue`. They must remain out of worker scheduling until a
-separate explicit recovery policy proves a safe path.
+separate explicit recovery policy proves a safe path. Goal 317 can record this
+exclusion as hygiene metadata, but it still must not requeue or schedule them.
+
+Goal 317 adds `skybridge-task-hygiene-apply.ps1` as the controlled
+preview/apply follow-up. Its default mode is preview. Live apply is not run
+during PR validation because it mutates live task metadata; the operator may
+run it only after merge with the exact confirmation string documented in
+[TASK_HYGIENE_APPLY.md](TASK_HYGIENE_APPLY.md).
 
 ## Safety
 

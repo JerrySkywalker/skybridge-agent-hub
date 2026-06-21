@@ -16,7 +16,9 @@ param(
   [string]$FixtureDeployEvidenceFile,
   [string]$FixtureHeartbeatFile,
   [string]$FixtureReadinessFile,
-  [string]$FixtureHygieneFile
+  [string]$FixtureHygieneFile,
+  [string]$FixtureHygieneApplyFile,
+  [string]$FixtureNotificationReadinessFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -394,6 +396,90 @@ function Get-HygieneProbe {
   }
 }
 
+function Get-HygieneApplyProbe {
+  if ($FixtureHygieneApplyFile) {
+    $apply = Read-JsonFile -Path $FixtureHygieneApplyFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-task-hygiene-apply.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Preview",
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($FixtureHygieneFile) { $args += @("-FixtureHygieneFile", $FixtureHygieneFile) }
+    $apply = Invoke-ChildJson -Arguments $args -AllowNonZero
+  }
+  if (-not (Get-BoolProp -Object $apply -Name "ok" -Default $false) -and -not (Get-Prop -Object $apply -Name "schema")) {
+    return [pscustomobject]@{
+      available = $false
+      ok = $false
+      mode = "preview"
+      evidence_repair_actions_count = 0
+      archive_or_keep_blocked_actions_count = 0
+      unsafe_to_requeue_exclusion_actions_count = 0
+      residual_warnings = @("task_hygiene_apply_preview_unavailable")
+      token_printed = Get-BoolProp -Object $apply -Name "token_printed"
+      safety = Get-Prop -Object $apply -Name "safety"
+    }
+  }
+  $planned = Get-Prop -Object $apply -Name "planned_actions"
+  [pscustomobject]@{
+    available = $true
+    ok = Get-BoolProp -Object $apply -Name "ok" -Default $true
+    mode = [string](Get-Prop -Object $apply -Name "mode" -Default "preview")
+    evidence_repair_actions_count = @((Get-Prop -Object $planned -Name "evidence_repair_actions" -Default @())).Count
+    archive_or_keep_blocked_actions_count = @((Get-Prop -Object $planned -Name "archive_or_keep_blocked_actions" -Default @())).Count
+    unsafe_to_requeue_exclusion_actions_count = @((Get-Prop -Object $planned -Name "unsafe_to_requeue_exclusion_actions" -Default @())).Count
+    residual_warnings = @((Get-Prop -Object $apply -Name "residual_warnings" -Default @()) | ForEach-Object { [string]$_ })
+    recommended_next_safe_action = [string](Get-Prop -Object $apply -Name "recommended_next_safe_action" -Default "")
+    token_printed = Get-BoolProp -Object $apply -Name "token_printed"
+    safety = Get-Prop -Object $apply -Name "safety"
+  }
+}
+
+function Get-NotificationDryRunProbe {
+  if ($FixtureNotificationReadinessFile) {
+    $notification = Read-JsonFile -Path $FixtureNotificationReadinessFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-notification-readiness.ps1"),
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-DryRun",
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    $notification = Invoke-ChildJson -Arguments $args -AllowNonZero
+  }
+  if (-not (Get-Prop -Object $notification -Name "schema")) {
+    return [pscustomobject]@{
+      available = $false
+      ok = $false
+      status = "unavailable"
+      dry_run = $true
+      blocker_notice_supported = $false
+      real_send_performed = $false
+      raw_notification_payload_included = $false
+      credential_values_exposed = $false
+      token_printed = Get-BoolProp -Object $notification -Name "token_printed"
+    }
+  }
+  [pscustomobject]@{
+    available = $true
+    ok = Get-BoolProp -Object $notification -Name "ok" -Default $false
+    status = [string](Get-Prop -Object $notification -Name "status" -Default "unknown")
+    dry_run = Get-BoolProp -Object $notification -Name "dry_run" -Default $true
+    provider_count = Get-CountProp -Object $notification -Name "provider_count"
+    ready_provider_count = Get-CountProp -Object $notification -Name "ready_provider_count"
+    blocker_notice_supported = Get-BoolProp -Object $notification -Name "blocker_notice_supported"
+    real_send_performed = Get-BoolProp -Object $notification -Name "real_send_performed"
+    raw_notification_payload_included = Get-BoolProp -Object $notification -Name "raw_notification_payload_included"
+    credential_values_exposed = Get-BoolProp -Object $notification -Name "credential_values_exposed"
+    token_printed = Get-BoolProp -Object $notification -Name "token_printed"
+  }
+}
+
 function Test-AnyTrueFlag {
   param($Object, [string[]]$Names)
   if ($null -eq $Object) { return $false }
@@ -424,6 +510,9 @@ function New-MarkdownReport {
     "- cloud: commit=$($Report.cloud.commit_sha), aligned=$($Report.cloud.commit_aligned), route_parity_ok=$($Report.cloud.route_parity_ok), deploy_evidence_ok=$($Report.cloud.deploy_evidence_ok)"
     "- worker: heartbeat_requested=$($Report.heartbeat.requested), refreshed=$($Report.heartbeat.refreshed), online=$($Report.heartbeat.worker_online_after), workers_online=$($Report.readiness.workers_online)"
     "- hygiene: total=$($Report.hygiene.total_tasks), failed_unrecovered=$($Report.hygiene.failed_unrecovered), blocked=$($Report.hygiene.blocked), needs_evidence=$($Report.hygiene.needs_evidence), safe_requeue=$($Report.hygiene.safe_requeue_candidates_count), evidence_repair=$($Report.hygiene.evidence_repair_candidates_count), archive_or_keep_blocked=$($Report.hygiene.archive_or_keep_blocked_candidates_count), unsafe_requeue=$($Report.hygiene.unsafe_to_requeue_candidates_count)"
+    "- hygiene_apply_preview: available=$($Report.hygiene_apply_preview.available), mode=$($Report.hygiene_apply_preview.mode), evidence=$($Report.hygiene_apply_preview.evidence_repair_actions_count), blocked=$($Report.hygiene_apply_preview.archive_or_keep_blocked_actions_count), excluded=$($Report.hygiene_apply_preview.unsafe_to_requeue_exclusion_actions_count)"
+    "- notification_readiness: available=$($Report.notification_readiness.available), status=$($Report.notification_readiness.status), dry_run=$($Report.notification_readiness.dry_run), real_send_performed=$($Report.notification_readiness.real_send_performed)"
+    "- deferred_execution_blockers: $(if ($Report.deferred_execution_blockers.Count -gt 0) { $Report.deferred_execution_blockers -join ', ' } else { 'none' })"
     "- forbidden_actions: $forbidden"
     "- next_safe_action: $($Report.recommended_next_safe_action)"
     "- token_printed: false"
@@ -438,6 +527,8 @@ $deployEvidence = Get-DeployEvidenceProbe -Commit ([string]$local.head_commit)
 $heartbeat = Get-HeartbeatProbe
 $readiness = Get-ReadinessProbe
 $hygiene = Get-HygieneProbe
+$hygieneApplyPreview = Get-HygieneApplyProbe
+$notificationDryRun = Get-NotificationDryRunProbe
 
 $cloudCommit = [string](Get-Prop -Object $version -Name "commit_sha")
 $commitAligned = (-not [string]::IsNullOrWhiteSpace($cloudCommit) -and -not [string]::IsNullOrWhiteSpace([string]$local.head_commit) -and $cloudCommit -eq [string]$local.head_commit)
@@ -471,23 +562,41 @@ $tokenPrinted = (
   [bool]$deployEvidence.token_printed -or
   [bool]$heartbeat.token_printed -or
   [bool]$readiness.token_printed -or
-  [bool]$hygiene.token_printed
+  [bool]$hygiene.token_printed -or
+  [bool]$hygieneApplyPreview.token_printed -or
+  [bool]$notificationDryRun.token_printed
 )
 
+$deferredExecutionBlockers = [System.Collections.Generic.List[string]]::new()
+$nonBlockingPreviewBlockers = @("not_on_main", "worktree_dirty", "admin_escalation_unavailable")
 $blockedReasons = [System.Collections.Generic.List[string]]::new()
-if ([string]$local.branch -ne "main") { $blockedReasons.Add("not_on_main") }
-if (-not [bool]$local.clean) { $blockedReasons.Add("worktree_dirty") }
+if ([string]$local.branch -ne "main") { $deferredExecutionBlockers.Add("not_on_main") }
+if (-not [bool]$local.clean) { $deferredExecutionBlockers.Add("worktree_dirty") }
 if (-not [bool]$version.available) { $blockedReasons.Add("cloud_version_unavailable") }
 if (-not $commitAligned) { $blockedReasons.Add("cloud_commit_mismatch") }
 if (-not $routeParityOk) { $blockedReasons.Add("route_parity_failed") }
 foreach ($blocker in @($readiness.blockers)) {
-  if (-not [string]::IsNullOrWhiteSpace($blocker) -and -not $blockedReasons.Contains($blocker)) { $blockedReasons.Add($blocker) }
+  if ([string]::IsNullOrWhiteSpace($blocker)) { continue }
+  if ($nonBlockingPreviewBlockers -contains [string]$blocker) {
+    if (-not $deferredExecutionBlockers.Contains($blocker)) { $deferredExecutionBlockers.Add($blocker) }
+    continue
+  }
+  if (-not $blockedReasons.Contains($blocker)) { $blockedReasons.Add($blocker) }
 }
 if (-not [bool]$readiness.available -or [string]$readiness.status -eq "unknown" -or [string]$readiness.status -eq "unavailable") {
   if (-not $blockedReasons.Contains("self_bootstrap_readiness_unavailable")) { $blockedReasons.Add("self_bootstrap_readiness_unavailable") }
 }
 if (-not [bool]$hygiene.available) {
   if (-not $blockedReasons.Contains("task_hygiene_report_unavailable")) { $blockedReasons.Add("task_hygiene_report_unavailable") }
+}
+if (-not [bool]$hygieneApplyPreview.available) {
+  if (-not $blockedReasons.Contains("task_hygiene_apply_preview_unavailable")) { $blockedReasons.Add("task_hygiene_apply_preview_unavailable") }
+}
+if (-not [bool]$notificationDryRun.available) {
+  if (-not $blockedReasons.Contains("notification_readiness_unavailable")) { $blockedReasons.Add("notification_readiness_unavailable") }
+}
+if ([bool]$notificationDryRun.real_send_performed -or [bool]$notificationDryRun.raw_notification_payload_included -or [bool]$notificationDryRun.credential_values_exposed) {
+  if (-not $blockedReasons.Contains("notification_readiness_unsafe")) { $blockedReasons.Add("notification_readiness_unsafe") }
 }
 if ($RefreshHeartbeat -and -not [bool]$heartbeat.refreshed) { $blockedReasons.Add("heartbeat_refresh_failed") }
 if ($unsafeMutation) { $blockedReasons.Add("unsafe_mutation_flag_detected") }
@@ -506,8 +615,12 @@ $status = if ($blockedReasons.Count -gt 0) {
 
 $nextAction = if ($status -eq "blocked") {
   "Fix convergence blockers before any self-bootstrap execution-class command."
-} elseif ($status -eq "partial") {
-  "Keep project_control paused and prepare Goal 317 preview/apply repair for evidence metadata and blocked-task archive/keep decisions; do not requeue or execute tasks."
+  } elseif ($status -eq "partial") {
+  if ([bool]$hygieneApplyPreview.available -and [bool]$notificationDryRun.available) {
+    "Goal 317 preview and notification dry-run are available. Keep project_control paused; do not call start-one until Goal 318 explicitly authorizes execution."
+  } else {
+    "Keep project_control paused and prepare Goal 317 preview/apply repair for evidence metadata and blocked-task archive/keep decisions; do not requeue or execute tasks."
+  }
 } else {
   "Continue with read-only monitoring until an explicit execution-class goal authorizes a separate action."
 }
@@ -547,7 +660,15 @@ $report = [pscustomobject]@{
     archive_or_keep_blocked_candidates_count = $hygiene.archive_or_keep_blocked_candidates_count
     unsafe_to_requeue_candidates_count = $hygiene.unsafe_to_requeue_candidates_count
   }
+  hygiene_apply_preview = $hygieneApplyPreview
+  notification_readiness = $notificationDryRun
   forbidden_actions = $forbidden
+  residual_task_hygiene_warnings = @(
+    if ($hygiene.evidence_repair_candidates_count -gt 0) { "task_evidence_repair_needed" }
+    if ($hygiene.archive_or_keep_blocked_candidates_count -gt 0) { "blocked_tasks_present" }
+    if ($hygiene.unsafe_to_requeue_candidates_count -gt 0) { "unsafe_to_requeue_tasks_present" }
+  )
+  deferred_execution_blockers = @($deferredExecutionBlockers.ToArray())
   recommended_next_safe_action = $nextAction
   safety = [pscustomobject]@{
     read_only_checks = $true
@@ -585,6 +706,9 @@ if ($Json) {
   "Heartbeat:    requested=$($report.heartbeat.requested) refreshed=$($report.heartbeat.refreshed) sent=$($report.heartbeat.heartbeat_sent) online=$($report.heartbeat.worker_online_after)"
   "Readiness:    status=$($report.readiness.status) workers_online=$($report.readiness.workers_online) project_control=$($report.readiness.project_control_state) start_one=$($report.readiness.can_start_one) run_until_hold=$($report.readiness.can_run_until_hold)"
   "Hygiene:      total=$($report.hygiene.total_tasks) failed=$($report.hygiene.failed_unrecovered) blocked=$($report.hygiene.blocked) evidence=$($report.hygiene.evidence_repair_candidates_count) archive_or_keep=$($report.hygiene.archive_or_keep_blocked_candidates_count) unsafe_requeue=$($report.hygiene.unsafe_to_requeue_candidates_count)"
+  "ApplyPreview: available=$($report.hygiene_apply_preview.available) mode=$($report.hygiene_apply_preview.mode) evidence=$($report.hygiene_apply_preview.evidence_repair_actions_count) archive_or_keep=$($report.hygiene_apply_preview.archive_or_keep_blocked_actions_count) unsafe_requeue=$($report.hygiene_apply_preview.unsafe_to_requeue_exclusion_actions_count)"
+  "NotifyDryRun: available=$($report.notification_readiness.available) status=$($report.notification_readiness.status) ready=$($report.notification_readiness.ready_provider_count) total=$($report.notification_readiness.provider_count) real_send=$($report.notification_readiness.real_send_performed)"
+  "DeferredExec: $(if ($report.deferred_execution_blockers.Count -gt 0) { $report.deferred_execution_blockers -join ', ' } else { 'none' })"
   "Next:         $($report.recommended_next_safe_action)"
   "TokenPrinted: false"
 }

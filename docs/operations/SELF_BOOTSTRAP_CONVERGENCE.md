@@ -59,16 +59,18 @@ environment dumps.
 
 ## Status
 
-`blocked` means a hard convergence gate failed: local branch is not `main`,
-the worktree is dirty, cloud version is unavailable, cloud commit does not
-match local HEAD, route parity failed, readiness has blockers, requested
-heartbeat refresh failed, an unsafe mutation flag is true, or any child report
-indicates token output.
+`blocked` means a hard preview/convergence gate failed: cloud version is
+unavailable, cloud commit does not match local HEAD, route parity failed,
+non-deferred readiness blockers remain, requested heartbeat refresh failed, an
+unsafe mutation flag is true, notification dry-run safety is unsafe, or any
+child report indicates token output.
 
-`partial` means there are no blockers, cloud commit aligns and a worker is
-online or heartbeat was refreshed, but warning-class items remain. The current
-expected live state is partial because Goal 315 task hygiene warnings, Hermes
-exposure and Notification Center readiness are still warning-level work.
+`partial` means there are no hard preview blockers, cloud commit aligns and a
+worker is online or heartbeat was refreshed, but warning-class or
+execution-deferred items remain. Goal 317 reports `not_on_main`,
+`worktree_dirty` and `admin_escalation_unavailable` under
+`deferred_execution_blockers` during PR development instead of treating them as
+preview blockers, because Goal 317 validation does not authorize execution.
 
 `pass` means no blockers, no readiness warnings, cloud commit aligns, a worker
 is online and all safety flags remain clean.
@@ -78,10 +80,22 @@ converged enough for preview planning while keeping all execution gates closed.
 
 ## Goal 317 Boundary
 
-The recommended next safe action from a partial result is a Goal 317 apply
-plan that may repair evidence metadata and record keep-blocked/archive
-decisions. Goal 316 does not apply those changes. It only reports the current
-state and preserves the execution boundary.
+Goal 317 extends convergence with:
+
+- task hygiene apply preview status;
+- notification readiness dry-run status;
+- residual task hygiene warnings;
+- an explicit next safe action.
+
+The recommended next safe action from a partial result is to keep
+`project_control` paused and review the Goal 317 preview/dry-run outputs.
+Goal 317 PR validation must not run live `-Apply`. The operator may run the
+metadata-only apply command only after merge, with the exact confirmation
+string, and only for the fixed task ids documented in
+[TASK_HYGIENE_APPLY.md](TASK_HYGIENE_APPLY.md).
+
+`start-one` remains forbidden until Goal 318 or a later explicit
+execution-class goal opens a separate gate.
 
 ## Smoke
 

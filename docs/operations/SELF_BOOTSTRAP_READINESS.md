@@ -134,6 +134,15 @@ Goal 317 is the earliest follow-up that may be allowed to apply bounded
 metadata repair or keep/archive decisions. Execution remains forbidden unless a
 future goal explicitly opens a separate execution-class gate.
 
+Goal 317 also adds a notification readiness dry-run so convergence can report
+whether future blocker summaries have a safe notification path. The dry-run
+does not send a message and must report `real_send_performed=false`,
+`raw_notification_payload_included=false`, `credential_values_exposed=false`
+and `token_printed=false`.
+
+Even after Goal 317 preview/apply support exists, `start-one` remains forbidden
+until Goal 318. Task hygiene metadata is not execution authorization.
+
 ## Readiness Policy
 
 `ready` requires all of these to be true:

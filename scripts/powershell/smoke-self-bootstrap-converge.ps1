@@ -117,6 +117,46 @@ function New-BaseFixtures {
       }
       token_printed = $false
     }
+    hygieneApply = [pscustomobject]@{
+      schema = "skybridge.task_hygiene_apply.v1"
+      ok = $true
+      mode = "preview"
+      planned_actions = [pscustomobject]@{
+        evidence_repair_actions = @([pscustomobject]@{ task_id = "remote-docs-exec-pilot-001"; operation = "mark_evidence_repair_applied" })
+        archive_or_keep_blocked_actions = @(
+          [pscustomobject]@{ task_id = "always-on-worker-loop-pilot-docs-179"; operation = "mark_keep_blocked" },
+          [pscustomobject]@{ task_id = "task_proposal-59a0236fb69800cd"; operation = "mark_keep_blocked" },
+          [pscustomobject]@{ task_id = "remote-claim-smoke-001"; operation = "mark_keep_blocked" }
+        )
+        unsafe_to_requeue_exclusion_actions = @(1..11 | ForEach-Object { [pscustomobject]@{ task_id = "unsafe-to-requeue-$($_)"; operation = "mark_excluded_from_requeue" } })
+      }
+      residual_warnings = @("preview_only_no_task_mutation")
+      recommended_next_safe_action = "Review preview only."
+      safety = [pscustomobject]@{
+        preview_only = $true
+        tasks_claimed = $false
+        tasks_requeued = $false
+        codex_run_called = $false
+        project_control_unpaused = $false
+        start_one_called = $false
+        run_until_hold_called = $false
+        token_printed = $false
+      }
+      token_printed = $false
+    }
+    notification = [pscustomobject]@{
+      schema = "skybridge.notification_readiness.v1"
+      ok = $true
+      status = "partial"
+      dry_run = $true
+      provider_count = 2
+      ready_provider_count = 1
+      blocker_notice_supported = $true
+      real_send_performed = $false
+      raw_notification_payload_included = $false
+      credential_values_exposed = $false
+      token_printed = $false
+    }
   }
 }
 
@@ -134,6 +174,8 @@ function Invoke-ConvergeFixture {
   $heartbeatPath = Write-Fixture $dir "heartbeat.json" $fixtures.heartbeat
   $readinessPath = Write-Fixture $dir "readiness.json" $fixtures.readiness
   $hygienePath = Write-Fixture $dir "hygiene.json" $fixtures.hygiene
+  $hygieneApplyPath = Write-Fixture $dir "hygiene-apply.json" $fixtures.hygieneApply
+  $notificationPath = Write-Fixture $dir "notification-readiness.json" $fixtures.notification
 
   $args = @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -147,6 +189,8 @@ function Invoke-ConvergeFixture {
     "-FixtureHeartbeatFile", $heartbeatPath,
     "-FixtureReadinessFile", $readinessPath,
     "-FixtureHygieneFile", $hygienePath,
+    "-FixtureHygieneApplyFile", $hygieneApplyPath,
+    "-FixtureNotificationReadinessFile", $notificationPath,
     "-Json"
   )
   if ($RefreshHeartbeat) { $args += "-RefreshHeartbeat" }
@@ -169,8 +213,8 @@ function Assert-Contains {
 $cases = @()
 
 $case = Invoke-ConvergeFixture -Name "not-on-main" -Mutate { param($f) $f.local.branch = "codex/goal-316" }
-if ($case.result.status -ne "blocked") { throw "not-on-main should block." }
-Assert-Contains $case.result.blocked_reasons "not_on_main" "not-on-main blockers"
+if ($case.result.status -ne "partial") { throw "not-on-main should defer execution but keep preview convergence partial." }
+Assert-Contains $case.result.deferred_execution_blockers "not_on_main" "not-on-main deferred blockers"
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "cloud-mismatch" -Mutate { param($f) $f.version.commit_sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
@@ -185,6 +229,15 @@ if (@($case.result.blocked_reasons).Count -ne 0) { throw "partial fixture should
 Assert-True $case.result.cloud.commit_aligned "partial commit aligned"
 Assert-False $case.result.readiness.can_start_one "partial can_start_one"
 Assert-False $case.result.readiness.can_run_until_hold "partial can_run_until_hold"
+Assert-True $case.result.hygiene_apply_preview.available "partial hygiene_apply_preview available"
+if ($case.result.hygiene_apply_preview.mode -ne "preview") { throw "Expected hygiene apply preview mode." }
+if ($case.result.hygiene_apply_preview.evidence_repair_actions_count -ne 1) { throw "Expected one hygiene apply evidence action." }
+if ($case.result.hygiene_apply_preview.archive_or_keep_blocked_actions_count -ne 3) { throw "Expected three hygiene apply blocked actions." }
+if ($case.result.hygiene_apply_preview.unsafe_to_requeue_exclusion_actions_count -ne 11) { throw "Expected eleven hygiene apply exclusion actions." }
+Assert-True $case.result.notification_readiness.available "partial notification_readiness available"
+Assert-True $case.result.notification_readiness.dry_run "partial notification dry_run"
+Assert-False $case.result.notification_readiness.real_send_performed "partial notification real_send_performed"
+Assert-False $case.result.notification_readiness.credential_values_exposed "partial notification credential_values_exposed"
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "heartbeat-fails" -RefreshHeartbeat -Mutate {

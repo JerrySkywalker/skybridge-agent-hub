@@ -46,6 +46,8 @@
     "smoke:self-bootstrap-converge": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-converge.ps1",
     "smoke:task-hygiene-report": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-report.ps1",
     "smoke:task-hygiene-repair-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-repair-preview.ps1",
+    "smoke:task-hygiene-apply": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-apply.ps1",
+    "smoke:notification-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-notification-readiness.ps1",
     "smoke:worker-heartbeat-proof": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-worker-heartbeat-proof.ps1",
     "smoke:public-docs-no-private-endpoints": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-public-docs-no-private-endpoints.ps1",
     "smoke:api-base-diagnostics": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-api-base-diagnostics.ps1",
