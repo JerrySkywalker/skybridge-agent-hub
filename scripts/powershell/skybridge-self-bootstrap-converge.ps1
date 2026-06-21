@@ -283,11 +283,12 @@ function Get-ReadinessProbe {
   if ($FixtureReadinessFile) {
     $readiness = Read-JsonFile -Path $FixtureReadinessFile
   } else {
+    $deployVerifyTimeout = if ($WaitDeploy) { [Math]::Max($TimeoutSeconds, 180) } else { $TimeoutSeconds }
     $args = @(
       "-File", (Join-Path $PSScriptRoot "skybridge-self-bootstrap-readiness.ps1"),
       "-ProjectId", $ProjectId,
       "-TimeoutSeconds", [string]$TimeoutSeconds,
-      "-DeployVerifyTimeoutSeconds", [string](if ($WaitDeploy) { [Math]::Max($TimeoutSeconds, 180) } else { $TimeoutSeconds }),
+      "-DeployVerifyTimeoutSeconds", [string]$deployVerifyTimeout,
       "-DeployVerifyPollSeconds", "5",
       "-Json"
     )
