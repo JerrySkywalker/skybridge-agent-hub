@@ -42,14 +42,22 @@ function ConvertTo-SafeText {
 
 function Invoke-ChildJson {
   param([Parameter(Mandatory = $true)][string[]]$Arguments)
-  $output = @(& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1)
-  $exitCode = $LASTEXITCODE
-  $text = (($output | Out-String).Trim())
-  if ($exitCode -ne 0) {
-    throw "Command failed: pwsh $($Arguments -join ' '): $(ConvertTo-SafeText -Text $text)"
+  $attempt = 0
+  while ($true) {
+    $output = @(& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+    $text = (($output | Out-String).Trim())
+    if ($exitCode -eq 0) {
+      if ([string]::IsNullOrWhiteSpace($text)) { throw "Command returned empty JSON." }
+      return ($text | ConvertFrom-Json)
+    }
+    $safe = ConvertTo-SafeText -Text $text
+    if ($attempt -ge 2 -or $safe -notmatch "(?i)(ssl|tls|connection|timeout|temporarily|reset|eof|handshake)") {
+      throw "Command failed: pwsh $($Arguments -join ' '): $safe"
+    }
+    Start-Sleep -Seconds ([Math]::Min(2 + $attempt, 5))
+    $attempt += 1
   }
-  if ([string]::IsNullOrWhiteSpace($text)) { throw "Command returned empty JSON." }
-  $text | ConvertFrom-Json
 }
 
 function New-EvidenceRepairPreview {

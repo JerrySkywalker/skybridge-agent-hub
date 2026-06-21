@@ -51,15 +51,22 @@ function Invoke-StatusReport {
   if ($TokenEnvVar) { $args += @("-TokenEnvVar", $TokenEnvVar) }
   if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
 
-  $output = @(& pwsh @args 2>&1)
-  $exitCode = $LASTEXITCODE
-  $text = (($output | Out-String).Trim())
-  if ($exitCode -ne 0) {
+  $attempt = 0
+  while ($true) {
+    $output = @(& pwsh @args 2>&1)
+    $exitCode = $LASTEXITCODE
+    $text = (($output | Out-String).Trim())
+    if ($exitCode -eq 0) {
+      return ($text | ConvertFrom-Json)
+    }
     $safe = $text -replace "(?i)authorization\s*[:=]\s*bearer\s+\S+", "authorization=[redacted]"
     $safe = $safe -replace "(?i)(token|secret|password|cookie|credential|api[_-]?key)\s*[:=]\s*\S+", '$1=[redacted]'
-    throw "skybridge-status.ps1 read-only hygiene query failed: $safe"
+    if ($attempt -ge 2 -or $safe -notmatch "(?i)(ssl|tls|connection|timeout|temporarily|reset|eof|handshake)") {
+      throw "skybridge-status.ps1 read-only hygiene query failed: $safe"
+    }
+    Start-Sleep -Seconds ([Math]::Min(2 + $attempt, 5))
+    $attempt += 1
   }
-  return ($text | ConvertFrom-Json)
 }
 
 function Test-UnsafeTaskSurface {
