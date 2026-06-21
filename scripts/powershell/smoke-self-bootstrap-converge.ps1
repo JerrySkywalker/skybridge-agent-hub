@@ -162,6 +162,44 @@ function New-BaseFixtures {
       credential_values_exposed = $false
       token_printed = $false
     }
+    executionSecondGate = [pscustomobject]@{
+      schema = "skybridge.execution_second_gate_readiness.v1"
+      ok = $true
+      status = "preview_ready"
+      project_id = "skybridge-agent-hub"
+      project_control_state = "paused"
+      cloud_commit_aligned = $true
+      worker_online = $true
+      notification_blocker_notice_supported = $true
+      hermes_exposure_status = "blocked"
+      hermes_tool_execution_risk = $true
+      second_gate_configured = $false
+      allowed_preview_only = $true
+      allowed_execution = $false
+      preview_blockers = @()
+      token_printed = $false
+    }
+    startOnePreview = [pscustomobject]@{
+      schema = "skybridge.start_one_preview.v1"
+      ok = $true
+      status = "no_safe_candidate"
+      preview_only = $true
+      would_claim = $false
+      would_run_codex = $false
+      would_unpause_project_control = $false
+      selected_candidate = $null
+      candidate_pool_summary = [pscustomobject]@{ total_tasks = 18; queued_tasks = 0; eligible_candidates = 0; excluded_tasks = 15; online_workers = 1 }
+      excluded_tasks_summary = [pscustomobject]@{
+        failed_tasks_excluded = 12
+        blocked_historical_tasks_excluded = 3
+        hygiene_metadata_excluded_tasks = 12
+        unsafe_to_requeue_tasks_excluded = 12
+        completed_tasks_excluded = 3
+        remote_docs_exec_pilot_001_excluded = $true
+        goal_315_317_residue_eligible = 0
+      }
+      token_printed = $false
+    }
   }
 }
 
@@ -181,6 +219,8 @@ function Invoke-ConvergeFixture {
   $hygienePath = Write-Fixture $dir "hygiene.json" $fixtures.hygiene
   $hygieneApplyPath = Write-Fixture $dir "hygiene-apply.json" $fixtures.hygieneApply
   $notificationPath = Write-Fixture $dir "notification-readiness.json" $fixtures.notification
+  $executionSecondGatePath = Write-Fixture $dir "execution-second-gate.json" $fixtures.executionSecondGate
+  $startOnePreviewPath = Write-Fixture $dir "start-one-preview.json" $fixtures.startOnePreview
 
   $args = @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -196,6 +236,8 @@ function Invoke-ConvergeFixture {
     "-FixtureHygieneFile", $hygienePath,
     "-FixtureHygieneApplyFile", $hygieneApplyPath,
     "-FixtureNotificationReadinessFile", $notificationPath,
+    "-FixtureExecutionSecondGateFile", $executionSecondGatePath,
+    "-FixtureStartOnePreviewFile", $startOnePreviewPath,
     "-Json"
   )
   if ($RefreshHeartbeat) { $args += "-RefreshHeartbeat" }
@@ -243,6 +285,17 @@ Assert-True $case.result.notification_readiness.available "partial notification_
 Assert-True $case.result.notification_readiness.dry_run "partial notification dry_run"
 Assert-False $case.result.notification_readiness.real_send_performed "partial notification real_send_performed"
 Assert-False $case.result.notification_readiness.credential_values_exposed "partial notification credential_values_exposed"
+Assert-True $case.result.execution_second_gate.available "partial execution_second_gate available"
+if ($case.result.execution_second_gate.status -ne "preview_ready") { throw "Expected execution second gate preview_ready." }
+Assert-True $case.result.execution_second_gate.allowed_preview_only "partial execution second gate preview"
+Assert-False $case.result.execution_second_gate.allowed_execution "partial execution second gate execution"
+Assert-True $case.result.execution_forbidden "partial execution forbidden"
+if ($case.result.can_start_one_false_reason -ne "self_bootstrap_readiness_can_start_one_false") { throw "Unexpected can_start_one_false_reason." }
+Assert-True $case.result.start_one_preview.available "partial start_one_preview available"
+if ($case.result.start_one_preview.status -ne "no_safe_candidate") { throw "Expected start_one_preview no_safe_candidate." }
+if ($null -ne $case.result.start_one_preview.selected_candidate) { throw "Expected no selected candidate." }
+Assert-False $case.result.start_one_preview.would_claim "start_one_preview would_claim"
+Assert-False $case.result.start_one_preview.would_run_codex "start_one_preview would_run_codex"
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "bootstrap-notification-only" -Mutate {

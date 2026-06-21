@@ -44,6 +44,8 @@
     "smoke:self-bootstrap-loop": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-loop.ps1 -DryRun",
     "smoke:self-bootstrap-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-readiness.ps1",
     "smoke:self-bootstrap-converge": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-self-bootstrap-converge.ps1",
+    "smoke:execution-second-gate-readiness": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-execution-second-gate-readiness.ps1",
+    "smoke:start-one-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-start-one-preview.ps1",
     "smoke:task-hygiene-report": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-report.ps1",
     "smoke:task-hygiene-repair-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-repair-preview.ps1",
     "smoke:task-hygiene-apply": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-apply.ps1",
