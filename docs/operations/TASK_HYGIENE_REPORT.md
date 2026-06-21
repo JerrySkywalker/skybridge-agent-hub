@@ -100,8 +100,9 @@ repair. Goal 315 does not release leases or alter claims.
 
 ## Goal 316 Boundary
 
-A later Goal 316 may safely propose one or more of these actions, still behind
-explicit preview/apply gates:
+Goal 316 adds a preview-only repair planner for these hygiene buckets. It may
+propose one or more of these actions, still behind explicit preview/apply
+gates:
 
 - repair evidence for `evidence-repair-only` tasks;
 - archive or keep historical blocked tasks after operator review;
@@ -109,9 +110,19 @@ explicit preview/apply gates:
 - define a separate retry policy for failed tasks that are still
   `unsafe-to-requeue`.
 
-Goal 316 must still preserve the hard boundaries around secrets, production
-configuration, task execution and project-control state unless that future goal
-explicitly authorizes a narrower mutation.
+Goal 316 preserves the hard boundaries around secrets, production
+configuration, task execution and project-control state. It does not apply the
+repair. Goal 317 is the earliest follow-up that may be allowed to write bounded
+evidence metadata or record archive/keep-blocked decisions.
+
+Run the preview:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-task-hygiene-repair-preview.ps1 `
+  -ApiBase $env:SKYBRIDGE_API_BASE `
+  -Json
+```
 
 ## Smoke
 
