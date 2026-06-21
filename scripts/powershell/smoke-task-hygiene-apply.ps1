@@ -9,11 +9,12 @@ $ErrorActionPreference = "Stop"
 
 function Invoke-SkyBridgeJson([string]$Method, [string]$Path, $Body = $null) {
   $uri = "$ApiBase$Path"
+  $headers = if ($script:SmokeHeaders) { $script:SmokeHeaders } else { @{} }
   if ($null -eq $Body) {
-    if ($Method -in @("POST", "PATCH")) { return Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body "{}" }
-    return Invoke-RestMethod -Method $Method -Uri $uri
+    if ($Method -in @("POST", "PATCH")) { return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -ContentType "application/json" -Body "{}" }
+    return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers
   }
-  Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20)
+  Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20)
 }
 
 function Wait-SkyBridgeHealth {
@@ -29,6 +30,7 @@ function Invoke-HygieneApply {
   $exit = $LASTEXITCODE
   $text = (($raw | Out-String).Trim())
   Assert-NoUnsafeText $text
+  if ($script:FixtureWorkerToken -and $text.Contains($script:FixtureWorkerToken)) { throw "Worker token value was printed." }
   if ($ExpectFailure) {
     if ($exit -eq 0) { throw "Expected hygiene apply command to fail." }
     return $text
@@ -50,9 +52,17 @@ New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $dbFile = Join-Path $tempDir "skybridge-task-hygiene-apply.sqlite"
 if ($Port -le 0) { $Port = Get-Random -Minimum 18000 -Maximum 28000 }
 $ApiBase = "http://127.0.0.1:$Port"
+$script:FixtureWorkerToken = "goal317-fixture-worker-token"
+$PreviousWorkerToken = [Environment]::GetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN")
+$PreviousWorkerTokenFile = [Environment]::GetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN_FILE")
+$PreviousGoal317Token = [Environment]::GetEnvironmentVariable("GOAL317_FIXTURE_WORKER_TOKEN")
 
 try {
-  $serverCommand = "`$env:SKYBRIDGE_DB_FILE = '$dbFile'; `$env:PORT = '$Port'; Remove-Item Env:SKYBRIDGE_WORKER_TOKEN -ErrorAction SilentlyContinue; Remove-Item Env:SKYBRIDGE_WORKER_TOKENS_FILE -ErrorAction SilentlyContinue; corepack pnpm --filter @skybridge-agent-hub/server dev"
+  [Environment]::SetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN", $null)
+  [Environment]::SetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN_FILE", $null)
+  [Environment]::SetEnvironmentVariable("GOAL317_FIXTURE_WORKER_TOKEN", $null)
+  $script:SmokeHeaders = @{ Authorization = "Bearer $script:FixtureWorkerToken" }
+  $serverCommand = "`$env:SKYBRIDGE_DB_FILE = '$dbFile'; `$env:PORT = '$Port'; `$env:SKYBRIDGE_WORKER_TOKEN = '$script:FixtureWorkerToken'; Remove-Item Env:SKYBRIDGE_WORKER_TOKENS_FILE -ErrorAction SilentlyContinue; corepack pnpm --filter @skybridge-agent-hub/server dev"
   $startProcessParams = @{ FilePath = "pwsh"; ArgumentList = @("-NoProfile", "-Command", $serverCommand); PassThru = $true }
   if ($IsWindows) { $startProcessParams.WindowStyle = "Hidden" }
   $serverProcess = Start-Process @startProcessParams
@@ -99,8 +109,12 @@ try {
   if ($defaultPreview.mode -ne "preview") { throw "Default mode must be preview." }
 
   Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-Apply", "-Json") -ExpectFailure | Out-Null
+  $missingTokenFailure = Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-Apply", "-Confirm", "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY", "-Json") -ExpectFailure
+  if ($missingTokenFailure -notmatch "Apply requires worker auth") { throw "Apply missing-token failure did not fail closed on worker auth." }
 
   $badFixture = Join-Path $tempDir "unexpected-hygiene.json"
+  $tokenFile = Join-Path $tempDir "worker-token.txt"
+  Set-Content -LiteralPath $tokenFile -Value "  $script:FixtureWorkerToken  " -Encoding UTF8
   [pscustomobject]@{
     schema = "skybridge.task_hygiene_report.v1"
     ok = $true
@@ -109,7 +123,7 @@ try {
     unsafe_to_requeue_candidates = @($unsafeTasks | ForEach-Object { [pscustomobject]@{ task_id = $_; classification = "unsafe-to-requeue" } })
     token_printed = $false
   } | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $badFixture -Encoding UTF8
-  Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-FixtureHygieneFile", $badFixture, "-Apply", "-Confirm", "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY", "-Json") -ExpectFailure | Out-Null
+  Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-FixtureHygieneFile", $badFixture, "-Apply", "-Confirm", "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY", "-TokenFile", $tokenFile, "-Json") -ExpectFailure | Out-Null
 
   try {
     Invoke-SkyBridgeJson "POST" "/v1/tasks/$evidenceTask/hygiene-metadata" @{ project_id = "skybridge-agent-hub"; operation = "mark_evidence_repair_applied"; requested_status = "queued"; reason = "must fail" } | Out-Null
@@ -119,7 +133,8 @@ try {
   }
 
   $before = Get-TaskMap
-  $apply = Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-Apply", "-Confirm", "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY", "-Json")
+  [Environment]::SetEnvironmentVariable("GOAL317_FIXTURE_WORKER_TOKEN", $script:FixtureWorkerToken)
+  $apply = Invoke-HygieneApply -ScriptArgs @("-ApiBase", $ApiBase, "-Apply", "-Confirm", "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY", "-TokenEnvVar", "GOAL317_FIXTURE_WORKER_TOKEN", "-Json")
   Assert-True $apply.ok "apply ok"
   if ($apply.mode -ne "apply") { throw "Apply mode expected." }
   Assert-False $apply.safety.tasks_claimed "apply tasks_claimed"
@@ -151,7 +166,10 @@ try {
     ok = $true
     smoke = "task-hygiene-apply"
     preview_default = $true
+    preview_without_token = $true
     apply_failed_without_confirmation = $true
+    apply_failed_without_token = $true
+    apply_passed_bearer_header = $true
     unexpected_task_ids_rejected = $true
     forbidden_status_transition_rejected = $true
     metadata_only_applied_actions = @($apply.applied_actions).Count
@@ -160,6 +178,9 @@ try {
   }
   if ($Json) { $summary | ConvertTo-Json -Depth 8 -Compress } else { Complete-Smoke "task-hygiene-apply" }
 } finally {
+  [Environment]::SetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN", $PreviousWorkerToken)
+  [Environment]::SetEnvironmentVariable("SKYBRIDGE_WORKER_TOKEN_FILE", $PreviousWorkerTokenFile)
+  [Environment]::SetEnvironmentVariable("GOAL317_FIXTURE_WORKER_TOKEN", $PreviousGoal317Token)
   if ($serverProcess) {
     try { $serverProcess.Kill($true) } catch { Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue }
   }

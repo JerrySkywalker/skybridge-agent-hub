@@ -5,6 +5,8 @@ param(
   [string]$Confirm,
   [switch]$Json,
   [string]$ApiBase,
+  [string]$TokenEnvVar,
+  [string]$TokenFile,
   [string]$ProjectId = "skybridge-agent-hub",
   [string]$OutputJsonFile,
   [string]$OutputMarkdownFile,
@@ -21,6 +23,7 @@ $RequiredConfirm = "I_UNDERSTAND_GOAL_317_HYGIENE_METADATA_ONLY"
 $ExpectedEvidenceIds = @("remote-docs-exec-pilot-001")
 $ExpectedBlockedIds = @("always-on-worker-loop-pilot-docs-179", "task_proposal-59a0236fb69800cd", "remote-claim-smoke-001")
 $ForbiddenTaskStatuses = @("queued", "claimed", "running")
+$script:ResolvedWorkerToken = $null
 
 function Get-Prop {
   param($Object, [string]$Name, $Default = $null)
@@ -34,6 +37,9 @@ function ConvertTo-SafeText {
   param([string]$Text, [int]$MaxLength = 260)
   if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
   $safe = $Text
+  if (-not [string]::IsNullOrWhiteSpace($script:ResolvedWorkerToken)) {
+    $safe = $safe.Replace($script:ResolvedWorkerToken, "[redacted]")
+  }
   $safe = $safe -replace "(?i)authorization\s*[:=]\s*bearer\s+\S+", "authorization=[redacted]"
   $safe = $safe -replace "(?i)bearer\s+[A-Za-z0-9._-]{12,}", "bearer [redacted]"
   $safe = $safe -replace "(?i)sk-[A-Za-z0-9_-]{20,}", "sk-[redacted]"
@@ -42,6 +48,37 @@ function ConvertTo-SafeText {
   $safe = $safe.Trim()
   if ($safe.Length -gt $MaxLength) { return $safe.Substring(0, $MaxLength) }
   return $safe
+}
+
+function Get-EnvironmentValue {
+  param([string]$Name)
+  if ([string]::IsNullOrWhiteSpace($Name)) { return $null }
+  $value = [Environment]::GetEnvironmentVariable($Name)
+  if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+  return $value.Trim()
+}
+
+function Resolve-WorkerToken {
+  $envName = if (-not [string]::IsNullOrWhiteSpace($TokenEnvVar)) { $TokenEnvVar } else { "SKYBRIDGE_WORKER_TOKEN" }
+  $token = Get-EnvironmentValue -Name $envName
+  if (-not [string]::IsNullOrWhiteSpace($token)) { return $token }
+
+  $resolvedTokenFile = $null
+  if (-not [string]::IsNullOrWhiteSpace($TokenFile)) {
+    $resolvedTokenFile = $TokenFile
+  } else {
+    $resolvedTokenFile = Get-EnvironmentValue -Name "SKYBRIDGE_WORKER_TOKEN_FILE"
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($resolvedTokenFile)) {
+    if (-not (Test-Path -LiteralPath $resolvedTokenFile -PathType Leaf)) {
+      throw "Worker token file was configured but was not found."
+    }
+    $fileToken = (Get-Content -LiteralPath $resolvedTokenFile -Raw).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($fileToken)) { return $fileToken }
+  }
+
+  return $null
 }
 
 function Invoke-ChildJson {
@@ -61,8 +98,22 @@ function Invoke-ChildJson {
 function Invoke-SkyBridgeJson {
   param([string]$Method, [string]$Path, $Body = $null)
   $uri = "$($script:ResolvedApiBase.TrimEnd('/'))$Path"
-  if ($null -eq $Body) { return Invoke-RestMethod -Method $Method -Uri $uri -TimeoutSec $TimeoutSeconds }
-  Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
+  $headers = @{}
+  if (-not [string]::IsNullOrWhiteSpace($script:ResolvedWorkerToken)) {
+    $headers["Authorization"] = "Bearer $script:ResolvedWorkerToken"
+  }
+  try {
+    if ($null -eq $Body) {
+      if ($headers.Count -gt 0) { return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -TimeoutSec $TimeoutSeconds }
+      return Invoke-RestMethod -Method $Method -Uri $uri -TimeoutSec $TimeoutSeconds
+    }
+    if ($headers.Count -gt 0) {
+      return Invoke-RestMethod -Method $Method -Uri $uri -Headers $headers -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
+    }
+    Invoke-RestMethod -Method $Method -Uri $uri -ContentType "application/json" -Body ($Body | ConvertTo-Json -Depth 20) -TimeoutSec $TimeoutSeconds
+  } catch {
+    throw (ConvertTo-SafeText -Text $_.Exception.Message)
+  }
 }
 
 function Get-RepairPreview {
@@ -133,6 +184,11 @@ function Assert-ExactSet {
 $mode = if ($Apply) { "apply" } else { "preview" }
 if ($Apply -and $Preview) { throw "Use only one of -Preview or -Apply." }
 if ($Apply -and $Confirm -ne $RequiredConfirm) { throw "Apply requires exact confirmation string: $RequiredConfirm" }
+
+$script:ResolvedWorkerToken = Resolve-WorkerToken
+if ($Apply -and [string]::IsNullOrWhiteSpace($script:ResolvedWorkerToken)) {
+  throw "Apply requires worker auth. Provide -TokenEnvVar, SKYBRIDGE_WORKER_TOKEN, -TokenFile, or SKYBRIDGE_WORKER_TOKEN_FILE."
+}
 
 $script:ResolvedApiBase = $null
 if (-not $FixtureHygieneFile -or $ApiBase -or $Apply) {
