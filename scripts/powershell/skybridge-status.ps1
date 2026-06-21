@@ -62,6 +62,26 @@ function New-StatusApiConfig {
   [pscustomobject]@{ api_base = $ApiBase; project_id = $ProjectId; auth_mode = $authMode; token_env_var = $TokenEnvVar; token_file = $TokenFile }
 }
 
+function Invoke-StatusReadOnlyApi {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [int]$RetryCount = 2
+  )
+
+  $attempt = 0
+  while ($true) {
+    try {
+      return Invoke-SkyBridgeApi -Method GET -Path $Path -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+    } catch {
+      if ($attempt -ge $RetryCount) { throw }
+      $message = $_.Exception.Message
+      if ($message -notmatch "(?i)(ssl|tls|connection|timeout|temporarily|reset|eof|handshake)") { throw }
+      Start-Sleep -Seconds ([Math]::Min(2 + $attempt, 5))
+      $attempt += 1
+    }
+  }
+}
+
 function Shorten-StatusText {
   param([string]$Value, [int]$Width)
   if ([string]::IsNullOrWhiteSpace($Value)) { $Value = "-" }
@@ -806,20 +826,20 @@ $warnings = @()
 if ($Since -and -not $sinceDate) { $warnings += "Could not parse -Since; timestamp filter was ignored." }
 if ($Until -and -not $untilDate) { $warnings += "Could not parse -Until; timestamp filter was ignored." }
 
-$health = Invoke-SkyBridgeApi -Method GET -Path "/v1/health" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+$health = Invoke-StatusReadOnlyApi -Path "/v1/health"
 $project = $null
-try { $project = Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds } catch {}
+try { $project = Invoke-StatusReadOnlyApi -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" } catch {}
 $control = $null
-try { $control = (Invoke-SkyBridgeApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/control" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).control_state } catch {}
-$workers = (Invoke-SkyBridgeApi -Method GET -Path "/v1/workers" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).workers
+try { $control = (Invoke-StatusReadOnlyApi -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/control").control_state } catch {}
+$workers = (Invoke-StatusReadOnlyApi -Path "/v1/workers").workers
 if (-not [string]::IsNullOrWhiteSpace($WorkerId)) {
-  $workerResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($WorkerId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+  $workerResponse = Invoke-StatusReadOnlyApi -Path "/v1/workers/$([uri]::EscapeDataString($WorkerId))"
   $workers = @($workerResponse.worker)
 }
 
-$tasks = (Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds).tasks
+$tasks = (Invoke-StatusReadOnlyApi -Path "/v1/tasks?project_id=$([uri]::EscapeDataString($ProjectId))").tasks
 if (-not [string]::IsNullOrWhiteSpace($TaskId)) {
-  $taskResponse = Invoke-SkyBridgeApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+  $taskResponse = Invoke-StatusReadOnlyApi -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))"
   $tasks = @($taskResponse.task)
 }
 
@@ -873,7 +893,7 @@ $allProposalSummaries = @()
 $filteredProposals = @()
 $shownProposals = @()
 if ($ShowProposals -or $Hygiene -or $NeedsReview -or $NeedsReconciliation -or $ReconcileProposals) {
-  $proposalPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/task-proposals?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+  $proposalPayload = Invoke-StatusReadOnlyApi -Path "/v1/task-proposals?project_id=$([uri]::EscapeDataString($ProjectId))"
   $proposalItems = @($proposalPayload.proposals) | Where-Object { $null -ne $_ }
   $taskIndex = @{}
   foreach ($task in @($allTaskSummaries)) {
@@ -912,7 +932,7 @@ $campaignGateSummary = $null
 if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) {
   try {
     if ($CampaignId) {
-      $campaignPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+      $campaignPayload = Invoke-StatusReadOnlyApi -Path "/v1/campaigns/$([uri]::EscapeDataString($CampaignId))"
       $allCampaignSummaries = @($campaignPayload.campaign | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignSummary -Campaign $_ })
       $campaignStepSummaries = @($campaignPayload.steps | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignStepSummary -Step $_ })
       try {
@@ -922,11 +942,11 @@ if ($ShowCampaigns -or $CampaignId -or $ShowCampaignSteps) {
         $warnings += "Campaign advance-preview unavailable for $CampaignId."
       }
     } else {
-      $campaignPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns?project_id=$([uri]::EscapeDataString($ProjectId))" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+      $campaignPayload = Invoke-StatusReadOnlyApi -Path "/v1/campaigns?project_id=$([uri]::EscapeDataString($ProjectId))"
       $allCampaignSummaries = @($campaignPayload.campaigns | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignSummary -Campaign $_ })
       if ($ShowCampaignSteps) {
         foreach ($campaign in @($allCampaignSummaries | Select-Object -First $CampaignLimit)) {
-          $stepsPayload = Invoke-SkyBridgeApi -Method GET -Path "/v1/campaigns/$([uri]::EscapeDataString($campaign.campaign_id))/steps" -ApiBase $ApiBase -Config $config -TimeoutSeconds $TimeoutSeconds
+          $stepsPayload = Invoke-StatusReadOnlyApi -Path "/v1/campaigns/$([uri]::EscapeDataString($campaign.campaign_id))/steps"
           $campaignStepSummaries += @($stepsPayload.steps | Where-Object { $null -ne $_ } | ForEach-Object { Select-CampaignStepSummary -Step $_ })
         }
       }

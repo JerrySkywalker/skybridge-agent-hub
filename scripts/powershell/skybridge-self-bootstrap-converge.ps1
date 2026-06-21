@@ -79,21 +79,29 @@ function Invoke-ChildJson {
     [Parameter(Mandatory = $true)][string[]]$Arguments,
     [switch]$AllowNonZero
   )
-  $output = @(& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1)
-  $exitCode = $LASTEXITCODE
-  $text = (($output | Out-String).Trim())
-  $parsed = $null
-  if (-not [string]::IsNullOrWhiteSpace($text)) {
-    try { $parsed = $text | ConvertFrom-Json } catch {}
+  $attempt = 0
+  while ($true) {
+    $output = @(& pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+    $text = (($output | Out-String).Trim())
+    $parsed = $null
+    if (-not [string]::IsNullOrWhiteSpace($text)) {
+      try { $parsed = $text | ConvertFrom-Json } catch {}
+    }
+    if ($exitCode -eq 0 -and $null -ne $parsed) { return $parsed }
+    if ($exitCode -eq 0) { throw "Command did not return JSON: pwsh $($Arguments -join ' ')" }
+    $safe = ConvertTo-SafeText -Text $text
+    if ($attempt -lt 2 -and $safe -match "(?i)(ssl|tls|connection|timeout|temporarily|reset|eof|handshake)") {
+      Start-Sleep -Seconds ([Math]::Min(2 + $attempt, 5))
+      $attempt += 1
+      continue
+    }
+    if (-not $AllowNonZero) {
+      throw "Command failed: pwsh $($Arguments -join ' '): $safe"
+    }
+    if ($null -ne $parsed) { return $parsed }
+    return [pscustomobject]@{ ok = $false; error_summary = $safe; token_printed = $false }
   }
-  if ($exitCode -ne 0 -and -not $AllowNonZero) {
-    throw "Command failed: pwsh $($Arguments -join ' '): $(ConvertTo-SafeText -Text $text)"
-  }
-  if ($null -ne $parsed) { return $parsed }
-  if ($exitCode -ne 0) {
-    return [pscustomobject]@{ ok = $false; error_summary = ConvertTo-SafeText -Text $text; token_printed = $false }
-  }
-  throw "Command did not return JSON: pwsh $($Arguments -join ' ')"
 }
 
 function New-ProbeFailure {
