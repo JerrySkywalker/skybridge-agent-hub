@@ -150,6 +150,12 @@ Goal 318 preview readiness is documented in
 [START_ONE_PREVIEW.md](START_ONE_PREVIEW.md). A later Goal 319 would need
 separate explicit operator authorization before claiming exactly one safe task.
 
+Goal 319 adds that authorization shape only for the deterministic docs/test
+pilot task. It does not make `can_start_one=true` for the generic queue and it
+does not make `can_run_until_hold=true`. Project control remains paused unless
+the task-specific apply path uses its internal one-claim API sequence, and even
+then the global project control state must remain paused.
+
 ## Readiness Policy
 
 `ready` requires all of these to be true:

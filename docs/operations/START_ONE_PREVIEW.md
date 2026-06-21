@@ -65,18 +65,31 @@ Goal 318 specifically proves old residue remains out of execution:
 These exclusions are not claims and not requeues. They are read-only
 classification evidence for a later human-reviewed execution pilot.
 
-## Goal 319 Requirements
+## Goal 319 Apply Pilot
 
-A later Goal 319 start-one apply pilot would need a separate explicit
-authorization. It should be limited to one safe queued low-risk task, prove the
-second gate is configured, prevent duplicate claims and duplicate task PRs,
-send only safe blocker notices, keep raw logs/prompts out of SkyBridge, and
-stop at human review after the single task.
+Goal 319 adds a separate seed and apply-pilot path documented in
+[START_ONE_APPLY_PILOT.md](START_ONE_APPLY_PILOT.md). PR development remains
+preview-only. The live apply may run only after merge and explicit operator
+confirmation.
+
+The preview may show the deterministic pilot task as a candidate after it is
+seeded, but preview still means:
+
+```text
+would_claim=false
+would_run_codex=false
+would_unpause_project_control=false
+```
+
+No old Goal 315/317 failed, blocked or completed residue may become eligible.
+No existing task may be requeued to make the pilot pass.
 
 ## Smoke
 
 ```powershell
 corepack pnpm smoke:start-one-preview
+corepack pnpm smoke:start-one-pilot-seed
+corepack pnpm smoke:start-one-apply-pilot
 ```
 
 The smoke is fixture-only. It verifies no claim, no Codex run, no
