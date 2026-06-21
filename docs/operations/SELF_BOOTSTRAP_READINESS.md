@@ -109,11 +109,30 @@ admin escalation readiness, project control policy, campaign readiness and no
 execution-class blockers. Project control can remain `paused`, and readiness
 can keep `can_start_one=false` even after the worker heartbeat proof passes.
 
-Goal 315 does not repair the warnings. A later Goal 316 may define a
-preview-first plan to repair evidence, keep or archive historical blocked
-tasks, or recover stale leases/claims. That later goal must remain explicit
-about any mutation and must not requeue or run tasks as a side effect of
-classification.
+Goal 315 does not repair the warnings. Goal 316 adds a convergence command and
+a preview-first repair plan so the operator no longer has to visually inspect
+several large JSON outputs:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass `
+  -File .\scripts\powershell\skybridge-self-bootstrap-converge.ps1 `
+  -ApiBase $env:SKYBRIDGE_API_BASE `
+  -TokenFile "$HOME\.skybridge\worker-token.txt" `
+  -RefreshHeartbeat `
+  -Json
+```
+
+Heartbeat refresh is explicit and heartbeat-only. It can make an authorized
+local worker appear online, but it must not claim, requeue, archive, write
+evidence, call Codex, call queue apply, call `start-one`, call
+`run-until-hold` or unpause project control.
+
+Convergence `partial` is acceptable at this stage when cloud commit alignment,
+route parity and worker readiness are healthy but Goal 315 hygiene warnings,
+Hermes exposure warnings or Notification Center readiness warnings remain.
+Goal 317 is the earliest follow-up that may be allowed to apply bounded
+metadata repair or keep/archive decisions. Execution remains forbidden unless a
+future goal explicitly opens a separate execution-class gate.
 
 ## Readiness Policy
 
