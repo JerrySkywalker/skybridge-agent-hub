@@ -297,9 +297,29 @@ function Get-ReadinessProbe {
     if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
     $readiness = Invoke-ChildJson -Arguments $args -AllowNonZero
   }
+  if (-not (Get-BoolProp -Object $readiness -Name "ok" -Default $false) -and -not (Get-Prop -Object $readiness -Name "schema")) {
+    return [pscustomobject]@{
+      available = $false
+      ok = $false
+      status = "unavailable"
+      blockers = @("self_bootstrap_readiness_unavailable")
+      warnings = @()
+      workers_online = 0
+      online_worker_ids = @()
+      project_control_state = "unknown"
+      can_start_one = $false
+      can_run_until_hold = $false
+      allow_worker_heartbeat = $false
+      allow_start_one = $false
+      allow_run_until_hold = $false
+      token_printed = Get-BoolProp -Object $readiness -Name "token_printed"
+    }
+  }
   $workers = Get-Prop -Object (Get-Prop -Object $readiness -Name "control_plane") -Name "workers"
   $projectControl = Get-Prop -Object (Get-Prop -Object $readiness -Name "control_plane") -Name "project_control"
   [pscustomobject]@{
+    available = $true
+    ok = Get-BoolProp -Object $readiness -Name "ok" -Default $true
     status = [string](Get-Prop -Object $readiness -Name "status" -Default "unknown")
     blockers = @((Get-Prop -Object $readiness -Name "blockers" -Default @()) | ForEach-Object { [string]$_ })
     warnings = @((Get-Prop -Object $readiness -Name "warnings" -Default @()) | ForEach-Object { [string]$_ })
@@ -330,7 +350,27 @@ function Get-HygieneProbe {
     if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
     $hygiene = Invoke-ChildJson -Arguments $args -AllowNonZero
   }
+  if (-not (Get-BoolProp -Object $hygiene -Name "ok" -Default $false) -and -not (Get-Prop -Object $hygiene -Name "schema")) {
+    return [pscustomobject]@{
+      available = $false
+      ok = $false
+      total_tasks = 0
+      failed_unrecovered = 0
+      blocked = 0
+      needs_evidence = 0
+      stale_leases = 0
+      stale_claims = 0
+      safe_requeue_candidates_count = 0
+      evidence_repair_candidates_count = 0
+      archive_or_keep_blocked_candidates_count = 0
+      unsafe_to_requeue_candidates_count = 0
+      token_printed = Get-BoolProp -Object $hygiene -Name "token_printed"
+      safety = Get-Prop -Object $hygiene -Name "safety"
+    }
+  }
   [pscustomobject]@{
+    available = $true
+    ok = Get-BoolProp -Object $hygiene -Name "ok" -Default $true
     total_tasks = Get-CountProp -Object $hygiene -Name "total_tasks"
     failed_unrecovered = Get-CountProp -Object $hygiene -Name "failed_unrecovered"
     blocked = Get-CountProp -Object $hygiene -Name "blocked"
@@ -434,6 +474,12 @@ if (-not $commitAligned) { $blockedReasons.Add("cloud_commit_mismatch") }
 if (-not $routeParityOk) { $blockedReasons.Add("route_parity_failed") }
 foreach ($blocker in @($readiness.blockers)) {
   if (-not [string]::IsNullOrWhiteSpace($blocker) -and -not $blockedReasons.Contains($blocker)) { $blockedReasons.Add($blocker) }
+}
+if (-not [bool]$readiness.available -or [string]$readiness.status -eq "unknown" -or [string]$readiness.status -eq "unavailable") {
+  if (-not $blockedReasons.Contains("self_bootstrap_readiness_unavailable")) { $blockedReasons.Add("self_bootstrap_readiness_unavailable") }
+}
+if (-not [bool]$hygiene.available) {
+  if (-not $blockedReasons.Contains("task_hygiene_report_unavailable")) { $blockedReasons.Add("task_hygiene_report_unavailable") }
 }
 if ($RefreshHeartbeat -and -not [bool]$heartbeat.refreshed) { $blockedReasons.Add("heartbeat_refresh_failed") }
 if ($unsafeMutation) { $blockedReasons.Add("unsafe_mutation_flag_detected") }

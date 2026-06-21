@@ -211,6 +211,30 @@ if ($case.result.status -ne "blocked") { throw "unsafe deploy mutation flag shou
 Assert-Contains $case.result.blocked_reasons "unsafe_mutation_flag_detected" "deploy unsafe blockers"
 $cases += $case
 
+$case = Invoke-ConvergeFixture -Name "readiness-unavailable" -Mutate {
+  param($f)
+  $f.readiness = [pscustomobject]@{
+    ok = $false
+    error_summary = "fixture unavailable"
+    token_printed = $false
+  }
+}
+if ($case.result.status -ne "blocked") { throw "readiness unavailable should block." }
+Assert-Contains $case.result.blocked_reasons "self_bootstrap_readiness_unavailable" "readiness unavailable blockers"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "hygiene-unavailable" -Mutate {
+  param($f)
+  $f.hygiene = [pscustomobject]@{
+    ok = $false
+    error_summary = "fixture unavailable"
+    token_printed = $false
+  }
+}
+if ($case.result.status -ne "blocked") { throw "hygiene unavailable should block." }
+Assert-Contains $case.result.blocked_reasons "task_hygiene_report_unavailable" "hygiene unavailable blockers"
+$cases += $case
+
 $summary = [pscustomobject]@{
   ok = $true
   smoke = "self-bootstrap-converge"
