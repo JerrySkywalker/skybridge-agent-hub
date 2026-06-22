@@ -120,7 +120,7 @@ function Invoke-SkyBridgeApi {
 }
 
 function Register-Worker {
-  param($Config)
+  param($Config, [int]$TimeoutSeconds = 10)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/workers/register" -ApiBase $Config.api_base -Body @{
     worker_id = $Config.worker_id
     name = if ($Config.name) { $Config.name } else { $Config.worker_id }
@@ -131,16 +131,16 @@ function Register-Worker {
     auth_mode = if ($Config.auth_mode) { [string]$Config.auth_mode } else { "none" }
     api_base = $Config.api_base
     allow_remote_server = [bool]$Config.allow_remote_server
-  } -Config $Config
+  } -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Send-WorkerHeartbeat {
-  param($Config, [string]$StatusNote = "ready", [double]$Load = 0)
+  param($Config, [string]$StatusNote = "ready", [double]$Load = 0, [int]$TimeoutSeconds = 10)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/workers/$([uri]::EscapeDataString($Config.worker_id))/heartbeat" -ApiBase $Config.api_base -Body @{
     status_note = $StatusNote
     load = $Load
     seen_at = (Get-Date).ToUniversalTime().ToString("o")
-  } -Config $Config
+  } -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Get-ProjectControlState {

@@ -116,6 +116,7 @@ function Invoke-SeedFixture {
 }
 
 $script:Worker = [pscustomobject]@{ worker_id = "jerry-win-local-01"; status = "online"; enabled = $true; capabilities = @("codex", "docs", "windows"); token_printed = $false }
+$script:HeartbeatOnlyWorker = [pscustomobject]@{ worker_id = "jerry-win-local-01"; status = "online"; enabled = $true; capabilities = @("heartbeat"); token_printed = $false }
 $script:SecondGate = [pscustomobject]@{
   schema = "skybridge.execution_second_gate_readiness.v1"
   ok = $true
@@ -175,6 +176,15 @@ Assert-True $riskFallback.pilot_task_lookup.found_in_hygiene "risk fallback foun
 $blockedPathsSafe = Invoke-ApplyPilot -Name "blocked-paths-safe" -Tasks @((New-Task -TaskId "start-one-apply-pilot-docs-001" -BlockedPaths @("deploy/**", ".env", "secrets/**", ".github/settings/**"))) -Extra @("-Preview")
 if ($blockedPathsSafe.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Blocked-path guardrails poisoned safe candidate." }
 
+$heartbeatOnlyWorker = Invoke-ApplyPilot -Name "heartbeat-only-worker" -Tasks @($pilot) -Workers @($script:HeartbeatOnlyWorker) -Extra @("-Preview")
+if ($heartbeatOnlyWorker.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Heartbeat-only worker compatibility proof did not accept the safe docs pilot." }
+Assert-True $heartbeatOnlyWorker.pilot_task_lookup.worker_match "heartbeat-only worker explicit proof"
+
+$heartbeatOnlyWithoutProofTask = New-Task -TaskId "start-one-apply-pilot-docs-001"
+$heartbeatOnlyWithoutProofTask.required_capabilities = @("codex", "docs")
+$heartbeatOnlyWithoutProof = Invoke-ApplyPilot -Name "heartbeat-only-without-proof" -Tasks @($heartbeatOnlyWithoutProofTask) -Workers @($script:HeartbeatOnlyWorker) -Extra @("-Preview")
+if ($heartbeatOnlyWithoutProof.selected_task_id) { throw "Heartbeat-only worker without explicit compatibility proof was selected." }
+
 $missingConfirm = Invoke-ApplyPilot -Name "missing-confirm" -Tasks @($pilot) -Extra @("-Apply")
 Assert-False $missingConfirm.ok "apply requires confirmation"
 if (@($missingConfirm.blockers) -notcontains "confirmation_required") { throw "Expected confirmation_required." }
@@ -215,6 +225,7 @@ $summary = [pscustomobject]@{
     "seeded_pilot_task_is_accepted_by_apply_preview",
     "missing_risk_safe_pilot_allowed_with_hygiene_proof",
     "blocked_paths_guardrails_do_not_poison_safe_candidate",
+    "heartbeat_only_worker_accepts_only_explicit_docs_compatibility_proof",
     "apply_requires_confirmation",
     "apply_claims_and_runs_once_fixture",
     "apply_rejects_old_failed_tasks",
