@@ -48,6 +48,7 @@
     "smoke:start-one-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-start-one-preview.ps1",
     "smoke:start-one-pilot-seed": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-start-one-pilot-seed.ps1",
     "smoke:start-one-apply-pilot": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-start-one-apply-pilot.ps1",
+    "smoke:start-one-hold-report": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-start-one-hold-report.ps1",
     "smoke:task-hygiene-report": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-report.ps1",
     "smoke:task-hygiene-repair-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-repair-preview.ps1",
     "smoke:task-hygiene-apply": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-task-hygiene-apply.ps1",
