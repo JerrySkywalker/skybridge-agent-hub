@@ -378,10 +378,18 @@ function Get-HygieneProbe {
       evidence_repair_candidates_count = 0
       archive_or_keep_blocked_candidates_count = 0
       unsafe_to_requeue_candidates_count = 0
+      expected_active_pilot_task = $false
+      active_task_id = $null
+      active_task_allowed_for_goal_319_pilot = $false
       token_printed = Get-BoolProp -Object $hygiene -Name "token_printed"
       safety = Get-Prop -Object $hygiene -Name "safety"
     }
   }
+  $pilotClassification = @((Get-Prop -Object $hygiene -Name "task_classifications" -Default @()) | Where-Object { [string](Get-Prop -Object $_ -Name "task_id") -eq "start-one-apply-pilot-docs-001" } | Select-Object -First 1)
+  $pilotStatus = if ($pilotClassification) { [string](Get-Prop -Object $pilotClassification[0] -Name "status" -Default "") } else { "" }
+  $pilotHygieneStatus = if ($pilotClassification) { [string](Get-Prop -Object $pilotClassification[0] -Name "hygiene_status" -Default "") } else { "" }
+  $pilotClass = if ($pilotClassification) { [string](Get-Prop -Object $pilotClassification[0] -Name "classification" -Default "") } else { "" }
+  $expectedActivePilot = ($pilotStatus -eq "queued" -and $pilotHygieneStatus -eq "active_ok" -and $pilotClass -eq "not-residue")
   [pscustomobject]@{
     available = $true
     ok = Get-BoolProp -Object $hygiene -Name "ok" -Default $true
@@ -395,6 +403,9 @@ function Get-HygieneProbe {
     evidence_repair_candidates_count = @((Get-Prop -Object $hygiene -Name "evidence_repair_candidates" -Default @())).Count
     archive_or_keep_blocked_candidates_count = @((Get-Prop -Object $hygiene -Name "archive_or_keep_blocked_candidates" -Default @())).Count
     unsafe_to_requeue_candidates_count = @((Get-Prop -Object $hygiene -Name "unsafe_to_requeue_candidates" -Default @())).Count
+    expected_active_pilot_task = $expectedActivePilot
+    active_task_id = if ($expectedActivePilot) { "start-one-apply-pilot-docs-001" } else { $null }
+    active_task_allowed_for_goal_319_pilot = $expectedActivePilot
     token_printed = Get-BoolProp -Object $hygiene -Name "token_printed"
     safety = Get-Prop -Object $hygiene -Name "safety"
   }
@@ -788,6 +799,9 @@ if (-not $commitAligned) { $blockedReasons.Add("cloud_commit_mismatch") }
 if (-not $routeParityOk) { $blockedReasons.Add("route_parity_failed") }
 foreach ($blocker in @($readiness.blockers)) {
   if ([string]::IsNullOrWhiteSpace($blocker)) { continue }
+  if ([string]$blocker -eq "active_tasks_present" -and [bool]$hygiene.active_task_allowed_for_goal_319_pilot) {
+    continue
+  }
   if ($nonBlockingPreviewBlockers -contains [string]$blocker) {
     if (-not $deferredExecutionBlockers.Contains($blocker)) { $deferredExecutionBlockers.Add($blocker) }
     continue
@@ -884,6 +898,9 @@ $report = [pscustomobject]@{
     evidence_repair_candidates_count = $hygiene.evidence_repair_candidates_count
     archive_or_keep_blocked_candidates_count = $hygiene.archive_or_keep_blocked_candidates_count
     unsafe_to_requeue_candidates_count = $hygiene.unsafe_to_requeue_candidates_count
+    expected_active_pilot_task = $hygiene.expected_active_pilot_task
+    active_task_id = $hygiene.active_task_id
+    active_task_allowed_for_goal_319_pilot = $hygiene.active_task_allowed_for_goal_319_pilot
   }
   hygiene_apply_preview = $hygieneApplyPreview
   notification_readiness = $notificationDryRun

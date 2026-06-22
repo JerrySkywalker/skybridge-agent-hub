@@ -72,6 +72,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass `
 ```
 
 The output schema is `skybridge.start_one_apply_pilot.v1`.
+Preview includes a sanitized `pilot_task_lookup` object that compares direct
+task lookup, project task-list visibility and hygiene classification. If these
+sources disagree on returned task fields, the pilot fails closed instead of
+claiming a task.
 
 ## Safety Contract
 
@@ -79,7 +83,8 @@ The pilot may select only one candidate:
 
 - `task_id=start-one-apply-pilot-docs-001`
 - `status=queued`
-- `risk=low`
+- `risk=low`, or `risk=not_reported` only when the deterministic pilot task has
+  explicit safe pilot hygiene proof;
 - `task_type=docs` or `test`
 - allowed path exactly `docs/operations/START_ONE_APPLY_PILOT.md`
 - worker capability match for `jerry-win-local-01`
@@ -93,6 +98,11 @@ The output must prove:
 - `run_until_hold_called=false`;
 - `campaign_metadata_advanced=false`;
 - `token_printed=false`.
+
+Self-bootstrap convergence may distinguish the queued deterministic pilot task
+from generic active tasks. The exception is limited to
+`start-one-apply-pilot-docs-001` when hygiene reports it as
+`active_ok`/`not-residue`; arbitrary active tasks remain blockers.
 
 If the candidate is missing, unsafe, duplicated, blocked by residue, fails to
 claim, fails execution, misses evidence, fails validation or leaks token-like
