@@ -4,6 +4,8 @@ param(
   [string]$ApiBase,
   [string]$TokenFile,
   [string]$ProjectId = "skybridge-agent-hub",
+  [string]$CampaignId,
+  [string]$TaskPrefix,
   [Parameter(ParameterSetName = "Preview")][switch]$Preview,
   [Parameter(ParameterSetName = "Apply")][switch]$Apply,
   [string]$Confirm,
@@ -66,7 +68,26 @@ function Get-AllowedPathForTaskId {
   if ($TaskId -match "^run-until-hold-pilot-docs-(00[1-3])$") {
     return "docs/operations/RUN_UNTIL_HOLD_PILOT_$($Matches[1]).md"
   }
+  if ($TaskId -match "^campaign-policy-compiler-pilot-docs-(00[1-3])$") {
+    return "docs/operations/CAMPAIGN_COMPILER_PILOT_$($Matches[1]).md"
+  }
   return $null
+}
+
+function Test-SelectorMatch {
+  param($Task, [string]$TaskId)
+  $campaign = [string](Get-Prop -Object $Task -Name "campaign_id" -Default "")
+  $metadata = Get-Prop -Object $Task -Name "hygiene_metadata"
+  if ([string]::IsNullOrWhiteSpace($campaign)) {
+    $campaign = [string](Get-Prop -Object $metadata -Name "campaign_id" -Default "")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($CampaignId)) {
+    return ($campaign -eq $CampaignId -and $TaskId -match "^campaign-policy-compiler-pilot-docs-00[1-3]$")
+  }
+  if (-not [string]::IsNullOrWhiteSpace($TaskPrefix)) {
+    return $TaskId.StartsWith($TaskPrefix)
+  }
+  return ($TaskId -match "^run-until-hold-pilot-docs-00[1-3]$")
 }
 
 function ConvertTo-SafeCandidate {
@@ -157,12 +178,12 @@ function Test-SafeCandidate {
   $risk = ([string](Get-Prop -Object $Task -Name "risk" -Default "")).ToLowerInvariant()
   $taskType = ([string](Get-Prop -Object $Task -Name "task_type" -Default "")).ToLowerInvariant()
   $text = (@(Get-Prop -Object $Task -Name "title" -Default ""; Get-Prop -Object $Task -Name "body" -Default ""; Get-Prop -Object $Task -Name "prompt_summary" -Default ""; @($allowed) -join " ") -join " ").ToLowerInvariant()
-  if (-not $allowedPath) { $reasons.Add("not_goal_321_pilot") | Out-Null }
+  if (-not $allowedPath -or -not (Test-SelectorMatch -Task $Task -TaskId $taskId)) { $reasons.Add("not_selected_bounded_pilot") | Out-Null }
   if ($status -ne "queued") { $reasons.Add("${status}_status") | Out-Null }
   if ($risk -notin @("low", "safe_start_one_pilot", "bounded_loop_pilot")) { $reasons.Add("risk_not_low") | Out-Null }
   if ($taskType -notin @("docs", "test")) { $reasons.Add("task_type_not_docs_or_test") | Out-Null }
   if ($allowed.Count -ne 1 -or $allowed[0] -ne $allowedPath) { $reasons.Add("allowed_paths_not_exact_safe_docs_path") | Out-Null }
-  if ($risk -ne "low" -and -not (Get-BoolProp -Object $metadata -Name "bounded_loop_pilot" -Default $false)) { $reasons.Add("missing_bounded_loop_pilot_marker") | Out-Null }
+  if ($risk -ne "low" -and -not (Get-BoolProp -Object $metadata -Name "bounded_loop_pilot" -Default $false) -and -not (Get-BoolProp -Object $metadata -Name "campaign_task_compiler_pilot" -Default $false)) { $reasons.Add("missing_bounded_loop_pilot_marker") | Out-Null }
   if ([string](Get-Prop -Object $metadata -Name "allowed_worker_id" -Default $WorkerId) -ne $WorkerId) { $reasons.Add("worker_id_not_allowed") | Out-Null }
   if ($claim.claimed) { $reasons.Add("duplicate_claim_rejected") | Out-Null }
   if ($claim.active_lease) { $reasons.Add("active_lease_present") | Out-Null }
@@ -210,7 +231,8 @@ function Invoke-BoundedCodexOnce {
     return [pscustomobject]@{ ok = $false; terminal_state = "failed_with_evidence"; failure_category = "codex_cli_unavailable"; codex_run_called = $false; codex_execution_count = 0; files_changed = @(); validation_result = [pscustomobject]@{ ok = $false; status = "not_run"; token_printed = $false }; token_printed = $false }
   }
   $before = @(& git status --short)
-  $prompt = "Update only $allowedPath for SkyBridge Mega Goal 321. Write a concise docs-only bounded run-until-hold pilot note. Do not edit code, scripts, secrets, deployment files, GitHub settings, or infrastructure."
+  $goalLabel = if ($taskId -like "campaign-policy-compiler-pilot-docs-*") { "Mega Goal 322 campaign compiler pilot" } else { "Mega Goal 321 bounded run-until-hold pilot" }
+  $prompt = "Update only $allowedPath for SkyBridge $goalLabel. Write a concise docs-only operator note. Do not edit code, scripts, credentials, deployment files, repository settings, or infrastructure."
   $null = & codex exec --sandbox workspace-write $prompt 2>$null
   $after = @(& git status --short)
   $changed = @($after | Where-Object { $before -notcontains $_ } | ForEach-Object { $line = [string]$_; if ($line.Length -gt 3) { $line.Substring(3).Replace("\", "/") } } | Where-Object { $_ })
@@ -262,7 +284,7 @@ foreach ($task in @($tasks)) {
   $decision = Test-SafeCandidate -Task $task -Workers $workers
   if ($decision.safe) {
     $safeCandidates += $task
-  } elseif ([string](Get-Prop -Object $task -Name "task_id" -Default "") -match "^run-until-hold-pilot-docs-") {
+  } elseif ([string](Get-Prop -Object $task -Name "task_id" -Default "") -match "^(run-until-hold-pilot-docs-|campaign-policy-compiler-pilot-docs-)") {
     $rejections += [pscustomobject]@{ task_id = [string](Get-Prop -Object $task -Name "task_id" -Default ""); reasons = @($decision.reasons) }
   }
 }
@@ -345,6 +367,8 @@ $report = [pscustomobject]@{
   mode = $Mode
   generated_at = (Get-Date).ToUniversalTime().ToString("o")
   project_id = $ProjectId
+  campaign_id = if ($CampaignId) { $CampaignId } else { $null }
+  task_prefix = if ($TaskPrefix) { $TaskPrefix } else { $null }
   max_tasks = $MaxTasks
   max_runtime_minutes = $MaxRuntimeMinutes
   selected_candidates = @($selected | ForEach-Object { ConvertTo-SafeCandidate -Task $_ })

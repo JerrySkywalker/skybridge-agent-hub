@@ -26,7 +26,9 @@ param(
   [string]$FixtureStartOneHoldReportFile,
   [string]$FixtureRunUntilHoldPilotSeedFile,
   [string]$FixtureRunUntilHoldBoundedFile,
-  [string]$FixtureRunUntilHoldReportFile
+  [string]$FixtureRunUntilHoldReportFile,
+  [string]$FixtureCampaignTaskCompilerFile,
+  [string]$FixtureCampaignPolicyReportFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -884,6 +886,95 @@ function Get-RunUntilHoldReportProbe {
   }
 }
 
+function Get-CampaignTaskCompilerProbe {
+  if ($FixtureCampaignTaskCompilerFile) {
+    $compiler = Read-JsonFile -Path $FixtureCampaignTaskCompilerFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-compile-campaign-tasks.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Preview",
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $compiler = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        status = "unavailable"
+        campaign_id = "campaign-policy-compiler-pilot-001"
+        generated_task_count = 0
+        rejected_unsafe_item_count = 0
+        old_residue_excluded = $false
+        project_control_stayed_paused = $false
+        recommended_next_safe_action = "Fix campaign compiler probe before generating campaign tasks."
+        token_printed = $false
+      }
+    }
+  }
+  [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $compiler -Name "ok" -Default $false)
+    status = if ([bool](Get-Prop -Object $compiler -Name "ok" -Default $false)) { "preview_ready" } else { "blocked" }
+    campaign_id = [string](Get-Prop -Object $compiler -Name "campaign_id" -Default "campaign-policy-compiler-pilot-001")
+    generated_task_count = [int](Get-Prop -Object $compiler -Name "generated_task_count" -Default @((Get-Prop -Object $compiler -Name "generated_tasks" -Default @())).Count)
+    rejected_unsafe_item_count = @((Get-Prop -Object $compiler -Name "rejected_items" -Default @())).Count
+    old_residue_excluded = -not [bool](Get-Prop -Object (Get-Prop -Object $compiler -Name "old_residue_exclusion") -Name "old_residue_selected" -Default $false)
+    project_control_stayed_paused = -not [bool](Get-Prop -Object (Get-Prop -Object $compiler -Name "forbidden_actions") -Name "project_control_unpaused" -Default $false)
+    recommended_next_safe_action = "Compile safe campaign tasks only, then use bounded run-until-hold with the campaign selector."
+    token_printed = [bool](Get-Prop -Object $compiler -Name "token_printed" -Default $false)
+  }
+}
+
+function Get-CampaignPolicyReportProbe {
+  if ($FixtureCampaignPolicyReportFile) {
+    $policy = Read-JsonFile -Path $FixtureCampaignPolicyReportFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-campaign-policy-report.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $policy = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        campaign_status = "unavailable"
+        safe_task_count = 0
+        rejected_task_count = 0
+        evidence_present = $false
+        old_residue_excluded = $false
+        project_control_stayed_paused = $false
+        run_until_hold_stayed_bounded = $false
+        recommended_next_safe_action = "Fix campaign policy report probe before continuing."
+        token_printed = $false
+      }
+    }
+  }
+  [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $policy -Name "ok" -Default $false)
+    campaign_status = [string](Get-Prop -Object $policy -Name "campaign_status" -Default "unknown")
+    safe_task_count = [int](Get-Prop -Object $policy -Name "safe_task_count" -Default 0)
+    rejected_task_count = [int](Get-Prop -Object $policy -Name "rejected_task_count" -Default 0)
+    evidence_present = [bool](Get-Prop -Object (Get-Prop -Object $policy -Name "evidence_state") -Name "evidence_present" -Default $true)
+    old_residue_excluded = [bool](Get-Prop -Object $policy -Name "old_residue_excluded" -Default (-not [bool](Get-Prop -Object $policy -Name "old_residue_selected" -Default $false)))
+    project_control_stayed_paused = [bool](Get-Prop -Object $policy -Name "project_control_stayed_paused" -Default $true)
+    run_until_hold_stayed_bounded = [bool](Get-Prop -Object $policy -Name "run_until_hold_stayed_bounded" -Default $true)
+    recommended_next_safe_action = [string](Get-Prop -Object $policy -Name "recommended_next_safe_action" -Default "Use bounded run-until-hold with the campaign selector; keep project_control paused.")
+    token_printed = [bool](Get-Prop -Object $policy -Name "token_printed" -Default $false)
+  }
+}
+
 function Test-AnyTrueFlag {
   param($Object, [string[]]$Names)
   if ($null -eq $Object) { return $false }
@@ -924,6 +1015,8 @@ function New-MarkdownReport {
     "- bounded_pilot_seed: available=$($Report.bounded_pilot_seed.available), status=$($Report.bounded_pilot_seed.status), would_create=$($Report.bounded_pilot_seed.would_create_count), pilot_tasks=$($Report.bounded_pilot_seed.pilot_task_count)"
     "- bounded_run_until_hold: available=$($Report.bounded_run_until_hold.available), stop=$($Report.bounded_run_until_hold.latest_stop_reason), hold=$($Report.bounded_run_until_hold.latest_hold_reason), selected=$($Report.bounded_run_until_hold.selected_candidate_count), executed=$($Report.bounded_run_until_hold.executed_task_count), evidence=$($Report.bounded_run_until_hold.evidence_present), old_residue_excluded=$($Report.bounded_run_until_hold.old_residue_excluded), bounded=$($Report.bounded_run_until_hold.run_until_hold_bounded)"
     "- bounded_run_until_hold_report: available=$($Report.bounded_run_until_hold_report.available), status=$($Report.bounded_run_until_hold_report.latest_bounded_run_status), evidence=$($Report.bounded_run_until_hold_report.evidence_present), project_control_paused=$($Report.bounded_run_until_hold_report.project_control_stayed_paused)"
+    "- campaign_task_compiler: available=$($Report.campaign_task_compiler.available), status=$($Report.campaign_task_compiler.status), campaign=$($Report.campaign_task_compiler.campaign_id), generated=$($Report.campaign_task_compiler.generated_task_count), rejected=$($Report.campaign_task_compiler.rejected_unsafe_item_count), old_residue_excluded=$($Report.campaign_task_compiler.old_residue_excluded)"
+    "- campaign_policy_report: available=$($Report.campaign_policy_report.available), status=$($Report.campaign_policy_report.campaign_status), safe_tasks=$($Report.campaign_policy_report.safe_task_count), rejected=$($Report.campaign_policy_report.rejected_task_count), evidence=$($Report.campaign_policy_report.evidence_present), bounded=$($Report.campaign_policy_report.run_until_hold_stayed_bounded)"
     "- execution_forbidden: $($Report.execution_forbidden)"
     "- can_start_one_false_reason: $($Report.can_start_one_false_reason)"
     "- deferred_execution_blockers: $(if ($Report.deferred_execution_blockers.Count -gt 0) { $Report.deferred_execution_blockers -join ', ' } else { 'none' })"
@@ -951,6 +1044,8 @@ $startOneFailureSemantics = Get-StartOneHoldReportProbe
 $boundedPilotSeed = Get-RunUntilHoldPilotSeedProbe
 $boundedRunUntilHold = Get-RunUntilHoldBoundedProbe
 $boundedRunUntilHoldReport = Get-RunUntilHoldReportProbe
+$campaignTaskCompiler = Get-CampaignTaskCompilerProbe
+$campaignPolicyReport = Get-CampaignPolicyReportProbe
 
 $cloudCommit = [string](Get-Prop -Object $version -Name "commit_sha")
 $commitAligned = (-not [string]::IsNullOrWhiteSpace($cloudCommit) -and -not [string]::IsNullOrWhiteSpace([string]$local.head_commit) -and $cloudCommit -eq [string]$local.head_commit)
@@ -994,7 +1089,9 @@ $tokenPrinted = (
   [bool]$startOneFailureSemantics.token_printed -or
   [bool]$boundedPilotSeed.token_printed -or
   [bool]$boundedRunUntilHold.token_printed -or
-  [bool]$boundedRunUntilHoldReport.token_printed
+  [bool]$boundedRunUntilHoldReport.token_printed -or
+  [bool]$campaignTaskCompiler.token_printed -or
+  [bool]$campaignPolicyReport.token_printed
 )
 
 $deferredExecutionBlockers = [System.Collections.Generic.List[string]]::new()
@@ -1063,6 +1160,18 @@ if (-not [bool]$boundedRunUntilHold.old_residue_excluded -or -not [bool]$bounded
 }
 if (-not [bool]$boundedRunUntilHoldReport.old_residue_excluded -or -not [bool]$boundedRunUntilHoldReport.project_control_stayed_paused -or -not [bool]$boundedRunUntilHoldReport.run_until_hold_stayed_bounded) {
   if (-not $blockedReasons.Contains("bounded_run_until_hold_report_unsafe")) { $blockedReasons.Add("bounded_run_until_hold_report_unsafe") }
+}
+if (-not [bool]$campaignTaskCompiler.available) {
+  if (-not $blockedReasons.Contains("campaign_task_compiler_unavailable")) { $blockedReasons.Add("campaign_task_compiler_unavailable") }
+}
+if (-not [bool]$campaignPolicyReport.available) {
+  if (-not $blockedReasons.Contains("campaign_policy_report_unavailable")) { $blockedReasons.Add("campaign_policy_report_unavailable") }
+}
+if (-not [bool]$campaignTaskCompiler.old_residue_excluded -or -not [bool]$campaignTaskCompiler.project_control_stayed_paused) {
+  if (-not $blockedReasons.Contains("campaign_task_compiler_unsafe")) { $blockedReasons.Add("campaign_task_compiler_unsafe") }
+}
+if (-not [bool]$campaignPolicyReport.old_residue_excluded -or -not [bool]$campaignPolicyReport.project_control_stayed_paused -or -not [bool]$campaignPolicyReport.run_until_hold_stayed_bounded) {
+  if (-not $blockedReasons.Contains("campaign_policy_report_unsafe")) { $blockedReasons.Add("campaign_policy_report_unsafe") }
 }
 if ($RefreshHeartbeat -and -not [bool]$heartbeat.refreshed) { $blockedReasons.Add("heartbeat_refresh_failed") }
 if ($unsafeMutation) { $blockedReasons.Add("unsafe_mutation_flag_detected") }
@@ -1141,6 +1250,8 @@ $report = [pscustomobject]@{
   bounded_pilot_seed = $boundedPilotSeed
   bounded_run_until_hold = $boundedRunUntilHold
   bounded_run_until_hold_report = $boundedRunUntilHoldReport
+  campaign_task_compiler = $campaignTaskCompiler
+  campaign_policy_report = $campaignPolicyReport
   execution_forbidden = [bool]$executionSecondGate.execution_forbidden
   can_start_one_false_reason = if (-not [bool]$readiness.can_start_one) {
     "self_bootstrap_readiness_can_start_one_false"
@@ -1207,6 +1318,8 @@ if ($Json) {
   "BoundedSeed:  available=$($report.bounded_pilot_seed.available) status=$($report.bounded_pilot_seed.status) would_create=$($report.bounded_pilot_seed.would_create_count) pilot_tasks=$($report.bounded_pilot_seed.pilot_task_count)"
   "BoundedRun:   available=$($report.bounded_run_until_hold.available) stop=$($report.bounded_run_until_hold.latest_stop_reason) hold=$(if ($report.bounded_run_until_hold.latest_hold_reason) { $report.bounded_run_until_hold.latest_hold_reason } else { 'none' }) selected=$($report.bounded_run_until_hold.selected_candidate_count) executed=$($report.bounded_run_until_hold.executed_task_count) evidence=$($report.bounded_run_until_hold.evidence_present) old_residue_excluded=$($report.bounded_run_until_hold.old_residue_excluded) bounded=$($report.bounded_run_until_hold.run_until_hold_bounded)"
   "BoundedRpt:   available=$($report.bounded_run_until_hold_report.available) status=$($report.bounded_run_until_hold_report.latest_bounded_run_status) evidence=$($report.bounded_run_until_hold_report.evidence_present) project_control_paused=$($report.bounded_run_until_hold_report.project_control_stayed_paused)"
+  "CampaignCmp: available=$($report.campaign_task_compiler.available) status=$($report.campaign_task_compiler.status) campaign=$($report.campaign_task_compiler.campaign_id) generated=$($report.campaign_task_compiler.generated_task_count) rejected=$($report.campaign_task_compiler.rejected_unsafe_item_count)"
+  "CampaignRpt: available=$($report.campaign_policy_report.available) status=$($report.campaign_policy_report.campaign_status) safe_tasks=$($report.campaign_policy_report.safe_task_count) evidence=$($report.campaign_policy_report.evidence_present)"
   "ExecBlocked:  $($report.execution_forbidden) reason=$($report.can_start_one_false_reason)"
   "DeferredExec: $(if ($report.deferred_execution_blockers.Count -gt 0) { $report.deferred_execution_blockers -join ', ' } else { 'none' })"
   "Next:         $($report.recommended_next_safe_action)"
