@@ -78,8 +78,12 @@ function Test-SelectorMatch {
   param($Task, [string]$TaskId)
   $campaign = [string](Get-Prop -Object $Task -Name "campaign_id" -Default "")
   $metadata = Get-Prop -Object $Task -Name "hygiene_metadata"
+  $planner = Get-Prop -Object $Task -Name "planner_metadata"
   if ([string]::IsNullOrWhiteSpace($campaign)) {
     $campaign = [string](Get-Prop -Object $metadata -Name "campaign_id" -Default "")
+  }
+  if ([string]::IsNullOrWhiteSpace($campaign)) {
+    $campaign = [string](Get-Prop -Object $planner -Name "source_campaign_id" -Default "")
   }
   if (-not [string]::IsNullOrWhiteSpace($CampaignId)) {
     return ($campaign -eq $CampaignId -and $TaskId -match "^campaign-policy-compiler-pilot-docs-00[1-3]$")
