@@ -201,6 +201,45 @@ function New-BaseFixtures {
       }
       token_printed = $false
     }
+    pilotSeed = [pscustomobject]@{
+      schema = "skybridge.start_one_pilot_seed.v1"
+      ok = $true
+      status = "would_create_safe_pilot_task"
+      mode = "preview"
+      pilot_task_id = "start-one-apply-pilot-docs-001"
+      would_create_task = $true
+      created_task = $null
+      token_printed = $false
+    }
+    startOneApplyPilot = [pscustomobject]@{
+      schema = "skybridge.start_one_apply_pilot.v1"
+      ok = $true
+      status = "no_safe_candidate"
+      mode = "preview"
+      selected_task_id = $null
+      selected_candidate = $null
+      final_task_status = "queued"
+      pilot_task_lookup = [pscustomobject]@{
+        found_by_id = $false
+        found_in_task_list = $false
+        found_in_hygiene = $false
+        task_id = $null
+        status = $null
+        rejection_reasons = @("missing_pilot_task")
+        token_printed = $false
+      }
+      old_residue_exclusion = [pscustomobject]@{
+        unsafe_to_requeue_tasks_excluded = 12
+        blocked_historical_tasks_excluded = 3
+        remote_docs_exec_pilot_001_excluded = $true
+        no_old_residue_eligible = $true
+      }
+      claim_result = [pscustomobject]@{ would_claim = $false; claimed = $false; token_printed = $false }
+      execution_result = [pscustomobject]@{ codex_run_called = $false; codex_execution_count = 0; token_printed = $false }
+      project_control = [pscustomobject]@{ project_control_unpaused = $false }
+      forbidden_actions = [pscustomobject]@{ run_until_hold_called = $false }
+      token_printed = $false
+    }
   }
 }
 
@@ -222,6 +261,8 @@ function Invoke-ConvergeFixture {
   $notificationPath = Write-Fixture $dir "notification-readiness.json" $fixtures.notification
   $executionSecondGatePath = Write-Fixture $dir "execution-second-gate.json" $fixtures.executionSecondGate
   $startOnePreviewPath = Write-Fixture $dir "start-one-preview.json" $fixtures.startOnePreview
+  $pilotSeedPath = Write-Fixture $dir "pilot-seed.json" $fixtures.pilotSeed
+  $startOneApplyPilotPath = Write-Fixture $dir "start-one-apply-pilot.json" $fixtures.startOneApplyPilot
 
   $args = @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -239,6 +280,8 @@ function Invoke-ConvergeFixture {
     "-FixtureNotificationReadinessFile", $notificationPath,
     "-FixtureExecutionSecondGateFile", $executionSecondGatePath,
     "-FixtureStartOnePreviewFile", $startOnePreviewPath,
+    "-FixturePilotSeedFile", $pilotSeedPath,
+    "-FixtureStartOneApplyPilotFile", $startOneApplyPilotPath,
     "-Json"
   )
   if ($RefreshHeartbeat) { $args += "-RefreshHeartbeat" }
@@ -332,6 +375,46 @@ if (@($case.result.blocked_reasons) -contains "active_tasks_present") { throw "E
 Assert-True $case.result.hygiene.expected_active_pilot_task "expected active pilot flag"
 if ($case.result.hygiene.active_task_id -ne "start-one-apply-pilot-docs-001") { throw "Expected active pilot task id." }
 Assert-True $case.result.hygiene.active_task_allowed_for_goal_319_pilot "active pilot allowed flag"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "completed-pilot-reported" -Mutate {
+  param($f)
+  $f.pilotSeed.status = "existing_completed_pilot_task"
+  $f.pilotSeed.would_create_task = $false
+  $f.pilotSeed.created_task = [pscustomobject]@{
+    task_id = "start-one-apply-pilot-docs-001"
+    status = "existing_completed_pilot_task"
+    task_status = "completed"
+    allowed_paths = @("docs/operations/START_ONE_APPLY_PILOT.md")
+  }
+  $f.startOneApplyPilot.status = "no_safe_candidate"
+  $f.startOneApplyPilot.pilot_task_lookup = [pscustomobject]@{
+    found_by_id = $true
+    found_in_task_list = $true
+    found_in_hygiene = $true
+    task_id = "start-one-apply-pilot-docs-001"
+    status = "completed"
+    rejection_reasons = @("task_status_not_queued:completed")
+    token_printed = $false
+  }
+  $f.hygiene.task_classifications = @(
+    [pscustomobject]@{
+      task_id = "start-one-apply-pilot-docs-001"
+      status = "completed"
+      hygiene_status = "ok"
+      classification = "not-residue"
+      risk = "not_reported"
+      task_type = "docs"
+      assigned_worker_id = "jerry-win-local-01"
+      recommended_action = "No Goal 315 action."
+    }
+  )
+}
+Assert-True $case.result.pilot_seed.pilot_task_exists "completed pilot seed exists"
+Assert-True $case.result.pilot_seed.pilot_task_completed "completed pilot seed completed"
+Assert-True $case.result.start_one_apply_pilot.pilot_task_exists "completed apply pilot exists"
+Assert-True $case.result.start_one_apply_pilot.pilot_task_completed "completed apply pilot completed"
+if ($case.result.start_one_apply_pilot.pilot_task_terminal_status -ne "completed") { throw "Expected completed terminal status." }
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "bootstrap-notification-only" -Mutate {

@@ -67,6 +67,10 @@ $existing = Invoke-Seed -Name "existing-safe" -Tasks @((New-PilotTask)) -Extra @
 if ($existing.status -ne "existing_safe_pilot_task") { throw "Expected existing safe pilot task." }
 Assert-False $existing.would_create_task "existing would_create_task"
 
+$existingCompleted = Invoke-Seed -Name "existing-completed" -Tasks @((New-PilotTask -Status "completed")) -Extra @("-Preview")
+if ($existingCompleted.status -ne "existing_completed_pilot_task") { throw "Expected existing completed pilot task." }
+Assert-False $existingCompleted.would_create_task "existing completed would_create_task"
+
 $unsafe = Invoke-Seed -Name "existing-unsafe" -Tasks @((New-PilotTask -AllowedPaths @("deploy/docker-compose.yml"))) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_SEED_ONE_SAFE_START_ONE_PILOT_TASK")
 Assert-False $unsafe.ok "unsafe existing ok"
 if (@($unsafe.blockers) -notcontains "existing_pilot_task_not_safe") { throw "Expected existing_pilot_task_not_safe." }
@@ -79,6 +83,7 @@ $summary = [pscustomobject]@{
     "seed_apply_requires_confirmation",
     "seed_apply_only_creates_safe_pilot_task_fixture",
     "existing_safe_reported",
+    "existing_completed_reported",
     "existing_unsafe_fails_closed"
   )
   token_printed = $false

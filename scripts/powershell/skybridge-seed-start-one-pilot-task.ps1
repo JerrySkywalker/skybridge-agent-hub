@@ -83,7 +83,7 @@ function Test-SafePilotTask {
   return (
     [string](Get-Prop -Object $Task -Name "task_id") -eq $PilotTaskId -and
     [string](Get-Prop -Object $Task -Name "project_id") -eq $ProjectId -and
-    [string](Get-Prop -Object $Task -Name "status" -Default "queued") -eq "queued" -and
+    [string](Get-Prop -Object $Task -Name "status" -Default "queued") -in @("queued", "completed") -and
     [string](Get-Prop -Object $Task -Name "risk" -Default "") -eq "low" -and
     [string](Get-Prop -Object $Task -Name "task_type" -Default "") -eq "docs" -and
     $allowed.Count -eq 1 -and
@@ -159,7 +159,9 @@ if ($existing) {
   if (-not (Test-SafePilotTask -Task $existing)) {
     $report = New-Report -Ok $false -WouldCreate $false -CreatedTask $null -Blockers @("existing_pilot_task_not_safe") -Status "failed_closed"
   } else {
-    $report = New-Report -Ok $true -WouldCreate $false -CreatedTask ([pscustomobject]@{ task_id = $PilotTaskId; status = "existing_safe_pilot_task"; allowed_paths = @($AllowedPath) }) -Status "existing_safe_pilot_task"
+    $existingStatus = [string](Get-Prop -Object $existing -Name "status" -Default "queued")
+    $reportStatus = if ($existingStatus -eq "completed") { "existing_completed_pilot_task" } else { "existing_safe_pilot_task" }
+    $report = New-Report -Ok $true -WouldCreate $false -CreatedTask ([pscustomobject]@{ task_id = $PilotTaskId; status = $reportStatus; task_status = $existingStatus; allowed_paths = @($AllowedPath) }) -Status $reportStatus
   }
 } elseif ($Mode -eq "preview") {
   $report = New-Report -Ok $true -WouldCreate $true -CreatedTask $null -Status "would_create_safe_pilot_task"
