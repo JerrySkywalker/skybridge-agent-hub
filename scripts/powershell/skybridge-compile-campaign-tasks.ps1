@@ -161,8 +161,22 @@ function New-GeneratedTask {
     prompt_summary = "Docs-only campaign compiler pilot limited to $allowedPath."
     status = "queued"
     risk = "low"
-    source = "campaign-task-compiler"
+    source = "manual"
     task_type = "docs"
+    planner_metadata = [pscustomobject]@{
+      adapter = "campaign-task-compiler"
+      decision = "continue"
+      reason = "safe bounded campaign task"
+      task_type = "docs"
+      allowed_paths = @($allowedPath)
+      blocked_paths = @($BlockedPaths)
+      validation = @("corepack pnpm smoke:campaign-task-compiler", "corepack pnpm smoke:run-until-hold-bounded")
+      expected_files = @($allowedPath)
+      source_campaign_id = $CampaignId
+      source_campaign_step_id = $taskId
+      source_goal_id = "mega-goal-322"
+      created_at = (Get-Date).ToUniversalTime().ToString("o")
+    }
     required_capabilities = @("codex", "docs", "windows")
     allowed_paths = @($allowedPath)
     blocked_paths = @($BlockedPaths)
@@ -190,7 +204,8 @@ function Test-ExistingSafeGeneratedTask {
   param($Task, [int]$Index)
   $allowed = @((Get-Prop -Object $Task -Name "allowed_paths" -Default @()) | ForEach-Object { ([string]$_).Replace("\", "/") })
   $metadata = Get-Prop -Object $Task -Name "hygiene_metadata"
-  $campaign = [string](Get-Prop -Object $Task -Name "campaign_id" -Default (Get-Prop -Object $metadata -Name "campaign_id" -Default ""))
+  $planner = Get-Prop -Object $Task -Name "planner_metadata"
+  $campaign = [string](Get-Prop -Object $Task -Name "campaign_id" -Default (Get-Prop -Object $metadata -Name "campaign_id" -Default (Get-Prop -Object $planner -Name "source_campaign_id" -Default "")))
   return (
     [string](Get-Prop -Object $Task -Name "task_id") -eq (Get-TaskIdForIndex -Index $Index) -and
     $campaign -eq $CampaignId -and

@@ -72,7 +72,8 @@ $compiler = Get-Compiler
 $bounded = Get-Bounded
 $campaignTasks = @($tasks | Where-Object {
   $metadata = Get-Prop -Object $_ -Name "hygiene_metadata"
-  [string](Get-Prop -Object $_ -Name "campaign_id" -Default (Get-Prop -Object $metadata -Name "campaign_id" -Default "")) -eq $CampaignId -and
+  $planner = Get-Prop -Object $_ -Name "planner_metadata"
+  [string](Get-Prop -Object $_ -Name "campaign_id" -Default (Get-Prop -Object $metadata -Name "campaign_id" -Default (Get-Prop -Object $planner -Name "source_campaign_id" -Default ""))) -eq $CampaignId -and
   [string](Get-Prop -Object $_ -Name "task_id" -Default "") -match "^campaign-policy-compiler-pilot-docs-00[1-3]$"
 })
 $safeTasks = @($campaignTasks | Where-Object {
