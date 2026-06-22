@@ -22,7 +22,8 @@ param(
   [string]$FixtureExecutionSecondGateFile,
   [string]$FixtureStartOnePreviewFile,
   [string]$FixturePilotSeedFile,
-  [string]$FixtureStartOneApplyPilotFile
+  [string]$FixtureStartOneApplyPilotFile,
+  [string]$FixtureStartOneHoldReportFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -693,6 +694,57 @@ function Get-StartOneApplyPilotProbe {
   }
 }
 
+function Get-StartOneHoldReportProbe {
+  if ($FixtureStartOneHoldReportFile) {
+    $hold = Read-JsonFile -Path $FixtureStartOneHoldReportFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-start-one-hold-report.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $hold = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        status = "unavailable"
+        latest_pilot_execution_terminal_state = "not_reported"
+        latest_hold_reason = "hold_report_unavailable"
+        evidence_present = $false
+        token_printed = $false
+      }
+    }
+  }
+  $evidence = Get-Prop -Object $hold -Name "evidence_summary"
+  [pscustomobject]@{
+    available = $true
+    ok = Get-BoolProp -Object $hold -Name "ok" -Default $true
+    status = [string](Get-Prop -Object $hold -Name "current_status" -Default "unknown")
+    task_id = [string](Get-Prop -Object $hold -Name "task_id" -Default "start-one-apply-pilot-docs-001")
+    latest_pilot_execution_terminal_state = [string](Get-Prop -Object $hold -Name "terminal_state" -Default "not_reported")
+    latest_hold_reason = [string](Get-Prop -Object $hold -Name "hold_reason" -Default "")
+    evidence_present = Get-BoolProp -Object $hold -Name "evidence_present"
+    evidence_safety_summary = [pscustomobject]@{
+      schema = [string](Get-Prop -Object $evidence -Name "schema" -Default "not_reported")
+      files_changed = @((Get-Prop -Object $evidence -Name "files_changed" -Default @()) | ForEach-Object { [string]$_ })
+      prompt_content_included = Get-BoolProp -Object $evidence -Name "prompt_content_included"
+      log_content_included = Get-BoolProp -Object $evidence -Name "log_content_included"
+      credential_values_included = Get-BoolProp -Object $evidence -Name "credential_values_included"
+    }
+    old_residue_stayed_excluded = (-not (Get-BoolProp -Object $hold -Name "old_residue_selected"))
+    project_control_stayed_paused = (-not (Get-BoolProp -Object $hold -Name "project_control_unpaused"))
+    run_until_hold_stayed_unavailable = (-not (Get-BoolProp -Object $hold -Name "run_until_hold_called"))
+    manual_operator_review_needed = Get-BoolProp -Object $hold -Name "manual_operator_review_needed"
+    recommended_next_safe_action = [string](Get-Prop -Object $hold -Name "recommended_next_safe_action" -Default "")
+    token_printed = Get-BoolProp -Object $hold -Name "token_printed"
+  }
+}
+
 function Test-AnyTrueFlag {
   param($Object, [string[]]$Names)
   if ($null -eq $Object) { return $false }
@@ -729,6 +781,7 @@ function New-MarkdownReport {
     "- start_one_preview: available=$($Report.start_one_preview.available), status=$($Report.start_one_preview.status), selected_candidate=$(if ($Report.start_one_preview.selected_candidate) { $Report.start_one_preview.selected_candidate.task_id } else { 'none' }), would_claim=$($Report.start_one_preview.would_claim), would_run_codex=$($Report.start_one_preview.would_run_codex)"
     "- pilot_seed: available=$($Report.pilot_seed.available), status=$($Report.pilot_seed.status), exists=$($Report.pilot_seed.pilot_task_exists), would_create=$($Report.pilot_seed.would_create_task)"
     "- start_one_apply_pilot: available=$($Report.start_one_apply_pilot.available), status=$($Report.start_one_apply_pilot.status), selected=$($Report.start_one_apply_pilot.selected_task_id), completed=$($Report.start_one_apply_pilot.pilot_task_completed), old_residue_excluded=$($Report.start_one_apply_pilot.old_residue_remains_excluded)"
+    "- start_one_failure_semantics: available=$($Report.start_one_failure_semantics.available), terminal=$($Report.start_one_failure_semantics.latest_pilot_execution_terminal_state), hold_reason=$($Report.start_one_failure_semantics.latest_hold_reason), evidence_present=$($Report.start_one_failure_semantics.evidence_present), manual_review=$($Report.start_one_failure_semantics.manual_operator_review_needed)"
     "- execution_forbidden: $($Report.execution_forbidden)"
     "- can_start_one_false_reason: $($Report.can_start_one_false_reason)"
     "- deferred_execution_blockers: $(if ($Report.deferred_execution_blockers.Count -gt 0) { $Report.deferred_execution_blockers -join ', ' } else { 'none' })"
@@ -752,6 +805,7 @@ $executionSecondGate = Get-ExecutionSecondGateProbe
 $startOnePreview = Get-StartOnePreviewProbe
 $pilotSeed = Get-PilotSeedProbe
 $startOneApplyPilot = Get-StartOneApplyPilotProbe
+$startOneFailureSemantics = Get-StartOneHoldReportProbe
 
 $cloudCommit = [string](Get-Prop -Object $version -Name "commit_sha")
 $commitAligned = (-not [string]::IsNullOrWhiteSpace($cloudCommit) -and -not [string]::IsNullOrWhiteSpace([string]$local.head_commit) -and $cloudCommit -eq [string]$local.head_commit)
@@ -791,7 +845,8 @@ $tokenPrinted = (
   [bool]$executionSecondGate.token_printed -or
   [bool]$startOnePreview.token_printed -or
   [bool]$pilotSeed.token_printed -or
-  [bool]$startOneApplyPilot.token_printed
+  [bool]$startOneApplyPilot.token_printed -or
+  [bool]$startOneFailureSemantics.token_printed
 )
 
 $deferredExecutionBlockers = [System.Collections.Generic.List[string]]::new()
@@ -839,6 +894,12 @@ if ([bool]$startOnePreview.would_claim -or [bool]$startOnePreview.would_run_code
 }
 if ([bool]$startOneApplyPilot.project_control_unpaused -or [bool]$startOneApplyPilot.run_until_hold_called) {
   if (-not $blockedReasons.Contains("start_one_apply_pilot_unsafe")) { $blockedReasons.Add("start_one_apply_pilot_unsafe") }
+}
+if (-not [bool]$startOneFailureSemantics.available) {
+  if (-not $blockedReasons.Contains("start_one_hold_report_unavailable")) { $blockedReasons.Add("start_one_hold_report_unavailable") }
+}
+if (-not [bool]$startOneFailureSemantics.old_residue_stayed_excluded -or -not [bool]$startOneFailureSemantics.project_control_stayed_paused -or -not [bool]$startOneFailureSemantics.run_until_hold_stayed_unavailable) {
+  if (-not $blockedReasons.Contains("start_one_failure_semantics_unsafe")) { $blockedReasons.Add("start_one_failure_semantics_unsafe") }
 }
 if ($RefreshHeartbeat -and -not [bool]$heartbeat.refreshed) { $blockedReasons.Add("heartbeat_refresh_failed") }
 if ($unsafeMutation) { $blockedReasons.Add("unsafe_mutation_flag_detected") }
@@ -913,6 +974,7 @@ $report = [pscustomobject]@{
   start_one_preview = $startOnePreview
   pilot_seed = $pilotSeed
   start_one_apply_pilot = $startOneApplyPilot
+  start_one_failure_semantics = $startOneFailureSemantics
   execution_forbidden = [bool]$executionSecondGate.execution_forbidden
   can_start_one_false_reason = if (-not [bool]$readiness.can_start_one) {
     "self_bootstrap_readiness_can_start_one_false"
@@ -974,6 +1036,7 @@ if ($Json) {
   "StartPreview: available=$($report.start_one_preview.available) status=$($report.start_one_preview.status) selected=$(if ($report.start_one_preview.selected_candidate) { $report.start_one_preview.selected_candidate.task_id } else { 'none' }) would_claim=$($report.start_one_preview.would_claim) would_codex=$($report.start_one_preview.would_run_codex)"
   "PilotSeed:    available=$($report.pilot_seed.available) status=$($report.pilot_seed.status) exists=$($report.pilot_seed.pilot_task_exists) would_create=$($report.pilot_seed.would_create_task)"
   "ApplyPilot:   available=$($report.start_one_apply_pilot.available) status=$($report.start_one_apply_pilot.status) selected=$(if ($report.start_one_apply_pilot.selected_task_id) { $report.start_one_apply_pilot.selected_task_id } else { 'none' }) completed=$($report.start_one_apply_pilot.pilot_task_completed) old_residue_excluded=$($report.start_one_apply_pilot.old_residue_remains_excluded)"
+  "HoldReport:   available=$($report.start_one_failure_semantics.available) terminal=$($report.start_one_failure_semantics.latest_pilot_execution_terminal_state) hold=$(if ($report.start_one_failure_semantics.latest_hold_reason) { $report.start_one_failure_semantics.latest_hold_reason } else { 'none' }) evidence=$($report.start_one_failure_semantics.evidence_present) manual_review=$($report.start_one_failure_semantics.manual_operator_review_needed)"
   "ExecBlocked:  $($report.execution_forbidden) reason=$($report.can_start_one_false_reason)"
   "DeferredExec: $(if ($report.deferred_execution_blockers.Count -gt 0) { $report.deferred_execution_blockers -join ', ' } else { 'none' })"
   "Next:         $($report.recommended_next_safe_action)"

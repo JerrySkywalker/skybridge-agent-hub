@@ -85,7 +85,7 @@ function Invoke-ApplyPilot {
     -Json
   if ($LASTEXITCODE -ne 0) { throw "apply pilot script failed for $Name." }
   $text = (($raw | Out-String).Trim())
-  Assert-NoUnsafeText $text
+  try { Assert-NoUnsafeText $text } catch { throw "Unsafe text detected for $Name." }
   $result = $text | ConvertFrom-Json
   if ($result.schema -ne "skybridge.start_one_apply_pilot.v1") { throw "Unexpected apply schema for $Name." }
   Assert-False $result.token_printed "$Name token_printed"
@@ -113,6 +113,16 @@ function Invoke-SeedFixture {
   $seededPath = Join-Path $stateDir "seeded-task.json"
   if (-not (Test-Path -LiteralPath $seededPath -PathType Leaf)) { throw "Seed fixture did not write seeded-task.json." }
   return $seededPath
+}
+
+function Assert-Terminal {
+  param($Result, [string]$TerminalState, [string]$FailureCategory = "")
+  if ([string]$Result.terminal_state -ne $TerminalState) { throw "Expected terminal_state $TerminalState but got $($Result.terminal_state)." }
+  if ($FailureCategory -and [string]$Result.failure_category -ne $FailureCategory) { throw "Expected failure_category $FailureCategory but got $($Result.failure_category)." }
+  Assert-False $Result.forbidden_actions.run_until_hold_called "terminal run_until_hold_called"
+  Assert-False $Result.forbidden_actions.project_control_unpaused "terminal project_control_unpaused"
+  Assert-False $Result.forbidden_actions.old_task_claimed "terminal old_task_claimed"
+  Assert-False $Result.forbidden_actions.old_task_requeued "terminal old_task_requeued"
 }
 
 $script:Worker = [pscustomobject]@{ worker_id = "jerry-win-local-01"; status = "online"; enabled = $true; capabilities = @("codex", "docs", "windows"); token_printed = $false }
@@ -194,7 +204,101 @@ Assert-True $apply.claim_result.claimed "apply claimed"
 Assert-True $apply.claim_result.heartbeat_refreshed_before_claim "apply refreshed heartbeat before claim"
 if ($apply.execution_result.codex_execution_count -ne 1) { throw "Apply must run Codex exactly once." }
 if ($apply.final_task_status -ne "completed") { throw "Expected completed final status." }
+Assert-Terminal $apply "completed_with_evidence"
 Assert-True $apply.evidence_result.ok "evidence ok"
+Assert-True $apply.evidence_result.evidence_written "evidence written"
+if ($apply.evidence_result.evidence.schema -ne "skybridge.start_one_apply_pilot_evidence.v2") { throw "Expected evidence schema v2." }
+if (@($apply.evidence_result.evidence.files_changed) -ne "docs/operations/START_ONE_APPLY_PILOT.md") { throw "Evidence changed files did not match pilot path." }
+
+$codexUnavailable = Invoke-ApplyPilot -Name "codex-unavailable" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexUnavailable")
+Assert-False $codexUnavailable.ok "codex unavailable ok"
+Assert-Terminal $codexUnavailable "failed_needs_operator_review" "codex_cli_unavailable"
+Assert-False $codexUnavailable.execution_result.codex_run_called "codex unavailable run called"
+Assert-True $codexUnavailable.evidence_result.evidence_written "codex unavailable evidence"
+
+$codexNonzero = Invoke-ApplyPilot -Name "codex-nonzero" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexNonZero")
+Assert-False $codexNonzero.ok "codex nonzero ok"
+Assert-Terminal $codexNonzero "failed_with_evidence" "codex_nonzero"
+if ($codexNonzero.execution_result.codex_execution_count -ne 1) { throw "Codex nonzero should count exactly one execution." }
+
+$codexUnsafe = Invoke-ApplyPilot -Name "codex-unsafe-path" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexUnsafePath")
+Assert-False $codexUnsafe.ok "codex unsafe ok"
+Assert-Terminal $codexUnsafe "unsafe_path_changed" "unsafe_path_changed"
+if (@($codexUnsafe.evidence_result.evidence.files_changed) -contains "scripts/powershell/unsafe-fixture.ps1" -ne $true) { throw "Unsafe path evidence missing sanitized path list." }
+
+$codexNoChange = Invoke-ApplyPilot -Name "codex-no-change" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexNoChange")
+Assert-False $codexNoChange.ok "codex no change ok"
+Assert-Terminal $codexNoChange "validation_failed" "no_file_changed"
+
+$validationFailed = Invoke-ApplyPilot -Name "validation-failed" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureValidationFailure")
+Assert-False $validationFailed.ok "validation failed ok"
+Assert-Terminal $validationFailed "validation_failed" "validation_failed"
+Assert-True $validationFailed.evidence_result.evidence.validation_result.status.Equals("failed") "validation result failed"
+
+$evidenceWriteFailed = Invoke-ApplyPilot -Name "evidence-write-failed" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexSuccess", "-FixtureEvidenceWriteFailure")
+Assert-False $evidenceWriteFailed.ok "evidence write failed ok"
+Assert-Terminal $evidenceWriteFailed "evidence_write_failed" "evidence_write_failed"
+Assert-False $evidenceWriteFailed.evidence_result.evidence_written "evidence_write_failed evidence_written"
+
+$completeUnexpected = Invoke-ApplyPilot -Name "complete-api-unexpected" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexSuccess", "-FixtureCompleteApiUnexpectedResponse")
+Assert-False $completeUnexpected.ok "complete api unexpected ok"
+Assert-Terminal $completeUnexpected "held_after_anomaly" "complete_api_unexpected_response"
+
+$failUnexpected = Invoke-ApplyPilot -Name "fail-api-unexpected" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexNonZero", "-FixtureFailApiUnexpectedResponse")
+Assert-False $failUnexpected.ok "fail api unexpected ok"
+Assert-Terminal $failUnexpected "held_after_anomaly" "fail_api_unexpected_response"
+
+$alreadyCompletedPilot = New-Task -TaskId "start-one-apply-pilot-docs-001" -Status "completed"
+$completedNoop = Invoke-ApplyPilot -Name "already-completed-noop" -Tasks @($alreadyCompletedPilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexSuccess")
+Assert-True $completedNoop.ok "completed noop ok"
+Assert-Terminal $completedNoop "already_completed_noop"
+Assert-False $completedNoop.claim_result.claimed "completed noop claimed"
+if ($completedNoop.execution_result.codex_execution_count -ne 0) { throw "Completed noop ran Codex." }
+
+$alreadyFailedPilot = New-Task -TaskId "start-one-apply-pilot-docs-001" -Status "failed"
+$alreadyFailedPilot | Add-Member -NotePropertyName result -NotePropertyValue ([pscustomobject]@{ evidence_summary = [pscustomobject]@{ final_task_status = "failed_with_evidence"; terminal_state = "failed_with_evidence"; evidence_present = $true } }) -Force
+$failedNoop = Invoke-ApplyPilot -Name "already-failed-with-evidence-noop" -Tasks @($alreadyFailedPilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexSuccess")
+Assert-True $failedNoop.ok "failed evidence noop ok"
+Assert-Terminal $failedNoop "already_failed_with_evidence_noop" "already_failed_with_evidence_noop"
+Assert-False $failedNoop.claim_result.claimed "failed noop claimed"
+if ($failedNoop.execution_result.codex_execution_count -ne 0) { throw "Failed evidence noop ran Codex." }
+
+$claimedPilot = New-Task -TaskId "start-one-apply-pilot-docs-001"
+$claimedPilot | Add-Member -NotePropertyName claim_id -NotePropertyValue "fixture-claim" -Force
+$claimedRejected = Invoke-ApplyPilot -Name "already-claimed" -Tasks @($claimedPilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY")
+Assert-False $claimedRejected.ok "already claimed ok"
+Assert-Terminal $claimedRejected "held_after_anomaly" "duplicate_claim_rejected"
+Assert-False $claimedRejected.claim_result.claimed "already claimed claimed"
+
+$activeLeasePilot = New-Task -TaskId "start-one-apply-pilot-docs-001"
+$activeLeasePilot | Add-Member -NotePropertyName lease -NotePropertyValue ([pscustomobject]@{ lease_id = "fixture-lease" }) -Force
+$activeLeaseRejected = Invoke-ApplyPilot -Name "active-lease" -Tasks @($activeLeasePilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY")
+Assert-False $activeLeaseRejected.ok "active lease ok"
+Assert-Terminal $activeLeaseRejected "held_after_anomaly" "active_lease_present"
+Assert-False $activeLeaseRejected.claim_result.claimed "active lease claimed"
+
+$staleLeasePilot = New-Task -TaskId "start-one-apply-pilot-docs-001"
+$staleLeasePilot | Add-Member -NotePropertyName lease -NotePropertyValue ([pscustomobject]@{ lease_id = "fixture-lease"; expires_at = (Get-Date).ToUniversalTime().AddMinutes(-10).ToString("o") }) -Force
+$staleLeaseRejected = Invoke-ApplyPilot -Name "stale-lease" -Tasks @($staleLeasePilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY")
+Assert-False $staleLeaseRejected.ok "stale lease ok"
+Assert-Terminal $staleLeaseRejected "held_after_anomaly" "claim_expired"
+Assert-False $staleLeaseRejected.claim_result.claimed "stale lease claimed"
+
+$heartbeatBefore = Invoke-ApplyPilot -Name "heartbeat-before-claim-expired" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureWorkerHeartbeatExpiredBeforeClaim")
+Assert-False $heartbeatBefore.ok "heartbeat before ok"
+Assert-Terminal $heartbeatBefore "held_after_anomaly" "worker_heartbeat_expired_before_claim"
+Assert-False $heartbeatBefore.claim_result.claimed "heartbeat before claimed"
+
+$heartbeatAfter = Invoke-ApplyPilot -Name "heartbeat-after-claim-expired" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureWorkerHeartbeatExpiredAfterClaim")
+Assert-False $heartbeatAfter.ok "heartbeat after ok"
+Assert-Terminal $heartbeatAfter "held_after_anomaly" "worker_heartbeat_expired_after_claim"
+Assert-True $heartbeatAfter.claim_result.claimed "heartbeat after claimed"
+Assert-False $heartbeatAfter.execution_result.codex_run_called "heartbeat after codex"
+
+$statusMismatch = Invoke-ApplyPilot -Name "status-mismatch-after-claim" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureTaskStatusMismatchAfterClaim")
+Assert-False $statusMismatch.ok "status mismatch ok"
+Assert-Terminal $statusMismatch "held_after_anomaly" "task_status_mismatch_after_claim"
+Assert-False $statusMismatch.execution_result.codex_run_called "status mismatch codex"
 
 $failedOld = Invoke-ApplyPilot -Name "old-failed-only" -Tasks @($oldFailed[0]) -Extra @("-Preview")
 if ($failedOld.selected_task_id) { throw "Old failed task selected." }
@@ -230,6 +334,23 @@ $summary = [pscustomobject]@{
     "apply_requires_confirmation",
     "apply_refreshes_heartbeat_before_claim",
     "apply_claims_and_runs_once_fixture",
+    "success_path_writes_sanitized_evidence_schema_v2",
+    "codex_cli_unavailable_fails_closed",
+    "codex_nonzero_fails_with_evidence",
+    "codex_unsafe_path_changed_fails_safely",
+    "codex_no_file_changed_validation_failed",
+    "evidence_write_failed_holds_safely",
+    "validation_failed_holds_safely",
+    "complete_api_unexpected_response_holds_safely",
+    "fail_api_unexpected_response_holds_safely",
+    "duplicate_apply_completed_noop",
+    "duplicate_apply_failed_with_evidence_noop",
+    "duplicate_claim_rejected",
+    "active_lease_present_holds_safely",
+    "stale_lease_claim_expired_holds_safely",
+    "worker_heartbeat_expired_before_claim_holds_safely",
+    "worker_heartbeat_expired_after_claim_holds_safely",
+    "task_status_mismatch_after_claim_holds_safely",
     "apply_rejects_old_failed_tasks",
     "apply_rejects_old_blocked_tasks",
     "apply_rejects_completed_tasks",

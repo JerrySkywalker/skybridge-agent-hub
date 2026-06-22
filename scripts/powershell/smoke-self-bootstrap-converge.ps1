@@ -240,6 +240,29 @@ function New-BaseFixtures {
       forbidden_actions = [pscustomobject]@{ run_until_hold_called = $false }
       token_printed = $false
     }
+    startOneHoldReport = [pscustomobject]@{
+      schema = "skybridge.start_one_hold_report.v1"
+      ok = $true
+      task_id = "start-one-apply-pilot-docs-001"
+      current_status = "not_reported"
+      terminal_state = "not_reported"
+      hold_reason = $null
+      evidence_present = $false
+      evidence_summary = [pscustomobject]@{
+        schema = "not_reported"
+        files_changed = @()
+        prompt_content_included = $false
+        log_content_included = $false
+        credential_values_included = $false
+        token_printed = $false
+      }
+      old_residue_selected = $false
+      project_control_unpaused = $false
+      run_until_hold_called = $false
+      manual_operator_review_needed = $false
+      recommended_next_safe_action = "Preview only."
+      token_printed = $false
+    }
   }
 }
 
@@ -263,6 +286,7 @@ function Invoke-ConvergeFixture {
   $startOnePreviewPath = Write-Fixture $dir "start-one-preview.json" $fixtures.startOnePreview
   $pilotSeedPath = Write-Fixture $dir "pilot-seed.json" $fixtures.pilotSeed
   $startOneApplyPilotPath = Write-Fixture $dir "start-one-apply-pilot.json" $fixtures.startOneApplyPilot
+  $startOneHoldReportPath = Write-Fixture $dir "start-one-hold-report.json" $fixtures.startOneHoldReport
 
   $args = @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -282,6 +306,7 @@ function Invoke-ConvergeFixture {
     "-FixtureStartOnePreviewFile", $startOnePreviewPath,
     "-FixturePilotSeedFile", $pilotSeedPath,
     "-FixtureStartOneApplyPilotFile", $startOneApplyPilotPath,
+    "-FixtureStartOneHoldReportFile", $startOneHoldReportPath,
     "-Json"
   )
   if ($RefreshHeartbeat) { $args += "-RefreshHeartbeat" }
@@ -409,12 +434,55 @@ $case = Invoke-ConvergeFixture -Name "completed-pilot-reported" -Mutate {
       recommended_action = "No Goal 315 action."
     }
   )
+  $f.startOneHoldReport | Add-Member -NotePropertyName current_status -NotePropertyValue "completed" -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName terminal_state -NotePropertyValue "completed_with_evidence" -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName evidence_present -NotePropertyValue $true -Force
+  $f.startOneHoldReport.evidence_summary | Add-Member -NotePropertyName schema -NotePropertyValue "skybridge.start_one_apply_pilot_evidence.v2" -Force
+  $f.startOneHoldReport.evidence_summary | Add-Member -NotePropertyName files_changed -NotePropertyValue @("docs/operations/START_ONE_APPLY_PILOT.md") -Force
 }
 Assert-True $case.result.pilot_seed.pilot_task_exists "completed pilot seed exists"
 Assert-True $case.result.pilot_seed.pilot_task_completed "completed pilot seed completed"
 Assert-True $case.result.start_one_apply_pilot.pilot_task_exists "completed apply pilot exists"
 Assert-True $case.result.start_one_apply_pilot.pilot_task_completed "completed apply pilot completed"
 if ($case.result.start_one_apply_pilot.pilot_task_terminal_status -ne "completed") { throw "Expected completed terminal status." }
+if ($case.result.start_one_failure_semantics.latest_pilot_execution_terminal_state -ne "completed_with_evidence") { throw "Expected completed failure semantics terminal state." }
+Assert-True $case.result.start_one_failure_semantics.evidence_present "completed hold evidence present"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "failed-with-evidence-hold-reported" -Mutate {
+  param($f)
+  $f.startOneApplyPilot.status = "failed_with_evidence"
+  $f.startOneApplyPilot.final_task_status = "failed_with_evidence"
+  $f.startOneApplyPilot | Add-Member -NotePropertyName terminal_state -NotePropertyValue "validation_failed" -Force
+  $f.startOneApplyPilot | Add-Member -NotePropertyName failure_category -NotePropertyValue "validation_failed" -Force
+  $f.startOneApplyPilot | Add-Member -NotePropertyName manual_operator_review_needed -NotePropertyValue $true -Force
+  $f.startOneApplyPilot | Add-Member -NotePropertyName evidence_summary -NotePropertyValue ([pscustomobject]@{
+    evidence_present = $true
+    schema = "skybridge.start_one_apply_pilot_evidence.v2"
+    terminal_state = "validation_failed"
+    failure_category = "validation_failed"
+    files_changed = @("docs/operations/START_ONE_APPLY_PILOT.md")
+    prompt_content_included = $false
+    log_content_included = $false
+    credential_values_included = $false
+    token_printed = $false
+  }) -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName current_status -NotePropertyValue "failed" -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName terminal_state -NotePropertyValue "validation_failed" -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName hold_reason -NotePropertyValue "validation_failed" -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName evidence_present -NotePropertyValue $true -Force
+  $f.startOneHoldReport | Add-Member -NotePropertyName manual_operator_review_needed -NotePropertyValue $true -Force
+  $f.startOneHoldReport.evidence_summary | Add-Member -NotePropertyName schema -NotePropertyValue "skybridge.start_one_apply_pilot_evidence.v2" -Force
+  $f.startOneHoldReport.evidence_summary | Add-Member -NotePropertyName files_changed -NotePropertyValue @("docs/operations/START_ONE_APPLY_PILOT.md") -Force
+}
+Assert-True $case.result.start_one_failure_semantics.available "failed hold report available"
+if ($case.result.start_one_failure_semantics.latest_pilot_execution_terminal_state -ne "validation_failed") { throw "Expected validation_failed terminal state." }
+if ($case.result.start_one_failure_semantics.latest_hold_reason -ne "validation_failed") { throw "Expected validation_failed hold reason." }
+Assert-True $case.result.start_one_failure_semantics.evidence_present "failed hold evidence present"
+Assert-True $case.result.start_one_failure_semantics.manual_operator_review_needed "failed hold manual review"
+Assert-True $case.result.start_one_failure_semantics.old_residue_stayed_excluded "failed hold old residue excluded"
+Assert-True $case.result.start_one_failure_semantics.project_control_stayed_paused "failed hold project control paused"
+Assert-True $case.result.start_one_failure_semantics.run_until_hold_stayed_unavailable "failed hold run_until_hold unavailable"
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "bootstrap-notification-only" -Mutate {
