@@ -162,7 +162,7 @@ function Test-SafeCandidate {
   if ($risk -notin @("low", "safe_start_one_pilot", "bounded_loop_pilot")) { $reasons.Add("risk_not_low") | Out-Null }
   if ($taskType -notin @("docs", "test")) { $reasons.Add("task_type_not_docs_or_test") | Out-Null }
   if ($allowed.Count -ne 1 -or $allowed[0] -ne $allowedPath) { $reasons.Add("allowed_paths_not_exact_safe_docs_path") | Out-Null }
-  if (-not (Get-BoolProp -Object $metadata -Name "bounded_loop_pilot" -Default $false)) { $reasons.Add("missing_bounded_loop_pilot_marker") | Out-Null }
+  if ($risk -ne "low" -and -not (Get-BoolProp -Object $metadata -Name "bounded_loop_pilot" -Default $false)) { $reasons.Add("missing_bounded_loop_pilot_marker") | Out-Null }
   if ([string](Get-Prop -Object $metadata -Name "allowed_worker_id" -Default $WorkerId) -ne $WorkerId) { $reasons.Add("worker_id_not_allowed") | Out-Null }
   if ($claim.claimed) { $reasons.Add("duplicate_claim_rejected") | Out-Null }
   if ($claim.active_lease) { $reasons.Add("active_lease_present") | Out-Null }
