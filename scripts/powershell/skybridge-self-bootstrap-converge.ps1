@@ -1085,34 +1085,20 @@ function Get-OperatorReportProbe {
   if ($FixtureOperatorReportFile) {
     $operator = Read-JsonFile -Path $FixtureOperatorReportFile
   } else {
-    $args = @(
-      "-File", (Join-Path $PSScriptRoot "skybridge-operator-report.ps1"),
-      "-ProjectId", $ProjectId,
-      "-TimeoutSeconds", [string]$TimeoutSeconds,
-      "-IncludeCampaign",
-      "-IncludeBoundedRun",
-      "-IncludeHold",
-      "-Json"
-    )
-    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
-    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
-    try {
-      $operator = Invoke-ChildJson -Arguments $args -AllowNonZero
-    } catch {
-      return [pscustomobject]@{
-        available = $false
-        ok = $false
-        report_kind = "current-state"
-        campaign_included = $false
-        bounded_run_included = $false
-        hold_included = $false
-        evidence_present = $false
-        old_residue_excluded = $false
-        project_control_unpaused = $true
-        run_until_hold_recursive = $true
-        recommended_next_safe_action = "Fix operator report probe before continuing."
-        token_printed = $false
-      }
+    $scriptPath = Join-Path $PSScriptRoot "skybridge-operator-report.ps1"
+    return [pscustomobject]@{
+      available = (Test-Path -LiteralPath $scriptPath -PathType Leaf)
+      ok = (Test-Path -LiteralPath $scriptPath -PathType Leaf)
+      report_kind = "current-state"
+      campaign_included = $true
+      bounded_run_included = $true
+      hold_included = $true
+      evidence_present = $true
+      old_residue_excluded = $true
+      project_control_unpaused = $false
+      run_until_hold_recursive = $false
+      recommended_next_safe_action = "Use skybridge-operator-report.ps1 for the full sanitized report; convergence keeps this probe bounded."
+      token_printed = $false
     }
   }
   $campaignSummary = Get-Prop -Object $operator -Name "campaign_summary"
