@@ -471,13 +471,14 @@ if ($Mode -eq "preview") {
   $finalStatus = "failed"
   try {
     if ($FixtureStateDir) {
-      $claimResult = [pscustomobject]@{ ok = $true; claimed = $true; task_id = $PilotTaskId; worker_id = $WorkerId; claim_count = 1; token_printed = $false }
+      $claimResult = [pscustomobject]@{ ok = $true; claimed = $true; task_id = $PilotTaskId; worker_id = $WorkerId; claim_count = 1; heartbeat_refreshed_before_claim = $true; token_printed = $false }
     } else {
       if ([string]::IsNullOrWhiteSpace($ApiBase)) { throw "ApiBase is required for live apply." }
       $config = [pscustomobject]@{ api_base = $ApiBase; auth_mode = if ($TokenFile) { "bearer_token" } else { "none" }; token_file = $TokenFile; worker_id = $WorkerId }
-      $claim = Claim-Task -Config $config -TaskId $PilotTaskId
-      $claimResult = [pscustomobject]@{ ok = $true; claimed = $true; task_id = $PilotTaskId; worker_id = $WorkerId; claim_status = [string](Get-Prop -Object (Get-Prop -Object $claim -Name "task") -Name "status" -Default "claimed"); claim_count = 1; token_printed = $false }
-      Start-Task -Config $config -TaskId $PilotTaskId | Out-Null
+      Send-WorkerHeartbeat -Config $config -StatusNote "start_one_apply_pilot_claim_guard" -Load 0 -TimeoutSeconds $TimeoutSeconds | Out-Null
+      $claim = Claim-Task -Config $config -TaskId $PilotTaskId -TimeoutSeconds $TimeoutSeconds
+      $claimResult = [pscustomobject]@{ ok = $true; claimed = $true; task_id = $PilotTaskId; worker_id = $WorkerId; claim_status = [string](Get-Prop -Object (Get-Prop -Object $claim -Name "task") -Name "status" -Default "claimed"); claim_count = 1; heartbeat_refreshed_before_claim = $true; token_printed = $false }
+      Start-Task -Config $config -TaskId $PilotTaskId -TimeoutSeconds $TimeoutSeconds | Out-Null
     }
     $execution = Invoke-PilotCodexOnce
     $finalStatus = if ($execution.ok) { "completed" } else { "failed_with_evidence" }
@@ -485,7 +486,7 @@ if ($Mode -eq "preview") {
     if (-not $FixtureStateDir) {
       $config = [pscustomobject]@{ api_base = $ApiBase; auth_mode = if ($TokenFile) { "bearer_token" } else { "none" }; token_file = $TokenFile; worker_id = $WorkerId }
       $body = @{ summary = [string]$execution.summary; evidence_summary = $evidence.evidence }
-      if ($execution.ok) { Complete-Task -Config $config -TaskId $PilotTaskId -Result $body | Out-Null } else { Fail-Task -Config $config -TaskId $PilotTaskId -Result $body | Out-Null }
+      if ($execution.ok) { Complete-Task -Config $config -TaskId $PilotTaskId -Result $body -TimeoutSeconds $TimeoutSeconds | Out-Null } else { Fail-Task -Config $config -TaskId $PilotTaskId -Result $body -TimeoutSeconds $TimeoutSeconds | Out-Null }
     }
     $report = New-Report -Ok ([bool]$execution.ok) -Status $finalStatus -SelectedTask $selected -ClaimResult $claimResult -ExecutionResult $execution -EvidenceResult $evidence -FinalTaskStatus $finalStatus -OldResidueExclusion $oldResidue -PilotTaskLookup $pilotTaskLookup -Blockers @()
   } catch {

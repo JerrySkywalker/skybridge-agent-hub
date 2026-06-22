@@ -191,6 +191,7 @@ if (@($missingConfirm.blockers) -notcontains "confirmation_required") { throw "E
 
 $apply = Invoke-ApplyPilot -Name "apply-success" -Tasks @($pilot) -Extra @("-Apply", "-Confirm", "I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY", "-FixtureCodexSuccess")
 Assert-True $apply.claim_result.claimed "apply claimed"
+Assert-True $apply.claim_result.heartbeat_refreshed_before_claim "apply refreshed heartbeat before claim"
 if ($apply.execution_result.codex_execution_count -ne 1) { throw "Apply must run Codex exactly once." }
 if ($apply.final_task_status -ne "completed") { throw "Expected completed final status." }
 Assert-True $apply.evidence_result.ok "evidence ok"
@@ -227,6 +228,7 @@ $summary = [pscustomobject]@{
     "blocked_paths_guardrails_do_not_poison_safe_candidate",
     "heartbeat_only_worker_accepts_only_explicit_docs_compatibility_proof",
     "apply_requires_confirmation",
+    "apply_refreshes_heartbeat_before_claim",
     "apply_claims_and_runs_once_fixture",
     "apply_rejects_old_failed_tasks",
     "apply_rejects_old_blocked_tasks",
