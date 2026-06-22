@@ -304,31 +304,31 @@ function Get-NextTask {
 }
 
 function Claim-Task {
-  param($Config, [Parameter(Mandatory = $true)][string]$TaskId)
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [int]$TimeoutSeconds = 10)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/claim" -ApiBase $Config.api_base -Body @{
     worker_id = $Config.worker_id
-  } -Config $Config
+  } -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Start-Task {
-  param($Config, [Parameter(Mandatory = $true)][string]$TaskId)
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [int]$TimeoutSeconds = 10)
   Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/start" -ApiBase $Config.api_base -Body @{
     worker_id = $Config.worker_id
-  } -Config $Config
+  } -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Complete-Task {
-  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{}, [int]$TimeoutSeconds = 10)
   $body = @{ worker_id = $Config.worker_id }
   foreach ($key in $Result.Keys) { $body[$key] = $Result[$key] }
-  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/complete" -ApiBase $Config.api_base -Body $body -Config $Config
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/complete" -ApiBase $Config.api_base -Body $body -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Fail-Task {
-  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{})
+  param($Config, [Parameter(Mandatory = $true)][string]$TaskId, [hashtable]$Result = @{}, [int]$TimeoutSeconds = 10)
   $body = @{ worker_id = $Config.worker_id }
   foreach ($key in $Result.Keys) { $body[$key] = $Result[$key] }
-  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/fail" -ApiBase $Config.api_base -Body $body -Config $Config
+  Invoke-SkyBridgeApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($TaskId))/fail" -ApiBase $Config.api_base -Body $body -Config $Config -TimeoutSeconds $TimeoutSeconds
 }
 
 function Block-Task {
