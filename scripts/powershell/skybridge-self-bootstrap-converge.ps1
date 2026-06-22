@@ -28,7 +28,10 @@ param(
   [string]$FixtureRunUntilHoldBoundedFile,
   [string]$FixtureRunUntilHoldReportFile,
   [string]$FixtureCampaignTaskCompilerFile,
-  [string]$FixtureCampaignPolicyReportFile
+  [string]$FixtureCampaignPolicyReportFile,
+  [string]$FixtureOperatorReportFile,
+  [string]$FixtureOperatorNotificationReadinessFile,
+  [string]$FixtureReviewGateFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -975,6 +978,165 @@ function Get-CampaignPolicyReportProbe {
   }
 }
 
+function Get-OperatorNotificationReadinessProbe {
+  if ($FixtureOperatorNotificationReadinessFile) {
+    $notification = Read-JsonFile -Path $FixtureOperatorNotificationReadinessFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-operator-notification-readiness.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-DryRun",
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $notification = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        status = "unavailable"
+        dry_run = $true
+        report_delivery_supported = $false
+        review_gate_supported = $false
+        real_provider_configured = $false
+        bootstrap_dry_run_available = $false
+        real_send_performed = $false
+        raw_notification_payload_included = $false
+        credential_values_exposed = $false
+        recommended_next_safe_action = "Fix operator notification readiness before continuing."
+        token_printed = $false
+      }
+    }
+  }
+  [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $notification -Name "ok" -Default $false)
+    status = [string](Get-Prop -Object $notification -Name "status" -Default "unknown")
+    dry_run = Get-BoolProp -Object $notification -Name "dry_run" -Default $true
+    provider_count = Get-CountProp -Object $notification -Name "provider_count"
+    ready_provider_count = Get-CountProp -Object $notification -Name "ready_provider_count"
+    real_ready_provider_count = Get-CountProp -Object $notification -Name "real_ready_provider_count"
+    dry_run_safe_provider_count = Get-CountProp -Object $notification -Name "dry_run_safe_provider_count"
+    report_delivery_supported = Get-BoolProp -Object $notification -Name "report_delivery_supported"
+    review_gate_supported = Get-BoolProp -Object $notification -Name "review_gate_supported"
+    real_provider_configured = Get-BoolProp -Object $notification -Name "real_provider_configured"
+    bootstrap_dry_run_available = Get-BoolProp -Object $notification -Name "bootstrap_dry_run_available"
+    real_send_performed = Get-BoolProp -Object $notification -Name "real_send_performed"
+    raw_notification_payload_included = Get-BoolProp -Object $notification -Name "raw_notification_payload_included"
+    credential_values_exposed = Get-BoolProp -Object $notification -Name "credential_values_exposed"
+    recommended_next_safe_action = [string](Get-Prop -Object $notification -Name "recommended_next_safe_action" -Default "Use dry-run operator report delivery.")
+    token_printed = [bool](Get-Prop -Object $notification -Name "token_printed" -Default $false)
+  }
+}
+
+function Get-ReviewGateProbe {
+  if ($FixtureReviewGateFile) {
+    $gate = Read-JsonFile -Path $FixtureReviewGateFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-review-gate.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $gate = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        gate_status = "blocked"
+        allowed_preview = $false
+        allowed_bounded_run = $false
+        allowed_unbounded_run = $false
+        allowed_daemon = $false
+        needs_operator_review = $true
+        notification_available = $false
+        old_residue_excluded = $false
+        project_control_paused = $false
+        recommended_next_safe_action = "Fix review gate probe before continuing."
+        token_printed = $false
+      }
+    }
+  }
+  [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $gate -Name "ok" -Default $false)
+    gate_status = [string](Get-Prop -Object $gate -Name "gate_status" -Default "unknown")
+    allowed_preview = Get-BoolProp -Object $gate -Name "allowed_preview"
+    allowed_bounded_run = Get-BoolProp -Object $gate -Name "allowed_bounded_run"
+    allowed_unbounded_run = Get-BoolProp -Object $gate -Name "allowed_unbounded_run"
+    allowed_daemon = Get-BoolProp -Object $gate -Name "allowed_daemon"
+    needs_operator_review = Get-BoolProp -Object $gate -Name "needs_operator_review"
+    notification_available = Get-BoolProp -Object $gate -Name "notification_available"
+    old_residue_excluded = Get-BoolProp -Object $gate -Name "old_residue_excluded"
+    project_control_paused = Get-BoolProp -Object $gate -Name "project_control_paused"
+    recommended_next_safe_action = [string](Get-Prop -Object $gate -Name "recommended_next_safe_action" -Default "")
+    token_printed = [bool](Get-Prop -Object $gate -Name "token_printed" -Default $false)
+  }
+}
+
+function Get-OperatorReportProbe {
+  if ($FixtureOperatorReportFile) {
+    $operator = Read-JsonFile -Path $FixtureOperatorReportFile
+  } else {
+    $args = @(
+      "-File", (Join-Path $PSScriptRoot "skybridge-operator-report.ps1"),
+      "-ProjectId", $ProjectId,
+      "-TimeoutSeconds", [string]$TimeoutSeconds,
+      "-IncludeCampaign",
+      "-IncludeBoundedRun",
+      "-IncludeHold",
+      "-Json"
+    )
+    if ($ApiBase) { $args += @("-ApiBase", $ApiBase) }
+    if ($TokenFile) { $args += @("-TokenFile", $TokenFile) }
+    try {
+      $operator = Invoke-ChildJson -Arguments $args -AllowNonZero
+    } catch {
+      return [pscustomobject]@{
+        available = $false
+        ok = $false
+        report_kind = "current-state"
+        campaign_included = $false
+        bounded_run_included = $false
+        hold_included = $false
+        evidence_present = $false
+        old_residue_excluded = $false
+        project_control_unpaused = $true
+        run_until_hold_recursive = $true
+        recommended_next_safe_action = "Fix operator report probe before continuing."
+        token_printed = $false
+      }
+    }
+  }
+  $campaignSummary = Get-Prop -Object $operator -Name "campaign_summary"
+  $boundedSummary = Get-Prop -Object $operator -Name "bounded_run_summary"
+  $holdSummary = Get-Prop -Object $operator -Name "hold_summary"
+  $evidence = Get-Prop -Object $operator -Name "evidence_summary"
+  $oldResidue = Get-Prop -Object $operator -Name "old_residue_summary"
+  $safety = Get-Prop -Object $operator -Name "safety_summary"
+  [pscustomobject]@{
+    available = $true
+    ok = [bool](Get-Prop -Object $operator -Name "ok" -Default $false)
+    report_kind = [string](Get-Prop -Object $operator -Name "report_kind" -Default "current-state")
+    campaign_included = Get-BoolProp -Object $campaignSummary -Name "included"
+    bounded_run_included = Get-BoolProp -Object $boundedSummary -Name "included"
+    hold_included = Get-BoolProp -Object $holdSummary -Name "included"
+    evidence_present = Get-BoolProp -Object $evidence -Name "evidence_present"
+    old_residue_excluded = Get-BoolProp -Object $oldResidue -Name "old_residue_excluded"
+    project_control_unpaused = Get-BoolProp -Object $safety -Name "project_control_unpaused"
+    run_until_hold_recursive = Get-BoolProp -Object $safety -Name "run_until_hold_recursive"
+    recommended_next_safe_action = [string](Get-Prop -Object $operator -Name "recommended_next_safe_action" -Default "")
+    token_printed = [bool](Get-Prop -Object $operator -Name "token_printed" -Default $false)
+  }
+}
+
 function Test-AnyTrueFlag {
   param($Object, [string[]]$Names)
   if ($null -eq $Object) { return $false }
@@ -1017,6 +1179,9 @@ function New-MarkdownReport {
     "- bounded_run_until_hold_report: available=$($Report.bounded_run_until_hold_report.available), status=$($Report.bounded_run_until_hold_report.latest_bounded_run_status), evidence=$($Report.bounded_run_until_hold_report.evidence_present), project_control_paused=$($Report.bounded_run_until_hold_report.project_control_stayed_paused)"
     "- campaign_task_compiler: available=$($Report.campaign_task_compiler.available), status=$($Report.campaign_task_compiler.status), campaign=$($Report.campaign_task_compiler.campaign_id), generated=$($Report.campaign_task_compiler.generated_task_count), rejected=$($Report.campaign_task_compiler.rejected_unsafe_item_count), old_residue_excluded=$($Report.campaign_task_compiler.old_residue_excluded)"
     "- campaign_policy_report: available=$($Report.campaign_policy_report.available), status=$($Report.campaign_policy_report.campaign_status), safe_tasks=$($Report.campaign_policy_report.safe_task_count), rejected=$($Report.campaign_policy_report.rejected_task_count), evidence=$($Report.campaign_policy_report.evidence_present), bounded=$($Report.campaign_policy_report.run_until_hold_stayed_bounded)"
+    "- operator_report: available=$($Report.operator_report.available), ok=$($Report.operator_report.ok), campaign_included=$($Report.operator_report.campaign_included), bounded_included=$($Report.operator_report.bounded_run_included), evidence=$($Report.operator_report.evidence_present)"
+    "- operator_notification_readiness: available=$($Report.operator_notification_readiness.available), status=$($Report.operator_notification_readiness.status), dry_run=$($Report.operator_notification_readiness.dry_run), report_delivery=$($Report.operator_notification_readiness.report_delivery_supported), bootstrap=$($Report.operator_notification_readiness.bootstrap_dry_run_available), real_provider=$($Report.operator_notification_readiness.real_provider_configured)"
+    "- review_gate: available=$($Report.review_gate.available), status=$($Report.review_gate.gate_status), preview=$($Report.review_gate.allowed_preview), bounded=$($Report.review_gate.allowed_bounded_run), operator_review=$($Report.review_gate.needs_operator_review)"
     "- execution_forbidden: $($Report.execution_forbidden)"
     "- can_start_one_false_reason: $($Report.can_start_one_false_reason)"
     "- deferred_execution_blockers: $(if ($Report.deferred_execution_blockers.Count -gt 0) { $Report.deferred_execution_blockers -join ', ' } else { 'none' })"
@@ -1046,6 +1211,9 @@ $boundedRunUntilHold = Get-RunUntilHoldBoundedProbe
 $boundedRunUntilHoldReport = Get-RunUntilHoldReportProbe
 $campaignTaskCompiler = Get-CampaignTaskCompilerProbe
 $campaignPolicyReport = Get-CampaignPolicyReportProbe
+$operatorNotificationReadiness = Get-OperatorNotificationReadinessProbe
+$reviewGate = Get-ReviewGateProbe
+$operatorReport = Get-OperatorReportProbe
 
 $cloudCommit = [string](Get-Prop -Object $version -Name "commit_sha")
 $commitAligned = (-not [string]::IsNullOrWhiteSpace($cloudCommit) -and -not [string]::IsNullOrWhiteSpace([string]$local.head_commit) -and $cloudCommit -eq [string]$local.head_commit)
@@ -1091,7 +1259,10 @@ $tokenPrinted = (
   [bool]$boundedRunUntilHold.token_printed -or
   [bool]$boundedRunUntilHoldReport.token_printed -or
   [bool]$campaignTaskCompiler.token_printed -or
-  [bool]$campaignPolicyReport.token_printed
+  [bool]$campaignPolicyReport.token_printed -or
+  [bool]$operatorNotificationReadiness.token_printed -or
+  [bool]$reviewGate.token_printed -or
+  [bool]$operatorReport.token_printed
 )
 
 $deferredExecutionBlockers = [System.Collections.Generic.List[string]]::new()
@@ -1173,6 +1344,27 @@ if (-not [bool]$campaignTaskCompiler.old_residue_excluded -or -not [bool]$campai
 if (-not [bool]$campaignPolicyReport.old_residue_excluded -or -not [bool]$campaignPolicyReport.project_control_stayed_paused -or -not [bool]$campaignPolicyReport.run_until_hold_stayed_bounded) {
   if (-not $blockedReasons.Contains("campaign_policy_report_unsafe")) { $blockedReasons.Add("campaign_policy_report_unsafe") }
 }
+if (-not [bool]$operatorNotificationReadiness.available) {
+  if (-not $blockedReasons.Contains("operator_notification_readiness_unavailable")) { $blockedReasons.Add("operator_notification_readiness_unavailable") }
+}
+if (-not [bool]$operatorNotificationReadiness.report_delivery_supported -or -not [bool]$operatorNotificationReadiness.review_gate_supported) {
+  if (-not $blockedReasons.Contains("operator_notification_readiness_incomplete")) { $blockedReasons.Add("operator_notification_readiness_incomplete") }
+}
+if ([bool]$operatorNotificationReadiness.real_send_performed -or [bool]$operatorNotificationReadiness.raw_notification_payload_included -or [bool]$operatorNotificationReadiness.credential_values_exposed) {
+  if (-not $blockedReasons.Contains("operator_notification_readiness_unsafe")) { $blockedReasons.Add("operator_notification_readiness_unsafe") }
+}
+if (-not [bool]$reviewGate.available) {
+  if (-not $blockedReasons.Contains("review_gate_unavailable")) { $blockedReasons.Add("review_gate_unavailable") }
+}
+if ([bool]$reviewGate.allowed_unbounded_run -or [bool]$reviewGate.allowed_daemon -or -not [bool]$reviewGate.project_control_paused -or -not [bool]$reviewGate.old_residue_excluded) {
+  if (-not $blockedReasons.Contains("review_gate_unsafe")) { $blockedReasons.Add("review_gate_unsafe") }
+}
+if (-not [bool]$operatorReport.available) {
+  if (-not $blockedReasons.Contains("operator_report_unavailable")) { $blockedReasons.Add("operator_report_unavailable") }
+}
+if ([bool]$operatorReport.project_control_unpaused -or [bool]$operatorReport.run_until_hold_recursive -or -not [bool]$operatorReport.old_residue_excluded) {
+  if (-not $blockedReasons.Contains("operator_report_unsafe")) { $blockedReasons.Add("operator_report_unsafe") }
+}
 if ($RefreshHeartbeat -and -not [bool]$heartbeat.refreshed) { $blockedReasons.Add("heartbeat_refresh_failed") }
 if ($unsafeMutation) { $blockedReasons.Add("unsafe_mutation_flag_detected") }
 if ($tokenPrinted) { $blockedReasons.Add("token_printed_detected") }
@@ -1252,6 +1444,9 @@ $report = [pscustomobject]@{
   bounded_run_until_hold_report = $boundedRunUntilHoldReport
   campaign_task_compiler = $campaignTaskCompiler
   campaign_policy_report = $campaignPolicyReport
+  operator_report = $operatorReport
+  operator_notification_readiness = $operatorNotificationReadiness
+  review_gate = $reviewGate
   execution_forbidden = [bool]$executionSecondGate.execution_forbidden
   can_start_one_false_reason = if (-not [bool]$readiness.can_start_one) {
     "self_bootstrap_readiness_can_start_one_false"
@@ -1269,6 +1464,7 @@ $report = [pscustomobject]@{
     if ($hygiene.unsafe_to_requeue_candidates_count -gt 0) { "unsafe_to_requeue_tasks_present" }
     if ([bool]$pilotSeed.available -and -not [bool]$pilotSeed.pilot_task_exists) { "start_one_pilot_task_not_seeded" }
     if ([bool]$boundedPilotSeed.available -and [int]$boundedPilotSeed.would_create_count -gt 0) { "bounded_pilot_tasks_not_seeded" }
+    if ([bool]$reviewGate.available -and [bool]$reviewGate.needs_operator_review) { "operator_review_required" }
   )
   deferred_execution_blockers = @($deferredExecutionBlockers.ToArray())
   recommended_next_safe_action = $nextAction
@@ -1320,6 +1516,9 @@ if ($Json) {
   "BoundedRpt:   available=$($report.bounded_run_until_hold_report.available) status=$($report.bounded_run_until_hold_report.latest_bounded_run_status) evidence=$($report.bounded_run_until_hold_report.evidence_present) project_control_paused=$($report.bounded_run_until_hold_report.project_control_stayed_paused)"
   "CampaignCmp: available=$($report.campaign_task_compiler.available) status=$($report.campaign_task_compiler.status) campaign=$($report.campaign_task_compiler.campaign_id) generated=$($report.campaign_task_compiler.generated_task_count) rejected=$($report.campaign_task_compiler.rejected_unsafe_item_count)"
   "CampaignRpt: available=$($report.campaign_policy_report.available) status=$($report.campaign_policy_report.campaign_status) safe_tasks=$($report.campaign_policy_report.safe_task_count) evidence=$($report.campaign_policy_report.evidence_present)"
+  "OperatorRpt: available=$($report.operator_report.available) ok=$($report.operator_report.ok) campaign=$($report.operator_report.campaign_included) bounded=$($report.operator_report.bounded_run_included) evidence=$($report.operator_report.evidence_present)"
+  "OperatorNtf: available=$($report.operator_notification_readiness.available) status=$($report.operator_notification_readiness.status) dry_run=$($report.operator_notification_readiness.dry_run) report_delivery=$($report.operator_notification_readiness.report_delivery_supported) real_provider=$($report.operator_notification_readiness.real_provider_configured)"
+  "ReviewGate:  available=$($report.review_gate.available) status=$($report.review_gate.gate_status) preview=$($report.review_gate.allowed_preview) bounded=$($report.review_gate.allowed_bounded_run) operator_review=$($report.review_gate.needs_operator_review)"
   "ExecBlocked:  $($report.execution_forbidden) reason=$($report.can_start_one_false_reason)"
   "DeferredExec: $(if ($report.deferred_execution_blockers.Count -gt 0) { $report.deferred_execution_blockers -join ', ' } else { 'none' })"
   "Next:         $($report.recommended_next_safe_action)"

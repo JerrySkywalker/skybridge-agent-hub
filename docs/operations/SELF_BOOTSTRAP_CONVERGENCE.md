@@ -74,6 +74,14 @@ not authorize execution. Goal 318 also remains `partial` when
 `execution_second_gate.execution_forbidden=true` or
 `start_one_preview.status=no_safe_candidate`.
 
+Mega Goal 323 also reports `operator_report`,
+`operator_notification_readiness` and `review_gate`. These fields prove that a
+sanitized operator-visible report exists, bootstrap dry-run notification
+delivery can carry the report, and the current automation state has a
+conservative review decision. Convergence must still show `project_control`
+paused, old residue excluded, bounded run state safe, campaign compiler state
+safe, no unbounded execution path and `token_printed=false`.
+
 When no real notification or admin escalation provider is configured, the
 bootstrap notifier can satisfy blocker notice support for dry-run convergence
 only. In that state convergence should show
@@ -171,4 +179,5 @@ corepack pnpm smoke:self-bootstrap-converge
 The smoke is fixture-only. It covers non-main branch blocking, cloud commit
 mismatch, partial status with warnings, heartbeat refresh failure, heartbeat
 safety flag passthrough, execution second-gate and start-one preview summaries,
-unsafe mutation flags and `token_printed=false`.
+operator report/notification/review-gate summaries, unsafe mutation flags and
+`token_printed=false`.
