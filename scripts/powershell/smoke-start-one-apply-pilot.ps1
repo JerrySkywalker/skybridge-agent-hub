@@ -20,7 +20,8 @@ function New-Task {
     [string]$Status = "queued",
     [string]$Risk = "low",
     [string]$TaskType = "docs",
-    [string[]]$AllowedPaths = @("docs/operations/START_ONE_APPLY_PILOT.md")
+    [string[]]$AllowedPaths = @("docs/operations/START_ONE_APPLY_PILOT.md"),
+    [string[]]$BlockedPaths = @(".env", "secrets/**", "deploy/**")
   )
   [pscustomobject]@{
     task_id = $TaskId
@@ -33,12 +34,14 @@ function New-Task {
     source = "manual"
     required_capabilities = @("codex", "docs", "windows")
     allowed_paths = @($AllowedPaths)
+    blocked_paths = @($BlockedPaths)
     hygiene_metadata = [pscustomobject]@{ safe_start_one_pilot = ($TaskId -eq "start-one-apply-pilot-docs-001") }
     token_printed = $false
   }
 }
 
 function New-Hygiene {
+  param([switch]$IncludePilot)
   $unsafeTasks = 1..12 | ForEach-Object { "unsafe-to-requeue-$($_)" }
   $blockedTasks = @("always-on-worker-loop-pilot-docs-179", "task_proposal-59a0236fb69800cd", "remote-claim-smoke-001")
   [pscustomobject]@{
@@ -46,15 +49,29 @@ function New-Hygiene {
     ok = $true
     unsafe_to_requeue_candidates = @($unsafeTasks | ForEach-Object { [pscustomobject]@{ task_id = $_; classification = "unsafe-to-requeue" } })
     archive_or_keep_blocked_candidates = @($blockedTasks | ForEach-Object { [pscustomobject]@{ task_id = $_; classification = "historical-residue" } })
+    task_classifications = @(
+      if ($IncludePilot) {
+        [pscustomobject]@{
+          task_id = "start-one-apply-pilot-docs-001"
+          status = "queued"
+          hygiene_status = "active_ok"
+          classification = "not-residue"
+          risk = "not_reported"
+          task_type = "docs"
+          assigned_worker_id = "-"
+          recommended_action = "No Goal 315 action."
+        }
+      }
+    )
     token_printed = $false
   }
 }
 
 function Invoke-ApplyPilot {
-  param([string]$Name, [object[]]$Tasks, [string[]]$Extra = @(), [object[]]$Workers = @($script:Worker))
+  param([string]$Name, [object[]]$Tasks, [string[]]$Extra = @(), [object[]]$Workers = @($script:Worker), [switch]$IncludePilotHygiene)
   $tasksPath = Write-Fixture "$Name-tasks.json" ([pscustomobject]@{ tasks = @($Tasks) })
   $workersPath = Write-Fixture "$Name-workers.json" ([pscustomobject]@{ workers = @($Workers) })
-  $hygienePath = Write-Fixture "$Name-hygiene.json" (New-Hygiene)
+  $hygienePath = Write-Fixture "$Name-hygiene.json" (New-Hygiene -IncludePilot:$IncludePilotHygiene)
   $gatePath = Write-Fixture "$Name-second-gate.json" $script:SecondGate
   $stateDir = Join-Path $tmpRoot "$Name-state"
   $raw = & pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass `
@@ -118,6 +135,9 @@ $completed = New-Task -TaskId "completed-residue-317" -Status "completed"
 $preview = Invoke-ApplyPilot -Name "preview" -Tasks (@($oldFailed) + @($oldBlocked) + @($remoteFailed) + @($completed) + @($pilot)) -Extra @("-Preview")
 if ($preview.mode -ne "preview") { throw "Expected preview mode." }
 if ($preview.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Preview did not select pilot task." }
+Assert-True $preview.pilot_task_lookup.found_by_id "preview found_by_id"
+Assert-True $preview.pilot_task_lookup.found_in_task_list "preview found_in_task_list"
+Assert-True $preview.pilot_task_lookup.worker_match "preview worker_match"
 Assert-False $preview.claim_result.claimed "preview claimed"
 Assert-False $preview.would_claim "preview would_claim"
 Assert-False $preview.would_run_codex "preview would_run_codex"
@@ -147,6 +167,14 @@ Assert-False $seededPreview.would_claim "seeded preview would_claim"
 Assert-False $seededPreview.would_run_codex "seeded preview would_run_codex"
 Assert-False $seededPreview.would_unpause_project_control "seeded preview would_unpause"
 
+$missingRiskPilot = New-Task -TaskId "start-one-apply-pilot-docs-001" -Risk ""
+$riskFallback = Invoke-ApplyPilot -Name "risk-hygiene-proof" -Tasks @($missingRiskPilot) -Extra @("-Preview") -IncludePilotHygiene
+if ($riskFallback.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Hygiene safe marker did not allow missing-risk pilot." }
+Assert-True $riskFallback.pilot_task_lookup.found_in_hygiene "risk fallback found hygiene"
+
+$blockedPathsSafe = Invoke-ApplyPilot -Name "blocked-paths-safe" -Tasks @((New-Task -TaskId "start-one-apply-pilot-docs-001" -BlockedPaths @("deploy/**", ".env", "secrets/**", ".github/settings/**"))) -Extra @("-Preview")
+if ($blockedPathsSafe.selected_task_id -ne "start-one-apply-pilot-docs-001") { throw "Blocked-path guardrails poisoned safe candidate." }
+
 $missingConfirm = Invoke-ApplyPilot -Name "missing-confirm" -Tasks @($pilot) -Extra @("-Apply")
 Assert-False $missingConfirm.ok "apply requires confirmation"
 if (@($missingConfirm.blockers) -notcontains "confirmation_required") { throw "Expected confirmation_required." }
@@ -175,12 +203,18 @@ if ($unsafePath.selected_task_id) { throw "Unsafe path selected." }
 $deployTask = Invoke-ApplyPilot -Name "deploy-task" -Tasks @((New-Task -TaskId "start-one-apply-pilot-docs-001" -TaskType "deploy" -AllowedPaths @("docs/operations/START_ONE_APPLY_PILOT.md"))) -Extra @("-Preview")
 if ($deployTask.selected_task_id) { throw "Deploy task selected." }
 
+$missingPilot = Invoke-ApplyPilot -Name "missing-pilot" -Tasks @() -Extra @("-Preview")
+if ($missingPilot.status -ne "no_safe_candidate") { throw "Missing pilot task should remain no_safe_candidate." }
+if (@($missingPilot.blockers) -notcontains "no_safe_pilot_task") { throw "Missing pilot task should report no_safe_pilot_task." }
+
 $summary = [pscustomobject]@{
   ok = $true
   smoke = "start-one-apply-pilot"
   scenarios = @(
     "apply_preview_does_not_claim",
     "seeded_pilot_task_is_accepted_by_apply_preview",
+    "missing_risk_safe_pilot_allowed_with_hygiene_proof",
+    "blocked_paths_guardrails_do_not_poison_safe_candidate",
     "apply_requires_confirmation",
     "apply_claims_and_runs_once_fixture",
     "apply_rejects_old_failed_tasks",
@@ -189,6 +223,8 @@ $summary = [pscustomobject]@{
     "apply_rejects_multiple_candidates",
     "apply_rejects_unsafe_paths",
     "apply_rejects_deploy_secrets_server_root_tasks",
+    "missing_pilot_task_remains_no_safe_candidate",
+    "apply_reports_pilot_task_lookup_diagnostics",
     "apply_never_calls_run_until_hold",
     "project_control_remains_paused"
   )

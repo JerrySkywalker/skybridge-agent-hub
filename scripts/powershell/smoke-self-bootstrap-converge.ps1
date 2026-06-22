@@ -103,6 +103,7 @@ function New-BaseFixtures {
         [pscustomobject]@{ task_id = "remote-claim-smoke-001"; classification = "historical-residue" }
       )
       unsafe_to_requeue_candidates = @(1..11 | ForEach-Object { [pscustomobject]@{ task_id = "unsafe-to-requeue-$($_)"; classification = "unsafe-to-requeue" } })
+      task_classifications = @()
       safety = [pscustomobject]@{
         tasks_mutated = $false
         tasks_claimed = $false
@@ -296,6 +297,41 @@ if ($case.result.start_one_preview.status -ne "no_safe_candidate") { throw "Expe
 if ($null -ne $case.result.start_one_preview.selected_candidate) { throw "Expected no selected candidate." }
 Assert-False $case.result.start_one_preview.would_claim "start_one_preview would_claim"
 Assert-False $case.result.start_one_preview.would_run_codex "start_one_preview would_run_codex"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "active-non-pilot-blocks" -Mutate {
+  param($f)
+  $f.readiness.blockers = @("active_tasks_present")
+}
+if ($case.result.status -ne "blocked") { throw "active non-pilot task should remain a blocker." }
+Assert-Contains $case.result.blocked_reasons "active_tasks_present" "active non-pilot blockers"
+Assert-False $case.result.hygiene.active_task_allowed_for_goal_319_pilot "active non-pilot allowed flag"
+$cases += $case
+
+$case = Invoke-ConvergeFixture -Name "expected-active-pilot-allowed" -Mutate {
+  param($f)
+  $f.readiness.blockers = @("active_tasks_present")
+  $f.hygiene.total_tasks = 19
+  $f.hygiene.task_classifications = @(
+    [pscustomobject]@{
+      task_id = "start-one-apply-pilot-docs-001"
+      status = "queued"
+      hygiene_status = "active_ok"
+      classification = "not-residue"
+      risk = "not_reported"
+      task_type = "docs"
+      assigned_worker_id = "-"
+      recommended_action = "No Goal 315 action."
+    }
+  )
+  $f.startOnePreview.status = "candidate_previewed"
+  $f.startOnePreview.selected_candidate = [pscustomobject]@{ task_id = "start-one-apply-pilot-docs-001" }
+}
+if ($case.result.status -ne "partial") { throw "expected active pilot should not block convergence." }
+if (@($case.result.blocked_reasons) -contains "active_tasks_present") { throw "Expected pilot active task was treated as generic active blocker." }
+Assert-True $case.result.hygiene.expected_active_pilot_task "expected active pilot flag"
+if ($case.result.hygiene.active_task_id -ne "start-one-apply-pilot-docs-001") { throw "Expected active pilot task id." }
+Assert-True $case.result.hygiene.active_task_allowed_for_goal_319_pilot "active pilot allowed flag"
 $cases += $case
 
 $case = Invoke-ConvergeFixture -Name "bootstrap-notification-only" -Mutate {
