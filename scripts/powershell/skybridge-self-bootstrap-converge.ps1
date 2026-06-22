@@ -629,7 +629,8 @@ function Get-PilotSeedProbe {
     status = [string](Get-Prop -Object $seed -Name "status" -Default "unknown")
     mode = [string](Get-Prop -Object $seed -Name "mode" -Default "preview")
     pilot_task_id = [string](Get-Prop -Object $seed -Name "pilot_task_id" -Default "start-one-apply-pilot-docs-001")
-    pilot_task_exists = ($null -ne $created -and [string](Get-Prop -Object $created -Name "status" -Default "") -eq "existing_safe_pilot_task")
+    pilot_task_exists = ($null -ne $created -and [string](Get-Prop -Object $created -Name "status" -Default "") -in @("existing_safe_pilot_task", "existing_completed_pilot_task"))
+    pilot_task_completed = ([string](Get-Prop -Object $created -Name "status" -Default "") -eq "existing_completed_pilot_task" -or [string](Get-Prop -Object $created -Name "task_status" -Default "") -eq "completed")
     would_create_task = Get-BoolProp -Object $seed -Name "would_create_task"
     token_printed = Get-BoolProp -Object $seed -Name "token_printed"
   }
@@ -667,6 +668,9 @@ function Get-StartOneApplyPilotProbe {
   $selected = Get-Prop -Object $applyPilot -Name "selected_candidate"
   $oldResidue = Get-Prop -Object $applyPilot -Name "old_residue_exclusion"
   $finalStatus = [string](Get-Prop -Object $applyPilot -Name "final_task_status" -Default "")
+  $lookup = Get-Prop -Object $applyPilot -Name "pilot_task_lookup"
+  $lookupTaskId = [string](Get-Prop -Object $lookup -Name "task_id" -Default "")
+  $lookupStatus = [string](Get-Prop -Object $lookup -Name "status" -Default "")
   [pscustomobject]@{
     available = $true
     ok = Get-BoolProp -Object $applyPilot -Name "ok" -Default $true
@@ -674,8 +678,9 @@ function Get-StartOneApplyPilotProbe {
     mode = [string](Get-Prop -Object $applyPilot -Name "mode" -Default "preview")
     selected_task_id = Get-Prop -Object $applyPilot -Name "selected_task_id"
     selected_candidate = $selected
-    pilot_task_exists = ($null -ne $selected -or [string](Get-Prop -Object $applyPilot -Name "selected_task_id" -Default "") -eq "start-one-apply-pilot-docs-001")
-    pilot_task_completed = ($finalStatus -eq "completed")
+    pilot_task_exists = ($null -ne $selected -or [string](Get-Prop -Object $applyPilot -Name "selected_task_id" -Default "") -eq "start-one-apply-pilot-docs-001" -or $lookupTaskId -eq "start-one-apply-pilot-docs-001")
+    pilot_task_completed = ($finalStatus -eq "completed" -or $lookupStatus -eq "completed")
+    pilot_task_terminal_status = if ($lookupStatus) { $lookupStatus } else { $finalStatus }
     old_residue_remains_excluded = Get-BoolProp -Object $oldResidue -Name "no_old_residue_eligible" -Default $false
     unsafe_to_requeue_tasks_excluded = Get-CountProp -Object $oldResidue -Name "unsafe_to_requeue_tasks_excluded"
     blocked_historical_tasks_excluded = Get-CountProp -Object $oldResidue -Name "blocked_historical_tasks_excluded"

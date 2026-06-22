@@ -123,5 +123,34 @@ corepack pnpm smoke:start-one-pilot-seed
 corepack pnpm smoke:start-one-apply-pilot
 ```
 
+## Mega Goal 319 One-Task Boundary Proof
+
+This operations note proves only the Goal 319 start-one apply pilot boundary.
+It does not authorize generic `start-one`, `start-all`, `run-until-hold`,
+worker loops, production deployment, secret changes, GitHub settings changes or
+infrastructure mutation.
+
+The pilot is bounded to exactly one deterministic docs task:
+
+- task id exactly `start-one-apply-pilot-docs-001`;
+- task type `docs`;
+- only allowed path `docs/operations/START_ONE_APPLY_PILOT.md`;
+- no code, script, secret, deployment, GitHub settings or infrastructure paths;
+- `project_control` stays paused outside the explicitly confirmed single-task
+  apply path;
+- the operator confirmation must be exactly
+  `I_UNDERSTAND_START_ONE_SINGLE_SAFE_TASK_ONLY`.
+
+Any mismatch is a stop condition. If the selected task id, task type, allowed
+path, dirty-worktree state, active lock state, hygiene result, confirmation
+string or forbidden action list differs from the values above, the pilot must
+remain in preview/blocked state and no task may be claimed or executed.
+
+Successful Goal 319 evidence is therefore narrow: the system may prove that one
+reviewed docs-only task can be selected and applied once under the explicit
+confirmation gate, then return to hold. It must not prove or imply that the
+general queue, batch execution, server operation, production infrastructure or
+future arbitrary tasks are authorized.
+
 The smokes are fixture-only. They do not claim live tasks, do not run live
 Codex, do not unpause project control and do not call `run-until-hold`.
