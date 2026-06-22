@@ -153,14 +153,16 @@ function Test-WorkerMatch {
   $enabled = Get-BoolProp -Object $worker[0] -Name "enabled" -Default $true
   $caps = @((Get-Prop -Object $worker[0] -Name "capabilities" -Default @()) | ForEach-Object { ([string]$_).ToLowerInvariant() })
   if (-not ($enabled -and $status -eq "online")) { return $false }
-  if ($caps.Count -gt 0) {
-    return ($caps -contains "codex" -and ($caps -contains "docs" -or $caps -contains "documentation"))
-  }
   $required = @((Get-Prop -Object $Task -Name "required_capabilities" -Default @()) | ForEach-Object { ([string]$_).ToLowerInvariant() })
   $metadata = Get-Prop -Object $Task -Name "hygiene_metadata"
   $allowedWorker = [string](Get-Prop -Object $metadata -Name "allowed_worker_id" -Default "")
-  $taskCarriesDocsProof = ($required -contains "codex" -and ($required -contains "docs" -or $required -contains "documentation"))
-  return ($taskCarriesDocsProof -and ([string]::IsNullOrWhiteSpace($allowedWorker) -or $allowedWorker -eq $WorkerId))
+  $taskCarriesDocsProof = ($required -contains "codex" -and ($required -contains "docs" -or $required -contains "documentation") -and $required -contains "windows")
+  $explicitWorkerProof = ($taskCarriesDocsProof -and ([string]::IsNullOrWhiteSpace($allowedWorker) -or $allowedWorker -eq $WorkerId))
+  if ($caps.Count -gt 0) {
+    if ($caps.Count -eq 1 -and $caps -contains "heartbeat") { return $explicitWorkerProof }
+    return ($caps -contains "codex" -and ($caps -contains "docs" -or $caps -contains "documentation"))
+  }
+  return $explicitWorkerProof
 }
 
 function Test-SafePilotCandidate {

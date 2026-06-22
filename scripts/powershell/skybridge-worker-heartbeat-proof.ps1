@@ -112,9 +112,9 @@ function New-DefaultHeartbeatConfig {
     token_file = if ($TokenFile) { $TokenFile } else { $env:SKYBRIDGE_WORKER_TOKEN_FILE }
     allow_remote_server = $true
     reject_insecure_http_for_remote = $true
-    capabilities = @("heartbeat")
-    executor_adapters = @()
-    allowed_task_types = @()
+    capabilities = @("heartbeat", "codex", "docs", "windows")
+    executor_adapters = @("codex")
+    allowed_task_types = @("docs", "test")
     blocked_task_types = @("deploy", "production", "secrets")
     max_parallel_tasks = 1
     auto_merge_enabled = $false
@@ -167,8 +167,8 @@ try {
   $tasksBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
   $controlBefore = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($config.project_id))/control"
 
-  $registered = Register-Worker -Config $config
-  $heartbeat = Send-WorkerHeartbeat -Config $config -StatusNote "heartbeat_only_proof" -Load 0
+  $registered = Register-Worker -Config $config -TimeoutSeconds $TimeoutSeconds
+  $heartbeat = Send-WorkerHeartbeat -Config $config -StatusNote "heartbeat_only_proof" -Load 0 -TimeoutSeconds $TimeoutSeconds
   $workerAfter = Invoke-SkyBridgeApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($config.worker_id))" -ApiBase $config.api_base -Config $config -TimeoutSeconds $TimeoutSeconds
   $workersSummary = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/workers/summary"
   $tasksAfter = Invoke-OptionalApi -Config $config -Method GET -Path "/v1/tasks/summary"
