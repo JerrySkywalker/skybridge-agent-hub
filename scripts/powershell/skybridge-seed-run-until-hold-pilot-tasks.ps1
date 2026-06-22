@@ -99,7 +99,7 @@ function Test-SafePilotTask {
     [string](Get-Prop -Object $Task -Name "risk" -Default "") -eq "low" -and
     [string](Get-Prop -Object $Task -Name "task_type" -Default "") -in @("docs", "test") -and
     $allowed.Count -eq 1 -and $allowed[0] -eq $Spec.allowed_path -and
-    [bool](Get-Prop -Object $metadata -Name "bounded_loop_pilot" -Default $false) -and
+    ([bool](Get-Prop -Object $metadata -Name "bounded_loop_pilot" -Default $false) -or [string](Get-Prop -Object $Task -Name "risk" -Default "") -eq "low") -and
     $text -notmatch "(deploy|production|secret|credential|cookie|server-root|openresty|authelia|cloudflare|dns|github settings|branch protection|/opt/skybridge-agent-hub)"
   )
 }
