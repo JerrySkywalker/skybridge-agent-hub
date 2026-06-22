@@ -65,3 +65,30 @@ corepack pnpm smoke:notification-readiness
 The smoke is fixture-only and proves partial readiness with no real send and no
 credential or raw notification payload exposure. It also covers the
 no-provider/bootstrap-dry-run case.
+
+## Operator Report Delivery
+
+Mega Goal 323 adds `skybridge-operator-notification-readiness.ps1` for the
+operator report path. It wraps the existing readiness probe and adds explicit
+report/review-gate delivery fields:
+
+```text
+schema=skybridge.operator_notification_readiness.v1
+report_delivery_supported=true | false
+review_gate_supported=true | false
+bootstrap_dry_run_available=true | false
+real_provider_configured=true | false
+real_send_performed=false by default
+raw_notification_payload_included=false
+credential_values_exposed=false
+token_printed=false
+```
+
+Default mode is dry-run. A real send test is optional and must fail closed when
+no safe configured provider exists. Even when a real provider is available, the
+test payload is a minimal sanitized summary and must not include raw prompts,
+raw logs, credentials, webhook secrets, provider tokens or auth headers.
+
+Safe notification content is limited to status, task ids, PR numbers, commit
+ids, counts, stop reasons, hold reasons, sanitized evidence summaries and the
+recommended next action.

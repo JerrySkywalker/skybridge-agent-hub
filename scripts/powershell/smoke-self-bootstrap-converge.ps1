@@ -263,6 +263,106 @@ function New-BaseFixtures {
       recommended_next_safe_action = "Preview only."
       token_printed = $false
     }
+    boundedPilotSeed = [pscustomobject]@{
+      schema = "skybridge.run_until_hold_pilot_seed.v1"
+      ok = $true
+      mode = "preview"
+      created_tasks = @([pscustomobject]@{ task_id = "run-until-hold-pilot-docs-001"; token_printed = $false }, [pscustomobject]@{ task_id = "run-until-hold-pilot-docs-002"; token_printed = $false })
+      would_create = @()
+      token_printed = $false
+    }
+    boundedRun = [pscustomobject]@{
+      schema = "skybridge.run_until_hold_bounded.v1"
+      ok = $true
+      stop_reason = "no_safe_candidate"
+      hold_reason = "no_safe_candidate"
+      selected_candidates = @()
+      executed_task_count = 0
+      evidence_summary = [pscustomobject]@{ evidence_present = $true; attempted_task_count = 0; token_printed = $false }
+      old_residue_exclusion = [pscustomobject]@{ no_old_residue_eligible = $true; no_old_task_claimed = $true; no_old_task_requeued = $true; token_printed = $false }
+      project_control = [pscustomobject]@{ project_control_unpaused = $false; token_printed = $false }
+      forbidden_actions = [pscustomobject]@{ daemon_implemented = $false; recursive_run_until_hold = $false; token_printed = $false }
+      token_printed = $false
+    }
+    boundedReport = [pscustomobject]@{
+      schema = "skybridge.run_until_hold_report.v1"
+      ok = $true
+      latest_bounded_run_status = "no_safe_candidate"
+      stop_reason = "no_safe_candidate"
+      hold_reason = "no_safe_candidate"
+      evidence_summary = [pscustomobject]@{ evidence_present = $true; token_printed = $false }
+      unsafe_selection_proof = [pscustomobject]@{ no_old_residue_eligible = $true; token_printed = $false }
+      project_control_stayed_paused = $true
+      run_until_hold_stayed_bounded = $true
+      token_printed = $false
+    }
+    campaignCompiler = [pscustomobject]@{
+      schema = "skybridge.campaign_task_compiler.v1"
+      ok = $true
+      campaign_id = "campaign-policy-compiler-pilot-001"
+      generated_task_count = 2
+      generated_tasks = @()
+      rejected_items = @()
+      old_residue_exclusion = [pscustomobject]@{ old_residue_selected = $false; token_printed = $false }
+      forbidden_actions = [pscustomobject]@{ project_control_unpaused = $false; token_printed = $false }
+      token_printed = $false
+    }
+    campaignPolicy = [pscustomobject]@{
+      schema = "skybridge.campaign_policy_report.v1"
+      ok = $true
+      campaign_status = "completed"
+      safe_task_count = 2
+      rejected_task_count = 0
+      evidence_state = [pscustomobject]@{ evidence_present = $true; token_printed = $false }
+      old_residue_excluded = $true
+      project_control_stayed_paused = $true
+      run_until_hold_stayed_bounded = $true
+      token_printed = $false
+    }
+    operatorNotification = [pscustomobject]@{
+      schema = "skybridge.operator_notification_readiness.v1"
+      ok = $true
+      status = "bootstrap_dry_run_only"
+      dry_run = $true
+      provider_count = 1
+      ready_provider_count = 1
+      real_ready_provider_count = 0
+      dry_run_safe_provider_count = 1
+      report_delivery_supported = $true
+      review_gate_supported = $true
+      real_provider_configured = $false
+      bootstrap_dry_run_available = $true
+      real_send_performed = $false
+      raw_notification_payload_included = $false
+      credential_values_exposed = $false
+      token_printed = $false
+    }
+    reviewGate = [pscustomobject]@{
+      schema = "skybridge.review_gate.v1"
+      ok = $true
+      gate_status = "safe_to_continue_preview_only"
+      allowed_preview = $true
+      allowed_bounded_run = $false
+      allowed_unbounded_run = $false
+      allowed_daemon = $false
+      needs_operator_review = $false
+      notification_available = $true
+      old_residue_excluded = $true
+      project_control_paused = $true
+      token_printed = $false
+    }
+    operatorReport = [pscustomobject]@{
+      schema = "skybridge.operator_report.v1"
+      ok = $true
+      report_kind = "current-state"
+      campaign_summary = [pscustomobject]@{ included = $true; token_printed = $false }
+      bounded_run_summary = [pscustomobject]@{ included = $true; token_printed = $false }
+      hold_summary = [pscustomobject]@{ included = $true; token_printed = $false }
+      evidence_summary = [pscustomobject]@{ evidence_present = $true; token_printed = $false }
+      old_residue_summary = [pscustomobject]@{ old_residue_excluded = $true; token_printed = $false }
+      safety_summary = [pscustomobject]@{ project_control_unpaused = $false; run_until_hold_recursive = $false; token_printed = $false }
+      token_printed = $false
+    }
   }
 }
 
@@ -287,6 +387,14 @@ function Invoke-ConvergeFixture {
   $pilotSeedPath = Write-Fixture $dir "pilot-seed.json" $fixtures.pilotSeed
   $startOneApplyPilotPath = Write-Fixture $dir "start-one-apply-pilot.json" $fixtures.startOneApplyPilot
   $startOneHoldReportPath = Write-Fixture $dir "start-one-hold-report.json" $fixtures.startOneHoldReport
+  $boundedPilotSeedPath = Write-Fixture $dir "bounded-pilot-seed.json" $fixtures.boundedPilotSeed
+  $boundedRunPath = Write-Fixture $dir "bounded-run.json" $fixtures.boundedRun
+  $boundedReportPath = Write-Fixture $dir "bounded-report.json" $fixtures.boundedReport
+  $campaignCompilerPath = Write-Fixture $dir "campaign-compiler.json" $fixtures.campaignCompiler
+  $campaignPolicyPath = Write-Fixture $dir "campaign-policy.json" $fixtures.campaignPolicy
+  $operatorNotificationPath = Write-Fixture $dir "operator-notification.json" $fixtures.operatorNotification
+  $reviewGatePath = Write-Fixture $dir "review-gate.json" $fixtures.reviewGate
+  $operatorReportPath = Write-Fixture $dir "operator-report.json" $fixtures.operatorReport
 
   $args = @(
     "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -307,6 +415,14 @@ function Invoke-ConvergeFixture {
     "-FixturePilotSeedFile", $pilotSeedPath,
     "-FixtureStartOneApplyPilotFile", $startOneApplyPilotPath,
     "-FixtureStartOneHoldReportFile", $startOneHoldReportPath,
+    "-FixtureRunUntilHoldPilotSeedFile", $boundedPilotSeedPath,
+    "-FixtureRunUntilHoldBoundedFile", $boundedRunPath,
+    "-FixtureRunUntilHoldReportFile", $boundedReportPath,
+    "-FixtureCampaignTaskCompilerFile", $campaignCompilerPath,
+    "-FixtureCampaignPolicyReportFile", $campaignPolicyPath,
+    "-FixtureOperatorNotificationReadinessFile", $operatorNotificationPath,
+    "-FixtureReviewGateFile", $reviewGatePath,
+    "-FixtureOperatorReportFile", $operatorReportPath,
     "-Json"
   )
   if ($RefreshHeartbeat) { $args += "-RefreshHeartbeat" }

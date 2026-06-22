@@ -47,4 +47,6 @@ Safety invariants:
 - each selected task must be queued, low risk, docs/test typed, marked `bounded_loop_pilot`, and limited to one matching `docs/operations/RUN_UNTIL_HOLD_PILOT_00N.md` path;
 - old failed, blocked, completed, unsafe-to-requeue, active non-pilot, stale-claim, active-lease, deploy, secret, server-root, OpenResty, Authelia, DNS, Cloudflare, and GitHub-settings surfaces are rejected;
 - no raw prompts, raw logs, raw stdout/stderr, credentials, cookies, tokens, or environment dumps are reported;
+- operator reports may summarize selected/executed counts, stop reasons, hold reasons and evidence presence, but never raw task prompts or Codex output;
+- review gate status must keep unbounded run and daemon mode disabled;
 - `token_printed=false`.
