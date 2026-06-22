@@ -50,11 +50,11 @@ Hermes server tool execution remains a risk unless a documented second gate is
 configured. The readiness script reports that risk without printing Hermes raw
 responses, tokens, endpoints, prompts, logs or environment dumps.
 
-`allowed_execution=true` is not expected in Goal 318. A later Goal 319
-start-one apply pilot would need explicit operator authorization, a configured
-second gate, a safe single candidate, real blocker-notice readiness, duplicate
-prevention, no active leases, and a fresh proof that `project_control` can be
-unpaused only for the bounded pilot.
+`allowed_execution=true` is not expected for the generic queue. Goal 319 does
+not open that gate. It adds only a task-specific pilot path for
+`start-one-apply-pilot-docs-001`, with exact operator confirmation and
+`project_control` still paused. Generic `start-one`, batch execution and
+`run-until-hold` remain unavailable.
 
 ## Smoke
 

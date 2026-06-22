@@ -135,6 +135,33 @@ Convergence may include a selected candidate from the preview, but that is not
 authorization to claim it. The selected candidate is a review target for a
 future Goal 319 apply pilot only.
 
+## Goal 319 Boundary
+
+Goal 319 extends convergence with:
+
+- `pilot_seed.status`;
+- `pilot_seed.pilot_task_exists`;
+- `start_one_apply_pilot.status`;
+- `start_one_apply_pilot.selected_task_id`;
+- `start_one_apply_pilot.pilot_task_completed`;
+- `start_one_apply_pilot.old_residue_remains_excluded`.
+
+These fields report the single-task pilot state only. Convergence still must
+show `project_control` paused, no `run-until-hold` call, no generic queue
+execution and `token_printed=false`.
+
+During PR development, expected live validation is preview-only:
+
+```text
+pilot_seed.mode=preview
+start_one_apply_pilot.mode=preview
+start_one_apply_pilot.codex_run_called=false
+start_one_apply_pilot.project_control_unpaused=false
+```
+
+The post-merge manual apply sequence is documented in
+[START_ONE_APPLY_PILOT.md](START_ONE_APPLY_PILOT.md).
+
 ## Smoke
 
 ```powershell
