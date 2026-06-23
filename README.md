@@ -121,6 +121,8 @@ For the preview-only Bootstrap Alpha task registry, see
 [docs/product/TASK_TEMPLATE_REGISTRY.md](docs/product/TASK_TEMPLATE_REGISTRY.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
+For the first exact-confirmed worker template runner, see
+[docs/product/WORKER_TEMPLATE_RUNNER_V1.md](docs/product/WORKER_TEMPLATE_RUNNER_V1.md).
 
 ## Quick Start
 

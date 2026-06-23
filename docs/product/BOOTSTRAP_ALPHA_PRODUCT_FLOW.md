@@ -22,8 +22,9 @@ automation.
 8. The SkyBridge Server stores project, goal, campaign, task, worker, lease, and
    evidence state.
 9. The local worker actively pulls from the server and claims compatible tasks.
-10. The worker executes only template runners, such as Codex docs/report tasks
-    or future MATLAB experiment runners.
+10. The worker executes only template runners. MG329 starts with one
+    safe-local-smoke fixture runner; Codex and MATLAB runners remain future
+    reviewed goals.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
 12. The operator reviews the result through Desktop and server reports and
@@ -62,9 +63,8 @@ has an explicit runner id, input schema, path bounds, validation rules, risk
 class, capability requirements, and evidence schema.
 
 Initial runner families are expected to cover software documentation/report
-tasks, safe local smokes, and future MATLAB experiment batches. Template
-execution is future implementation work; this document freezes the Bootstrap
-Alpha target shape.
+tasks, safe local smokes, and future MATLAB experiment batches. MG329 implements
+the first narrow runner for `safe-local-smoke.v1` only.
 
 ## MG325 Local Worker Setup Layer
 
@@ -104,6 +104,20 @@ one non-running draft campaign. It keeps `claim_created=false`,
 `execution_started=false`, `codex_run_called=false`, `matlab_run_called=false`,
 `worker_loop_started=false`, `arbitrary_shell_enabled=false`,
 `raw_prompt_persisted=false`, `raw_response_persisted=false`, and
+`token_printed=false`.
+
+## MG329 Worker Template Runner v1
+
+The first worker runner adds `skybridge.worker_template_runner_preview.v1`,
+`skybridge.worker_template_runner_result.v1`, and
+`skybridge.template_runner_evidence.v1`. It can preview eligible tasks and,
+with exact PowerShell confirmation, claim/start/complete exactly one
+`safe-local-smoke.v1` fixture task against a local or fixture server.
+
+Desktop shows a preview-only Worker Runner panel. The runner keeps
+`pr_created=false`, `codex_run_called=false`, `matlab_run_called=false`,
+`arbitrary_shell_enabled=false`, `worker_loop_started=false`,
+`unbounded_run_enabled=false`, `project_control_unpaused=false`, and
 `token_printed=false`.
 
 token_printed=false

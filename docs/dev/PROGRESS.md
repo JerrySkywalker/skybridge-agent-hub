@@ -831,3 +831,11 @@
 - Froze the next Mega Goal sequence from MG325 through MG331 around Desktop installer, chat planner, template registry, draft review, worker template runner, MATLAB golden trial, and end-to-end release.
 - Added the read-only `skybridge-bootstrap-alpha-acceptance.ps1` smoke and `smoke:bootstrap-alpha-acceptance` package script.
 - Kept the current safety boundary unchanged: no task claims, no Codex execution, no MATLAB execution, no worker loop start, no notification send, no unbounded run, no daemon path, and `token_printed=false`.
+
+## 2026-06-23 Mega Goal 329 Worker Template Runner v1
+
+- Added the first Worker Template Runner v1 contracts for preview, result, and sanitized evidence.
+- Added `scripts/powershell/skybridge-worker-template-runner.ps1` with read-only preview and exact-confirmed `apply-one` limited to one `safe-local-smoke.v1` fixture task.
+- Added fixture/local smokes for preview, apply-one, unsafe rejection, and Desktop runner preview contract.
+- Added a Desktop Bootstrap Alpha Worker Runner Preview panel and the product doc `docs/product/WORKER_TEMPLATE_RUNNER_V1.md`.
+- Kept Codex execution, MATLAB execution, arbitrary shell, worker loop, unbounded run, project-control unpause, PR creation, old task requeue, live cloud task claim, and `token_printed=false`.

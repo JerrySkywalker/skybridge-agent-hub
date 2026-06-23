@@ -548,6 +548,81 @@ export type DraftReview = z.infer<typeof DraftReviewSchema>;
 export type DraftSubmitPreview = z.infer<typeof DraftSubmitPreviewSchema>;
 export type DraftSubmitResult = z.infer<typeof DraftSubmitResultSchema>;
 
+export const WorkerTemplateRunnerModeSchema = z.enum(["preview", "apply"]);
+const TemplateRunnerCommonSchema = z.object({
+  ok: z.boolean(),
+  mode: WorkerTemplateRunnerModeSchema,
+  worker_id: z.string().min(1),
+  project_id: z.string().min(1),
+  task_id: z.string().min(1).nullable().optional(),
+  template_id: z.string().min(1).nullable().optional(),
+  runner_id: z.string().min(1).nullable().optional(),
+  selected: z.boolean(),
+  eligible: z.boolean(),
+  rejected_reason: z.string(),
+  claim_created: z.boolean(),
+  execution_started: z.boolean(),
+  execution_completed: z.boolean(),
+  execution_failed: z.boolean(),
+  evidence_present: z.boolean(),
+  allowed_paths_checked: z.boolean(),
+  blocked_paths_checked: z.boolean(),
+  changed_files: z.array(z.string()),
+  validation_status: z.string().min(1),
+  result_summary: z.string(),
+  pr_created: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  unbounded_run_enabled: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const WorkerTemplateRunnerSchema = TemplateRunnerCommonSchema.extend({
+  schema: z.literal("skybridge.worker_template_runner.v1"),
+});
+export const WorkerTemplateRunnerPreviewSchema = TemplateRunnerCommonSchema.extend({
+  schema: z.literal("skybridge.worker_template_runner_preview.v1"),
+  mode: z.literal("preview"),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  execution_completed: z.literal(false),
+  execution_failed: z.literal(false),
+});
+export const WorkerTemplateRunnerResultSchema = TemplateRunnerCommonSchema.extend({
+  schema: z.literal("skybridge.worker_template_runner_result.v1"),
+  mode: z.literal("apply"),
+});
+export const TemplateRunnerEvidenceSchema = z.object({
+  schema: z.literal("skybridge.template_runner_evidence.v1"),
+  ok: z.boolean(),
+  worker_id: z.string().min(1),
+  project_id: z.string().min(1),
+  task_id: z.string().min(1),
+  template_id: z.string().min(1),
+  runner_id: z.string().min(1),
+  evidence_schema_id: z.string().min(1),
+  evidence_path: z.string().optional(),
+  changed_files: z.array(z.string()),
+  validation_status: z.string().min(1),
+  result_summary: z.string(),
+  pr_created: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  unbounded_run_enabled: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  raw_logs_included: z.literal(false),
+  token_printed: z.literal(false),
+});
+export type WorkerTemplateRunnerMode = z.infer<typeof WorkerTemplateRunnerModeSchema>;
+export type WorkerTemplateRunner = z.infer<typeof WorkerTemplateRunnerSchema>;
+export type WorkerTemplateRunnerPreview = z.infer<typeof WorkerTemplateRunnerPreviewSchema>;
+export type WorkerTemplateRunnerResult = z.infer<typeof WorkerTemplateRunnerResultSchema>;
+export type TemplateRunnerEvidence = z.infer<typeof TemplateRunnerEvidenceSchema>;
+
 export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
 export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
 export const TaskTemplateValidationSchema = z.object({
@@ -694,6 +769,9 @@ export interface PlannerAdapterMetadata {
   decision: PlannerDecisionAction;
   reason: string;
   task_type?: string;
+  template_id?: string;
+  runner_id?: string;
+  evidence_schema?: string[];
   allowed_paths: string[];
   blocked_paths: string[];
   validation: string[];

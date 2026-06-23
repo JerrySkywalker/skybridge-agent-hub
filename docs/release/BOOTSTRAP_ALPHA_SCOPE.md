@@ -53,6 +53,14 @@ campaign after exact operator confirmation. It does not claim tasks, run
 Codex, run MATLAB, start worker loops, send notifications, expose arbitrary
 shell, unpause project control, or persist raw prompts or raw responses.
 
+MG329 covers Worker Template Runner v1 only. Preview is read-only. Confirmed
+`apply-one` may claim/start/complete/fail exactly one compatible
+`safe-local-smoke.v1` fixture task against a local or fixture server after the
+exact confirmation text is supplied. It does not run Codex, run MATLAB, expose
+arbitrary shell, start a worker loop, run unbounded, unpause project control,
+create PRs, requeue old tasks, or claim live cloud tasks during post-deploy
+smoke.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

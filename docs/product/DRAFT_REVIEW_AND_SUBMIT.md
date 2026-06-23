@@ -51,7 +51,7 @@ steps. For `matlab-parameter-sweep.v1`, the expected steps are:
 - `hold-for-operator-review`
 
 The campaign remains `draft`; steps are not executed. The MATLAB runner remains
-future work for MG329/MG330.
+future work for MG330.
 
 ## Desktop
 
@@ -89,6 +89,8 @@ full environment listings into docs or logs.
 - `project_control_unpause=false`
 - `token_printed=false`
 
-Next safe action after submit is `hold_for_mg329_worker_runner`.
+Next safe action after submit is `hold_for_mg329_worker_runner`. MG329 can run
+only one exact-confirmed `safe-local-smoke.v1` fixture task; docs/Codex and
+MATLAB submitted records remain held for later reviewed runners.
 
 token_printed=false

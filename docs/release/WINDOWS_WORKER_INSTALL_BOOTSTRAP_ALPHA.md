@@ -21,9 +21,10 @@ Install and repair are preview-only in MG325. Apply is future work and must keep
 exact confirmation, local user-level scope, and the no-execution boundary.
 
 MG326 adds a separate Desktop Chat-to-Task panel. MG327 adds a separate Desktop
-Task Templates panel. These panels may reference local tool capabilities from
-worker setup, but they still produce or display previews only and do not start
-the worker service, claim tasks, execute Codex, or execute MATLAB.
+Task Templates panel. MG328 adds reviewed queued-record submit. MG329 adds a
+separate Worker Runner Preview panel and PowerShell-only one-task fixture
+runner for `safe-local-smoke.v1`. Worker service install/repair remains
+separate from runner apply.
 
 ## Worker Service Meaning
 
@@ -31,6 +32,10 @@ In Bootstrap Alpha, the worker service means a local Windows service wrapper
 that can later host a reviewed SkyBridge worker loop. MG325 only checks whether
 that wrapper can be installed or repaired. It does not claim server tasks, run
 Codex, run MATLAB, send notifications, or start a worker loop.
+
+MG329 does not start the Windows service wrapper or worker loop. Its
+`skybridge-worker-template-runner.ps1` helper can apply one safe local fixture
+task only when pointed at the intended API base and given exact confirmation.
 
 ## Required Local Tools
 
@@ -94,6 +99,10 @@ MG325 keeps these fields false:
 - `matlab_executed=false`
 - `notification_sent=false`
 - `token_printed=false`
+
+MG329 keeps Codex execution, MATLAB execution, arbitrary shell, worker loop,
+unbounded run, project-control unpause, PR creation, and live cloud task claim
+disabled.
 
 Do not paste secrets, tokens, cookies, provider headers, raw prompts, stdout,
 stderr, or full environment listings into docs, issues, logs, or screenshots.
