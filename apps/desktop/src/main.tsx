@@ -2700,7 +2700,7 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
     <section className="panel bootstrap-worker-setup-panel" aria-label="Bootstrap Alpha Worker Setup">
       <h2>Bootstrap Alpha Worker Setup</h2>
       <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha worker setup disabled execution flags">
-        <span>MG330 install apply is PowerShell exact-confirmation only</span>
+        <span>MG331 identity and live heartbeat apply are PowerShell exact-confirmation only</span>
         <span>claim_enabled=false</span>
         <span>execute_enabled=false</span>
         <span>template_runner_enabled=false; worker_loop_started=false; token_printed=false</span>
@@ -2709,6 +2709,10 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         <StatusValue label="Schema" value={status.schema} />
         <StatusValue label="Readiness" value={status.readiness_status} />
         <StatusValue label="Worker id" value={status.worker_id} />
+        <StatusValue label="Worker name" value={status.worker_name ?? "unconfigured-local-worker"} />
+        <StatusValue label="Worker provider" value={status.worker_provider ?? "local-windows"} />
+        <StatusValue label="Worker identity status" value={status.worker_identity_status ?? "unknown"} />
+        <StatusValue label="Worker labels" value={(status.worker_labels ?? []).join("; ") || "none"} />
         <StatusValue label="Service name" value={status.service_name} />
         <StatusValue label="Install strategy" value={status.install_strategy ?? "not_installed"} />
         <StatusValue label="Install state" value={status.install_state} />
@@ -2717,8 +2721,12 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         <StatusValue label="Install apply available" value={String(status.install_apply_available ?? false)} />
         <StatusValue label="Repair preview" value={String(status.repair_preview_available)} />
         <StatusValue label="Repair apply available" value={String(status.repair_apply_available ?? false)} />
+        <StatusValue label="Identity preview" value={String(status.identity_setup_preview_available ?? false)} />
+        <StatusValue label="Identity apply available" value={String(status.identity_apply_available ?? false)} />
         <StatusValue label="Heartbeat preview" value={String(status.heartbeat_preview_available ?? false)} />
         <StatusValue label="Heartbeat apply available" value={String(status.heartbeat_apply_available ?? false)} />
+        <StatusValue label="Live heartbeat preview" value={String(status.live_heartbeat_preview_available ?? false)} />
+        <StatusValue label="Live heartbeat apply available" value={String(status.live_heartbeat_apply_available ?? false)} />
         <StatusValue label="Service installed" value={String(status.service_installed)} />
         <StatusValue label="Service running" value={String(status.service_running)} />
         <StatusValue label="Service start type" value={status.service_start_type} />
@@ -2734,6 +2742,7 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         <StatusValue label="Local service state" value={status.service_state_path ?? "$HOME\\.skybridge\\state\\worker-service.json"} />
         <StatusValue label="Service command preview" value={status.service_command_preview ?? "skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-preview"} />
         <StatusValue label="Last heartbeat" value={status.last_heartbeat_at ?? "none"} />
+        <StatusValue label="Live heartbeat last result" value={status.live_heartbeat_last_result ?? "none"} />
         <StatusValue label="Cloud worker registered" value={String(status.cloud_worker_registered ?? false)} />
         <StatusValue label="Cloud worker status" value={status.cloud_worker_status ?? "unknown"} />
         <StatusValue label="Blockers" value={status.blockers.join("; ") || "none"} />
@@ -2759,6 +2768,12 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-service-install.ps1 -Command preview">
           Install preview
         </button>
+        <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-identity.ps1 -Command preview -WorkerId jerry-win-local-01">
+          Identity setup preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: identity apply requires I_UNDERSTAND_CONFIGURE_LOCAL_WORKER_IDENTITY_NO_TASK_EXECUTION">
+          Identity apply unavailable in Desktop
+        </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: apply requires I_UNDERSTAND_INSTALL_LOCAL_WORKER_SERVICE_NO_TASK_EXECUTION">
           Install apply unavailable in Desktop
         </button>
@@ -2771,8 +2786,14 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-preview">
           Heartbeat pairing preview
         </button>
+        <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-live-heartbeat.ps1 -Command preview">
+          Live heartbeat preview
+        </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: heartbeat apply requires I_UNDERSTAND_REGISTER_AND_HEARTBEAT_WORKER_ONLY_NO_TASK_CLAIM">
           Heartbeat apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: live heartbeat apply requires I_UNDERSTAND_REGISTER_AND_HEARTBEAT_WORKER_ONLY_NO_TASK_CLAIM">
+          Live heartbeat apply unavailable in Desktop
         </button>
         <button type="button" disabled aria-disabled="true" title="Read-only script: skybridge-worker-service-doctor.ps1">
           Doctor read-only

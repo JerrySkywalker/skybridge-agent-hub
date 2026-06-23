@@ -110,4 +110,9 @@ not add Codex or MATLAB execution and does not run the worker template runner
 against live cloud tasks. MATLAB execution remains deferred to a later
 reviewed golden-trial goal.
 
+MG331 activates the real local worker identity
+`jerry-win-local-01` and may send a live heartbeat-only registration to the
+cloud server. It does not make the Worker Template Runner live against cloud
+tasks, does not claim tasks, and does not start a loop.
+
 token_printed=false

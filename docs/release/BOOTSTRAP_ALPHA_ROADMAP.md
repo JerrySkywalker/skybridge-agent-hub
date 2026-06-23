@@ -114,7 +114,28 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Live deployment expected: no server runtime change; if the existing cloud
   auto-deploy runs after merge, verify parity through the existing path only.
 
-## MG331 MATLAB Experiment Golden Trial
+## MG331 Local Worker Identity Activation + Live Heartbeat
+
+- Objective: configure a real local Bootstrap Alpha worker identity and prove
+  live heartbeat-only registration against the deployed server.
+- Likely touched: worker identity PowerShell scripts, Desktop Worker Setup
+  panel, install docs, heartbeat fixture smokes, Bootstrap Alpha acceptance.
+- Acceptance criteria: missing worker id fails closed; exact-confirmed identity
+  apply writes only safe local metadata; live heartbeat preview creates no
+  server mutation; exact-confirmed live heartbeat registers and heartbeats the
+  worker only; Desktop shows identity and cloud worker status.
+- Implementation note: MG331 adds `skybridge-worker-identity.ps1`,
+  `skybridge-worker-live-heartbeat.ps1`, identity/live heartbeat smokes, and
+  Desktop identity/heartbeat status fields. Baseline worker id is
+  `jerry-win-local-01`.
+- Forbidden scope: live task claim, task execution, worker template runner live
+  apply, Codex execution, MATLAB execution, arbitrary shell, worker loop start,
+  unbounded run, PR creation, project-control unpause, deploy infrastructure
+  mutation.
+- Live deployment expected: no server runtime change; if the existing cloud
+  auto-deploy runs after merge, verify parity through the existing path only.
+
+## MG332 MATLAB Experiment Golden Trial
 
 - Objective: run a reviewed MATLAB parameter sweep golden path through the
   template model.
@@ -127,7 +148,7 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   background daemon expansion, automatic merge.
 - Live deployment expected: maybe, if the server must store golden-path state.
 
-## MG332 End-to-end Bootstrap Alpha Release
+## MG333 End-to-end Bootstrap Alpha Release
 
 - Objective: release the complete Bootstrap Alpha golden path.
 - Likely touched: release docs, server deploy scripts, Desktop package docs,

@@ -51,6 +51,26 @@ function Read-SkyBridgeSafeConfigValue {
   return $value
 }
 
+function Read-SkyBridgeSafeConfigText {
+  param([string]$Path, [string]$Key, [int]$MaxLength = 120)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  $text = Get-Content -Raw -LiteralPath $Path
+  $match = [regex]::Match($text, ("(?m)^\s*(?:\`$env:)?{0}\s*=\s*['""]?([^'""]+)" -f [regex]::Escape($Key)))
+  if (-not $match.Success) { return $null }
+  $value = $match.Groups[1].Value.Trim()
+  if ([string]::IsNullOrWhiteSpace($value) -or $value.Length -gt $MaxLength) { return $null }
+  if ($value -match "(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|token|secret|password|cookie") { return $null }
+  if ($value -notmatch "^[\p{L}\p{N} ._:@/\-]+$") { return $null }
+  return $value
+}
+
+function Read-SkyBridgeSafeConfigList {
+  param([string]$Path, [string]$Key)
+  $value = Read-SkyBridgeSafeConfigText -Path $Path -Key $Key -MaxLength 240
+  if ([string]::IsNullOrWhiteSpace($value)) { return @() }
+  @($value -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^[A-Za-z0-9_.:-]{1,40}$" })
+}
+
 function Read-SkyBridgeSafeApiBaseHost {
   param([string]$Path)
   $candidate = $env:SKYBRIDGE_API_BASE
@@ -157,6 +177,17 @@ if ([string]::IsNullOrWhiteSpace($configuredWorkerId)) {
 }
 $workerIdConfigured = -not [string]::IsNullOrWhiteSpace($configuredWorkerId)
 $workerId = if ($workerIdConfigured) { $configuredWorkerId } else { "local-windows-worker" }
+$configuredWorkerName = $env:SKYBRIDGE_WORKER_NAME
+if ([string]::IsNullOrWhiteSpace($configuredWorkerName)) {
+  $configuredWorkerName = Read-SkyBridgeSafeConfigText -Path $workerConfig -Key "SKYBRIDGE_WORKER_NAME"
+}
+$workerName = if (-not [string]::IsNullOrWhiteSpace($configuredWorkerName)) { $configuredWorkerName } elseif ($workerIdConfigured) { $workerId } else { "unconfigured-local-worker" }
+$configuredWorkerProvider = $env:SKYBRIDGE_WORKER_PROVIDER
+if ([string]::IsNullOrWhiteSpace($configuredWorkerProvider)) {
+  $configuredWorkerProvider = Read-SkyBridgeSafeConfigValue -Path $workerConfig -Key "SKYBRIDGE_WORKER_PROVIDER"
+}
+$workerProvider = if (-not [string]::IsNullOrWhiteSpace($configuredWorkerProvider)) { $configuredWorkerProvider } else { "local-windows" }
+$workerLabels = Read-SkyBridgeSafeConfigList -Path $workerConfig -Key "SKYBRIDGE_WORKER_LABELS"
 
 $repoRootConfigured = (
   -not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_REPO_ROOT) -or
@@ -179,6 +210,7 @@ $stateLastHeartbeatAt = if ($serviceState -and $serviceState.PSObject.Properties
 $stateCloudRegistered = $serviceState -and [bool]($serviceState.cloud_worker_registered)
 $stateCloudStatus = if ($serviceState -and $serviceState.PSObject.Properties.Name -contains "cloud_worker_status") { [string]$serviceState.cloud_worker_status } else { "unknown" }
 $stateInstallStrategy = if ($serviceState -and $serviceState.PSObject.Properties.Name -contains "install_strategy") { [string]$serviceState.install_strategy } else { "not_installed" }
+$stateLiveHeartbeatResult = if ($serviceState -and $serviceState.PSObject.Properties.Name -contains "last_live_heartbeat_result") { [string]$serviceState.last_live_heartbeat_result } else { "none" }
 
 $tools = [ordered]@{
   powershell = $true
@@ -211,7 +243,7 @@ if ([bool]$service.service_installed -and -not [bool]$service.service_running) {
 if (-not $apiBaseConfigured) { $blockers.Add("api_base_not_configured") | Out-Null }
 if (-not $tokenFilePresent) { $blockers.Add("worker_token_file_missing") | Out-Null }
 if (-not $repoRootDetected) { $blockers.Add("repo_root_not_detected") | Out-Null }
-if (-not $workerIdConfigured) { $warnings.Add("worker_id_defaulted") | Out-Null }
+if (-not $workerIdConfigured) { $blockers.Add("worker_id_not_configured") | Out-Null }
 if (-not $repoRootConfigured) { $warnings.Add("repo_root_detected_but_not_configured") | Out-Null }
 if (-not $serviceNameConfigured) { $warnings.Add("service_name_defaulted") | Out-Null }
 foreach ($requiredTool in @("powershell", "git", "node", "pnpm")) {
@@ -224,7 +256,9 @@ if (-not [string]::IsNullOrWhiteSpace([string]$service.warning)) { $warnings.Add
 if ($serviceState -and $serviceState.PSObject.Properties.Name -contains "state_read_error") { $warnings.Add([string]$serviceState.state_read_error) | Out-Null }
 
 $readinessStatus = if ($blockers.Count -gt 0) { "blocked" } elseif ($warnings.Count -gt 0) { "warning" } else { "ready" }
-$recommended = if (-not [bool]$service.service_installed) {
+$recommended = if (-not $workerIdConfigured) {
+  "run_worker_identity_preview"
+} elseif (-not [bool]$service.service_installed) {
   "run_install_preview"
 } elseif (-not $apiBaseConfigured) {
   "create_skybridge_api_base_config"
@@ -244,6 +278,10 @@ $report = [pscustomobject]@{
   schema = "skybridge.local_worker_service_status.v1"
   ok = $true
   worker_id = $workerId
+  worker_name = $workerName
+  worker_provider = $workerProvider
+  worker_labels = @($workerLabels)
+  worker_identity_status = if ($workerIdConfigured) { "configured" } else { "missing" }
   service_name = $ServiceName
   service_installed = [bool]$service.service_installed
   service_running = [bool]$service.service_running
@@ -255,8 +293,12 @@ $report = [pscustomobject]@{
   repair_preview_available = $true
   install_apply_available = $true
   repair_apply_available = $true
+  identity_setup_preview_available = $true
+  identity_apply_available = $true
   heartbeat_preview_available = $true
   heartbeat_apply_available = $true
+  live_heartbeat_preview_available = $true
+  live_heartbeat_apply_available = $true
   api_base_configured = [bool]$apiBaseConfigured
   api_base_host = if ([string]::IsNullOrWhiteSpace($apiBaseHost)) { $null } else { $apiBaseHost }
   token_file_present = [bool]$tokenFilePresent
@@ -271,6 +313,7 @@ $report = [pscustomobject]@{
   last_heartbeat_at = if ([string]::IsNullOrWhiteSpace($stateLastHeartbeatAt)) { $null } else { $stateLastHeartbeatAt }
   cloud_worker_registered = [bool]$stateCloudRegistered
   cloud_worker_status = $stateCloudStatus
+  live_heartbeat_last_result = $stateLiveHeartbeatResult
   powershell_available = [bool]$tools["powershell"]
   git_available = [bool]$tools["git"]
   gh_available = [bool]$tools["gh"]
@@ -287,6 +330,8 @@ $report = [pscustomobject]@{
     repair_apply = $true
     heartbeat_pairing = $true
     heartbeat_apply = $true
+    identity_setup = $true
+    live_heartbeat = $true
     task_claim = $false
     task_execute = $false
     template_runner = $false

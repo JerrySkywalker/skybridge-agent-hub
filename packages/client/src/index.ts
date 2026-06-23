@@ -1880,6 +1880,8 @@ export interface LocalWorkerServiceCapabilities {
   repair_apply?: boolean;
   heartbeat_pairing?: boolean;
   heartbeat_apply?: boolean;
+  identity_setup?: boolean;
+  live_heartbeat?: boolean;
   task_claim: false;
   task_execute: false;
   template_runner?: false;
@@ -1903,6 +1905,10 @@ export interface LocalWorkerServiceStatus {
   schema: "skybridge.local_worker_service_status.v1";
   ok: boolean;
   worker_id: string;
+  worker_name?: string;
+  worker_provider?: string;
+  worker_labels?: string[];
+  worker_identity_status?: string;
   service_name: string;
   service_installed: boolean;
   service_running: boolean;
@@ -1914,8 +1920,12 @@ export interface LocalWorkerServiceStatus {
   repair_preview_available: true;
   install_apply_available?: boolean;
   repair_apply_available?: boolean;
+  identity_setup_preview_available?: boolean;
+  identity_apply_available?: boolean;
   heartbeat_preview_available?: boolean;
   heartbeat_apply_available?: boolean;
+  live_heartbeat_preview_available?: boolean;
+  live_heartbeat_apply_available?: boolean;
   api_base_configured: boolean;
   api_base_host?: string | null;
   token_file_present: boolean;
@@ -1930,6 +1940,7 @@ export interface LocalWorkerServiceStatus {
   last_heartbeat_at?: string | null;
   cloud_worker_registered?: boolean;
   cloud_worker_status?: string;
+  live_heartbeat_last_result?: string;
   powershell_available: boolean;
   git_available: boolean;
   gh_available: boolean;
@@ -4338,6 +4349,10 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   schema: "skybridge.local_worker_service_status.v1",
   ok: true,
   worker_id: "local-windows-worker",
+  worker_name: "unconfigured-local-worker",
+  worker_provider: "local-windows",
+  worker_labels: [],
+  worker_identity_status: "missing",
   service_name: "SkyBridgeWorkerService",
   service_installed: false,
   service_running: false,
@@ -4349,8 +4364,12 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   repair_preview_available: true,
   install_apply_available: true,
   repair_apply_available: true,
+  identity_setup_preview_available: true,
+  identity_apply_available: true,
   heartbeat_preview_available: true,
   heartbeat_apply_available: true,
+  live_heartbeat_preview_available: true,
+  live_heartbeat_apply_available: true,
   api_base_configured: false,
   api_base_host: null,
   token_file_present: false,
@@ -4365,6 +4384,7 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   last_heartbeat_at: null,
   cloud_worker_registered: false,
   cloud_worker_status: "unknown",
+  live_heartbeat_last_result: "none",
   powershell_available: true,
   git_available: true,
   gh_available: false,
@@ -4381,6 +4401,8 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
     repair_apply: true,
     heartbeat_pairing: true,
     heartbeat_apply: true,
+    identity_setup: true,
+    live_heartbeat: true,
     task_claim: false,
     task_execute: false,
     template_runner: false,
@@ -4400,7 +4422,7 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
     token_printed: false,
   },
   readiness_status: "blocked",
-  blockers: ["service_not_installed", "api_base_not_configured", "worker_token_file_missing"],
+  blockers: ["service_not_installed", "api_base_not_configured", "worker_token_file_missing", "worker_id_not_configured"],
   warnings: ["gh_missing_pr_operations_disabled", "codex_missing_codex_templates_disabled", "matlab_missing_matlab_templates_disabled"],
   recommended_next_action: "run_install_preview",
   claim_enabled: false,

@@ -14,6 +14,7 @@ worker execution loop.
   visibility for Bootstrap Alpha;
 - local worker service install/repair apply with exact confirmation and
   heartbeat-only pairing drill;
+- local worker identity activation and live heartbeat-only registration;
 - chat-to-task draft target;
 - task template registry target;
 - reviewed draft submit target;
@@ -71,6 +72,15 @@ server after exact confirmation. It does not claim tasks, run the worker
 template runner against live cloud, run Codex, run MATLAB, start a worker loop,
 send notifications, expose arbitrary shell, run unbounded, create PRs, requeue
 old tasks, unpause project control, or mutate production infrastructure.
+
+MG331 covers Local Worker Identity Activation and Live Heartbeat only.
+Identity apply may write safe local worker metadata for
+`worker_id=jerry-win-local-01`. Live heartbeat apply may register and heartbeat
+that worker against the deployed server after exact confirmation. It does not
+claim live cloud tasks, execute tasks, run Codex, run MATLAB, start a worker
+template runner, start a loop, send notifications, expose arbitrary shell, run
+unbounded, create PRs, requeue old tasks, unpause project control, or mutate
+production infrastructure.
 
 ## Release Principle
 

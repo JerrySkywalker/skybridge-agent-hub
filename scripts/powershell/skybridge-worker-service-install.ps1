@@ -138,6 +138,17 @@ function Write-ConfigLineIfMissing {
   return $true
 }
 
+function Read-ConfigValue {
+  param([string]$Path, [string]$Key)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+  $text = Get-Content -Raw -LiteralPath $Path
+  $match = [regex]::Match($text, ("(?m)^\s*(?:\`$env:)?{0}\s*=\s*['""]?([^'""]+)" -f [regex]::Escape($Key)))
+  if (-not $match.Success) { return $null }
+  $value = $match.Groups[1].Value.Trim()
+  if ($value -notmatch "^[A-Za-z0-9_.:@-]{1,80}$") { return $null }
+  return $value
+}
+
 function Write-WorkerHeartbeatWrapper {
   param([string]$Path, [string]$ResolvedRepo, [string]$ResolvedHome)
   $heartbeatScript = Join-Path $ResolvedRepo "scripts\powershell\skybridge-worker-heartbeat-pairing-drill.ps1"
@@ -159,6 +170,15 @@ $skybridgeDir = Join-Path $resolvedHome ".skybridge"
 $stateDir = Join-Path $skybridgeDir "state"
 $statePath = Join-Path $stateDir "worker-service.json"
 $heartbeatScriptPath = Join-Path $skybridgeDir "worker-heartbeat.ps1"
+$workerConfigPath = Join-Path $skybridgeDir "worker.env.ps1"
+if ([string]::IsNullOrWhiteSpace($WorkerId) -or $WorkerId -eq "local-windows-worker") {
+  if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_WORKER_ID)) {
+    $WorkerId = $env:SKYBRIDGE_WORKER_ID
+  } else {
+    $configuredWorkerId = Read-ConfigValue -Path $workerConfigPath -Key "SKYBRIDGE_WORKER_ID"
+    if (-not [string]::IsNullOrWhiteSpace($configuredWorkerId)) { $WorkerId = $configuredWorkerId }
+  }
+}
 $status = Invoke-WorkerServiceStatus -ResolvedHome $resolvedHome -ResolvedRepo $resolvedRepo
 
 $planned = New-Object System.Collections.Generic.List[string]
