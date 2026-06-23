@@ -24,6 +24,11 @@ docs/report drafts now use registry metadata for `template_id`, `runner_id`,
 allowed paths, blocked paths, validation rules, risk class, and evidence
 schema. The planner remains deterministic and preview-only.
 
+MG328 consumes the same draft preview for reviewed submit. The planner still
+does not create server records by itself; the operator must request submit
+preview and then provide exact confirmation before the server creates queued
+task or draft campaign records.
+
 ## Draft Schemas
 
 The shared preview contracts are:
@@ -50,6 +55,10 @@ These flags stay false in MG326:
 - `matlab_run_called=false`
 - `arbitrary_shell_enabled=false`
 - `token_printed=false`
+
+MG328 keeps these same execution flags false after submit. Only
+`task_created` or `campaign_created` may become true, and only after exact
+operator confirmation through the reviewed submit path.
 
 ## Clarifying Questions
 

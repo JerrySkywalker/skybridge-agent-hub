@@ -1,5 +1,21 @@
 # Progress Log
 
+## 2026-06-23 Mega Goal 328 Draft Review And Submit To Server
+
+- Added shared reviewed submit contracts: `skybridge.draft_review.v1`,
+  `skybridge.draft_submit_preview.v1`, and
+  `skybridge.draft_submit_result.v1`.
+- Added server `POST /v1/drafts/submit-preview` and `POST /v1/drafts/submit`.
+  Preview creates nothing; confirmed submit requires exact confirmation and
+  creates queued task or non-running draft campaign records only.
+- Added `skybridge-draft-submit.ps1` plus focused submit smokes for preview,
+  server task submit, MATLAB campaign submit, and Desktop fixture coverage.
+- Updated Desktop Chat-to-Task with a Draft Review + Submit card, submit
+  preview state, exact confirmation, result ids, and MG329 worker-runner hold.
+- Kept task claim, Codex execution, MATLAB execution, worker loop start,
+  arbitrary shell, project-control unpause, raw prompt persistence, raw
+  response persistence, and token printing disabled.
+
 ## 2026-06-23 Mega Goal 327 Task Template Registry
 
 - Added the shared Bootstrap Alpha task template registry contract:

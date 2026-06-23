@@ -11,6 +11,7 @@ $requiredDocs = @(
   "docs/product/TASK_TEMPLATE_MODEL.md",
   "docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md",
   "docs/product/TASK_TEMPLATE_REGISTRY.md",
+  "docs/product/DRAFT_REVIEW_AND_SUBMIT.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -26,6 +27,7 @@ $requiredScripts = @{
   worker_service_repair_preview = "scripts/powershell/skybridge-worker-service-repair-preview.ps1"
   chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
   task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
+  draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
 }
 
 $componentPaths = @{
@@ -104,7 +106,11 @@ $requiredPackageScripts = @(
   "smoke:chat-to-task-matlab-example",
   "smoke:task-template-registry",
   "smoke:task-template-registry-matlab",
-  "smoke:desktop-task-template-registry"
+  "smoke:desktop-task-template-registry",
+  "smoke:draft-submit-preview",
+  "smoke:draft-submit-server",
+  "smoke:draft-submit-matlab-campaign",
+  "smoke:desktop-draft-review-submit"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -138,6 +144,7 @@ $workerSupportPresent = [bool](@($workerResults | Where-Object { $_.exists }).Co
 $desktopWorkerServiceManagerPresent = $false
 $desktopChatToTaskPanelPresent = $false
 $desktopTaskTemplateRegistryPanelPresent = $false
+$desktopDraftReviewSubmitPanelPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -153,7 +160,7 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("skybridge.task_draft_preview.v1") -and
     $desktopSource -match [regex]::Escape("task_created=false") -and
     $desktopSource -match [regex]::Escape("execution_started=false; codex_run_called=false; matlab_run_called=false; token_printed=false") -and
-    $desktopSource -match [regex]::Escape("Review and Submit (MG328 future work)")
+    $desktopSource -match [regex]::Escape("Draft Review + Submit")
   )
   $desktopTaskTemplateRegistryPanelPresent = (
     $desktopSource -match [regex]::Escape("Bootstrap Alpha Task Templates") -and
@@ -161,6 +168,19 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("execution_supported=false") -and
     $desktopSource -match [regex]::Escape("task_creation_supported=false; campaign_creation_supported=false; claim_supported=false") -and
     $desktopSource -match [regex]::Escape("codex_run_supported=false; matlab_run_supported=false; arbitrary_shell_enabled=false; token_printed=false")
+  )
+  $desktopDraftReviewSubmitPanelPresent = (
+    $desktopSource -match [regex]::Escape("Draft Review + Submit") -and
+    $desktopSource -match [regex]::Escape("Submit preview") -and
+    $desktopSource -match [regex]::Escape("Confirm submit") -and
+    $desktopSource -match [regex]::Escape("DRAFT_SUBMIT_CONFIRMATION_TEXT") -and
+    $desktopSource -match [regex]::Escape("submitPreview.schema") -and
+    $desktopSource -match [regex]::Escape("submitResult.schema") -and
+    $desktopSource -match [regex]::Escape("Run with Worker (MG329 future work)") -and
+    $desktopSource -match [regex]::Escape("claim_created=false") -and
+    $desktopSource -match [regex]::Escape("execution_started=false") -and
+    $desktopSource -match [regex]::Escape("worker_loop_started=false") -and
+    $desktopSource -match [regex]::Escape("token_printed=false")
   )
 }
 
@@ -173,6 +193,9 @@ $chatToTaskError = $null
 $taskTemplateRegistryContract = $null
 $taskTemplateRegistryContractOk = $false
 $taskTemplateRegistryError = $null
+$draftSubmitStatusContract = $null
+$draftSubmitStatusContractOk = $false
+$draftSubmitStatusError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -252,6 +275,29 @@ try {
       [bool]$taskTemplateRegistryContract.token_printed -eq $false
     )
   }
+  $draftSubmitScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-draft-submit.ps1"
+  if (Test-Path -LiteralPath $draftSubmitScriptPath -PathType Leaf) {
+    $rawSubmit = & pwsh -NoProfile -ExecutionPolicy Bypass -File $draftSubmitScriptPath -Command status -Json
+    $submitText = ($rawSubmit | Out-String).Trim()
+    Assert-NoUnsafeText $submitText
+    $draftSubmitStatusContract = $submitText | ConvertFrom-Json
+    $draftSubmitStatusContractOk = (
+      [string]$draftSubmitStatusContract.schema -eq "skybridge.draft_submit_status.v1" -and
+      [bool]$draftSubmitStatusContract.confirmation_required -eq $true -and
+      [bool]$draftSubmitStatusContract.preview_default -eq $true -and
+      [bool]$draftSubmitStatusContract.task_created -eq $false -and
+      [bool]$draftSubmitStatusContract.campaign_created -eq $false -and
+      [bool]$draftSubmitStatusContract.claim_created -eq $false -and
+      [bool]$draftSubmitStatusContract.execution_started -eq $false -and
+      [bool]$draftSubmitStatusContract.codex_run_called -eq $false -and
+      [bool]$draftSubmitStatusContract.matlab_run_called -eq $false -and
+      [bool]$draftSubmitStatusContract.worker_loop_started -eq $false -and
+      [bool]$draftSubmitStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$draftSubmitStatusContract.raw_prompt_persisted -eq $false -and
+      [bool]$draftSubmitStatusContract.raw_response_persisted -eq $false -and
+      [bool]$draftSubmitStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -261,6 +307,9 @@ try {
   }
   if (-not $taskTemplateRegistryContractOk) {
     $taskTemplateRegistryError = "task_template_registry_contract_failed"
+  }
+  if (-not $draftSubmitStatusContractOk) {
+    $draftSubmitStatusError = "draft_submit_status_contract_failed"
   }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
@@ -276,9 +325,11 @@ $ok = (
   $desktopWorkerServiceManagerPresent -and
   $desktopChatToTaskPanelPresent -and
   $desktopTaskTemplateRegistryPanelPresent -and
+  $desktopDraftReviewSubmitPanelPresent -and
   $workerStatusContractOk -and
   $chatToTaskContractOk -and
-  $taskTemplateRegistryContractOk
+  $taskTemplateRegistryContractOk -and
+  $draftSubmitStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -293,6 +344,7 @@ $report = [pscustomobject]@{
   desktop_worker_service_manager_present = $desktopWorkerServiceManagerPresent
   desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
+  desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -340,6 +392,26 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   task_template_registry_error = $taskTemplateRegistryError
+  draft_submit_status_contract_ok = $draftSubmitStatusContractOk
+  draft_submit_status_contract = if ($draftSubmitStatusContract) {
+    [pscustomobject]@{
+      schema = $draftSubmitStatusContract.schema
+      confirmation_required = $draftSubmitStatusContract.confirmation_required
+      preview_default = $draftSubmitStatusContract.preview_default
+      task_created = $draftSubmitStatusContract.task_created
+      campaign_created = $draftSubmitStatusContract.campaign_created
+      claim_created = $draftSubmitStatusContract.claim_created
+      execution_started = $draftSubmitStatusContract.execution_started
+      codex_run_called = $draftSubmitStatusContract.codex_run_called
+      matlab_run_called = $draftSubmitStatusContract.matlab_run_called
+      worker_loop_started = $draftSubmitStatusContract.worker_loop_started
+      arbitrary_shell_enabled = $draftSubmitStatusContract.arbitrary_shell_enabled
+      raw_prompt_persisted = $draftSubmitStatusContract.raw_prompt_persisted
+      raw_response_persisted = $draftSubmitStatusContract.raw_response_persisted
+      token_printed = $draftSubmitStatusContract.token_printed
+    }
+  } else { $null }
+  draft_submit_status_error = $draftSubmitStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

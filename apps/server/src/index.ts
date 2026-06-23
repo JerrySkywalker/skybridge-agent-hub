@@ -8,11 +8,14 @@ import { nanoid } from "nanoid";
 import { ZodError } from "zod";
 import {
   createEvent,
+  CampaignDraftSchema,
+  getTaskTemplate,
   listAdapterCapabilities,
   isNotificationTrigger,
   parseEvent,
   SOURCE_CAPABILITIES,
   SharedRedactionRules,
+  TaskDraftSchema,
   fixtureOperatorApprovalGate,
   fixtureOperatorApprovalRequest,
   fixtureOperatorApprovalState,
@@ -47,7 +50,10 @@ import {
   type TaskRisk,
   type TaskSource,
   type TaskStatus,
+  type CampaignDraft,
   type PlannerDecisionAction,
+  type TaskDraft,
+  type TaskTemplate,
   type Worker,
   type WorkerCapability,
   type WorkerStatus,
@@ -95,7 +101,9 @@ interface CreateServerOptions {
   logger?: boolean;
 }
 
-const ROUTE_SET_VERSION = "2026-06-17.goal-301-cloud-deploy-parity";
+const ROUTE_SET_VERSION = "2026-06-17.goal-301-cloud-deploy-parity.goal-328-draft-submit";
+const DRAFT_SUBMIT_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_QUEUED_DRAFT_RECORDS_ONLY_NO_EXECUTION";
 
 interface ServerVersionMetadata {
   schema: "skybridge.server_version.v1";
@@ -1518,6 +1526,33 @@ export async function createServer(
 
   app.post<{ Params: { campaignId: string; stepId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/steps/:stepId/attach-execution-evidence", { preHandler: requireWorkerAuth }, async (request, reply) => {
     return attachCampaignEvidence(request.params.campaignId, request.params.stepId, request.body, store, addStoredEvent, reply);
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/drafts/submit-preview", async (request, reply) => {
+    const preview = buildDraftSubmitPreview(request.body, store);
+    return reply.code(preview.ok ? 200 : preview.statusCode).send(preview.response);
+  });
+
+  app.post<{ Body: Record<string, unknown> }>("/v1/drafts/submit", async (request, reply) => {
+    const preview = buildDraftSubmitPreview(request.body, store);
+    if (!preview.ok) return reply.code(preview.statusCode).send(preview.response);
+    if (
+      request.body.confirm_submit !== true ||
+      safeString(request.body.confirmation_text) !== DRAFT_SUBMIT_CONFIRMATION_TEXT
+    ) {
+      return reply.code(400).send(
+        draftSubmitEnvelope("skybridge.draft_submit_result.v1", preview.context, {
+          ok: false,
+          review_status: "blocked",
+          review_reason: "missing_exact_confirmation",
+          task_created: false,
+          campaign_created: false,
+          next_safe_action: "enter_exact_confirmation_text_before_submit",
+        }),
+      );
+    }
+    const result = await submitReviewedDraft(preview.context, store, addStoredEvent);
+    return reply.code(result.statusCode).send(result.response);
   });
 
   app.post<{ Body: Record<string, unknown> }>("/v1/tasks", async (request, reply) => {
@@ -4692,6 +4727,538 @@ function safePlannerAdapterAuditMetadata(input: unknown): PlannerAdapterAuditMet
     raw_response_included: false,
     secrets_included: false,
   };
+}
+
+type DraftSubmitDraft = TaskDraft | CampaignDraft;
+
+interface DraftSubmitContext {
+  draft: DraftSubmitDraft;
+  template: TaskTemplate;
+  submittedBy: string;
+  allowedPaths: string[];
+  blockedPaths: string[];
+  validation: string[];
+  requiredCapabilities: string[];
+}
+
+type DraftSubmitPreviewBuild =
+  | {
+      ok: true;
+      statusCode: 200;
+      context: DraftSubmitContext;
+      response: Record<string, unknown>;
+    }
+  | {
+      ok: false;
+      statusCode: number;
+      context: DraftSubmitContext;
+      response: Record<string, unknown>;
+    };
+
+function extractDraftSubmitDraft(input: unknown): DraftSubmitDraft | undefined {
+  const record = safeRecord(input);
+  if (!record) return undefined;
+  const preview = safeRecord(record.preview);
+  const candidate = safeRecord(record.draft) ?? safeRecord(preview?.draft) ?? record;
+  if (!candidate) return undefined;
+  if (candidate.draft_type === "task") {
+    const parsed = TaskDraftSchema.safeParse(candidate);
+    return parsed.success ? parsed.data : undefined;
+  }
+  if (candidate.draft_type === "campaign") {
+    const parsed = CampaignDraftSchema.safeParse(candidate);
+    return parsed.success ? parsed.data : undefined;
+  }
+  return undefined;
+}
+
+function emptyDraftSubmitContext(input: Record<string, unknown> | undefined): DraftSubmitContext {
+  const draftType = safeString(input?.draft_type) === "campaign" ? "campaign" : "task";
+  const fallbackDraft = {
+    schema: draftType === "campaign" ? "skybridge.campaign_draft.v1" : "skybridge.task_draft.v1",
+    draft_id: safeString(input?.draft_id) ?? "unknown_draft",
+    draft_type: draftType,
+    template_id: safeString(input?.template_id) ?? "unknown_template",
+    project_id: safeString(input?.project_id) ?? "unknown_project",
+    title: safeString(input?.title) ?? "Unknown draft",
+    summary: safeString(input?.summary) ?? "Draft validation failed before safe mapping.",
+    risk: safeString(input?.risk) ?? "blocked",
+    required_capabilities: [],
+    allowed_paths: [],
+    blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+    validation: ["Fix draft validation errors before submit."],
+    runner_id: safeString(input?.runner_id) ?? "not-selected",
+    evidence_schema: [],
+    planner_id: "unknown-planner",
+    input_preview: "not_persisted",
+    input_hash: "unknown_input_hash",
+    inputs: {},
+    raw_prompt_persisted: false,
+    raw_response_persisted: false,
+    task_created: false,
+    campaign_created: false,
+    claim_created: false,
+    execution_started: false,
+    codex_run_called: false,
+    matlab_run_called: false,
+    arbitrary_shell_enabled: false,
+    token_printed: false,
+  } as DraftSubmitDraft;
+  const fallbackTemplate = {
+    schema: "skybridge.task_template.v1",
+    template_id: fallbackDraft.template_id,
+    version: "unknown",
+    title: "Unknown template",
+    description: "Template validation failed.",
+    category: "blocked",
+    draft_type: draftType,
+    risk_class: "high",
+    required_capabilities: [],
+    optional_capabilities: [],
+    input_schema_summary: ["blocked"],
+    allowed_paths: [],
+    blocked_paths: fallbackDraft.blocked_paths,
+    validation_rules: [],
+    runner_id: fallbackDraft.runner_id,
+    evidence_schema: [],
+    output_paths: [],
+    execution_supported: false,
+    draft_only: true,
+    task_creation_supported: false,
+    campaign_creation_supported: false,
+    claim_supported: false,
+    codex_run_supported: false,
+    matlab_run_supported: false,
+    arbitrary_shell_enabled: false,
+    token_printed: false,
+  } as TaskTemplate;
+  return {
+    draft: fallbackDraft,
+    template: fallbackTemplate,
+    submittedBy: safeString(input?.submitted_by) ?? "local-operator",
+    allowedPaths: [],
+    blockedPaths: fallbackDraft.blocked_paths,
+    validation: fallbackDraft.validation,
+    requiredCapabilities: [],
+  };
+}
+
+function draftSubmitEnvelope(
+  schema: "skybridge.draft_review.v1" | "skybridge.draft_submit_preview.v1" | "skybridge.draft_submit_result.v1",
+  context: DraftSubmitContext,
+  overrides: Partial<{
+    ok: boolean;
+    review_status: "ready_for_submit_preview" | "ready_for_confirmation" | "submitted" | "blocked";
+    review_reason: string;
+    created_task_id: string;
+    created_campaign_id: string;
+    created_campaign_step_ids: string[];
+    task_created: boolean;
+    campaign_created: boolean;
+    next_safe_action: string;
+  }> = {},
+): Record<string, unknown> {
+  return {
+    schema,
+    ok: overrides.ok ?? true,
+    draft_id: context.draft.draft_id,
+    draft_type: context.draft.draft_type,
+    template_id: context.draft.template_id,
+    project_id: context.draft.project_id,
+    title: context.draft.title,
+    risk: context.template.risk_class,
+    required_capabilities: context.requiredCapabilities,
+    allowed_paths: context.allowedPaths,
+    blocked_paths: context.blockedPaths,
+    runner_id: context.template.runner_id,
+    evidence_schema: context.template.evidence_schema,
+    review_status: overrides.review_status ?? "ready_for_confirmation",
+    review_reason: overrides.review_reason ?? "draft_validated_create_queued_records_only_no_execution",
+    submitted_by: context.submittedBy,
+    ...(overrides.created_task_id ? { created_task_id: overrides.created_task_id } : {}),
+    ...(overrides.created_campaign_id ? { created_campaign_id: overrides.created_campaign_id } : {}),
+    ...(overrides.created_campaign_step_ids ? { created_campaign_step_ids: overrides.created_campaign_step_ids } : {}),
+    task_created: overrides.task_created ?? false,
+    campaign_created: overrides.campaign_created ?? false,
+    claim_created: false,
+    execution_started: false,
+    codex_run_called: false,
+    matlab_run_called: false,
+    worker_loop_started: false,
+    arbitrary_shell_enabled: false,
+    project_control_unpause: false,
+    raw_prompt_persisted: false,
+    raw_response_persisted: false,
+    token_printed: false,
+    next_safe_action: overrides.next_safe_action ?? "confirm_submit_or_hold_for_review",
+  };
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  const rightSet = new Set(right);
+  return left.length === right.length && left.every((item) => rightSet.has(item));
+}
+
+function allInSet(values: string[], allowed: string[]): boolean {
+  const allowedSet = new Set(allowed);
+  return values.every((value) => allowedSet.has(value));
+}
+
+function validationSummaries(template: TaskTemplate): string[] {
+  return template.validation_rules.map((rule) => rule.summary);
+}
+
+function draftHasReportRequested(draft: DraftSubmitDraft): boolean {
+  const inputs = safeRecord(draft.inputs) ?? {};
+  const outputs = safeStringArray(inputs.outputs) ?? [];
+  return outputs.some((item) => /report|报告/i.test(item)) || /report|报告/i.test(draft.title) || /report|报告/i.test(draft.summary);
+}
+
+function buildDraftSubmitPreview(input: Record<string, unknown> | undefined, store: EventStore): DraftSubmitPreviewBuild {
+  const record = safeRecord(input);
+  const draft = extractDraftSubmitDraft(input);
+  const context = draft
+    ? {
+        draft,
+        template: (getTaskTemplate(draft.template_id) as TaskTemplate | undefined) ?? emptyDraftSubmitContext(draft as unknown as Record<string, unknown>).template,
+        submittedBy: safeString(record?.submitted_by) ?? "local-operator",
+        allowedPaths: draft.allowed_paths,
+        blockedPaths: draft.blocked_paths,
+        validation: draft.validation,
+        requiredCapabilities: draft.required_capabilities,
+      }
+    : emptyDraftSubmitContext(record);
+  const blockers: string[] = [];
+  const unsafePayload = findUnsafeControlPlanePayload(input ?? {});
+  blockers.push(...unsafePayload);
+  if (!draft) blockers.push("invalid_or_missing_draft");
+  if (draft?.draft_type !== "task" && draft?.draft_type !== "campaign") blockers.push("unsupported_draft_type");
+  const template = draft ? getTaskTemplate(draft.template_id) : undefined;
+  if (draft && !template) blockers.push("unknown_template_id");
+  if (draft && ["blocked-request.v1", "needs-clarification.v1"].includes(draft.template_id)) blockers.push("draft_not_submittable");
+  if (draft && !store.getProject(draft.project_id)) blockers.push("project_not_found");
+  const previewBlockers = safeStringArray(record?.blockers) ?? [];
+  if (previewBlockers.length > 0) blockers.push(...previewBlockers);
+  if (record?.unsafe_request_detected === true) blockers.push("unsafe_request_detected");
+
+  if (draft) {
+    for (const [field, value] of Object.entries({
+      raw_prompt_persisted: draft.raw_prompt_persisted,
+      raw_response_persisted: draft.raw_response_persisted,
+      task_created: draft.task_created,
+      campaign_created: draft.campaign_created,
+      claim_created: draft.claim_created,
+      execution_started: draft.execution_started,
+      codex_run_called: draft.codex_run_called,
+      matlab_run_called: draft.matlab_run_called,
+      arbitrary_shell_enabled: draft.arbitrary_shell_enabled,
+      token_printed: draft.token_printed,
+    })) {
+      if (value !== false) blockers.push(`${field}_must_be_false`);
+    }
+  }
+
+  if (draft && template) {
+    context.template = template;
+    context.allowedPaths = draft.allowed_paths.filter((path) => template.allowed_paths.includes(path));
+    context.blockedPaths = [...new Set([...template.blocked_paths, ...draft.blocked_paths])];
+    context.validation = validationSummaries(template);
+    context.requiredCapabilities = [
+      ...new Set(draft.required_capabilities.filter((capability) =>
+        [...template.required_capabilities, ...template.optional_capabilities].includes(capability)
+      )),
+    ];
+    if (template.draft_type !== draft.draft_type) blockers.push("template_draft_type_mismatch");
+    if (draft.runner_id !== template.runner_id) blockers.push("runner_id_mismatch");
+    if (!sameStringSet(draft.evidence_schema, template.evidence_schema)) blockers.push("evidence_schema_mismatch");
+    if (!allInSet(template.required_capabilities, draft.required_capabilities)) blockers.push("missing_required_template_capability");
+    if (!allInSet(draft.allowed_paths, template.allowed_paths)) blockers.push("allowed_paths_outside_template_policy");
+    if (!allInSet(template.blocked_paths, draft.blocked_paths)) blockers.push("blocked_paths_missing_template_policy");
+    if (template.execution_supported !== false || template.claim_supported !== false || template.codex_run_supported !== false || template.matlab_run_supported !== false || template.arbitrary_shell_enabled !== false) {
+      blockers.push("template_forbidden_execution_flag_enabled");
+    }
+  }
+
+  const uniqueBlockers = [...new Set(blockers)];
+  if (uniqueBlockers.length > 0) {
+    const response = {
+      ...draftSubmitEnvelope("skybridge.draft_submit_preview.v1", context, {
+        ok: false,
+        review_status: "blocked",
+        review_reason: uniqueBlockers.join(";"),
+        next_safe_action: uniqueBlockers.includes("project_not_found")
+          ? "create_or_select_existing_project_before_submit"
+          : "fix_or_reject_draft_before_submit",
+      }),
+      blockers: uniqueBlockers,
+    };
+    return {
+      ok: false,
+      statusCode: uniqueBlockers.includes("project_not_found") ? 404 : uniqueBlockers.includes("unknown_template_id") ? 400 : 409,
+      context,
+      response,
+    };
+  }
+
+  return {
+    ok: true,
+    statusCode: 200,
+    context,
+    response: draftSubmitEnvelope("skybridge.draft_submit_preview.v1", context),
+  };
+}
+
+async function submitReviewedDraft(
+  context: DraftSubmitContext,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+): Promise<{ statusCode: number; response: Record<string, unknown> }> {
+  if (context.draft.draft_type === "task") {
+    return submitTaskDraft(context, store, addStoredEvent);
+  }
+  return submitCampaignDraft(context, store, addStoredEvent);
+}
+
+async function submitTaskDraft(
+  context: DraftSubmitContext,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+): Promise<{ statusCode: number; response: Record<string, unknown> }> {
+  const draft = context.draft;
+  const now = new Date().toISOString();
+  const suffix = draft.input_hash.slice(0, 12);
+  const taskId = `draft_task_${suffix}`;
+  if (store.getTask(taskId)) {
+    return {
+      statusCode: 409,
+      response: draftSubmitEnvelope("skybridge.draft_submit_result.v1", context, {
+        ok: false,
+        review_status: "blocked",
+        review_reason: "draft_task_already_exists",
+        next_safe_action: "review_existing_draft_task_or_change_draft_id",
+      }),
+    };
+  }
+  const task: StoredTask = {
+    task_id: taskId,
+    project_id: draft.project_id,
+    title: draft.title,
+    body: `Draft review submission for ${draft.template_id}. ${draft.summary}`,
+    prompt_summary: draft.summary,
+    status: "queued",
+    risk: context.template.risk_class as TaskRisk,
+    source: "manual",
+    task_type: context.template.category,
+    allowed_paths: context.allowedPaths,
+    blocked_paths: context.blockedPaths,
+    validation: context.validation,
+    required_capabilities: context.requiredCapabilities,
+    planner_metadata: {
+      adapter: draft.planner_id,
+      decision: "continue",
+      reason: "draft_review_submit_queued_only_no_execution",
+      task_type: context.template.category,
+      allowed_paths: context.allowedPaths,
+      blocked_paths: context.blockedPaths,
+      validation: context.validation,
+      expected_files: context.allowedPaths,
+      expected_outputs: context.template.output_paths,
+      stop_criteria_status: ["hold_for_mg329_worker_runner"],
+      source_run_id: draft.draft_id,
+      created_at: now,
+      raw_response_included: false,
+      secrets_included: false,
+    },
+    created_at: now,
+    updated_at: now,
+  };
+  await store.upsertTask(task);
+  await recordTaskEvent(task, "task.created", undefined, "Draft reviewed and submitted as queued task.", addStoredEvent, store, {
+    source: "draft_review",
+    template_id: context.template.template_id,
+    runner_id: context.template.runner_id,
+    evidence_schema: context.template.evidence_schema,
+    raw_prompt_persisted: false,
+    raw_response_persisted: false,
+    claim_created: false,
+    execution_started: false,
+    token_printed: false,
+  });
+  await recordDraftSubmitAudit(context, "draft.submit.task", taskId, store);
+  return {
+    statusCode: 201,
+    response: draftSubmitEnvelope("skybridge.draft_submit_result.v1", context, {
+      review_status: "submitted",
+      review_reason: "queued_task_created_no_execution",
+      created_task_id: task.task_id,
+      task_created: true,
+      campaign_created: false,
+      next_safe_action: "hold_for_mg329_worker_runner",
+    }),
+  };
+}
+
+function campaignStepDefinitionSlugs(draft: DraftSubmitDraft): string[] {
+  const steps = [
+    "prepare-parameter-grid",
+    "run-matlab-sweep",
+    "aggregate-results",
+  ];
+  if (draftHasReportRequested(draft) || draft.required_capabilities.includes("codex")) {
+    steps.push("generate-analysis-report");
+  }
+  steps.push("hold-for-operator-review");
+  return steps;
+}
+
+function titleFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+async function submitCampaignDraft(
+  context: DraftSubmitContext,
+  store: EventStore,
+  addStoredEvent: (event: StoredEvent) => Promise<void>,
+): Promise<{ statusCode: number; response: Record<string, unknown> }> {
+  const draft = context.draft;
+  const now = new Date().toISOString();
+  const suffix = draft.input_hash.slice(0, 12);
+  const campaignId = `draft_campaign_${suffix}`;
+  if (store.getCampaign(campaignId)) {
+    return {
+      statusCode: 409,
+      response: draftSubmitEnvelope("skybridge.draft_submit_result.v1", context, {
+        ok: false,
+        review_status: "blocked",
+        review_reason: "draft_campaign_already_exists",
+        next_safe_action: "review_existing_draft_campaign_or_change_draft_id",
+      }),
+    };
+  }
+  const stepSlugs = campaignStepDefinitionSlugs(draft);
+  const steps: StoredCampaignStep[] = stepSlugs.map((slug, index) => ({
+    campaign_step_id: `${campaignId}:${slug}`,
+    campaign_id: campaignId,
+    project_id: draft.project_id,
+    goal_id: slug,
+    title: titleFromSlug(slug),
+    order: index + 1,
+    status: index === 0 ? "ready" : "pending",
+    dependencies: index === 0 ? [] : [stepSlugs[index - 1]!],
+    metadata: {
+      source: "draft_review",
+      draft_id: draft.draft_id,
+      template_id: context.template.template_id,
+      runner_id: context.template.runner_id,
+      evidence_schema: context.template.evidence_schema,
+      allowed_paths: context.allowedPaths,
+      blocked_paths: context.blockedPaths,
+      validation: context.validation,
+      draft_submission_only: true,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      token_printed: false,
+    },
+    advance_gate: {
+      requires_human_approval: true,
+      requires_clean_worktree: true,
+      requires_no_active_tasks: true,
+      requires_no_stale_leases: true,
+      allow_project_control_running: false,
+    },
+    evidence_summary: {
+      summary: "Draft submission metadata only; worker runner deferred to MG329.",
+      created_at: now,
+    },
+    linked_task_ids: [],
+    linked_pr_urls: [],
+    created_at: now,
+    updated_at: now,
+  }));
+  const campaign: StoredCampaign = {
+    campaign_id: campaignId,
+    project_id: draft.project_id,
+    title: draft.title,
+    description: `Draft review submission for ${draft.template_id}. ${draft.summary}`,
+    source: "draft_review",
+    status: "draft",
+    current_step_id: steps[0]?.campaign_step_id,
+    created_at: now,
+    updated_at: now,
+    created_by: context.submittedBy,
+    safety_policy: {
+      queued_only: true,
+      execution_started: false,
+      claim_created: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      worker_loop_started: false,
+      project_control_unpause: false,
+      token_printed: false,
+    },
+    metadata: {
+      draft_id: draft.draft_id,
+      template_id: context.template.template_id,
+      runner_id: context.template.runner_id,
+      evidence_schema: context.template.evidence_schema,
+      allowed_paths: context.allowedPaths,
+      blocked_paths: context.blockedPaths,
+      validation: context.validation,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      token_printed: false,
+    },
+  };
+  await store.upsertCampaign(campaign);
+  for (const step of steps) await store.upsertCampaignStep(step);
+  await recordCampaignEvent(campaign, "campaign.created", "Draft reviewed and submitted as draft campaign.", addStoredEvent, {
+    source: "draft_review",
+    template_id: context.template.template_id,
+    runner_id: context.template.runner_id,
+    step_count: steps.length,
+    claim_created: false,
+    execution_started: false,
+    codex_run_called: false,
+    matlab_run_called: false,
+    token_printed: false,
+  });
+  await recordDraftSubmitAudit(context, "draft.submit.campaign", campaignId, store);
+  return {
+    statusCode: 201,
+    response: draftSubmitEnvelope("skybridge.draft_submit_result.v1", context, {
+      review_status: "submitted",
+      review_reason: "draft_campaign_created_no_execution",
+      created_campaign_id: campaign.campaign_id,
+      created_campaign_step_ids: steps.map((step) => step.campaign_step_id),
+      task_created: false,
+      campaign_created: true,
+      next_safe_action: "hold_for_mg329_worker_runner",
+    }),
+  };
+}
+
+async function recordDraftSubmitAudit(
+  context: DraftSubmitContext,
+  action: string,
+  createdRecordId: string,
+  store: EventStore,
+): Promise<void> {
+  await store.addAuditRecord({
+    audit_id: `audit_${action.replace(/\./g, "_")}_${context.draft.input_hash.slice(0, 12)}`,
+    time: new Date().toISOString(),
+    action,
+    actor: context.submittedBy,
+    source_adapter: "skybridge/draft-submit-api",
+    run_id: context.draft.draft_id,
+    safety_decision: `created_${createdRecordId}_queued_only_no_execution`,
+    immutable_event_id: context.draft.draft_id,
+    redaction_policy_version: "packages/event-schema/src/redaction-rules.json",
+    raw_payload_included: false,
+  });
 }
 
 function parseCampaignImportInput(input: Record<string, unknown> | undefined, store: EventStore):

@@ -489,6 +489,65 @@ export type CampaignDraft = z.infer<typeof CampaignDraftSchema>;
 export type TaskDraftClarifyingQuestion = z.infer<typeof TaskDraftClarifyingQuestionSchema>;
 export type TaskDraftPreview = z.infer<typeof TaskDraftPreviewSchema>;
 
+export const DraftReviewStatusSchema = z.enum([
+  "ready_for_submit_preview",
+  "ready_for_confirmation",
+  "submitted",
+  "blocked",
+]);
+export const DraftSubmitDraftTypeSchema = z.enum(["task", "campaign"]);
+const DraftSubmitCommonSchema = z.object({
+  ok: z.boolean(),
+  draft_id: z.string().min(1),
+  draft_type: DraftSubmitDraftTypeSchema,
+  template_id: z.string().min(1),
+  project_id: z.string().min(1),
+  title: z.string().min(1),
+  risk: z.string().min(1),
+  required_capabilities: z.array(z.string()),
+  allowed_paths: z.array(z.string()),
+  blocked_paths: z.array(z.string()),
+  runner_id: z.string().min(1),
+  evidence_schema: z.array(z.string()),
+  review_status: DraftReviewStatusSchema,
+  review_reason: z.string().min(1),
+  submitted_by: z.string().min(1),
+  created_task_id: z.string().min(1).optional(),
+  created_campaign_id: z.string().min(1).optional(),
+  created_campaign_step_ids: z.array(z.string().min(1)).optional(),
+  task_created: z.boolean(),
+  campaign_created: z.boolean(),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  worker_loop_started: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  project_control_unpause: z.literal(false).optional(),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  token_printed: z.literal(false),
+  next_safe_action: z.string().min(1).optional(),
+});
+export const DraftReviewSchema = DraftSubmitCommonSchema.extend({
+  schema: z.literal("skybridge.draft_review.v1"),
+  task_created: z.literal(false),
+  campaign_created: z.literal(false),
+});
+export const DraftSubmitPreviewSchema = DraftSubmitCommonSchema.extend({
+  schema: z.literal("skybridge.draft_submit_preview.v1"),
+  task_created: z.literal(false),
+  campaign_created: z.literal(false),
+});
+export const DraftSubmitResultSchema = DraftSubmitCommonSchema.extend({
+  schema: z.literal("skybridge.draft_submit_result.v1"),
+});
+export type DraftReviewStatus = z.infer<typeof DraftReviewStatusSchema>;
+export type DraftSubmitDraftType = z.infer<typeof DraftSubmitDraftTypeSchema>;
+export type DraftReview = z.infer<typeof DraftReviewSchema>;
+export type DraftSubmitPreview = z.infer<typeof DraftSubmitPreviewSchema>;
+export type DraftSubmitResult = z.infer<typeof DraftSubmitResultSchema>;
+
 export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
 export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
 export const TaskTemplateValidationSchema = z.object({

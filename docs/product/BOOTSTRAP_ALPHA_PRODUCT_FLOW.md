@@ -17,8 +17,8 @@ automation.
 5. A local Hermes planner or server-mediated Hermes planner converts natural
    language into structured task or campaign drafts.
 6. Task templates constrain what the planner may produce.
-7. The operator reviews a preview before any server-side task or campaign is
-   created.
+7. The operator reviews a preview and explicitly confirms before any
+   server-side task or campaign is created.
 8. The SkyBridge Server stores project, goal, campaign, task, worker, lease, and
    evidence state.
 9. The local worker actively pulls from the server and claims compatible tasks.
@@ -94,5 +94,16 @@ the registry metadata as read-only template information. The registry keeps
 `campaign_creation_supported=false`, `claim_supported=false`,
 `codex_run_supported=false`, `matlab_run_supported=false`,
 `arbitrary_shell_enabled=false`, and `token_printed=false`.
+
+## MG328 Draft Review And Submit
+
+The reviewed submit layer adds `skybridge.draft_submit_preview.v1` and
+`skybridge.draft_submit_result.v1`. Submit preview creates nothing. Confirmed
+submit requires exact operator confirmation and may create one queued task or
+one non-running draft campaign. It keeps `claim_created=false`,
+`execution_started=false`, `codex_run_called=false`, `matlab_run_called=false`,
+`worker_loop_started=false`, `arbitrary_shell_enabled=false`,
+`raw_prompt_persisted=false`, `raw_response_persisted=false`, and
+`token_printed=false`.
 
 token_printed=false

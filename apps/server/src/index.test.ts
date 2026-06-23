@@ -1459,6 +1459,185 @@ describe("server api", () => {
     expect(task.json<{ error: string }>().error).toBe("goal_not_executable");
   });
 
+  it("previews and submits reviewed drafts as queued records without execution", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "draft-submit-project", name: "Draft Submit Project" },
+    });
+
+    const docsDraft = {
+      schema: "skybridge.task_draft.v1",
+      draft_id: "draft_docs_submit_abc123abc123",
+      draft_type: "task",
+      template_id: "software-docs-task.v1",
+      project_id: "draft-submit-project",
+      title: "Software Docs Task",
+      summary: "Draft a bounded documentation update or report with safe path limits.",
+      risk: "low",
+      required_capabilities: ["git", "codex"],
+      allowed_paths: ["docs/**", "README.md"],
+      blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**", "server-root", "DNS", "Cloudflare", "OpenResty", "Authelia", "GitHub settings"],
+      validation: ["Keep changed files under docs/** or README.md."],
+      runner_id: "software-docs-task-runner.v1",
+      evidence_schema: ["skybridge.docs_task_evidence.v1", "report_path", "changed_docs", "validation_status", "audit_summary"],
+      planner_id: "deterministic-local-chat-to-task.v1",
+      input_preview: "Draft a software docs report.",
+      input_hash: "abc123abc123abc123",
+      inputs: { output_kind: "summary_report", docs_only: true },
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      task_created: false,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      token_printed: false,
+    };
+
+    const preview = await server.inject({
+      method: "POST",
+      url: "/v1/drafts/submit-preview",
+      payload: { draft: docsDraft, submitted_by: "test-operator" },
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json<{ task_created: boolean; campaign_created: boolean; execution_started: boolean; token_printed: boolean }>()).toMatchObject({
+      task_created: false,
+      campaign_created: false,
+      execution_started: false,
+      token_printed: false,
+    });
+    expect((await server.inject({ method: "GET", url: "/v1/tasks?project_id=draft-submit-project" })).json<{ tasks: unknown[] }>().tasks).toHaveLength(0);
+
+    const rejected = await server.inject({
+      method: "POST",
+      url: "/v1/drafts/submit",
+      payload: { draft: docsDraft, confirm_submit: true, confirmation_text: "wrong" },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json<{ task_created: boolean; execution_started: boolean }>())
+      .toMatchObject({ task_created: false, execution_started: false });
+
+    const submitted = await server.inject({
+      method: "POST",
+      url: "/v1/drafts/submit",
+      payload: {
+        draft: docsDraft,
+        submitted_by: "test-operator",
+        confirm_submit: true,
+        confirmation_text: "I_UNDERSTAND_CREATE_QUEUED_DRAFT_RECORDS_ONLY_NO_EXECUTION",
+      },
+    });
+    expect(submitted.statusCode).toBe(201);
+    expect(submitted.json<{
+      created_task_id: string;
+      task_created: boolean;
+      campaign_created: boolean;
+      claim_created: boolean;
+      execution_started: boolean;
+      worker_loop_started: boolean;
+      token_printed: boolean;
+    }>()).toMatchObject({
+      created_task_id: "draft_task_abc123abc123",
+      task_created: true,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      worker_loop_started: false,
+      token_printed: false,
+    });
+
+    const tasks = (await server.inject({ method: "GET", url: "/v1/tasks?project_id=draft-submit-project" })).json<{
+      tasks: Array<{ task_id: string; status: string; assigned_worker_id?: string; planner_metadata: { raw_response_included: boolean; secrets_included: boolean } }>;
+    }>().tasks;
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      task_id: "draft_task_abc123abc123",
+      status: "queued",
+      planner_metadata: { raw_response_included: false, secrets_included: false },
+    });
+    expect(tasks[0]?.assigned_worker_id).toBeUndefined();
+  });
+
+  it("submits MATLAB campaign drafts as non-running campaign steps", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "matlab-draft-project", name: "MATLAB Draft Project" },
+    });
+    const matlabDraft = {
+      schema: "skybridge.campaign_draft.v1",
+      draft_id: "draft_matlab_submit_def456def456",
+      draft_type: "campaign",
+      template_id: "matlab-parameter-sweep.v1",
+      project_id: "matlab-draft-project",
+      title: "Chapter 4 MATLAB parameter sweep",
+      summary: "Draft a bounded MATLAB parameter-grid campaign for future worker execution.",
+      risk: "medium",
+      required_capabilities: ["windows", "powershell", "matlab", "codex"],
+      allowed_paths: ["experiments/matlab/**", "results/skybridge/**", "docs/experiments/**"],
+      blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**", "server-root", "DNS", "Cloudflare", "OpenResty", "Authelia", "GitHub settings"],
+      validation: ["Confirm MATLAB is available locally before future execution."],
+      runner_id: "matlab-parameter-sweep-runner.v1",
+      evidence_schema: ["skybridge.matlab_sweep_evidence.v1", "run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary"],
+      planner_id: "deterministic-local-chat-to-task.v1",
+      input_preview: "MATLAB parameter sweep eta=2..10 h=500/700km P=6/8/10 with summary report.",
+      input_hash: "def456def456def456",
+      inputs: { eta_range: [2, 10], h_km: [500, 700], p_values: [6, 8, 10], outputs: ["summary", "report"] },
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      task_created: false,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      token_printed: false,
+    };
+
+    const submitted = await server.inject({
+      method: "POST",
+      url: "/v1/drafts/submit",
+      payload: {
+        draft: matlabDraft,
+        confirm_submit: true,
+        confirmation_text: "I_UNDERSTAND_CREATE_QUEUED_DRAFT_RECORDS_ONLY_NO_EXECUTION",
+      },
+    });
+    expect(submitted.statusCode).toBe(201);
+    expect(submitted.json<{
+      created_campaign_id: string;
+      created_campaign_step_ids: string[];
+      task_created: boolean;
+      campaign_created: boolean;
+      execution_started: boolean;
+      matlab_run_called: boolean;
+      codex_run_called: boolean;
+    }>()).toMatchObject({
+      created_campaign_id: "draft_campaign_def456def456",
+      task_created: false,
+      campaign_created: true,
+      execution_started: false,
+      matlab_run_called: false,
+      codex_run_called: false,
+    });
+
+    const campaign = (await server.inject({ method: "GET", url: "/v1/campaigns/draft_campaign_def456def456" })).json<{
+      campaign: { status: string };
+      steps: Array<{ status: string; goal_id: string }>;
+    }>();
+    expect(campaign.campaign.status).toBe("draft");
+    expect(campaign.steps.map((step) => step.status)).not.toContain("running");
+    expect(campaign.steps.map((step) => step.goal_id)).toEqual(
+      expect.arrayContaining(["prepare-parameter-grid", "run-matlab-sweep", "aggregate-results", "generate-analysis-report", "hold-for-operator-review"]),
+    );
+  });
+
   it("runs task queue transitions and writes task events", async () => {
     const server = await testServer();
     await server.inject({

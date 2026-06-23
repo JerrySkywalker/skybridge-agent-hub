@@ -51,6 +51,12 @@ the registry. The registry is queryable through
 `scripts/powershell/skybridge-task-template-registry.ps1`, but it is read-only
 and draft-only.
 
+MG328 adds reviewed draft submit. Desktop can request submit preview, then
+confirmed submit can create one queued task or one non-running draft campaign
+only after exact operator confirmation. It keeps task claim, Codex execution,
+MATLAB execution, worker loop start, arbitrary shell, project-control unpause,
+raw prompt persistence, raw response persistence, and token printing disabled.
+
 ## MATLAB Parameter Sweep Example
 
 User input:

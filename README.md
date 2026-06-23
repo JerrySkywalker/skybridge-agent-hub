@@ -119,6 +119,8 @@ For the first preview-only natural-language draft planner, see
 [docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md](docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md).
 For the preview-only Bootstrap Alpha task registry, see
 [docs/product/TASK_TEMPLATE_REGISTRY.md](docs/product/TASK_TEMPLATE_REGISTRY.md).
+For reviewed queued-record submit, see
+[docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 
 ## Quick Start
 
