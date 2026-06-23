@@ -36,6 +36,13 @@ A planner draft must include:
 - risk class;
 - statement that no arbitrary shell is authorized.
 
+MG326 implements the first local deterministic draft planner through
+`scripts/powershell/skybridge-chat-to-task-draft.ps1` and the Desktop
+Bootstrap Alpha Chat-to-Task panel. It returns
+`skybridge.task_draft_preview.v1` only. Server-side task creation, campaign
+creation, task claim, Codex execution, MATLAB execution, arbitrary shell, and
+worker loop start remain disabled.
+
 ## MATLAB Parameter Sweep Example
 
 User input:

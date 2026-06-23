@@ -29,10 +29,13 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Acceptance criteria: chat input produces a previewable draft; missing fields
   trigger clarifying questions; drafts include template id, paths, validation,
   and evidence schema; no execution occurs.
+- Implementation note: MG326 adds a deterministic local draft planner,
+  `skybridge.task_draft_preview.v1`, Desktop Chat-to-Task panel, MATLAB and
+  docs/report examples, blocked-request classification, and focused smokes.
 - Forbidden scope: direct execution, raw prompt persistence, arbitrary shell,
   automatic task creation without operator confirmation.
-- Live deployment expected: no, unless limited to existing server API parity
-  after merge.
+- Live deployment expected: no server runtime change; if the existing cloud
+  auto-deploy runs after merge, verify parity through the existing path only.
 
 ## MG327 Task Template Registry
 

@@ -130,6 +130,10 @@ p {
   border-color: #7aa0b8;
 }
 
+.bootstrap-chat-to-task-panel {
+  border-color: #6f9d90;
+}
+
 .resident-status-card,
 .local-worker-supervisor-card,
 .local-resource-policy-card,

@@ -73,4 +73,14 @@ with service, config, tool capability, blocker, warning, and recommended-action
 fields. It keeps `claim_enabled=false`, `execute_enabled=false`,
 `worker_loop_started=false`, and `token_printed=false`.
 
+## MG326 Chat-to-Task Draft Layer
+
+The first Desktop-facing natural-language planner reports
+`skybridge.task_draft_preview.v1` from a deterministic local planner. It can
+produce a MATLAB parameter sweep campaign draft, a software docs/report task
+draft, a clarifying question, or a blocked request preview. It keeps
+`task_created=false`, `campaign_created=false`, `claim_created=false`,
+`execution_started=false`, `codex_run_called=false`, `matlab_run_called=false`,
+`arbitrary_shell_enabled=false`, and `token_printed=false`.
+
 token_printed=false

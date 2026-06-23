@@ -132,6 +132,15 @@ fn heartbeat_now(app: AppHandle) -> Result<HeartbeatResult, String> {
 }
 
 #[tauri::command]
+fn chat_to_task_draft(app: AppHandle, input_text: String, project_id: Option<String>) -> Result<Value, String> {
+    append_log(&app, "chat-to-task deterministic draft preview requested")?;
+    if input_text.len() > 4000 {
+        return Err("chat-to-task input exceeds 4000 character preview limit".into());
+    }
+    run_chat_to_task_draft(&input_text, project_id.as_deref().unwrap_or(PROJECT_ID))
+}
+
+#[tauri::command]
 fn open_report(_app: AppHandle) -> Result<(), String> {
     let report_file = report_file_path()?;
     let safe_root = campaign_reports_dir()?;
@@ -164,7 +173,7 @@ pub fn run() {
             build_tray(app.handle())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_status, heartbeat_now, open_report])
+        .invoke_handler(tauri::generate_handler![get_status, heartbeat_now, chat_to_task_draft, open_report])
         .run(tauri::generate_context!())
         .expect("error while running SkyBridge Desktop");
 }
@@ -453,6 +462,29 @@ fn run_local_worker_service_status() -> Result<Value, String> {
         "Bypass".into(),
         "-File".into(),
         script_path.display().to_string(),
+        "-Json".into(),
+    ];
+    parse_json(&run_powershell(&command_args)?)
+}
+
+fn run_chat_to_task_draft(input_text: &str, project_id: &str) -> Result<Value, String> {
+    let repo = repo_root()?;
+    let script_path = repo
+        .join("scripts")
+        .join("powershell")
+        .join("skybridge-chat-to-task-draft.ps1");
+    let command_args = vec![
+        "-NoProfile".to_string(),
+        "-ExecutionPolicy".into(),
+        "Bypass".into(),
+        "-File".into(),
+        script_path.display().to_string(),
+        "-Command".into(),
+        "draft".into(),
+        "-InputText".into(),
+        input_text.to_string(),
+        "-ProjectId".into(),
+        project_id.to_string(),
         "-Json".into(),
     ];
     parse_json(&run_powershell(&command_args)?)

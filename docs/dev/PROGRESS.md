@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2026-06-23 Mega Goal 326 Chat-to-Task Draft Planner
+
+- Added shared Chat-to-Task draft contracts for session, task draft, campaign
+  draft, clarifying question, and preview output.
+- Added deterministic local PowerShell planner
+  `skybridge-chat-to-task-draft.ps1` with MATLAB parameter sweep, software
+  docs/report, clarifying-question, blocked-request, command-text detection,
+  status, and safe-summary modes.
+- Added Desktop Bootstrap Alpha Chat-to-Task panel with natural-language input,
+  structured draft preview fields, clarifying questions, and disabled MG328
+  submit placeholder.
+- Added Chat-to-Task product docs, README link, Bootstrap Alpha doc updates,
+  package smoke scripts, and bootstrap-alpha acceptance coverage.
+- Kept raw prompt persistence, raw response persistence, task creation,
+  campaign creation, claim creation, Codex execution, MATLAB execution,
+  arbitrary shell, worker loop start, and token printing disabled.
+
 ## 2026-06-23 Mega Goal 325 Desktop Installer And Worker Service Manager
 
 - Added `skybridge.local_worker_service_status.v1` for local Windows worker

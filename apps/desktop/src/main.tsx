@@ -46,6 +46,7 @@ import {
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerServiceStatus,
+  fixtureChatToTaskDraftPreview,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -78,6 +79,7 @@ import {
   type LocalExecutionGuard,
   type LocalResourcePolicy,
   type LocalWorkerServiceStatus,
+  type TaskDraftPreview,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -157,6 +159,12 @@ type HeartbeatResult = {
   last_seen: string | null;
   status: DesktopStatus;
 };
+
+const matlabChatToTaskSample =
+  "帮我用 MATLAB 跑第四章参数扫描实验，eta=2..10，h=500/700km，P=6/8/10，输出 summary 和报告。";
+const docsChatToTaskSample =
+  "Draft a software docs report for Bootstrap Alpha worker setup and summarize the current disabled execution boundary.";
+const chatToTaskPreviewSchema = "skybridge.task_draft_preview.v1";
 
 const emptyStatus: DesktopStatus = {
   ok: false,
@@ -1485,6 +1493,9 @@ function App() {
   const [refreshing, setRefreshing] = React.useState(false);
   const refreshGeneration = React.useRef(0);
   const [message, setMessage] = React.useState(fixtureOnly ? "Fixture-only visual QA" : "Standby");
+  const [chatToTaskInput, setChatToTaskInput] = React.useState(matlabChatToTaskSample);
+  const [chatToTaskPreview, setChatToTaskPreview] = React.useState<TaskDraftPreview>(fixtureChatToTaskDraftPreview);
+  const [chatToTaskMessage, setChatToTaskMessage] = React.useState("Preview-only fixture loaded");
   const [nowSeconds, setNowSeconds] = React.useState(() => Math.floor(Date.now() / 1000));
 
   const refresh = React.useCallback(async () => {
@@ -1549,6 +1560,40 @@ function App() {
     await navigator.clipboard?.writeText(text);
     setMessage("Safe summary copied");
   }, [status]);
+
+  const generateChatToTaskDraft = React.useCallback(
+    async (overrideInput?: string) => {
+      const requestText = overrideInput ?? chatToTaskInput;
+      if (fixtureOnly) {
+        setChatToTaskPreview(fixtureChatToTaskDraftPreview);
+        setChatToTaskMessage("Fixture-only draft preview rendered");
+        return;
+      }
+      setChatToTaskMessage("Generating deterministic preview");
+      try {
+        const next = await invoke<TaskDraftPreview>("chat_to_task_draft", {
+          inputText: requestText,
+          projectId: status.project_id || "skybridge-agent-hub",
+        });
+        setChatToTaskPreview(next);
+        setChatToTaskMessage(`Preview status=${next.status}; token_printed=${String(next.token_printed)}`);
+      } catch (error) {
+        setChatToTaskPreview(fixtureChatToTaskDraftPreview);
+        setChatToTaskMessage(`Preview bridge unavailable; fixture shown: ${String(error).slice(0, 120)}`);
+      }
+    },
+    [chatToTaskInput, fixtureOnly, status.project_id],
+  );
+
+  const useMatlabChatToTaskSample = React.useCallback(() => {
+    setChatToTaskInput(matlabChatToTaskSample);
+    void generateChatToTaskDraft(matlabChatToTaskSample);
+  }, [generateChatToTaskDraft]);
+
+  const useDocsChatToTaskSample = React.useCallback(() => {
+    setChatToTaskInput(docsChatToTaskSample);
+    void generateChatToTaskDraft(docsChatToTaskSample);
+  }, [generateChatToTaskDraft]);
 
   React.useEffect(() => {
     void refresh();
@@ -1654,6 +1699,15 @@ function App() {
         onReset={apiSettings.reset}
       />
       <BootstrapAlphaWorkerSetupPanel status={localWorkerServiceStatus} />
+      <BootstrapAlphaChatToTaskPanel
+        inputText={chatToTaskInput}
+        preview={chatToTaskPreview}
+        message={chatToTaskMessage}
+        onInputChange={setChatToTaskInput}
+        onGenerate={() => void generateChatToTaskDraft()}
+        onSampleMatlab={useMatlabChatToTaskSample}
+        onSampleDocs={useDocsChatToTaskSample}
+      />
 
       <section className="toolbar" aria-label="Queue dashboard actions">
         <button type="button" onClick={refresh} disabled={refreshing}>
@@ -2173,6 +2227,99 @@ function AttentionPanel({ events }: { events: AttentionEvent[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function BootstrapAlphaChatToTaskPanel({
+  inputText,
+  preview,
+  message,
+  onInputChange,
+  onGenerate,
+  onSampleMatlab,
+  onSampleDocs,
+}: {
+  inputText: string;
+  preview: TaskDraftPreview;
+  message: string;
+  onInputChange: (value: string) => void;
+  onGenerate: () => void;
+  onSampleMatlab: () => void;
+  onSampleDocs: () => void;
+}) {
+  const draft = preview.draft;
+
+  return (
+    <section className="panel bootstrap-chat-to-task-panel" aria-label="Bootstrap Alpha Chat-to-Task">
+      <h2>Bootstrap Alpha Chat-to-Task</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha Chat-to-Task disabled execution flags">
+        <span>task_created=false</span>
+        <span>campaign_created=false; claim_created=false</span>
+        <span>execution_started=false; codex_run_called=false; matlab_run_called=false; token_printed=false</span>
+      </div>
+      <label className="manual-task-input-label" htmlFor="bootstrap-chat-to-task-input">
+        Natural-language request
+      </label>
+      <textarea
+        id="bootstrap-chat-to-task-input"
+        className="manual-task-input"
+        rows={4}
+        value={inputText}
+        onChange={(event) => onInputChange(event.currentTarget.value)}
+        aria-label="Bootstrap Alpha Chat-to-Task natural-language input"
+      />
+      <div className="queue-action-grid">
+        <button type="button" onClick={onGenerate} title="Runs the local deterministic draft planner only">
+          Generate draft preview
+        </button>
+        <button type="button" onClick={onSampleMatlab}>
+          MATLAB sample
+        </button>
+        <button type="button" onClick={onSampleDocs}>
+          Docs sample
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Review and Submit (MG328 future work)
+        </button>
+      </div>
+      <dl>
+        <StatusValue label="Preview schema" value={preview.schema} />
+        <StatusValue label="Status" value={preview.status} />
+        <StatusValue label="Draft type" value={preview.draft_type} />
+        <StatusValue label="Template id" value={preview.template_id} />
+        <StatusValue label="Draft id" value={preview.draft_id} />
+        <StatusValue label="Project id" value={preview.project_id} />
+        <StatusValue label="Planner id" value={preview.planner_id} />
+        <StatusValue label="Title" value={draft.title} />
+        <StatusValue label="Summary" value={draft.summary} />
+        <StatusValue label="Risk" value={draft.risk} />
+        <StatusValue label="Required capabilities" value={draft.required_capabilities.join("; ") || "none"} />
+        <StatusValue label="Allowed paths" value={draft.allowed_paths.join("; ") || "none"} />
+        <StatusValue label="Blocked paths" value={draft.blocked_paths.join("; ") || "none"} />
+        <StatusValue label="Validation" value={draft.validation.join("; ") || "none"} />
+        <StatusValue label="Runner id" value={draft.runner_id} />
+        <StatusValue label="Evidence schema" value={draft.evidence_schema.join("; ") || "none"} />
+        <StatusValue label="Input preview" value={preview.input_preview} />
+        <StatusValue label="Input hash" value={preview.input_hash} />
+        <StatusValue label="Clarifying questions" value={"questions" in draft ? draft.questions.join("; ") : "none"} />
+        <StatusValue label="Blockers" value={preview.blockers.join("; ") || "none"} />
+        <StatusValue label="Warnings" value={preview.warnings.join("; ") || "none"} />
+        <StatusValue label="Next safe action" value={preview.next_safe_action} />
+        <StatusValue label="command_text_detected" value={String(preview.command_text_detected)} />
+        <StatusValue label="unsafe_request_detected" value={String(preview.unsafe_request_detected)} />
+        <StatusValue label="raw_prompt_persisted" value={String(preview.raw_prompt_persisted)} />
+        <StatusValue label="raw_response_persisted" value={String(preview.raw_response_persisted)} />
+        <StatusValue label="task_created" value={String(preview.task_created)} />
+        <StatusValue label="campaign_created" value={String(preview.campaign_created)} />
+        <StatusValue label="claim_created" value={String(preview.claim_created)} />
+        <StatusValue label="execution_started" value={String(preview.execution_started)} />
+        <StatusValue label="codex_run_called" value={String(preview.codex_run_called)} />
+        <StatusValue label="matlab_run_called" value={String(preview.matlab_run_called)} />
+        <StatusValue label="arbitrary_shell_enabled" value={String(preview.arbitrary_shell_enabled)} />
+        <StatusValue label="token_printed" value={String(preview.token_printed)} />
+        <StatusValue label="Planner message" value={message} />
+      </dl>
     </section>
   );
 }

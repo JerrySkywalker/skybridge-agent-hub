@@ -115,6 +115,8 @@ Start with [docs/product/BOOTSTRAP_ALPHA_PRODUCT_FLOW.md](docs/product/BOOTSTRAP
 and [docs/release/BOOTSTRAP_ALPHA_ROADMAP.md](docs/release/BOOTSTRAP_ALPHA_ROADMAP.md).
 For the first local worker setup/status layer, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
+For the first preview-only natural-language draft planner, see
+[docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md](docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md).
 
 ## Quick Start
 
