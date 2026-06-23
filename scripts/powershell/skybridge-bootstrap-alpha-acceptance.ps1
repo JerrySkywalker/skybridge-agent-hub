@@ -13,6 +13,7 @@ $requiredDocs = @(
   "docs/product/TASK_TEMPLATE_REGISTRY.md",
   "docs/product/DRAFT_REVIEW_AND_SUBMIT.md",
   "docs/product/WORKER_TEMPLATE_RUNNER_V1.md",
+  "docs/product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -35,6 +36,7 @@ $requiredScripts = @{
   task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
   draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
   worker_template_runner = "scripts/powershell/skybridge-worker-template-runner.ps1"
+  live_safe_task_pilot = "scripts/powershell/skybridge-live-safe-task-pilot.ps1"
 }
 
 $componentPaths = @{
@@ -131,7 +133,11 @@ $requiredPackageScripts = @(
   "smoke:worker-template-runner-preview",
   "smoke:worker-template-runner-apply-one-fixture",
   "smoke:worker-template-runner-reject-unsafe",
-  "smoke:desktop-worker-template-runner"
+  "smoke:desktop-worker-template-runner",
+  "smoke:live-safe-task-pilot-preview",
+  "smoke:live-safe-task-pilot-fixture",
+  "smoke:live-safe-task-pilot-reject-unsafe",
+  "smoke:desktop-live-safe-task-pilot"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -167,6 +173,7 @@ $desktopChatToTaskPanelPresent = $false
 $desktopTaskTemplateRegistryPanelPresent = $false
 $desktopDraftReviewSubmitPanelPresent = $false
 $desktopWorkerTemplateRunnerPanelPresent = $false
+$desktopLiveSafeTaskPilotPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -231,6 +238,12 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MaxTasks=1; claim via PowerShell exact confirmation only") -and
     $desktopSource -match [regex]::Escape("codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false")
   )
+  $desktopLiveSafeTaskPilotPresent = (
+    $desktopSource -match [regex]::Escape("MG332 live pilot is PowerShell-only for task live-safe-template-task-332-001") -and
+    $desktopSource -match [regex]::Escape("MG332 target task id") -and
+    $desktopSource -match [regex]::Escape("MG332 task claimed count") -and
+    $desktopSource -match [regex]::Escape("MG332 live apply unavailable in Desktop")
+  )
 }
 
 $workerStatusContract = $null
@@ -248,6 +261,9 @@ $draftSubmitStatusError = $null
 $workerTemplateRunnerStatusContract = $null
 $workerTemplateRunnerStatusContractOk = $false
 $workerTemplateRunnerStatusError = $null
+$liveSafeTaskPilotStatusContract = $null
+$liveSafeTaskPilotStatusContractOk = $false
+$liveSafeTaskPilotStatusError = $null
 $workerInstallPreviewContract = $null
 $workerInstallPreviewContractOk = $false
 $workerInstallPreviewError = $null
@@ -472,6 +488,28 @@ try {
       [bool]$workerTemplateRunnerStatusContract.token_printed -eq $false
     )
   }
+  $liveSafeTaskPilotScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-live-safe-task-pilot.ps1"
+  if (Test-Path -LiteralPath $liveSafeTaskPilotScriptPath -PathType Leaf) {
+    $rawPilot = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveSafeTaskPilotScriptPath -Command safe-summary -WorkerId "jerry-win-local-01" -TaskId "live-safe-template-task-332-001" -Json
+    $pilotText = ($rawPilot | Out-String).Trim()
+    Assert-NoUnsafeText $pilotText
+    $liveSafeTaskPilotStatusContract = $pilotText | ConvertFrom-Json
+    $liveSafeTaskPilotStatusContractOk = (
+      [string]$liveSafeTaskPilotStatusContract.schema -eq "skybridge.live_safe_task_pilot_safe_summary.v1" -and
+      [string]$liveSafeTaskPilotStatusContract.worker_id -eq "jerry-win-local-01" -and
+      [string]$liveSafeTaskPilotStatusContract.task_id -eq "live-safe-template-task-332-001" -and
+      [string]$liveSafeTaskPilotStatusContract.template_id -eq "safe-local-smoke.v1" -and
+      [string]$liveSafeTaskPilotStatusContract.runner_id -eq "safe-local-smoke-runner.v1" -and
+      [bool]$liveSafeTaskPilotStatusContract.claim_created -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.execution_started -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.worker_loop_started -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.codex_run_called -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.matlab_run_called -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.project_control_unpaused -eq $false -and
+      [bool]$liveSafeTaskPilotStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -487,6 +525,9 @@ try {
   }
   if (-not $workerTemplateRunnerStatusContractOk) {
     $workerTemplateRunnerStatusError = "worker_template_runner_status_contract_failed"
+  }
+  if (-not $liveSafeTaskPilotStatusContractOk) {
+    $liveSafeTaskPilotStatusError = "live_safe_task_pilot_status_contract_failed"
   }
   if (-not $workerInstallPreviewContractOk) {
     $workerInstallPreviewError = "worker_install_preview_contract_failed"
@@ -516,6 +557,7 @@ $ok = (
   $desktopTaskTemplateRegistryPanelPresent -and
   $desktopDraftReviewSubmitPanelPresent -and
   $desktopWorkerTemplateRunnerPanelPresent -and
+  $desktopLiveSafeTaskPilotPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -526,7 +568,8 @@ $ok = (
   $chatToTaskContractOk -and
   $taskTemplateRegistryContractOk -and
   $draftSubmitStatusContractOk -and
-  $workerTemplateRunnerStatusContractOk
+  $workerTemplateRunnerStatusContractOk -and
+  $liveSafeTaskPilotStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -543,6 +586,7 @@ $report = [pscustomobject]@{
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
   desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
   desktop_worker_template_runner_panel_present = $desktopWorkerTemplateRunnerPanelPresent
+  desktop_live_safe_task_pilot_present = $desktopLiveSafeTaskPilotPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
@@ -708,6 +752,25 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   worker_template_runner_status_error = $workerTemplateRunnerStatusError
+  live_safe_task_pilot_status_contract_ok = $liveSafeTaskPilotStatusContractOk
+  live_safe_task_pilot_status_contract = if ($liveSafeTaskPilotStatusContract) {
+    [pscustomobject]@{
+      schema = $liveSafeTaskPilotStatusContract.schema
+      worker_id = $liveSafeTaskPilotStatusContract.worker_id
+      task_id = $liveSafeTaskPilotStatusContract.task_id
+      template_id = $liveSafeTaskPilotStatusContract.template_id
+      runner_id = $liveSafeTaskPilotStatusContract.runner_id
+      claim_created = $liveSafeTaskPilotStatusContract.claim_created
+      execution_started = $liveSafeTaskPilotStatusContract.execution_started
+      worker_loop_started = $liveSafeTaskPilotStatusContract.worker_loop_started
+      codex_run_called = $liveSafeTaskPilotStatusContract.codex_run_called
+      matlab_run_called = $liveSafeTaskPilotStatusContract.matlab_run_called
+      arbitrary_shell_enabled = $liveSafeTaskPilotStatusContract.arbitrary_shell_enabled
+      project_control_unpaused = $liveSafeTaskPilotStatusContract.project_control_unpaused
+      token_printed = $liveSafeTaskPilotStatusContract.token_printed
+    }
+  } else { $null }
+  live_safe_task_pilot_status_error = $liveSafeTaskPilotStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

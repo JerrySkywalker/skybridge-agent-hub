@@ -135,10 +135,33 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Live deployment expected: no server runtime change; if the existing cloud
   auto-deploy runs after merge, verify parity through the existing path only.
 
-## MG332 MATLAB Experiment Golden Trial
+## MG332 Live Worker One Safe Template Task
+
+- Objective: prove one live task lifecycle from server queued task through
+  local worker claim/start/complete with sanitized safe-local-smoke evidence.
+- Likely touched: worker template runner, live pilot PowerShell helper,
+  Desktop Worker Runner preview, Bootstrap Alpha acceptance, live task docs.
+- Acceptance criteria: exactly one task id,
+  `live-safe-template-task-332-001`, is created by the pilot, previewed,
+  exact-confirmed, claimed, started, and completed or failed by
+  `worker_id=jerry-win-local-01`; evidence summary is present; operator report,
+  review gate, and self-bootstrap convergence remain safe.
+- Implementation note: MG332 adds
+  [Live Worker One Safe Template Task](../product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md),
+  `skybridge-live-safe-task-pilot.ps1`, live runner modes on
+  `skybridge-worker-template-runner.ps1`, fixture/rejection smokes, and Desktop
+  live pilot status fields.
+- Forbidden scope: any old or arbitrary task claim, worker loop start, Codex
+  execution, MATLAB execution, arbitrary shell, PR creation, project-control
+  unpause, old task requeue, or production infrastructure mutation.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  run read-only pilot previews. The one live apply may run only if the exact
+  target task preconditions still hold.
+
+## MG333 MATLAB Experiment Golden Trial
 
 - Objective: run a reviewed MATLAB parameter sweep golden path through the
-  template model.
+  template model after the one-safe-task live lifecycle has been proven.
 - Likely touched: MATLAB template docs, worker runner, fixture experiment
   assets, evidence schemas, Desktop/server reports.
 - Acceptance criteria: operator confirms a MATLAB draft; worker runs only the
@@ -148,7 +171,7 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   background daemon expansion, automatic merge.
 - Live deployment expected: maybe, if the server must store golden-path state.
 
-## MG333 End-to-end Bootstrap Alpha Release
+## MG334 End-to-end Bootstrap Alpha Release
 
 - Objective: release the complete Bootstrap Alpha golden path.
 - Likely touched: release docs, server deploy scripts, Desktop package docs,

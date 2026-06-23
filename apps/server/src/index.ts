@@ -6162,7 +6162,7 @@ function safePathArray(input: unknown): string[] | undefined {
   const values = safeStringArray(input);
   if (!values) return undefined;
   return values
-    .filter((value) => !/[<>:"|?*]/.test(value))
+    .filter((value) => !/[<>:"|?]/.test(value))
     .map((value) => value.replace(/\\/g, "/"))
     .slice(0, 50);
 }
