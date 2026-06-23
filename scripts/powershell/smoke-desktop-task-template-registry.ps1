@@ -23,7 +23,7 @@ foreach ($needle in @(
   "execution_supported=false",
   "task_creation_supported=false; campaign_creation_supported=false; claim_supported=false",
   "codex_run_supported=false; matlab_run_supported=false; arbitrary_shell_enabled=false; token_printed=false",
-  "Review and Submit (MG328 future work)",
+  "Draft submit uses Chat-to-Task review",
   "Template execution unavailable",
   "Worker runner deferred to MG329"
 )) {

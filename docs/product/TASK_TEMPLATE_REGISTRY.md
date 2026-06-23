@@ -10,8 +10,9 @@ execution exists.
 Natural language is not executable input. A template narrows an operator intent
 into a known shape with stable path policy, capability requirements,
 validation, runner id, evidence schema, and disabled safety flags. A draft may
-reference a template id, but MG327 does not turn that draft into a server task
-or campaign.
+reference a template id. MG327 does not turn that draft into a server task or
+campaign. MG328 uses the registry as the validation source before confirmed
+queued-record submit.
 
 ## Registry Contract
 
@@ -62,9 +63,10 @@ create tasks.
 
 Desktop shows the Bootstrap Alpha Task Templates panel with available templates,
 risk class, capabilities, allowed paths, blocked paths, runner id, evidence
-schema, and safety flags. It does not show a run button, claim button, worker
-loop button, Codex execution button, MATLAB execution button, arbitrary shell
-box, or real submit path.
+schema, and safety flags. Submit happens from the reviewed Chat-to-Task draft
+surface, not directly from a template list. The template panel does not show a
+run button, claim button, worker loop button, Codex execution button, MATLAB
+execution button, arbitrary shell box, or automatic submit path.
 
 ## Manual Commands
 
@@ -77,9 +79,9 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-tas
 
 ## Future Goals
 
-MG328 may add reviewed draft submit to the server. MG329 may add the first
-worker template runner. Those goals must keep review-before-submit,
-template-bound execution, safe evidence, and explicit operator boundaries.
+MG328 adds reviewed draft submit to the server. MG329 may add the first worker
+template runner. Those goals must keep review-before-submit, template-bound
+execution, safe evidence, and explicit operator boundaries.
 
 ## Disabled In MG327
 

@@ -15,7 +15,10 @@ foreach ($needle in @(
   "Generate draft preview",
   "MATLAB sample",
   "Docs sample",
-  "Review and Submit (MG328 future work)",
+  "Draft Review + Submit",
+  "Submit preview",
+  "Confirm submit",
+  "Run with Worker (MG329 future work)",
   "task_created=false",
   "campaign_created=false; claim_created=false",
   "execution_started=false; codex_run_called=false; matlab_run_called=false; token_printed=false",
@@ -24,7 +27,10 @@ foreach ($needle in @(
   "arbitrary_shell_enabled",
   "skybridge.task_draft_preview.v1",
   "fixtureChatToTaskDraftPreview",
-  "TaskDraftPreview"
+  "TaskDraftPreview",
+  "submitPreview.schema",
+  "submitResult.schema",
+  "DRAFT_SUBMIT_CONFIRMATION_TEXT"
 )) {
   if ($desktopSource -notmatch [regex]::Escape($needle)) { throw "Desktop Chat-to-Task panel missing text: $needle" }
 }

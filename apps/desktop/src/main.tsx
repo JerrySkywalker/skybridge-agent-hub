@@ -47,7 +47,10 @@ import {
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerServiceStatus,
   fixtureChatToTaskDraftPreview,
+  fixtureDraftSubmitPreview,
+  fixtureMatlabDraftSubmitResult,
   fixtureTaskTemplateRegistry,
+  DRAFT_SUBMIT_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -81,6 +84,8 @@ import {
   type LocalResourcePolicy,
   type LocalWorkerServiceStatus,
   type TaskDraftPreview,
+  type DraftSubmitPreview,
+  type DraftSubmitResult,
   type TaskTemplate,
   type TaskTemplateRegistry,
   type LocalResourcePolicyEnforcement,
@@ -1500,6 +1505,10 @@ function App() {
   const [chatToTaskInput, setChatToTaskInput] = React.useState(matlabChatToTaskSample);
   const [chatToTaskPreview, setChatToTaskPreview] = React.useState<TaskDraftPreview>(fixtureChatToTaskDraftPreview);
   const [chatToTaskMessage, setChatToTaskMessage] = React.useState("Preview-only fixture loaded");
+  const [draftSubmitPreview, setDraftSubmitPreview] = React.useState<DraftSubmitPreview>(fixtureDraftSubmitPreview);
+  const [draftSubmitResult, setDraftSubmitResult] = React.useState<DraftSubmitResult | null>(fixtureMatlabDraftSubmitResult);
+  const [draftSubmitConfirmation, setDraftSubmitConfirmation] = React.useState("");
+  const [draftSubmitMessage, setDraftSubmitMessage] = React.useState("Submit preview fixture loaded");
   const [selectedTemplateId, setSelectedTemplateId] = React.useState(
     fixtureTaskTemplateRegistry.templates[0]?.template_id ?? "software-docs-task.v1",
   );
@@ -1583,6 +1592,26 @@ function App() {
           projectId: status.project_id || "skybridge-agent-hub",
         });
         setChatToTaskPreview(next);
+        setDraftSubmitResult(null);
+        setDraftSubmitPreview({
+          ...fixtureDraftSubmitPreview,
+          draft_id: next.draft_id,
+          draft_type: next.draft_type === "campaign" ? "campaign" : "task",
+          template_id: next.template_id,
+          project_id: next.project_id,
+          title: next.draft.title,
+          risk: next.draft.risk,
+          required_capabilities: next.draft.required_capabilities,
+          allowed_paths: next.draft.allowed_paths,
+          blocked_paths: next.draft.blocked_paths,
+          runner_id: next.draft.runner_id,
+          evidence_schema: next.draft.evidence_schema,
+          review_status: "ready_for_submit_preview",
+          review_reason: "draft_generated_submit_preview_pending",
+          task_created: false,
+          campaign_created: false,
+          token_printed: false,
+        });
         setChatToTaskMessage(`Preview status=${next.status}; token_printed=${String(next.token_printed)}`);
       } catch (error) {
         setChatToTaskPreview(fixtureChatToTaskDraftPreview);
@@ -1591,6 +1620,62 @@ function App() {
     },
     [chatToTaskInput, fixtureOnly, status.project_id],
   );
+
+  const requestDraftSubmitPreview = React.useCallback(async () => {
+    if (fixtureOnly) {
+      setDraftSubmitPreview(fixtureDraftSubmitPreview);
+      setDraftSubmitResult(null);
+      setDraftSubmitMessage("Fixture-only submit preview rendered");
+      return;
+    }
+    setDraftSubmitMessage("Requesting submit preview");
+    try {
+      const response = await fetch(`${apiSettings.apiBase.replace(/\/+$/, "")}/v1/drafts/submit-preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ draft: chatToTaskPreview.draft, submitted_by: "desktop-operator" }),
+      });
+      const next = (await response.json()) as DraftSubmitPreview;
+      setDraftSubmitPreview(next);
+      setDraftSubmitResult(null);
+      setDraftSubmitMessage(`Submit preview status=${next.review_status}; token_printed=${String(next.token_printed)}`);
+    } catch (error) {
+      setDraftSubmitPreview(fixtureDraftSubmitPreview);
+      setDraftSubmitResult(null);
+      setDraftSubmitMessage(`Submit preview unavailable; fixture shown: ${String(error).slice(0, 120)}`);
+    }
+  }, [apiSettings.apiBase, chatToTaskPreview.draft, fixtureOnly]);
+
+  const submitReviewedDraft = React.useCallback(async () => {
+    if (draftSubmitConfirmation !== DRAFT_SUBMIT_CONFIRMATION_TEXT) {
+      setDraftSubmitMessage("Exact confirmation required before submit");
+      return;
+    }
+    if (fixtureOnly) {
+      setDraftSubmitResult(fixtureMatlabDraftSubmitResult);
+      setDraftSubmitMessage("Fixture-only confirmed submit result rendered");
+      return;
+    }
+    setDraftSubmitMessage("Submitting reviewed draft");
+    try {
+      const response = await fetch(`${apiSettings.apiBase.replace(/\/+$/, "")}/v1/drafts/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          draft: chatToTaskPreview.draft,
+          submitted_by: "desktop-operator",
+          confirm_submit: true,
+          confirmation_text: DRAFT_SUBMIT_CONFIRMATION_TEXT,
+        }),
+      });
+      const next = (await response.json()) as DraftSubmitResult;
+      setDraftSubmitResult(next);
+      setDraftSubmitMessage(`Submit result=${next.review_status}; task_created=${String(next.task_created)}; campaign_created=${String(next.campaign_created)}; token_printed=${String(next.token_printed)}`);
+    } catch (error) {
+      setDraftSubmitResult(fixtureMatlabDraftSubmitResult);
+      setDraftSubmitMessage(`Submit unavailable; fixture shown: ${String(error).slice(0, 120)}`);
+    }
+  }, [apiSettings.apiBase, chatToTaskPreview.draft, draftSubmitConfirmation, fixtureOnly]);
 
   const useMatlabChatToTaskSample = React.useCallback(() => {
     setChatToTaskInput(matlabChatToTaskSample);
@@ -1710,10 +1795,17 @@ function App() {
         inputText={chatToTaskInput}
         preview={chatToTaskPreview}
         message={chatToTaskMessage}
+        submitPreview={draftSubmitPreview}
+        submitResult={draftSubmitResult}
+        submitMessage={draftSubmitMessage}
+        confirmationText={draftSubmitConfirmation}
         onInputChange={setChatToTaskInput}
         onGenerate={() => void generateChatToTaskDraft()}
         onSampleMatlab={useMatlabChatToTaskSample}
         onSampleDocs={useDocsChatToTaskSample}
+        onSubmitPreview={() => void requestDraftSubmitPreview()}
+        onConfirmationChange={setDraftSubmitConfirmation}
+        onConfirmSubmit={() => void submitReviewedDraft()}
       />
       <BootstrapAlphaTaskTemplateRegistryPanel
         registry={fixtureTaskTemplateRegistry}
@@ -2247,20 +2339,35 @@ function BootstrapAlphaChatToTaskPanel({
   inputText,
   preview,
   message,
+  submitPreview,
+  submitResult,
+  submitMessage,
+  confirmationText,
   onInputChange,
   onGenerate,
   onSampleMatlab,
   onSampleDocs,
+  onSubmitPreview,
+  onConfirmationChange,
+  onConfirmSubmit,
 }: {
   inputText: string;
   preview: TaskDraftPreview;
   message: string;
+  submitPreview: DraftSubmitPreview;
+  submitResult: DraftSubmitResult | null;
+  submitMessage: string;
+  confirmationText: string;
   onInputChange: (value: string) => void;
   onGenerate: () => void;
   onSampleMatlab: () => void;
   onSampleDocs: () => void;
+  onSubmitPreview: () => void;
+  onConfirmationChange: (value: string) => void;
+  onConfirmSubmit: () => void;
 }) {
   const draft = preview.draft;
+  const confirmationMatches = confirmationText === DRAFT_SUBMIT_CONFIRMATION_TEXT;
 
   return (
     <section className="panel bootstrap-chat-to-task-panel" aria-label="Bootstrap Alpha Chat-to-Task">
@@ -2291,8 +2398,11 @@ function BootstrapAlphaChatToTaskPanel({
         <button type="button" onClick={onSampleDocs}>
           Docs sample
         </button>
+        <button type="button" onClick={onSubmitPreview}>
+          Submit preview
+        </button>
         <button type="button" disabled aria-disabled="true">
-          Review and Submit (MG328 future work)
+          Run with Worker (MG329 future work)
         </button>
       </div>
       <dl>
@@ -2332,6 +2442,76 @@ function BootstrapAlphaChatToTaskPanel({
         <StatusValue label="token_printed" value={String(preview.token_printed)} />
         <StatusValue label="Planner message" value={message} />
       </dl>
+      <section className="draft-review-submit-card" aria-label="Draft Review + Submit">
+        <h3>Draft Review + Submit</h3>
+        <div className="mode-strip execution-disabled-banner" aria-label="Draft review submit disabled execution flags">
+          <span>claim_created=false</span>
+          <span>execution_started=false</span>
+          <span>codex_run_called=false; matlab_run_called=false; worker_loop_started=false</span>
+          <span>arbitrary_shell_enabled=false; token_printed=false</span>
+        </div>
+        <dl>
+          <StatusValue label="Review schema" value={submitPreview.schema} />
+          <StatusValue label="Review status" value={submitPreview.review_status} />
+          <StatusValue label="Review reason" value={submitPreview.review_reason} />
+          <StatusValue label="Template id" value={submitPreview.template_id} />
+          <StatusValue label="Risk" value={submitPreview.risk} />
+          <StatusValue label="Allowed paths" value={submitPreview.allowed_paths.join("; ") || "none"} />
+          <StatusValue label="Blocked paths" value={submitPreview.blocked_paths.join("; ") || "none"} />
+          <StatusValue label="Runner id" value={submitPreview.runner_id} />
+          <StatusValue label="Evidence schema" value={submitPreview.evidence_schema.join("; ") || "none"} />
+          <StatusValue label="Confirmation requirement" value={DRAFT_SUBMIT_CONFIRMATION_TEXT} />
+          <StatusValue label="task_created" value={String(submitPreview.task_created)} />
+          <StatusValue label="campaign_created" value={String(submitPreview.campaign_created)} />
+          <StatusValue label="claim_created" value={String(submitPreview.claim_created)} />
+          <StatusValue label="execution_started" value={String(submitPreview.execution_started)} />
+          <StatusValue label="codex_run_called" value={String(submitPreview.codex_run_called)} />
+          <StatusValue label="matlab_run_called" value={String(submitPreview.matlab_run_called)} />
+          <StatusValue label="worker_loop_started" value={String(submitPreview.worker_loop_started)} />
+          <StatusValue label="arbitrary_shell_enabled" value={String(submitPreview.arbitrary_shell_enabled)} />
+          <StatusValue label="token_printed" value={String(submitPreview.token_printed)} />
+          <StatusValue label="Submit message" value={submitMessage} />
+        </dl>
+        <label className="manual-task-input-label" htmlFor="draft-submit-confirmation">
+          Confirm submit
+        </label>
+        <input
+          id="draft-submit-confirmation"
+          className="manual-task-input"
+          value={confirmationText}
+          onChange={(event) => onConfirmationChange(event.currentTarget.value)}
+          aria-label="Draft submit exact confirmation"
+        />
+        <div className="queue-action-grid">
+          <button type="button" onClick={onSubmitPreview}>
+            Submit preview
+          </button>
+          <button type="button" onClick={onConfirmSubmit} disabled={!confirmationMatches}>
+            Confirm submit
+          </button>
+          <button type="button" disabled aria-disabled="true">
+            Run with Worker (MG329 future work)
+          </button>
+        </div>
+        {submitResult ? (
+          <dl>
+            <StatusValue label="Result schema" value={submitResult.schema} />
+            <StatusValue label="Created task id" value={submitResult.created_task_id ?? "none"} />
+            <StatusValue label="Created campaign id" value={submitResult.created_campaign_id ?? "none"} />
+            <StatusValue label="Created campaign steps" value={submitResult.created_campaign_step_ids?.join("; ") ?? "none"} />
+            <StatusValue label="Next safe action" value={submitResult.next_safe_action ?? "hold_for_mg329_worker_runner"} />
+            <StatusValue label="task_created" value={String(submitResult.task_created)} />
+            <StatusValue label="campaign_created" value={String(submitResult.campaign_created)} />
+            <StatusValue label="claim_created" value={String(submitResult.claim_created)} />
+            <StatusValue label="execution_started" value={String(submitResult.execution_started)} />
+            <StatusValue label="codex_run_called" value={String(submitResult.codex_run_called)} />
+            <StatusValue label="matlab_run_called" value={String(submitResult.matlab_run_called)} />
+            <StatusValue label="worker_loop_started" value={String(submitResult.worker_loop_started)} />
+            <StatusValue label="arbitrary_shell_enabled" value={String(submitResult.arbitrary_shell_enabled)} />
+            <StatusValue label="token_printed" value={String(submitResult.token_printed)} />
+          </dl>
+        ) : null}
+      </section>
     </section>
   );
 }
@@ -2402,7 +2582,7 @@ function BootstrapAlphaTaskTemplateRegistryPanel({
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true">
-          Review and Submit (MG328 future work)
+          Draft submit uses Chat-to-Task review
         </button>
         <button type="button" disabled aria-disabled="true">
           Template execution unavailable

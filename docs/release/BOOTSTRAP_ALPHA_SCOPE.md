@@ -14,6 +14,7 @@ worker execution loop.
   visibility for Bootstrap Alpha;
 - chat-to-task draft target;
 - task template registry target;
+- reviewed draft submit target;
 - worker template runner target;
 - golden path trial target.
 
@@ -45,6 +46,12 @@ templates and lets Desktop/planner scripts query that metadata. It does not
 create server tasks or campaigns, claim tasks, run Codex, run MATLAB, start
 worker loops, send notifications, expose arbitrary shell, or persist raw
 prompts.
+
+MG328 covers reviewed queued-record submit only. Submit preview creates
+nothing. Confirmed submit may create one queued task or one non-running draft
+campaign after exact operator confirmation. It does not claim tasks, run
+Codex, run MATLAB, start worker loops, send notifications, expose arbitrary
+shell, unpause project control, or persist raw prompts or raw responses.
 
 ## Release Principle
 

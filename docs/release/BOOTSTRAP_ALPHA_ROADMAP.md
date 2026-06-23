@@ -63,6 +63,11 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Acceptance criteria: preview clearly shows allowed/blocked paths and no-shell
   boundary; confirmation creates server-side records; rejection creates no task;
   evidence remains safe.
+- Implementation note: MG328 adds reviewed submit contracts,
+  `POST /v1/drafts/submit-preview`, `POST /v1/drafts/submit`, the
+  `skybridge-draft-submit.ps1` helper, Desktop Draft Review + Submit card, and
+  focused submit smokes. Submit preview creates nothing. Confirmed submit
+  creates queued task or non-running draft campaign records only.
 - Forbidden scope: worker claim, runner execution, automatic merge, hidden
   Desktop execution controls.
 - Live deployment expected: maybe, if server task/campaign APIs change.

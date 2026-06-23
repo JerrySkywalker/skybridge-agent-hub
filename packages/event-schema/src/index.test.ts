@@ -42,6 +42,8 @@ import {
   redactForTelemetry,
   SharedRedactionRules,
   TASK_TEMPLATE_REGISTRY,
+  DraftSubmitPreviewSchema,
+  DraftSubmitResultSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
   getTaskTemplate,
@@ -456,6 +458,56 @@ describe("event schema", () => {
       expect.arrayContaining([".env", "secrets/**", "deploy/**", ".git/**", "Cloudflare", "OpenResty", "Authelia"]),
     );
     expect(matlabTemplate?.evidence_schema).toContain("skybridge.matlab_sweep_evidence.v1");
+  });
+
+  it("models draft submit preview and result without execution", () => {
+    const preview = DraftSubmitPreviewSchema.parse({
+      schema: "skybridge.draft_submit_preview.v1",
+      ok: true,
+      draft_id: "draft_docs_abc123abc123",
+      draft_type: "task",
+      template_id: "software-docs-task.v1",
+      project_id: "skybridge-agent-hub",
+      title: "Software Docs Task",
+      risk: "low",
+      required_capabilities: ["git", "codex"],
+      allowed_paths: ["docs/**", "README.md"],
+      blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+      runner_id: "software-docs-task-runner.v1",
+      evidence_schema: ["skybridge.docs_task_evidence.v1"],
+      review_status: "ready_for_confirmation",
+      review_reason: "draft_validated_create_queued_records_only_no_execution",
+      submitted_by: "local-operator",
+      task_created: false,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      worker_loop_started: false,
+      arbitrary_shell_enabled: false,
+      project_control_unpause: false,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      token_printed: false,
+    });
+    expect(preview.task_created).toBe(false);
+    expect(preview.execution_started).toBe(false);
+
+    const result = DraftSubmitResultSchema.parse({
+      ...preview,
+      schema: "skybridge.draft_submit_result.v1",
+      review_status: "submitted",
+      review_reason: "queued_task_created_no_execution",
+      created_task_id: "draft_task_abc123abc123",
+      task_created: true,
+      campaign_created: false,
+      next_safe_action: "hold_for_mg329_worker_runner",
+    });
+    expect(result.task_created).toBe(true);
+    expect(result.claim_created).toBe(false);
+    expect(result.worker_loop_started).toBe(false);
+    expect(result.token_printed).toBe(false);
   });
 
   it("models Hermes DeepSeek provider preview disabled by default", () => {

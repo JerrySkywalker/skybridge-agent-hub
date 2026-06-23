@@ -349,6 +349,17 @@ dd {
   border-left: 4px solid #8b5cf6;
 }
 
+.draft-review-submit-card {
+  margin-top: 18px;
+  border-top: 1px solid #dfe6ea;
+  padding-top: 18px;
+}
+
+.draft-review-submit-card h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
 @media (max-width: 820px) {
   body {
     min-width: 0;

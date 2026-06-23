@@ -21,7 +21,8 @@ commands. MG327 makes the first templates first-class in
 
 ## First Planned Templates
 
-MG327 registers these template ids for deterministic draft previews only.
+MG327 registers these template ids for deterministic draft previews. MG328 may
+use the same template metadata to validate confirmed queued-record submit.
 Template execution remains future reviewed work.
 
 ### `software-docs-task.v1`
@@ -54,10 +55,11 @@ or reports.
 
 ## Freeze Boundary
 
-MG327 documents, types, and validates the registry only. It does not implement
-template execution, MATLAB execution, Codex execution, task claims, worker
-loops, notification sends, daemon paths, or project-control changes. Every
-registered template keeps `execution_supported=false`,
+MG327 documents, types, and validates the registry only. MG328 adds reviewed
+queued-record submit, but still does not implement template execution, MATLAB
+execution, Codex execution, task claims, worker loops, notification sends,
+daemon paths, or project-control changes. Every registered template keeps
+`execution_supported=false`,
 `task_creation_supported=false`, `campaign_creation_supported=false`,
 `claim_supported=false`, `codex_run_supported=false`,
 `matlab_run_supported=false`, `arbitrary_shell_enabled=false`, and

@@ -46,6 +46,9 @@ import type {
   CampaignDraft as CampaignDraftContract,
   TaskDraftClarifyingQuestion as TaskDraftClarifyingQuestionContract,
   TaskDraftPreview as TaskDraftPreviewContract,
+  DraftReview as DraftReviewContract,
+  DraftSubmitPreview as DraftSubmitPreviewContract,
+  DraftSubmitResult as DraftSubmitResultContract,
   TaskTemplate as TaskTemplateContract,
   TaskTemplateRegistry as TaskTemplateRegistryContract,
 } from "@skybridge-agent-hub/event-schema";
@@ -1926,6 +1929,9 @@ export type TaskDraft = TaskDraftContract;
 export type CampaignDraft = CampaignDraftContract;
 export type TaskDraftClarifyingQuestion = TaskDraftClarifyingQuestionContract;
 export type TaskDraftPreview = TaskDraftPreviewContract;
+export type DraftReview = DraftReviewContract;
+export type DraftSubmitPreview = DraftSubmitPreviewContract;
+export type DraftSubmitResult = DraftSubmitResultContract;
 export type TaskTemplate = TaskTemplateContract;
 export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
@@ -4518,6 +4524,114 @@ export const fixtureChatToTaskDraftPreview: TaskDraftPreview = {
   matlab_run_called: false,
   arbitrary_shell_enabled: false,
   token_printed: false,
+};
+
+export const DRAFT_SUBMIT_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_QUEUED_DRAFT_RECORDS_ONLY_NO_EXECUTION";
+
+export const fixtureDraftSubmitPreview: DraftSubmitPreview = {
+  schema: "skybridge.draft_submit_preview.v1",
+  ok: true,
+  draft_id: fixtureMatlabChatToTaskDraft.draft_id,
+  draft_type: fixtureMatlabChatToTaskDraft.draft_type,
+  template_id: fixtureMatlabChatToTaskDraft.template_id,
+  project_id: fixtureMatlabChatToTaskDraft.project_id,
+  title: fixtureMatlabChatToTaskDraft.title,
+  risk: fixtureMatlabChatToTaskDraft.risk,
+  required_capabilities: fixtureMatlabChatToTaskDraft.required_capabilities,
+  allowed_paths: fixtureMatlabChatToTaskDraft.allowed_paths,
+  blocked_paths: fixtureMatlabChatToTaskDraft.blocked_paths,
+  runner_id: fixtureMatlabChatToTaskDraft.runner_id,
+  evidence_schema: fixtureMatlabChatToTaskDraft.evidence_schema,
+  review_status: "ready_for_confirmation",
+  review_reason: "draft_validated_create_queued_records_only_no_execution",
+  submitted_by: "local-operator",
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  worker_loop_started: false,
+  arbitrary_shell_enabled: false,
+  project_control_unpause: false,
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  token_printed: false,
+  next_safe_action: "confirm_submit_or_hold_for_review",
+};
+
+export const fixtureDocsDraftSubmitResult: DraftSubmitResult = {
+  schema: "skybridge.draft_submit_result.v1",
+  ok: true,
+  draft_id: fixtureDocsChatToTaskDraft.draft_id,
+  draft_type: fixtureDocsChatToTaskDraft.draft_type,
+  template_id: fixtureDocsChatToTaskDraft.template_id,
+  project_id: fixtureDocsChatToTaskDraft.project_id,
+  title: fixtureDocsChatToTaskDraft.title,
+  risk: fixtureDocsChatToTaskDraft.risk,
+  required_capabilities: fixtureDocsChatToTaskDraft.required_capabilities,
+  allowed_paths: fixtureDocsChatToTaskDraft.allowed_paths,
+  blocked_paths: fixtureDocsChatToTaskDraft.blocked_paths,
+  runner_id: fixtureDocsChatToTaskDraft.runner_id,
+  evidence_schema: fixtureDocsChatToTaskDraft.evidence_schema,
+  review_status: "submitted",
+  review_reason: "queued_task_created_no_execution",
+  submitted_by: "local-operator",
+  created_task_id: "draft_task_4b1f7a8b9c0d",
+  task_created: true,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  worker_loop_started: false,
+  arbitrary_shell_enabled: false,
+  project_control_unpause: false,
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  token_printed: false,
+  next_safe_action: "hold_for_mg329_worker_runner",
+};
+
+export const fixtureMatlabDraftSubmitResult: DraftSubmitResult = {
+  schema: "skybridge.draft_submit_result.v1",
+  ok: true,
+  draft_id: fixtureMatlabChatToTaskDraft.draft_id,
+  draft_type: fixtureMatlabChatToTaskDraft.draft_type,
+  template_id: fixtureMatlabChatToTaskDraft.template_id,
+  project_id: fixtureMatlabChatToTaskDraft.project_id,
+  title: fixtureMatlabChatToTaskDraft.title,
+  risk: fixtureMatlabChatToTaskDraft.risk,
+  required_capabilities: fixtureMatlabChatToTaskDraft.required_capabilities,
+  allowed_paths: fixtureMatlabChatToTaskDraft.allowed_paths,
+  blocked_paths: fixtureMatlabChatToTaskDraft.blocked_paths,
+  runner_id: fixtureMatlabChatToTaskDraft.runner_id,
+  evidence_schema: fixtureMatlabChatToTaskDraft.evidence_schema,
+  review_status: "submitted",
+  review_reason: "draft_campaign_created_no_execution",
+  submitted_by: "local-operator",
+  created_campaign_id: "draft_campaign_6d1f7a8b9c0d",
+  created_campaign_step_ids: [
+    "draft_campaign_6d1f7a8b9c0d:prepare-parameter-grid",
+    "draft_campaign_6d1f7a8b9c0d:run-matlab-sweep",
+    "draft_campaign_6d1f7a8b9c0d:aggregate-results",
+    "draft_campaign_6d1f7a8b9c0d:generate-analysis-report",
+    "draft_campaign_6d1f7a8b9c0d:hold-for-operator-review",
+  ],
+  task_created: false,
+  campaign_created: true,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  worker_loop_started: false,
+  arbitrary_shell_enabled: false,
+  project_control_unpause: false,
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  token_printed: false,
+  next_safe_action: "hold_for_mg329_worker_runner",
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {
