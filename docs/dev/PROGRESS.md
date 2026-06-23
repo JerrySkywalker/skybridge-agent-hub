@@ -1,5 +1,21 @@
 # Progress Log
 
+## 2026-06-23 Mega Goal 325 Desktop Installer And Worker Service Manager
+
+- Added `skybridge.local_worker_service_status.v1` for local Windows worker
+  service install/readiness status with safe service, config, tool capability,
+  blocker, warning and recommended-action fields.
+- Added read-only status/doctor scripts plus preview-only install/repair scripts
+  for Bootstrap Alpha worker service management.
+- Added a Desktop Bootstrap Alpha Worker Setup panel with install/repair state,
+  tool capability matrix, blockers, warnings and explicit disabled execution
+  flags.
+- Added Windows worker install Bootstrap Alpha docs and focused smokes for
+  status, doctor, Desktop contract, and bootstrap-alpha acceptance.
+- Kept task claim, Codex execution, MATLAB execution, worker loop start,
+  notification send, arbitrary shell, apply install/repair and token printing
+  disabled.
+
 ## 2026-06-08 Goal 200 Controlled Goal Draft Review And Import
 
 - Added `skybridge-goal-draft-review.ps1` with review queue, validate, approve/reject/edit/supersede, import-preview, import-apply, safe-summary and attention-event commands.

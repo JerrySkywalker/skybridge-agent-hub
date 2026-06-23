@@ -113,6 +113,8 @@ drafts, template-bound worker runners, and operator-reviewed evidence.
 Start with [docs/product/BOOTSTRAP_ALPHA_PRODUCT_FLOW.md](docs/product/BOOTSTRAP_ALPHA_PRODUCT_FLOW.md),
 [docs/release/BOOTSTRAP_ALPHA_SCOPE.md](docs/release/BOOTSTRAP_ALPHA_SCOPE.md)
 and [docs/release/BOOTSTRAP_ALPHA_ROADMAP.md](docs/release/BOOTSTRAP_ALPHA_ROADMAP.md).
+For the first local worker setup/status layer, see
+[docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 
 ## Quick Start
 

@@ -126,6 +126,10 @@ p {
   border-color: #9eb8c6;
 }
 
+.bootstrap-worker-setup-panel {
+  border-color: #7aa0b8;
+}
+
 .resident-status-card,
 .local-worker-supervisor-card,
 .local-resource-policy-card,
@@ -158,6 +162,30 @@ p {
   font-size: 12px;
   font-weight: 800;
   padding: 9px 10px;
+}
+
+.tool-capability-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.tool-capability-grid span {
+  border: 1px solid #c7d7df;
+  border-radius: 6px;
+  color: #32434e;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
+.tool-available {
+  background: #e8f4ed;
+}
+
+.tool-missing {
+  background: #fff2d8;
 }
 
 .future-controls {
@@ -333,6 +361,10 @@ dd {
   }
 
   .future-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-capability-grid {
     grid-template-columns: 1fr;
   }
 

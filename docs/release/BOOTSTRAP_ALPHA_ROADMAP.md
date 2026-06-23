@@ -12,6 +12,10 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Acceptance criteria: Desktop shows install/repair/status states; repair is
   previewed or explicitly confirmed; worker service status is read safely; no
   task claim or execution starts.
+- Implementation note: MG325 adds
+  `skybridge.local_worker_service_status.v1`, read-only status/doctor scripts,
+  preview-only install/repair scripts, Desktop Worker Setup panel, and
+  [Windows Worker Install Bootstrap Alpha](WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 - Forbidden scope: arbitrary shell controls, daemon expansion, production infra,
   worker loop start.
 - Live deployment expected: no.

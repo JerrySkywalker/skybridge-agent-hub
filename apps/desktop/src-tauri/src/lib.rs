@@ -46,6 +46,7 @@ struct DesktopStatus {
     operator_readiness: Pre190Readiness,
     campaign_report: Value,
     worker_service_state: Value,
+    local_worker_service_status: Value,
     desktop_resident_state: Value,
     local_worker_supervisor_state: Value,
     local_resource_policy: Value,
@@ -287,6 +288,18 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         .get("worker_service_state")
         .cloned()
         .unwrap_or_else(|| fixture_worker_service_state(&worker_json));
+    let local_worker_service_status = match run_local_worker_service_status() {
+        Ok(value) => value,
+        Err(error) => {
+            warnings.push(format!("local_worker_service_status: {}", redact_summary(&error)));
+            fixture_local_worker_service_status(&worker_service_state)
+        }
+    };
+    detect_token_printed(
+        "local worker service status",
+        &local_worker_service_status,
+        &mut warnings,
+    );
     let desktop_resident_state = fixture_desktop_resident_state();
     let local_worker_supervisor_state = fixture_local_worker_supervisor_state(&worker_service_state);
     let local_resource_policy = fixture_local_resource_policy();
@@ -335,6 +348,7 @@ fn collect_status(app: &AppHandle) -> Result<DesktopStatus, String> {
         operator_readiness,
         campaign_report,
         worker_service_state,
+        local_worker_service_status,
         desktop_resident_state,
         local_worker_supervisor_state,
         local_resource_policy,
@@ -422,6 +436,23 @@ fn run_campaign_report() -> Result<Value, String> {
         PROJECT_ID.into(),
         "-TokenFile".into(),
         token_file.display().to_string(),
+        "-Json".into(),
+    ];
+    parse_json(&run_powershell(&command_args)?)
+}
+
+fn run_local_worker_service_status() -> Result<Value, String> {
+    let repo = repo_root()?;
+    let script_path = repo
+        .join("scripts")
+        .join("powershell")
+        .join("skybridge-worker-service-status.ps1");
+    let command_args = vec![
+        "-NoProfile".to_string(),
+        "-ExecutionPolicy".into(),
+        "Bypass".into(),
+        "-File".into(),
+        script_path.display().to_string(),
         "-Json".into(),
     ];
     parse_json(&run_powershell(&command_args)?)
@@ -940,6 +971,63 @@ fn fixture_worker_service_state(worker_json: &Value) -> Value {
         },
         "readiness_blockers": [first_blocker, "execution_disabled_until_goal_195"],
         "token_available": false,
+        "token_printed": false
+    })
+}
+
+fn fixture_local_worker_service_status(_worker_service: &Value) -> Value {
+    serde_json::json!({
+        "schema": "skybridge.local_worker_service_status.v1",
+        "ok": true,
+        "worker_id": "local-windows-worker",
+        "service_name": "SkyBridgeWorkerService",
+        "service_installed": false,
+        "service_running": false,
+        "service_start_type": "not_installed",
+        "install_state": "not_installed_preview_available",
+        "repair_state": "install_required_before_repair",
+        "install_preview_available": true,
+        "repair_preview_available": true,
+        "api_base_configured": false,
+        "token_file_present": false,
+        "repo_root_detected": true,
+        "powershell_available": true,
+        "git_available": true,
+        "gh_available": false,
+        "node_available": true,
+        "pnpm_available": true,
+        "codex_available": false,
+        "matlab_available": false,
+        "capabilities": {
+            "status_readonly": true,
+            "install_preview": true,
+            "repair_preview": true,
+            "doctor_readonly": true,
+            "service_apply": false,
+            "task_claim": false,
+            "task_execute": false,
+            "worker_loop": false,
+            "codex_execution": false,
+            "matlab_execution": false,
+            "arbitrary_shell": false,
+            "tools": {
+                "powershell": true,
+                "git": true,
+                "gh": false,
+                "node": true,
+                "pnpm": true,
+                "codex": false,
+                "matlab": false
+            },
+            "token_printed": false
+        },
+        "readiness_status": "blocked",
+        "blockers": ["service_not_installed", "api_base_not_configured", "worker_token_file_missing"],
+        "warnings": ["gh_missing_pr_operations_disabled", "codex_missing_codex_templates_disabled", "matlab_missing_matlab_templates_disabled"],
+        "recommended_next_action": "run_install_preview",
+        "claim_enabled": false,
+        "execute_enabled": false,
+        "worker_loop_started": false,
         "token_printed": false
     })
 }
