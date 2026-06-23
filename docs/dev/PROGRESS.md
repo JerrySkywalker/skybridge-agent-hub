@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 330 Local Worker Install Apply And Heartbeat Pairing
+
+- Added exact-confirmed local worker install and repair scripts:
+  `skybridge-worker-service-install.ps1` and
+  `skybridge-worker-service-repair.ps1`.
+- Added `skybridge-worker-heartbeat-pairing-drill.ps1` for register and
+  heartbeat-only pairing through `/v1/workers/register` and
+  `/v1/workers/:workerId/heartbeat`.
+- Hardened `skybridge.local_worker_service_status.v1` with local config paths,
+  install apply availability, repair apply availability, heartbeat pairing
+  availability, local state metadata, last heartbeat, and cloud worker status.
+- Updated Desktop Bootstrap Alpha Worker Setup to show install/repair apply
+  availability, heartbeat pairing state, cloud registration status, and disabled
+  execution flags. Desktop live apply remains unavailable.
+- Added fixture smokes for install preview, install apply, repair preview,
+  heartbeat pairing, Desktop install flow, and Bootstrap Alpha acceptance.
+- Kept live task claim, worker template runner live apply, Codex execution,
+  MATLAB execution, arbitrary shell, worker loop start, PR creation,
+  project-control unpause, notification send, and token printing disabled.
+
 ## 2026-06-23 Mega Goal 328 Draft Review And Submit To Server
 
 - Added shared reviewed submit contracts: `skybridge.draft_review.v1`,

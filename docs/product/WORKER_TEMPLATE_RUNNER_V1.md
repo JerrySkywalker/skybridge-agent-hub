@@ -105,7 +105,9 @@ tasks.
 - no notification send
 - `token_printed=false`
 
-MG330 is the next planned MATLAB golden trial and must introduce MATLAB
-execution separately through its own reviewed template runner boundary.
+MG330 is the local worker install/apply and heartbeat pairing drill. It does
+not add Codex or MATLAB execution and does not run the worker template runner
+against live cloud tasks. MATLAB execution remains deferred to a later
+reviewed golden-trial goal.
 
 token_printed=false

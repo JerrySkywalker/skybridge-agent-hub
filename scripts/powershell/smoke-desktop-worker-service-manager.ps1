@@ -11,8 +11,12 @@ $clientSource = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "packages\cli
 foreach ($needle in @(
   "Bootstrap Alpha Worker Setup",
   "Tool capability matrix",
-  "Install preview only",
-  "Repair preview only",
+  "Install preview",
+  "Install apply unavailable in Desktop",
+  "Repair preview",
+  "Repair apply unavailable in Desktop",
+  "Heartbeat pairing preview",
+  "Heartbeat apply unavailable in Desktop",
   "Doctor read-only",
   "claim_enabled=false",
   "execute_enabled=false",
@@ -28,8 +32,12 @@ foreach ($needle in @(
 
 foreach ($needle in @(
   "skybridge.local_worker_service_status.v1",
+  "install_apply_available",
+  "heartbeat_apply_available",
+  "cloud_worker_registered",
   "claim_enabled: false",
   "execute_enabled: false",
+  "template_runner_enabled: false",
   "worker_loop_started: false",
   "token_printed: false"
 )) {

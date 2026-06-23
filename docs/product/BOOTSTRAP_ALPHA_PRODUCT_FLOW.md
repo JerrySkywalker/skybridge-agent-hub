@@ -11,8 +11,8 @@ automation.
    deploy contract.
 2. Install the local Rust/Tauri Desktop client.
 3. The Desktop client installs, repairs, or reports status for the local Windows
-   worker service. MG325 implements this as status, doctor, install-preview, and
-   repair-preview only.
+   worker service. MG330 adds exact-confirmed local install/repair apply and a
+   heartbeat pairing drill while keeping execution disabled.
 4. The Desktop client provides a natural-language chat window for task intent.
 5. A local Hermes planner or server-mediated Hermes planner converts natural
    language into structured task or campaign drafts.
@@ -119,5 +119,24 @@ Desktop shows a preview-only Worker Runner panel. The runner keeps
 `arbitrary_shell_enabled=false`, `worker_loop_started=false`,
 `unbounded_run_enabled=false`, `project_control_unpaused=false`, and
 `token_printed=false`.
+
+## MG330 Local Worker Install Apply And Heartbeat Pairing
+
+MG330 turns the preview-only worker service layer into a local non-admin
+install/repair apply path and a heartbeat pairing drill. PowerShell apply
+requires exact confirmation and writes only local `.skybridge` config,
+heartbeat-only wrapper metadata, and safe state. The heartbeat drill can
+register and heartbeat the worker with the server, then holds for future
+operator action.
+
+Desktop shows install apply availability, repair apply availability, local
+service metadata, API base configured, token file present, worker id, last
+heartbeat, cloud worker registration, cloud worker online/offline status, and
+the recommended next action. Desktop does not perform live apply in MG330.
+
+MG330 keeps `claim_enabled=false`, `execute_enabled=false`,
+`template_runner_enabled=false`, `worker_loop_started=false`,
+`codex_run_called=false`, `matlab_run_called=false`,
+`arbitrary_shell_enabled=false`, and `token_printed=false`.
 
 token_printed=false

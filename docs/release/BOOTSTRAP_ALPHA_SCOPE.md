@@ -12,6 +12,8 @@ worker execution loop.
 - local worker service install target;
 - local worker service status, doctor, install-preview, and repair-preview
   visibility for Bootstrap Alpha;
+- local worker service install/repair apply with exact confirmation and
+  heartbeat-only pairing drill;
 - chat-to-task draft target;
 - task template registry target;
 - reviewed draft submit target;
@@ -60,6 +62,15 @@ exact confirmation text is supplied. It does not run Codex, run MATLAB, expose
 arbitrary shell, start a worker loop, run unbounded, unpause project control,
 create PRs, requeue old tasks, or claim live cloud tasks during post-deploy
 smoke.
+
+MG330 covers Local Worker Install Apply and Heartbeat Pairing only. Install and
+repair apply may create local `.skybridge` config scaffolding, write a
+non-admin heartbeat-only wrapper, and record safe local state after exact
+confirmation. Heartbeat apply may register and heartbeat the worker with the
+server after exact confirmation. It does not claim tasks, run the worker
+template runner against live cloud, run Codex, run MATLAB, start a worker loop,
+send notifications, expose arbitrary shell, run unbounded, create PRs, requeue
+old tasks, unpause project control, or mutate production infrastructure.
 
 ## Release Principle
 

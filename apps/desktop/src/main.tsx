@@ -2700,29 +2700,52 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
     <section className="panel bootstrap-worker-setup-panel" aria-label="Bootstrap Alpha Worker Setup">
       <h2>Bootstrap Alpha Worker Setup</h2>
       <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha worker setup disabled execution flags">
+        <span>MG330 install apply is PowerShell exact-confirmation only</span>
         <span>claim_enabled=false</span>
         <span>execute_enabled=false</span>
-        <span>worker_loop_started=false; token_printed=false</span>
+        <span>template_runner_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
         <StatusValue label="Schema" value={status.schema} />
         <StatusValue label="Readiness" value={status.readiness_status} />
         <StatusValue label="Worker id" value={status.worker_id} />
         <StatusValue label="Service name" value={status.service_name} />
+        <StatusValue label="Install strategy" value={status.install_strategy ?? "not_installed"} />
         <StatusValue label="Install state" value={status.install_state} />
         <StatusValue label="Repair state" value={status.repair_state} />
+        <StatusValue label="Install preview" value={String(status.install_preview_available)} />
+        <StatusValue label="Install apply available" value={String(status.install_apply_available ?? false)} />
+        <StatusValue label="Repair preview" value={String(status.repair_preview_available)} />
+        <StatusValue label="Repair apply available" value={String(status.repair_apply_available ?? false)} />
+        <StatusValue label="Heartbeat preview" value={String(status.heartbeat_preview_available ?? false)} />
+        <StatusValue label="Heartbeat apply available" value={String(status.heartbeat_apply_available ?? false)} />
         <StatusValue label="Service installed" value={String(status.service_installed)} />
         <StatusValue label="Service running" value={String(status.service_running)} />
         <StatusValue label="Service start type" value={status.service_start_type} />
         <StatusValue label="API base configured" value={String(status.api_base_configured)} />
+        <StatusValue label="API base host" value={status.api_base_host ?? "none"} />
         <StatusValue label="Token file present" value={String(status.token_file_present)} />
+        <StatusValue label="Worker id configured" value={String(status.worker_id_configured ?? false)} />
+        <StatusValue label="Repo root configured" value={String(status.repo_root_configured ?? false)} />
         <StatusValue label="Repo root detected" value={String(status.repo_root_detected)} />
+        <StatusValue label="SkyBridge config" value={status.skybridge_config_path ?? "$HOME\\.skybridge\\skybridge.env.ps1"} />
+        <StatusValue label="Worker config" value={status.worker_config_path ?? "$HOME\\.skybridge\\worker.env.ps1"} />
+        <StatusValue label="Token file" value={status.worker_token_path ?? "$HOME\\.skybridge\\worker-token.txt"} />
+        <StatusValue label="Local service state" value={status.service_state_path ?? "$HOME\\.skybridge\\state\\worker-service.json"} />
+        <StatusValue label="Service command preview" value={status.service_command_preview ?? "skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-preview"} />
+        <StatusValue label="Last heartbeat" value={status.last_heartbeat_at ?? "none"} />
+        <StatusValue label="Cloud worker registered" value={String(status.cloud_worker_registered ?? false)} />
+        <StatusValue label="Cloud worker status" value={status.cloud_worker_status ?? "unknown"} />
         <StatusValue label="Blockers" value={status.blockers.join("; ") || "none"} />
         <StatusValue label="Warnings" value={status.warnings.join("; ") || "none"} />
         <StatusValue label="Recommended next action" value={status.recommended_next_action} />
         <StatusValue label="claim_enabled" value={String(status.claim_enabled)} />
         <StatusValue label="execute_enabled" value={String(status.execute_enabled)} />
+        <StatusValue label="template_runner_enabled" value={String(status.template_runner_enabled ?? false)} />
         <StatusValue label="worker_loop_started" value={String(status.worker_loop_started)} />
+        <StatusValue label="codex_run_called" value={String(status.codex_run_called ?? false)} />
+        <StatusValue label="matlab_run_called" value={String(status.matlab_run_called ?? false)} />
+        <StatusValue label="arbitrary_shell_enabled" value={String(status.arbitrary_shell_enabled ?? false)} />
         <StatusValue label="token_printed" value={String(status.token_printed)} />
       </dl>
       <div className="tool-capability-grid" aria-label="Tool capability matrix">
@@ -2733,11 +2756,23 @@ function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerService
         ))}
       </div>
       <div className="queue-action-grid">
-        <button type="button" disabled aria-disabled="true" title="Preview-only script: skybridge-worker-service-install-preview.ps1">
-          Install preview only
+        <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-service-install.ps1 -Command preview">
+          Install preview
         </button>
-        <button type="button" disabled aria-disabled="true" title="Preview-only script: skybridge-worker-service-repair-preview.ps1">
-          Repair preview only
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply requires I_UNDERSTAND_INSTALL_LOCAL_WORKER_SERVICE_NO_TASK_EXECUTION">
+          Install apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-service-repair.ps1 -Command repair-preview">
+          Repair preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: repair requires I_UNDERSTAND_REPAIR_LOCAL_WORKER_SERVICE_NO_TASK_EXECUTION">
+          Repair apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Preview script: skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-preview">
+          Heartbeat pairing preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: heartbeat apply requires I_UNDERSTAND_REGISTER_AND_HEARTBEAT_WORKER_ONLY_NO_TASK_CLAIM">
+          Heartbeat apply unavailable in Desktop
         </button>
         <button type="button" disabled aria-disabled="true" title="Read-only script: skybridge-worker-service-doctor.ps1">
           Doctor read-only

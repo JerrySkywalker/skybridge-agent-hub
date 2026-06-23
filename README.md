@@ -123,6 +123,8 @@ For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see
 [docs/product/WORKER_TEMPLATE_RUNNER_V1.md](docs/product/WORKER_TEMPLATE_RUNNER_V1.md).
+For local worker install/repair apply and heartbeat pairing, see
+[docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 
 ## Quick Start
 
