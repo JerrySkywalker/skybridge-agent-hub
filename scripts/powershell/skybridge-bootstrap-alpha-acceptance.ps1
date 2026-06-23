@@ -12,6 +12,7 @@ $requiredDocs = @(
   "docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md",
   "docs/product/TASK_TEMPLATE_REGISTRY.md",
   "docs/product/DRAFT_REVIEW_AND_SUBMIT.md",
+  "docs/product/WORKER_TEMPLATE_RUNNER_V1.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -28,6 +29,7 @@ $requiredScripts = @{
   chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
   task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
   draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
+  worker_template_runner = "scripts/powershell/skybridge-worker-template-runner.ps1"
 }
 
 $componentPaths = @{
@@ -110,7 +112,11 @@ $requiredPackageScripts = @(
   "smoke:draft-submit-preview",
   "smoke:draft-submit-server",
   "smoke:draft-submit-matlab-campaign",
-  "smoke:desktop-draft-review-submit"
+  "smoke:desktop-draft-review-submit",
+  "smoke:worker-template-runner-preview",
+  "smoke:worker-template-runner-apply-one-fixture",
+  "smoke:worker-template-runner-reject-unsafe",
+  "smoke:desktop-worker-template-runner"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -145,6 +151,7 @@ $desktopWorkerServiceManagerPresent = $false
 $desktopChatToTaskPanelPresent = $false
 $desktopTaskTemplateRegistryPanelPresent = $false
 $desktopDraftReviewSubmitPanelPresent = $false
+$desktopWorkerTemplateRunnerPanelPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -182,6 +189,14 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("worker_loop_started=false") -and
     $desktopSource -match [regex]::Escape("token_printed=false")
   )
+  $desktopWorkerTemplateRunnerPanelPresent = (
+    $desktopSource -match [regex]::Escape("Bootstrap Alpha Worker Runner Preview") -and
+    $desktopSource -match [regex]::Escape("BootstrapAlphaWorkerTemplateRunnerPanel") -and
+    $desktopSource -match [regex]::Escape("skybridge.worker_template_runner_preview.v1") -and
+    $desktopSource -match [regex]::Escape("Desktop preview-only") -and
+    $desktopSource -match [regex]::Escape("MaxTasks=1; claim via PowerShell exact confirmation only") -and
+    $desktopSource -match [regex]::Escape("codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false")
+  )
 }
 
 $workerStatusContract = $null
@@ -196,6 +211,9 @@ $taskTemplateRegistryError = $null
 $draftSubmitStatusContract = $null
 $draftSubmitStatusContractOk = $false
 $draftSubmitStatusError = $null
+$workerTemplateRunnerStatusContract = $null
+$workerTemplateRunnerStatusContractOk = $false
+$workerTemplateRunnerStatusError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -298,6 +316,28 @@ try {
       [bool]$draftSubmitStatusContract.token_printed -eq $false
     )
   }
+  $workerTemplateRunnerScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-worker-template-runner.ps1"
+  if (Test-Path -LiteralPath $workerTemplateRunnerScriptPath -PathType Leaf) {
+    $rawRunner = & pwsh -NoProfile -ExecutionPolicy Bypass -File $workerTemplateRunnerScriptPath -Command status -Json
+    $runnerText = ($rawRunner | Out-String).Trim()
+    Assert-NoUnsafeText $runnerText
+    $workerTemplateRunnerStatusContract = $runnerText | ConvertFrom-Json
+    $workerTemplateRunnerStatusContractOk = (
+      [string]$workerTemplateRunnerStatusContract.schema -eq "skybridge.worker_template_runner_status.v1" -and
+      [bool]$workerTemplateRunnerStatusContract.confirmation_required -eq $true -and
+      [bool]$workerTemplateRunnerStatusContract.preview_default -eq $true -and
+      [int]$workerTemplateRunnerStatusContract.max_tasks -eq 1 -and
+      @($workerTemplateRunnerStatusContract.supported_template_ids) -contains "safe-local-smoke.v1" -and
+      @($workerTemplateRunnerStatusContract.supported_runner_ids) -contains "safe-local-smoke-runner.v1" -and
+      [bool]$workerTemplateRunnerStatusContract.codex_run_called -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.matlab_run_called -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.worker_loop_started -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.unbounded_run_enabled -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.project_control_unpaused -eq $false -and
+      [bool]$workerTemplateRunnerStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -310,6 +350,9 @@ try {
   }
   if (-not $draftSubmitStatusContractOk) {
     $draftSubmitStatusError = "draft_submit_status_contract_failed"
+  }
+  if (-not $workerTemplateRunnerStatusContractOk) {
+    $workerTemplateRunnerStatusError = "worker_template_runner_status_contract_failed"
   }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
@@ -326,10 +369,12 @@ $ok = (
   $desktopChatToTaskPanelPresent -and
   $desktopTaskTemplateRegistryPanelPresent -and
   $desktopDraftReviewSubmitPanelPresent -and
+  $desktopWorkerTemplateRunnerPanelPresent -and
   $workerStatusContractOk -and
   $chatToTaskContractOk -and
   $taskTemplateRegistryContractOk -and
-  $draftSubmitStatusContractOk
+  $draftSubmitStatusContractOk -and
+  $workerTemplateRunnerStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -345,6 +390,7 @@ $report = [pscustomobject]@{
   desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
   desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
+  desktop_worker_template_runner_panel_present = $desktopWorkerTemplateRunnerPanelPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -412,6 +458,25 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   draft_submit_status_error = $draftSubmitStatusError
+  worker_template_runner_status_contract_ok = $workerTemplateRunnerStatusContractOk
+  worker_template_runner_status_contract = if ($workerTemplateRunnerStatusContract) {
+    [pscustomobject]@{
+      schema = $workerTemplateRunnerStatusContract.schema
+      confirmation_required = $workerTemplateRunnerStatusContract.confirmation_required
+      preview_default = $workerTemplateRunnerStatusContract.preview_default
+      max_tasks = $workerTemplateRunnerStatusContract.max_tasks
+      supported_template_ids = $workerTemplateRunnerStatusContract.supported_template_ids
+      supported_runner_ids = $workerTemplateRunnerStatusContract.supported_runner_ids
+      codex_run_called = $workerTemplateRunnerStatusContract.codex_run_called
+      matlab_run_called = $workerTemplateRunnerStatusContract.matlab_run_called
+      arbitrary_shell_enabled = $workerTemplateRunnerStatusContract.arbitrary_shell_enabled
+      worker_loop_started = $workerTemplateRunnerStatusContract.worker_loop_started
+      unbounded_run_enabled = $workerTemplateRunnerStatusContract.unbounded_run_enabled
+      project_control_unpaused = $workerTemplateRunnerStatusContract.project_control_unpaused
+      token_printed = $workerTemplateRunnerStatusContract.token_printed
+    }
+  } else { $null }
+  worker_template_runner_status_error = $workerTemplateRunnerStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

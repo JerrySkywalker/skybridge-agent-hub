@@ -81,8 +81,16 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Acceptance criteria: worker pulls and claims one compatible template task;
   runner enforces template bounds; evidence returns safely; operator review
   remains required.
+- Implementation note: MG329 adds
+  `skybridge.worker_template_runner_preview.v1`,
+  `skybridge.worker_template_runner_result.v1`,
+  `skybridge.template_runner_evidence.v1`, the
+  `skybridge-worker-template-runner.ps1` helper, fixture/local smokes, and a
+  Desktop Worker Runner Preview panel. Apply is exact-confirmed and limited to
+  one `safe-local-smoke.v1` fixture task.
 - Forbidden scope: MATLAB execution, arbitrary shell, unbounded run, daemon
-  auto-expansion, project-control unpause.
+  auto-expansion, project-control unpause, Codex execution, PR creation, live
+  cloud task claim during post-deploy smoke.
 - Live deployment expected: maybe, for server compatibility only.
 
 ## MG330 MATLAB Experiment Golden Trial

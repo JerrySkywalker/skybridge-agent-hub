@@ -138,6 +138,10 @@ p {
   border-color: #8a98bd;
 }
 
+.bootstrap-worker-template-runner-panel {
+  border-color: #b08a58;
+}
+
 .resident-status-card,
 .local-worker-supervisor-card,
 .local-resource-policy-card,

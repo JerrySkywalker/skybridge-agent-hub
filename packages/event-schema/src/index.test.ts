@@ -44,8 +44,11 @@ import {
   TASK_TEMPLATE_REGISTRY,
   DraftSubmitPreviewSchema,
   DraftSubmitResultSchema,
+  TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
+  WorkerTemplateRunnerPreviewSchema,
+  WorkerTemplateRunnerResultSchema,
   getTaskTemplate,
   listTaskTemplates,
 } from "./index.js";
@@ -508,6 +511,84 @@ describe("event schema", () => {
     expect(result.claim_created).toBe(false);
     expect(result.worker_loop_started).toBe(false);
     expect(result.token_printed).toBe(false);
+  });
+
+  it("models worker template runner preview, result, and evidence safely", () => {
+    const preview = WorkerTemplateRunnerPreviewSchema.parse({
+      schema: "skybridge.worker_template_runner_preview.v1",
+      ok: true,
+      mode: "preview",
+      worker_id: "worker-mg329",
+      project_id: "skybridge-agent-hub",
+      task_id: "mg329-safe-local-smoke",
+      template_id: "safe-local-smoke.v1",
+      runner_id: "safe-local-smoke-runner.v1",
+      selected: true,
+      eligible: true,
+      rejected_reason: "",
+      claim_created: false,
+      execution_started: false,
+      execution_completed: false,
+      execution_failed: false,
+      evidence_present: false,
+      allowed_paths_checked: true,
+      blocked_paths_checked: true,
+      changed_files: [],
+      validation_status: "preview_only",
+      result_summary: "Eligible safe local smoke fixture task.",
+      pr_created: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      unbounded_run_enabled: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    });
+    expect(preview.claim_created).toBe(false);
+    expect(preview.execution_started).toBe(false);
+
+    const result = WorkerTemplateRunnerResultSchema.parse({
+      ...preview,
+      schema: "skybridge.worker_template_runner_result.v1",
+      mode: "apply",
+      claim_created: true,
+      execution_started: true,
+      execution_completed: true,
+      evidence_present: true,
+      validation_status: "passed",
+      result_summary: "Fixture runner completed one safe-local-smoke task.",
+    });
+    expect(result.claim_created).toBe(true);
+    expect(result.execution_completed).toBe(true);
+    expect(result.codex_run_called).toBe(false);
+    expect(result.matlab_run_called).toBe(false);
+
+    const evidence = TemplateRunnerEvidenceSchema.parse({
+      schema: "skybridge.template_runner_evidence.v1",
+      ok: true,
+      worker_id: "worker-mg329",
+      project_id: "skybridge-agent-hub",
+      task_id: "mg329-safe-local-smoke",
+      template_id: "safe-local-smoke.v1",
+      runner_id: "safe-local-smoke-runner.v1",
+      evidence_schema_id: "skybridge.local_smoke_evidence.v1",
+      evidence_path: ".agent/tmp/worker-template-runner/mg329-safe-local-smoke/evidence.json",
+      changed_files: [],
+      validation_status: "passed",
+      result_summary: "Safe fixture evidence only.",
+      pr_created: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      unbounded_run_enabled: false,
+      project_control_unpaused: false,
+      raw_logs_included: false,
+      token_printed: false,
+    });
+    expect(evidence.raw_logs_included).toBe(false);
+    expect(evidence.token_printed).toBe(false);
   });
 
   it("models Hermes DeepSeek provider preview disabled by default", () => {

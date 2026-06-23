@@ -1,9 +1,8 @@
 # Task Template Registry
 
 MG327 makes Bootstrap Alpha task templates explicit and queryable. The
-registry is the safe source of metadata that Chat-to-Task drafts, Desktop, and
-future server/worker flows can reference before any reviewed submit or runner
-execution exists.
+registry is the safe source of metadata that Chat-to-Task drafts, Desktop,
+reviewed submit, and worker runners can reference before execution is allowed.
 
 ## Why Templates Exist
 
@@ -77,11 +76,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-tas
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-task-template-registry.ps1 -Command validate -Json
 ```
 
-## Future Goals
+## Worker Runner Relation
 
-MG328 adds reviewed draft submit to the server. MG329 may add the first worker
-template runner. Those goals must keep review-before-submit, template-bound
-execution, safe evidence, and explicit operator boundaries.
+MG328 adds reviewed draft submit to the server. MG329 adds the first worker
+template runner for `safe-local-smoke.v1` only. Other templates remain draft or
+queued-record metadata until later goals add reviewed runner support. The
+registry remains the source for template id, runner id, path policy,
+capabilities, validation, and evidence schema.
+
+MG329 does not change the registry safety flags: templates still report
+`execution_supported=false` and runner execution is separately gated by the
+PowerShell runner contract.
 
 ## Disabled In MG327
 

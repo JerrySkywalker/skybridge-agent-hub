@@ -50,7 +50,10 @@ import {
   fixtureDraftSubmitPreview,
   fixtureMatlabDraftSubmitResult,
   fixtureTaskTemplateRegistry,
+  fixtureWorkerTemplateRunnerPreview,
+  fixtureWorkerTemplateRunnerResult,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
+  WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -88,6 +91,8 @@ import {
   type DraftSubmitResult,
   type TaskTemplate,
   type TaskTemplateRegistry,
+  type WorkerTemplateRunnerPreview,
+  type WorkerTemplateRunnerResult,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -174,6 +179,8 @@ const docsChatToTaskSample =
   "Draft a software docs report for Bootstrap Alpha worker setup and summarize the current disabled execution boundary.";
 const chatToTaskPreviewSchema = "skybridge.task_draft_preview.v1";
 const taskTemplateRegistrySchema = "skybridge.task_template_registry.v1";
+const workerTemplateRunnerPreviewSchema = "skybridge.worker_template_runner_preview.v1";
+const workerTemplateRunnerResultSchema = "skybridge.worker_template_runner_result.v1";
 
 const emptyStatus: DesktopStatus = {
   ok: false,
@@ -1791,6 +1798,10 @@ function App() {
         onReset={apiSettings.reset}
       />
       <BootstrapAlphaWorkerSetupPanel status={localWorkerServiceStatus} />
+      <BootstrapAlphaWorkerTemplateRunnerPanel
+        preview={fixtureWorkerTemplateRunnerPreview}
+        lastResult={fixtureWorkerTemplateRunnerResult}
+      />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
         preview={chatToTaskPreview}
@@ -2589,6 +2600,85 @@ function BootstrapAlphaTaskTemplateRegistryPanel({
         </button>
         <button type="button" disabled aria-disabled="true">
           Worker runner deferred to MG329
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function BootstrapAlphaWorkerTemplateRunnerPanel({
+  preview,
+  lastResult,
+}: {
+  preview: WorkerTemplateRunnerPreview;
+  lastResult: WorkerTemplateRunnerResult;
+}) {
+  const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
+    ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
+    : [];
+
+  return (
+    <section className="panel bootstrap-worker-template-runner-panel" aria-label="Bootstrap Alpha Worker Runner Preview">
+      <h2>Bootstrap Alpha Worker Runner Preview</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha worker template runner safety flags">
+        <span>Desktop preview-only</span>
+        <span>MaxTasks=1; claim via PowerShell exact confirmation only</span>
+        <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Preview schema" value={preview.schema || workerTemplateRunnerPreviewSchema} />
+        <StatusValue label="Runner status" value={preview.ok ? "eligible_safe_fixture_available" : "no_eligible_task"} />
+        <StatusValue label="Mode" value={preview.mode} />
+        <StatusValue label="Worker id" value={preview.worker_id} />
+        <StatusValue label="Project id" value={preview.project_id} />
+        <StatusValue label="Selected task id" value={preview.task_id ?? "none"} />
+        <StatusValue label="Selected template id" value={preview.template_id ?? "none"} />
+        <StatusValue label="Selected runner id" value={preview.runner_id ?? "none"} />
+        <StatusValue label="Selected" value={String(preview.selected)} />
+        <StatusValue label="Eligible" value={String(preview.eligible)} />
+        <StatusValue label="Rejected reason" value={preview.rejected_reason || "none"} />
+        <StatusValue label="Required capabilities" value="powershell; node; pnpm" />
+        <StatusValue label="Allowed paths checked" value={String(preview.allowed_paths_checked)} />
+        <StatusValue label="Blocked paths checked" value={String(preview.blocked_paths_checked)} />
+        <StatusValue label="Validation status" value={preview.validation_status} />
+        <StatusValue label="Result summary" value={preview.result_summary} />
+        <StatusValue label="Rejected tasks" value={rejectedTasks.map((task) => `${task.task_id ?? "unknown"}=${task.rejected_reason ?? "unknown"}`).join("; ") || "none"} />
+        <StatusValue label="claim_created" value={String(preview.claim_created)} />
+        <StatusValue label="execution_started" value={String(preview.execution_started)} />
+        <StatusValue label="execution_completed" value={String(preview.execution_completed)} />
+        <StatusValue label="execution_failed" value={String(preview.execution_failed)} />
+        <StatusValue label="pr_created" value={String(preview.pr_created)} />
+        <StatusValue label="codex_run_called" value={String(preview.codex_run_called)} />
+        <StatusValue label="matlab_run_called" value={String(preview.matlab_run_called)} />
+        <StatusValue label="arbitrary_shell_enabled" value={String(preview.arbitrary_shell_enabled)} />
+        <StatusValue label="worker_loop_started" value={String(preview.worker_loop_started)} />
+        <StatusValue label="unbounded_run_enabled" value={String(preview.unbounded_run_enabled)} />
+        <StatusValue label="project_control_unpaused" value={String(preview.project_control_unpaused)} />
+        <StatusValue label="token_printed" value={String(preview.token_printed)} />
+        <StatusValue label="Result schema" value={lastResult.schema || workerTemplateRunnerResultSchema} />
+        <StatusValue label="Last evidence summary fixture" value={lastResult.result_summary} />
+        <StatusValue label="Last evidence present" value={String(lastResult.evidence_present)} />
+        <StatusValue label="Last changed files" value={lastResult.changed_files.join("; ") || "none"} />
+        <StatusValue label="Confirmation requirement" value={WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
+          Preview eligible task
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-one requires exact confirmation">
+          Run One unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Worker loop unavailable
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Codex execution disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          MATLAB execution disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Arbitrary shell disabled
         </button>
       </div>
     </section>

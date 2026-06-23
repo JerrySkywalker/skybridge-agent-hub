@@ -49,8 +49,12 @@ import type {
   DraftReview as DraftReviewContract,
   DraftSubmitPreview as DraftSubmitPreviewContract,
   DraftSubmitResult as DraftSubmitResultContract,
+  TemplateRunnerEvidence as TemplateRunnerEvidenceContract,
   TaskTemplate as TaskTemplateContract,
   TaskTemplateRegistry as TaskTemplateRegistryContract,
+  WorkerTemplateRunner as WorkerTemplateRunnerContract,
+  WorkerTemplateRunnerPreview as WorkerTemplateRunnerPreviewContract,
+  WorkerTemplateRunnerResult as WorkerTemplateRunnerResultContract,
 } from "@skybridge-agent-hub/event-schema";
 
 import {
@@ -1932,6 +1936,10 @@ export type TaskDraftPreview = TaskDraftPreviewContract;
 export type DraftReview = DraftReviewContract;
 export type DraftSubmitPreview = DraftSubmitPreviewContract;
 export type DraftSubmitResult = DraftSubmitResultContract;
+export type WorkerTemplateRunner = WorkerTemplateRunnerContract;
+export type WorkerTemplateRunnerPreview = WorkerTemplateRunnerPreviewContract;
+export type WorkerTemplateRunnerResult = WorkerTemplateRunnerResultContract;
+export type TemplateRunnerEvidence = TemplateRunnerEvidenceContract;
 export type TaskTemplate = TaskTemplateContract;
 export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
@@ -4632,6 +4640,77 @@ export const fixtureMatlabDraftSubmitResult: DraftSubmitResult = {
   raw_response_persisted: false,
   token_printed: false,
   next_safe_action: "hold_for_mg329_worker_runner",
+};
+
+export const WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_RUN_ONE_SAFE_TEMPLATE_TASK_ONLY";
+
+export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
+  schema: "skybridge.template_runner_evidence.v1",
+  ok: true,
+  worker_id: "desktop-fixture-worker",
+  project_id: "skybridge-agent-hub",
+  task_id: "mg329-safe-local-smoke-fixture",
+  template_id: "safe-local-smoke.v1",
+  runner_id: "safe-local-smoke-runner.v1",
+  evidence_schema_id: "skybridge.local_smoke_evidence.v1",
+  evidence_path: ".agent/tmp/worker-template-runner/mg329-safe-local-smoke-fixture/evidence.json",
+  changed_files: [],
+  validation_status: "passed",
+  result_summary: "Fixture safe-local-smoke runner evidence; no Codex, MATLAB, shell, PR, loop, or project-control unpause.",
+  pr_created: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  unbounded_run_enabled: false,
+  project_control_unpaused: false,
+  raw_logs_included: false,
+  token_printed: false,
+};
+
+export const fixtureWorkerTemplateRunnerPreview: WorkerTemplateRunnerPreview = {
+  schema: "skybridge.worker_template_runner_preview.v1",
+  ok: true,
+  mode: "preview",
+  worker_id: fixtureTemplateRunnerEvidence.worker_id,
+  project_id: fixtureTemplateRunnerEvidence.project_id,
+  task_id: fixtureTemplateRunnerEvidence.task_id,
+  template_id: fixtureTemplateRunnerEvidence.template_id,
+  runner_id: fixtureTemplateRunnerEvidence.runner_id,
+  selected: true,
+  eligible: true,
+  rejected_reason: "",
+  claim_created: false,
+  execution_started: false,
+  execution_completed: false,
+  execution_failed: false,
+  evidence_present: false,
+  allowed_paths_checked: true,
+  blocked_paths_checked: true,
+  changed_files: [],
+  validation_status: "preview_only",
+  result_summary: "One eligible safe-local-smoke fixture task selected for explicit one-task apply.",
+  pr_created: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  unbounded_run_enabled: false,
+  project_control_unpaused: false,
+  token_printed: false,
+};
+
+export const fixtureWorkerTemplateRunnerResult: WorkerTemplateRunnerResult = {
+  ...fixtureWorkerTemplateRunnerPreview,
+  schema: "skybridge.worker_template_runner_result.v1",
+  mode: "apply",
+  claim_created: true,
+  execution_started: true,
+  execution_completed: true,
+  evidence_present: true,
+  validation_status: "passed",
+  result_summary: "Fixture safe-local-smoke runner completed exactly one task and recorded sanitized evidence.",
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

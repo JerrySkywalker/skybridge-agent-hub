@@ -14,6 +14,7 @@ The Desktop client is the local operator application. It is responsible for:
 - natural-language chat UI using `skybridge.task_draft_preview.v1` for MG326
   deterministic local draft previews;
 - preview and review UI for planner drafts;
+- preview UI for the first Worker Template Runner v1 fixture state;
 - server report, worker health, and evidence review surfaces.
 
 The client is not an arbitrary shell. It must not expose hidden command
@@ -46,9 +47,11 @@ The Windows worker is the local execution plane. It is responsible for:
 
 Worker pulls tasks from Server. The worker must not run an unbounded loop or
 daemon expansion unless a future reviewed goal explicitly enables that behavior.
-MG325 adds Desktop and PowerShell visibility for install/repair readiness only;
-task claim, Codex execution, MATLAB execution, and the worker loop remain
-disabled.
+MG325 adds Desktop and PowerShell visibility for install/repair readiness only.
+MG329 adds a PowerShell-only `apply-one` path that may claim/start/complete one
+eligible `safe-local-smoke.v1` fixture task after exact confirmation. Codex
+execution, MATLAB execution, arbitrary shell, unbounded loops, and project
+control unpause remain disabled.
 
 ## Hermes Or Planner
 
@@ -64,8 +67,9 @@ no server task or campaign creation, and no execution.
 ## Execution Tools
 
 Codex, MATLAB, Git, gh, and similar tools are execution tools invoked only by
-worker template runners. They are not server plugins, direct Desktop shell
-controls, or planner-side execution surfaces.
+future reviewed worker template runners. MG329 does not invoke Codex or MATLAB.
+These tools are not server plugins, direct Desktop shell controls, or
+planner-side execution surfaces.
 
 All adapter output that reaches the server must normalize into
 `skybridge.agent_event.v1` and preserve redaction boundaries.
