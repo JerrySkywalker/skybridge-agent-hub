@@ -104,6 +104,16 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-smoke-matrix.p
 
 See [docs/dev/BOINC_LIKE_SELF_BOOTSTRAP_COMPLETE.md](docs/dev/BOINC_LIKE_SELF_BOOTSTRAP_COMPLETE.md), [docs/dev/SELF_BOOTSTRAP_COMPLETE_RELEASE_NOTES.md](docs/dev/SELF_BOOTSTRAP_COMPLETE_RELEASE_NOTES.md) and [docs/dev/OPERATOR_COCKPIT_RUNBOOK.md](docs/dev/OPERATOR_COCKPIT_RUNBOOK.md). `token_printed=false`
 
+## Bootstrap Alpha
+
+Bootstrap Alpha freezes the next product-shaped flow: cloud SkyBridge Server,
+local Rust/Tauri Desktop client, local Windows worker service, chat-to-task
+drafts, template-bound worker runners, and operator-reviewed evidence.
+
+Start with [docs/product/BOOTSTRAP_ALPHA_PRODUCT_FLOW.md](docs/product/BOOTSTRAP_ALPHA_PRODUCT_FLOW.md),
+[docs/release/BOOTSTRAP_ALPHA_SCOPE.md](docs/release/BOOTSTRAP_ALPHA_SCOPE.md)
+and [docs/release/BOOTSTRAP_ALPHA_ROADMAP.md](docs/release/BOOTSTRAP_ALPHA_ROADMAP.md).
+
 ## Quick Start
 
 Requirements:
