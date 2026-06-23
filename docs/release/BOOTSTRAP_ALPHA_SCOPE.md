@@ -39,6 +39,13 @@ drafts, but it does not create server tasks or campaigns, claim tasks, run
 Codex, run MATLAB, start worker loops, send notifications, or persist raw
 prompts.
 
+MG327 covers task template registry visibility only. It defines
+`skybridge.task_template_registry.v1` metadata for the first Bootstrap Alpha
+templates and lets Desktop/planner scripts query that metadata. It does not
+create server tasks or campaigns, claim tasks, run Codex, run MATLAB, start
+worker loops, send notifications, expose arbitrary shell, or persist raw
+prompts.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

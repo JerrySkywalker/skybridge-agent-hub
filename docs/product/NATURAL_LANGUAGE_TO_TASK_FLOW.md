@@ -11,7 +11,8 @@ natural language creates drafts, not execution.
 3. Planner produces a structured draft.
 4. Planner asks a clarifying question when required fields are missing or risk
    is unclear.
-5. Planner selects a task template or campaign template.
+5. Planner selects a known template from the Bootstrap Alpha Task Template
+   Registry.
 6. Planner emits a task or campaign draft with bounded inputs.
 7. Desktop shows a preview with template, paths, capabilities, validation,
    evidence, and blocked actions.
@@ -43,6 +44,13 @@ Bootstrap Alpha Chat-to-Task panel. It returns
 creation, task claim, Codex execution, MATLAB execution, arbitrary shell, and
 worker loop start remain disabled.
 
+MG327 adds the first registry for template metadata:
+`skybridge.task_template_registry.v1`. Known MATLAB and docs/report drafts now
+take runner id, path policy, validation, risk class, and evidence schema from
+the registry. The registry is queryable through
+`scripts/powershell/skybridge-task-template-registry.ps1`, but it is read-only
+and draft-only.
+
 ## MATLAB Parameter Sweep Example
 
 User input:
@@ -66,29 +74,33 @@ inputs:
     - summary
     - report
 allowed_paths:
-  - experiments/chapter-4/
-  - results/chapter-4/
-  - reports/chapter-4/
+  - experiments/matlab/**
+  - results/skybridge/**
+  - docs/experiments/**
 blocked_paths:
   - .env
-  - secrets/
-  - .git/
-  - production/
+  - secrets/**
+  - deploy/**
+  - .git/**
 required_capabilities:
   - windows
+  - powershell
   - matlab
+optional_capabilities:
+  - codex
   - git
+  - gh
 validation:
   - confirm MATLAB is available locally
   - confirm input paths exist
   - confirm output files are under allowed paths
   - confirm no arbitrary shell command is requested
 evidence_schema:
+  - skybridge.matlab_sweep_evidence.v1
   - run_manifest
   - parameter_matrix
   - result_summary
   - report_path
-  - smoke_status
   - audit_summary
 arbitrary_shell: false
 ```

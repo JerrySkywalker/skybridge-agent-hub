@@ -46,6 +46,14 @@ import type {
   CampaignDraft as CampaignDraftContract,
   TaskDraftClarifyingQuestion as TaskDraftClarifyingQuestionContract,
   TaskDraftPreview as TaskDraftPreviewContract,
+  TaskTemplate as TaskTemplateContract,
+  TaskTemplateRegistry as TaskTemplateRegistryContract,
+} from "@skybridge-agent-hub/event-schema";
+
+import {
+  TASK_TEMPLATE_REGISTRY as EVENT_TASK_TEMPLATE_REGISTRY,
+  getTaskTemplate as getEventTaskTemplate,
+  listTaskTemplates as listEventTaskTemplates,
 } from "@skybridge-agent-hub/event-schema";
 
 export {
@@ -81,6 +89,7 @@ export {
   fixtureWorkerPairingRecord,
   fixtureWorkerPairingPreview,
   fixtureWorkerRegistration,
+  TASK_TEMPLATE_IDS,
 } from "@skybridge-agent-hub/event-schema";
 
 export interface NotificationRequest {
@@ -1917,6 +1926,8 @@ export type TaskDraft = TaskDraftContract;
 export type CampaignDraft = CampaignDraftContract;
 export type TaskDraftClarifyingQuestion = TaskDraftClarifyingQuestionContract;
 export type TaskDraftPreview = TaskDraftPreviewContract;
+export type TaskTemplate = TaskTemplateContract;
+export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
 export interface DesktopWorkerControlState {
   schema: "skybridge.desktop_worker_control_state.v1";
@@ -4340,6 +4351,20 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   token_printed: false,
 };
 
+export const fixtureTaskTemplateRegistry: TaskTemplateRegistry = EVENT_TASK_TEMPLATE_REGISTRY;
+export const fixtureTaskTemplates: TaskTemplate[] = fixtureTaskTemplateRegistry.templates;
+export function listTaskTemplates(): TaskTemplate[] {
+  return listEventTaskTemplates();
+}
+export function getTaskTemplate(templateId: string): TaskTemplate | undefined {
+  return getEventTaskTemplate(templateId);
+}
+
+const fixtureMatlabTemplate = getEventTaskTemplate("matlab-parameter-sweep.v1")!;
+const fixtureDocsTemplate = getEventTaskTemplate("software-docs-task.v1")!;
+const validationSummaries = (template: TaskTemplate) =>
+  template.validation_rules.map((rule) => rule.summary);
+
 export const fixtureChatToTaskSession: ChatToTaskSession = {
   schema: "skybridge.chat_to_task_session.v1",
   session_id: "chat_draft_fixture_6d1f7a8b9c0d",
@@ -4363,22 +4388,17 @@ export const fixtureMatlabChatToTaskDraft: CampaignDraft = {
   schema: "skybridge.campaign_draft.v1",
   draft_id: "draft_matlab_parameter_sweep_6d1f7a8b9c0d",
   draft_type: "campaign",
-  template_id: "matlab-parameter-sweep.v1",
+  template_id: fixtureMatlabTemplate.template_id,
   project_id: "skybridge-agent-hub",
   title: "Chapter 4 MATLAB parameter sweep",
-  summary: "Preview a bounded MATLAB parameter sweep and report request.",
-  risk: "local_experiment",
-  required_capabilities: ["windows", "powershell", "matlab", "codex"],
-  allowed_paths: ["results/skybridge/**", "docs/experiments/**"],
-  blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
-  validation: [
-    "Confirm MATLAB is available locally.",
-    "Confirm the experiment entrypoint before future execution.",
-    "Write outputs only under allowed paths.",
-    "Do not execute arbitrary shell commands.",
-  ],
-  runner_id: "matlab-parameter-sweep-runner.v1",
-  evidence_schema: ["run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary"],
+  summary: fixtureMatlabTemplate.description,
+  risk: fixtureMatlabTemplate.risk_class,
+  required_capabilities: [...fixtureMatlabTemplate.required_capabilities, "codex"],
+  allowed_paths: fixtureMatlabTemplate.allowed_paths,
+  blocked_paths: fixtureMatlabTemplate.blocked_paths,
+  validation: validationSummaries(fixtureMatlabTemplate),
+  runner_id: fixtureMatlabTemplate.runner_id,
+  evidence_schema: fixtureMatlabTemplate.evidence_schema,
   planner_id: fixtureChatToTaskSession.planner_id,
   input_preview: fixtureChatToTaskSession.input_preview,
   input_hash: fixtureChatToTaskSession.input_hash,
@@ -4404,21 +4424,17 @@ export const fixtureDocsChatToTaskDraft: TaskDraft = {
   schema: "skybridge.task_draft.v1",
   draft_id: "draft_docs_report_6d1f7a8b9c0d",
   draft_type: "task",
-  template_id: "software-docs-task.v1",
+  template_id: fixtureDocsTemplate.template_id,
   project_id: "skybridge-agent-hub",
-  title: "Software documentation/report draft",
-  summary: "Preview a documentation or analysis report task with safe evidence and no execution.",
-  risk: "docs_only",
-  required_capabilities: ["windows", "powershell", "git", "codex"],
-  allowed_paths: ["docs/**", "reports/skybridge/**"],
-  blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
-  validation: [
-    "Keep changes under docs/** or reports/skybridge/**.",
-    "Do not mutate deployment, server root, GitHub settings, or secrets.",
-    "Return a safe report path, source references, and validation status only.",
-  ],
-  runner_id: "codex-analysis-report-runner.v1",
-  evidence_schema: ["report_path", "source_references", "validation_status", "audit_summary"],
+  title: fixtureDocsTemplate.title,
+  summary: fixtureDocsTemplate.description,
+  risk: fixtureDocsTemplate.risk_class,
+  required_capabilities: fixtureDocsTemplate.required_capabilities,
+  allowed_paths: fixtureDocsTemplate.allowed_paths,
+  blocked_paths: fixtureDocsTemplate.blocked_paths,
+  validation: validationSummaries(fixtureDocsTemplate),
+  runner_id: fixtureDocsTemplate.runner_id,
+  evidence_schema: fixtureDocsTemplate.evidence_schema,
   planner_id: fixtureChatToTaskSession.planner_id,
   input_preview: "Draft a software docs report for Bootstrap Alpha worker setup.",
   input_hash: "4b1f7a8b9c0d4b1f7a8b9c0d",

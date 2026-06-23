@@ -117,6 +117,8 @@ For the first local worker setup/status layer, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For the first preview-only natural-language draft planner, see
 [docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md](docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md).
+For the preview-only Bootstrap Alpha task registry, see
+[docs/product/TASK_TEMPLATE_REGISTRY.md](docs/product/TASK_TEMPLATE_REGISTRY.md).
 
 ## Quick Start
 

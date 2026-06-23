@@ -134,6 +134,10 @@ p {
   border-color: #6f9d90;
 }
 
+.bootstrap-task-template-registry-panel {
+  border-color: #8a98bd;
+}
+
 .resident-status-card,
 .local-worker-supervisor-card,
 .local-resource-policy-card,

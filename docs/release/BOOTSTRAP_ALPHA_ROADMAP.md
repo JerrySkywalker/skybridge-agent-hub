@@ -40,15 +40,19 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 ## MG327 Task Template Registry
 
 - Objective: add a template registry contract for Bootstrap Alpha templates.
-- Likely touched: `apps/server`, `packages/event-schema`, template docs, schema
-  tests, registry smoke scripts.
+- Likely touched: `apps/desktop`, `packages/event-schema`, `packages/client`,
+  template docs, schema tests, registry smoke scripts.
 - Acceptance criteria: planned templates are represented with ids, input schema,
   required capabilities, path bounds, risk class, validation, runner id, and
   evidence schema; registry is queryable or fixture-backed for drafts.
+- Implementation note: MG327 adds `skybridge.task_template_registry.v1`, five
+  Bootstrap Alpha templates, a read-only PowerShell registry script,
+  registry-backed Chat-to-Task draft metadata, a Desktop Task Templates panel,
+  and focused smokes. No server endpoint is required for this goal.
 - Forbidden scope: full runner execution, MATLAB execution, unbounded task
   generation.
-- Live deployment expected: maybe, if server API shape changes and existing
-  deploy contract is used.
+- Live deployment expected: no server runtime change; if the existing cloud
+  auto-deploy runs after merge, verify parity through the existing path only.
 
 ## MG328 Draft Review + Submit To Server
 

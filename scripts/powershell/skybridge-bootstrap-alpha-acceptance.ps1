@@ -10,6 +10,7 @@ $requiredDocs = @(
   "docs/product/NATURAL_LANGUAGE_TO_TASK_FLOW.md",
   "docs/product/TASK_TEMPLATE_MODEL.md",
   "docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md",
+  "docs/product/TASK_TEMPLATE_REGISTRY.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -24,6 +25,7 @@ $requiredScripts = @{
   worker_service_install_preview = "scripts/powershell/skybridge-worker-service-install-preview.ps1"
   worker_service_repair_preview = "scripts/powershell/skybridge-worker-service-repair-preview.ps1"
   chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
+  task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
 }
 
 $componentPaths = @{
@@ -99,7 +101,10 @@ $requiredPackageScripts = @(
   "smoke:desktop-worker-service-manager",
   "smoke:chat-to-task-draft",
   "smoke:desktop-chat-to-task",
-  "smoke:chat-to-task-matlab-example"
+  "smoke:chat-to-task-matlab-example",
+  "smoke:task-template-registry",
+  "smoke:task-template-registry-matlab",
+  "smoke:desktop-task-template-registry"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -132,6 +137,7 @@ $workerSupportPresent = [bool](@($workerResults | Where-Object { $_.exists }).Co
 
 $desktopWorkerServiceManagerPresent = $false
 $desktopChatToTaskPanelPresent = $false
+$desktopTaskTemplateRegistryPanelPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -149,6 +155,13 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("execution_started=false; codex_run_called=false; matlab_run_called=false; token_printed=false") -and
     $desktopSource -match [regex]::Escape("Review and Submit (MG328 future work)")
   )
+  $desktopTaskTemplateRegistryPanelPresent = (
+    $desktopSource -match [regex]::Escape("Bootstrap Alpha Task Templates") -and
+    $desktopSource -match [regex]::Escape("skybridge.task_template_registry.v1") -and
+    $desktopSource -match [regex]::Escape("execution_supported=false") -and
+    $desktopSource -match [regex]::Escape("task_creation_supported=false; campaign_creation_supported=false; claim_supported=false") -and
+    $desktopSource -match [regex]::Escape("codex_run_supported=false; matlab_run_supported=false; arbitrary_shell_enabled=false; token_printed=false")
+  )
 }
 
 $workerStatusContract = $null
@@ -157,6 +170,9 @@ $workerStatusError = $null
 $chatToTaskContract = $null
 $chatToTaskContractOk = $false
 $chatToTaskError = $null
+$taskTemplateRegistryContract = $null
+$taskTemplateRegistryContractOk = $false
+$taskTemplateRegistryError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -194,12 +210,57 @@ try {
       [bool]$chatToTaskContract.token_printed -eq $false
     )
   }
+  $taskTemplateRegistryScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-task-template-registry.ps1"
+  if (Test-Path -LiteralPath $taskTemplateRegistryScriptPath -PathType Leaf) {
+    $rawRegistry = & pwsh -NoProfile -ExecutionPolicy Bypass -File $taskTemplateRegistryScriptPath -Command list -Json
+    $registryText = ($rawRegistry | Out-String).Trim()
+    Assert-NoUnsafeText $registryText
+    $taskTemplateRegistryContract = $registryText | ConvertFrom-Json
+    $requiredTemplateIds = @(
+      "software-docs-task.v1",
+      "codex-analysis-report.v1",
+      "safe-local-smoke.v1",
+      "matlab-parameter-sweep.v1",
+      "matlab-result-analysis.v1"
+    )
+    $registryTemplateIds = @($taskTemplateRegistryContract.templates | ForEach-Object { [string]$_.template_id })
+    $requiredTemplatesPresent = $true
+    foreach ($id in $requiredTemplateIds) {
+      if ($registryTemplateIds -notcontains $id) { $requiredTemplatesPresent = $false }
+    }
+    $forbiddenTemplateFlagsEnabled = @($taskTemplateRegistryContract.templates | Where-Object {
+      $_.execution_supported -ne $false -or
+      $_.task_creation_supported -ne $false -or
+      $_.campaign_creation_supported -ne $false -or
+      $_.claim_supported -ne $false -or
+      $_.codex_run_supported -ne $false -or
+      $_.matlab_run_supported -ne $false -or
+      $_.arbitrary_shell_enabled -ne $false -or
+      $_.token_printed -ne $false
+    }).Count -gt 0
+    $taskTemplateRegistryContractOk = (
+      [string]$taskTemplateRegistryContract.schema -eq "skybridge.task_template_registry.v1" -and
+      $requiredTemplatesPresent -and
+      -not $forbiddenTemplateFlagsEnabled -and
+      [bool]$taskTemplateRegistryContract.execution_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.task_creation_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.campaign_creation_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.claim_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.codex_run_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.matlab_run_supported -eq $false -and
+      [bool]$taskTemplateRegistryContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$taskTemplateRegistryContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
   }
   if (-not $chatToTaskContractOk) {
     $chatToTaskError = "chat_to_task_contract_failed"
+  }
+  if (-not $taskTemplateRegistryContractOk) {
+    $taskTemplateRegistryError = "task_template_registry_contract_failed"
   }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
@@ -214,8 +275,10 @@ $ok = (
   $docSecretFindings.Count -eq 0 -and
   $desktopWorkerServiceManagerPresent -and
   $desktopChatToTaskPanelPresent -and
+  $desktopTaskTemplateRegistryPanelPresent -and
   $workerStatusContractOk -and
-  $chatToTaskContractOk
+  $chatToTaskContractOk -and
+  $taskTemplateRegistryContractOk
 )
 
 $report = [pscustomobject]@{
@@ -229,6 +292,7 @@ $report = [pscustomobject]@{
   worker_support_candidates = $workerResults
   desktop_worker_service_manager_present = $desktopWorkerServiceManagerPresent
   desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
+  desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -259,6 +323,23 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   chat_to_task_error = $chatToTaskError
+  task_template_registry_contract_ok = $taskTemplateRegistryContractOk
+  task_template_registry_contract = if ($taskTemplateRegistryContract) {
+    [pscustomobject]@{
+      schema = $taskTemplateRegistryContract.schema
+      template_count = @($taskTemplateRegistryContract.templates).Count
+      template_ids = @($taskTemplateRegistryContract.templates | ForEach-Object { [string]$_.template_id })
+      execution_supported = $taskTemplateRegistryContract.execution_supported
+      task_creation_supported = $taskTemplateRegistryContract.task_creation_supported
+      campaign_creation_supported = $taskTemplateRegistryContract.campaign_creation_supported
+      claim_supported = $taskTemplateRegistryContract.claim_supported
+      codex_run_supported = $taskTemplateRegistryContract.codex_run_supported
+      matlab_run_supported = $taskTemplateRegistryContract.matlab_run_supported
+      arbitrary_shell_enabled = $taskTemplateRegistryContract.arbitrary_shell_enabled
+      token_printed = $taskTemplateRegistryContract.token_printed
+    }
+  } else { $null }
+  task_template_registry_error = $taskTemplateRegistryError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts
