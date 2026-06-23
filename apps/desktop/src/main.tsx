@@ -45,6 +45,7 @@ import {
   fixtureResidentPollingReport,
   fixtureLocalExecutionGuard,
   fixtureLocalResourcePolicy,
+  fixtureLocalWorkerServiceStatus,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -76,6 +77,7 @@ import {
   type DesktopResidentState,
   type LocalExecutionGuard,
   type LocalResourcePolicy,
+  type LocalWorkerServiceStatus,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -125,6 +127,7 @@ type DesktopStatus = {
   };
   campaign_report: CampaignRunReport | null;
   worker_service_state: WorkerServiceState | null;
+  local_worker_service_status: LocalWorkerServiceStatus | null;
   desktop_resident_state: DesktopResidentState | null;
   local_worker_supervisor_state: LocalWorkerSupervisorState | null;
   local_resource_policy: LocalResourcePolicy | null;
@@ -188,6 +191,7 @@ const emptyStatus: DesktopStatus = {
   },
   campaign_report: null,
   worker_service_state: null,
+  local_worker_service_status: null,
   desktop_resident_state: null,
   local_worker_supervisor_state: null,
   local_resource_policy: null,
@@ -238,6 +242,7 @@ const fixtureStatus: DesktopStatus = {
   },
   campaign_report: fixtureCampaignRunReport,
   worker_service_state: fixtureWorkerServiceState,
+  local_worker_service_status: fixtureLocalWorkerServiceStatus,
   desktop_resident_state: fixtureDesktopResidentState,
   local_worker_supervisor_state: fixtureLocalWorkerSupervisorState,
   local_resource_policy: fixtureLocalResourcePolicy,
@@ -1607,6 +1612,7 @@ function App() {
   const attention = createAttentionModel(report);
   const workerService = status.worker_service_state ?? report.worker_service_state ?? fixtureWorkerServiceState;
   const workerReadiness = createWorkerServiceReadiness(workerService);
+  const localWorkerServiceStatus = status.local_worker_service_status ?? fixtureLocalWorkerServiceStatus;
   const residentState = status.desktop_resident_state ?? report.desktop_resident_state ?? fixtureDesktopResidentState;
   const supervisorState = status.local_worker_supervisor_state ?? report.local_worker_supervisor_state ?? fixtureLocalWorkerSupervisorState;
   const resourcePolicy = status.local_resource_policy ?? report.local_resource_policy ?? fixtureLocalResourcePolicy;
@@ -1647,6 +1653,7 @@ function App() {
         onSetApiBase={apiSettings.setBase}
         onReset={apiSettings.reset}
       />
+      <BootstrapAlphaWorkerSetupPanel status={localWorkerServiceStatus} />
 
       <section className="toolbar" aria-label="Queue dashboard actions">
         <button type="button" onClick={refresh} disabled={refreshing}>
@@ -2166,6 +2173,77 @@ function AttentionPanel({ events }: { events: AttentionEvent[] }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function BootstrapAlphaWorkerSetupPanel({ status }: { status: LocalWorkerServiceStatus }) {
+  const tools = [
+    ["PowerShell", status.powershell_available],
+    ["Git", status.git_available],
+    ["gh", status.gh_available],
+    ["Node", status.node_available],
+    ["pnpm", status.pnpm_available],
+    ["Codex", status.codex_available],
+    ["MATLAB", status.matlab_available],
+  ] as const;
+
+  return (
+    <section className="panel bootstrap-worker-setup-panel" aria-label="Bootstrap Alpha Worker Setup">
+      <h2>Bootstrap Alpha Worker Setup</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha worker setup disabled execution flags">
+        <span>claim_enabled=false</span>
+        <span>execute_enabled=false</span>
+        <span>worker_loop_started=false; token_printed=false</span>
+      </div>
+      <dl>
+        <StatusValue label="Schema" value={status.schema} />
+        <StatusValue label="Readiness" value={status.readiness_status} />
+        <StatusValue label="Worker id" value={status.worker_id} />
+        <StatusValue label="Service name" value={status.service_name} />
+        <StatusValue label="Install state" value={status.install_state} />
+        <StatusValue label="Repair state" value={status.repair_state} />
+        <StatusValue label="Service installed" value={String(status.service_installed)} />
+        <StatusValue label="Service running" value={String(status.service_running)} />
+        <StatusValue label="Service start type" value={status.service_start_type} />
+        <StatusValue label="API base configured" value={String(status.api_base_configured)} />
+        <StatusValue label="Token file present" value={String(status.token_file_present)} />
+        <StatusValue label="Repo root detected" value={String(status.repo_root_detected)} />
+        <StatusValue label="Blockers" value={status.blockers.join("; ") || "none"} />
+        <StatusValue label="Warnings" value={status.warnings.join("; ") || "none"} />
+        <StatusValue label="Recommended next action" value={status.recommended_next_action} />
+        <StatusValue label="claim_enabled" value={String(status.claim_enabled)} />
+        <StatusValue label="execute_enabled" value={String(status.execute_enabled)} />
+        <StatusValue label="worker_loop_started" value={String(status.worker_loop_started)} />
+        <StatusValue label="token_printed" value={String(status.token_printed)} />
+      </dl>
+      <div className="tool-capability-grid" aria-label="Tool capability matrix">
+        {tools.map(([name, available]) => (
+          <span key={name} className={available ? "tool-available" : "tool-missing"}>
+            {name}: {available ? "available" : "missing"}
+          </span>
+        ))}
+      </div>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true" title="Preview-only script: skybridge-worker-service-install-preview.ps1">
+          Install preview only
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Preview-only script: skybridge-worker-service-repair-preview.ps1">
+          Repair preview only
+        </button>
+        <button type="button" disabled aria-disabled="true" title="Read-only script: skybridge-worker-service-doctor.ps1">
+          Doctor read-only
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Worker loop unavailable
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Codex execution disabled
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          MATLAB execution disabled
+        </button>
+      </div>
     </section>
   );
 }

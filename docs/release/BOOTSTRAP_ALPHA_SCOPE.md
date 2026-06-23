@@ -10,6 +10,8 @@ worker execution loop.
 - cloud server install, deploy, and parity checks;
 - local Desktop client install target;
 - local worker service install target;
+- local worker service status, doctor, install-preview, and repair-preview
+  visibility for Bootstrap Alpha;
 - chat-to-task draft target;
 - task template registry target;
 - worker template runner target;
@@ -26,6 +28,10 @@ worker execution loop.
 - multi-user permissions;
 - mobile or watch client;
 - automatic merge without operator review.
+
+MG325 covers local worker service visibility only. Worker task claim, Codex
+execution, MATLAB execution, worker loop start, notification send, and apply
+installation remain disabled or future reviewed work.
 
 ## Release Principle
 

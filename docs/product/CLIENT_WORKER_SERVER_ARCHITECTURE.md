@@ -9,6 +9,8 @@ The Desktop client is the local operator application. It is responsible for:
 
 - installer and repair flows for local components;
 - worker service manager and status surface;
+- Bootstrap Alpha worker service setup status using
+  `skybridge.local_worker_service_status.v1`;
 - natural-language chat UI;
 - preview and review UI for planner drafts;
 - server report, worker health, and evidence review surfaces.
@@ -43,6 +45,9 @@ The Windows worker is the local execution plane. It is responsible for:
 
 Worker pulls tasks from Server. The worker must not run an unbounded loop or
 daemon expansion unless a future reviewed goal explicitly enables that behavior.
+MG325 adds Desktop and PowerShell visibility for install/repair readiness only;
+task claim, Codex execution, MATLAB execution, and the worker loop remain
+disabled.
 
 ## Hermes Or Planner
 

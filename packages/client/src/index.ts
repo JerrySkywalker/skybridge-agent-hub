@@ -1848,6 +1848,65 @@ export interface WorkerServiceReadiness {
   token_printed: false;
 }
 
+export type LocalWorkerServiceReadinessStatus = "ready" | "warning" | "blocked";
+
+export interface LocalWorkerServiceCapabilities {
+  status_readonly: true;
+  install_preview: true;
+  repair_preview: true;
+  doctor_readonly: true;
+  service_apply: false;
+  task_claim: false;
+  task_execute: false;
+  worker_loop: false;
+  codex_execution: false;
+  matlab_execution: false;
+  arbitrary_shell: false;
+  tools: {
+    powershell: boolean;
+    git: boolean;
+    gh: boolean;
+    node: boolean;
+    pnpm: boolean;
+    codex: boolean;
+    matlab: boolean;
+  };
+  token_printed: false;
+}
+
+export interface LocalWorkerServiceStatus {
+  schema: "skybridge.local_worker_service_status.v1";
+  ok: boolean;
+  worker_id: string;
+  service_name: string;
+  service_installed: boolean;
+  service_running: boolean;
+  service_start_type: string;
+  install_state: string;
+  repair_state: string;
+  install_preview_available: true;
+  repair_preview_available: true;
+  api_base_configured: boolean;
+  token_file_present: boolean;
+  repo_root_detected: boolean;
+  powershell_available: boolean;
+  git_available: boolean;
+  gh_available: boolean;
+  node_available: boolean;
+  pnpm_available: boolean;
+  codex_available: boolean;
+  matlab_available: boolean;
+  capabilities: LocalWorkerServiceCapabilities;
+  readiness_status: LocalWorkerServiceReadinessStatus;
+  blockers: string[];
+  warnings: string[];
+  recommended_next_action: string;
+  claim_enabled: false;
+  execute_enabled: false;
+  worker_loop_started: false;
+  token_printed: false;
+}
+
 export interface DesktopWorkerControlState {
   schema: "skybridge.desktop_worker_control_state.v1";
   pause_after_current: boolean;
@@ -4212,6 +4271,61 @@ export const fixtureWorkerServiceState: WorkerServiceState = {
     "execution_disabled_until_goal_199",
   ],
   token_available: false,
+  token_printed: false,
+};
+
+export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
+  schema: "skybridge.local_worker_service_status.v1",
+  ok: true,
+  worker_id: "local-windows-worker",
+  service_name: "SkyBridgeWorkerService",
+  service_installed: false,
+  service_running: false,
+  service_start_type: "not_installed",
+  install_state: "not_installed_preview_available",
+  repair_state: "install_required_before_repair",
+  install_preview_available: true,
+  repair_preview_available: true,
+  api_base_configured: false,
+  token_file_present: false,
+  repo_root_detected: true,
+  powershell_available: true,
+  git_available: true,
+  gh_available: false,
+  node_available: true,
+  pnpm_available: true,
+  codex_available: false,
+  matlab_available: false,
+  capabilities: {
+    status_readonly: true,
+    install_preview: true,
+    repair_preview: true,
+    doctor_readonly: true,
+    service_apply: false,
+    task_claim: false,
+    task_execute: false,
+    worker_loop: false,
+    codex_execution: false,
+    matlab_execution: false,
+    arbitrary_shell: false,
+    tools: {
+      powershell: true,
+      git: true,
+      gh: false,
+      node: true,
+      pnpm: true,
+      codex: false,
+      matlab: false,
+    },
+    token_printed: false,
+  },
+  readiness_status: "blocked",
+  blockers: ["service_not_installed", "api_base_not_configured", "worker_token_file_missing"],
+  warnings: ["gh_missing_pr_operations_disabled", "codex_missing_codex_templates_disabled", "matlab_missing_matlab_templates_disabled"],
+  recommended_next_action: "run_install_preview",
+  claim_enabled: false,
+  execute_enabled: false,
+  worker_loop_started: false,
   token_printed: false,
 };
 

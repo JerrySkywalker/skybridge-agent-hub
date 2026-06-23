@@ -11,7 +11,8 @@ automation.
    deploy contract.
 2. Install the local Rust/Tauri Desktop client.
 3. The Desktop client installs, repairs, or reports status for the local Windows
-   worker service.
+   worker service. MG325 implements this as status, doctor, install-preview, and
+   repair-preview only.
 4. The Desktop client provides a natural-language chat window for task intent.
 5. A local Hermes planner or server-mediated Hermes planner converts natural
    language into structured task or campaign drafts.
@@ -64,5 +65,12 @@ Initial runner families are expected to cover software documentation/report
 tasks, safe local smokes, and future MATLAB experiment batches. Template
 execution is future implementation work; this document freezes the Bootstrap
 Alpha target shape.
+
+## MG325 Local Worker Setup Layer
+
+The first Desktop-facing layer reports `skybridge.local_worker_service_status.v1`
+with service, config, tool capability, blocker, warning, and recommended-action
+fields. It keeps `claim_enabled=false`, `execute_enabled=false`,
+`worker_loop_started=false`, and `token_printed=false`.
 
 token_printed=false
