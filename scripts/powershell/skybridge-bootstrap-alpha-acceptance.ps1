@@ -9,6 +9,7 @@ $requiredDocs = @(
   "docs/product/CLIENT_WORKER_SERVER_ARCHITECTURE.md",
   "docs/product/NATURAL_LANGUAGE_TO_TASK_FLOW.md",
   "docs/product/TASK_TEMPLATE_MODEL.md",
+  "docs/product/CHAT_TO_TASK_DRAFT_PLANNER.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -22,6 +23,7 @@ $requiredScripts = @{
   worker_service_doctor = "scripts/powershell/skybridge-worker-service-doctor.ps1"
   worker_service_install_preview = "scripts/powershell/skybridge-worker-service-install-preview.ps1"
   worker_service_repair_preview = "scripts/powershell/skybridge-worker-service-repair-preview.ps1"
+  chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
 }
 
 $componentPaths = @{
@@ -94,7 +96,10 @@ $requiredPackageScripts = @(
   "smoke:bootstrap-alpha-acceptance",
   "smoke:worker-service-status",
   "smoke:worker-service-doctor",
-  "smoke:desktop-worker-service-manager"
+  "smoke:desktop-worker-service-manager",
+  "smoke:chat-to-task-draft",
+  "smoke:desktop-chat-to-task",
+  "smoke:chat-to-task-matlab-example"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -126,6 +131,7 @@ $missingPackageScripts = @($packageScriptResults | Where-Object { -not $_.exists
 $workerSupportPresent = [bool](@($workerResults | Where-Object { $_.exists }).Count -gt 0)
 
 $desktopWorkerServiceManagerPresent = $false
+$desktopChatToTaskPanelPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -136,11 +142,21 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("execute_enabled=false") -and
     $desktopSource -match [regex]::Escape("worker_loop_started=false; token_printed=false")
   )
+  $desktopChatToTaskPanelPresent = (
+    $desktopSource -match [regex]::Escape("Bootstrap Alpha Chat-to-Task") -and
+    $desktopSource -match [regex]::Escape("skybridge.task_draft_preview.v1") -and
+    $desktopSource -match [regex]::Escape("task_created=false") -and
+    $desktopSource -match [regex]::Escape("execution_started=false; codex_run_called=false; matlab_run_called=false; token_printed=false") -and
+    $desktopSource -match [regex]::Escape("Review and Submit (MG328 future work)")
+  )
 }
 
 $workerStatusContract = $null
 $workerStatusContractOk = $false
 $workerStatusError = $null
+$chatToTaskContract = $null
+$chatToTaskContractOk = $false
+$chatToTaskError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -158,8 +174,33 @@ try {
       [bool]$workerStatusContract.token_printed -eq $false
     )
   }
+  $chatScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-chat-to-task-draft.ps1"
+  if (Test-Path -LiteralPath $chatScriptPath -PathType Leaf) {
+    $rawChat = & pwsh -NoProfile -ExecutionPolicy Bypass -File $chatScriptPath -Command sample-matlab -ProjectId "skybridge-agent-hub" -Json
+    $chatText = ($rawChat | Out-String).Trim()
+    Assert-NoUnsafeText $chatText
+    $chatToTaskContract = $chatText | ConvertFrom-Json
+    $chatToTaskContractOk = (
+      [string]$chatToTaskContract.schema -eq "skybridge.task_draft_preview.v1" -and
+      [string]$chatToTaskContract.draft_type -eq "campaign" -and
+      [string]$chatToTaskContract.template_id -eq "matlab-parameter-sweep.v1" -and
+      [bool]$chatToTaskContract.task_created -eq $false -and
+      [bool]$chatToTaskContract.campaign_created -eq $false -and
+      [bool]$chatToTaskContract.claim_created -eq $false -and
+      [bool]$chatToTaskContract.execution_started -eq $false -and
+      [bool]$chatToTaskContract.codex_run_called -eq $false -and
+      [bool]$chatToTaskContract.matlab_run_called -eq $false -and
+      [bool]$chatToTaskContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$chatToTaskContract.token_printed -eq $false
+    )
+  }
 } catch {
-  $workerStatusError = "worker_service_status_contract_failed"
+  if (-not $workerStatusContractOk) {
+    $workerStatusError = "worker_service_status_contract_failed"
+  }
+  if (-not $chatToTaskContractOk) {
+    $chatToTaskError = "chat_to_task_contract_failed"
+  }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -172,7 +213,9 @@ $ok = (
   $workerSupportPresent -and
   $docSecretFindings.Count -eq 0 -and
   $desktopWorkerServiceManagerPresent -and
-  $workerStatusContractOk
+  $desktopChatToTaskPanelPresent -and
+  $workerStatusContractOk -and
+  $chatToTaskContractOk
 )
 
 $report = [pscustomobject]@{
@@ -185,6 +228,7 @@ $report = [pscustomobject]@{
   worker_support_present = $workerSupportPresent
   worker_support_candidates = $workerResults
   desktop_worker_service_manager_present = $desktopWorkerServiceManagerPresent
+  desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -197,6 +241,24 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   worker_service_status_error = $workerStatusError
+  chat_to_task_contract_ok = $chatToTaskContractOk
+  chat_to_task_contract = if ($chatToTaskContract) {
+    [pscustomobject]@{
+      schema = $chatToTaskContract.schema
+      status = $chatToTaskContract.status
+      draft_type = $chatToTaskContract.draft_type
+      template_id = $chatToTaskContract.template_id
+      task_created = $chatToTaskContract.task_created
+      campaign_created = $chatToTaskContract.campaign_created
+      claim_created = $chatToTaskContract.claim_created
+      execution_started = $chatToTaskContract.execution_started
+      codex_run_called = $chatToTaskContract.codex_run_called
+      matlab_run_called = $chatToTaskContract.matlab_run_called
+      arbitrary_shell_enabled = $chatToTaskContract.arbitrary_shell_enabled
+      token_printed = $chatToTaskContract.token_printed
+    }
+  } else { $null }
+  chat_to_task_error = $chatToTaskError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

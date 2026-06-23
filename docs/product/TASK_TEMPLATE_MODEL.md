@@ -20,6 +20,9 @@ commands.
 
 ## First Planned Templates
 
+MG326 uses these template ids for deterministic draft previews only. Template
+execution remains future reviewed work.
+
 ### `software-docs-task.v1`
 
 Documentation-only repository updates. Expected runner produces changed docs,

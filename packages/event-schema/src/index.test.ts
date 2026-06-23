@@ -41,6 +41,7 @@ import {
   parseWorkerRegistration,
   redactForTelemetry,
   SharedRedactionRules,
+  TaskDraftPreviewSchema,
 } from "./index.js";
 
 describe("event schema", () => {
@@ -303,6 +304,100 @@ describe("event schema", () => {
         token_printed: false,
       }),
     ).toMatchObject({ accepted: true });
+  });
+
+  it("models chat-to-task MATLAB draft preview without execution", () => {
+    const session = {
+      schema: "skybridge.chat_to_task_session.v1",
+      session_id: "chat_draft_abc123abc123",
+      project_id: "skybridge-agent-hub",
+      planner_id: "deterministic-local-chat-to-task.v1",
+      input_preview: "MATLAB parameter sweep eta=2..10 h=500/700km P=6/8/10 with summary report.",
+      input_hash: "abc123abc123abc123",
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      task_created: false,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      token_printed: false,
+    } as const;
+    const draft = {
+      schema: "skybridge.campaign_draft.v1",
+      draft_id: "draft_matlab_abc123abc123",
+      draft_type: "campaign",
+      template_id: "matlab-parameter-sweep.v1",
+      project_id: "skybridge-agent-hub",
+      title: "Chapter 4 MATLAB parameter sweep",
+      summary: "Preview a bounded MATLAB parameter sweep and report request.",
+      risk: "local_experiment",
+      required_capabilities: ["windows", "powershell", "matlab", "codex"],
+      allowed_paths: ["results/skybridge/**", "docs/experiments/**"],
+      blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+      validation: ["confirm MATLAB availability", "write outputs only under allowed paths"],
+      runner_id: "matlab-parameter-sweep-runner.v1",
+      evidence_schema: ["run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary"],
+      planner_id: "deterministic-local-chat-to-task.v1",
+      input_preview: session.input_preview,
+      input_hash: session.input_hash,
+      inputs: {
+        eta_range: [2, 10],
+        h_km: [500, 700],
+        p_values: [6, 8, 10],
+        outputs: ["summary", "report"],
+      },
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      task_created: false,
+      campaign_created: false,
+      claim_created: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      arbitrary_shell_enabled: false,
+      token_printed: false,
+    } as const;
+    expect(
+      TaskDraftPreviewSchema.parse({
+        schema: "skybridge.task_draft_preview.v1",
+        ok: true,
+        status: "preview",
+        draft_id: draft.draft_id,
+        draft_type: draft.draft_type,
+        template_id: draft.template_id,
+        project_id: draft.project_id,
+        planner_id: draft.planner_id,
+        session,
+        draft,
+        command_text_detected: false,
+        unsafe_request_detected: false,
+        blockers: [],
+        warnings: [],
+        next_safe_action: "review_preview_only",
+        input_preview: session.input_preview,
+        input_hash: session.input_hash,
+        raw_prompt_persisted: false,
+        raw_response_persisted: false,
+        task_created: false,
+        campaign_created: false,
+        claim_created: false,
+        execution_started: false,
+        codex_run_called: false,
+        matlab_run_called: false,
+        arbitrary_shell_enabled: false,
+        token_printed: false,
+      }),
+    ).toMatchObject({
+      draft_type: "campaign",
+      template_id: "matlab-parameter-sweep.v1",
+      execution_started: false,
+      matlab_run_called: false,
+      codex_run_called: false,
+      token_printed: false,
+    });
   });
 
   it("models Hermes DeepSeek provider preview disabled by default", () => {

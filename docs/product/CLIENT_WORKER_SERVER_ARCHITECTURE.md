@@ -11,7 +11,8 @@ The Desktop client is the local operator application. It is responsible for:
 - worker service manager and status surface;
 - Bootstrap Alpha worker service setup status using
   `skybridge.local_worker_service_status.v1`;
-- natural-language chat UI;
+- natural-language chat UI using `skybridge.task_draft_preview.v1` for MG326
+  deterministic local draft previews;
 - preview and review UI for planner drafts;
 - server report, worker health, and evidence review surfaces.
 
@@ -57,6 +58,8 @@ validation, and evidence requirements.
 
 The planner does not execute work. Planner output remains a draft until the
 operator confirms it and the server creates the task or campaign.
+MG326 keeps the planner local and deterministic, with no raw prompt persistence,
+no server task or campaign creation, and no execution.
 
 ## Execution Tools
 

@@ -41,6 +41,11 @@ import type {
   ControlPlaneWorkerHeartbeat as ControlPlaneWorkerHeartbeatContract,
   WorkerPairingPreview,
   WorkerRegistration,
+  ChatToTaskSession as ChatToTaskSessionContract,
+  TaskDraft as TaskDraftContract,
+  CampaignDraft as CampaignDraftContract,
+  TaskDraftClarifyingQuestion as TaskDraftClarifyingQuestionContract,
+  TaskDraftPreview as TaskDraftPreviewContract,
 } from "@skybridge-agent-hub/event-schema";
 
 export {
@@ -1906,6 +1911,12 @@ export interface LocalWorkerServiceStatus {
   worker_loop_started: false;
   token_printed: false;
 }
+
+export type ChatToTaskSession = ChatToTaskSessionContract;
+export type TaskDraft = TaskDraftContract;
+export type CampaignDraft = CampaignDraftContract;
+export type TaskDraftClarifyingQuestion = TaskDraftClarifyingQuestionContract;
+export type TaskDraftPreview = TaskDraftPreviewContract;
 
 export interface DesktopWorkerControlState {
   schema: "skybridge.desktop_worker_control_state.v1";
@@ -4326,6 +4337,170 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   claim_enabled: false,
   execute_enabled: false,
   worker_loop_started: false,
+  token_printed: false,
+};
+
+export const fixtureChatToTaskSession: ChatToTaskSession = {
+  schema: "skybridge.chat_to_task_session.v1",
+  session_id: "chat_draft_fixture_6d1f7a8b9c0d",
+  project_id: "skybridge-agent-hub",
+  planner_id: "deterministic-local-chat-to-task.v1",
+  input_preview: "MATLAB parameter sweep eta=2..10 h=500/700km P=6/8/10 with summary report.",
+  input_hash: "6d1f7a8b9c0d6d1f7a8b9c0d",
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureMatlabChatToTaskDraft: CampaignDraft = {
+  schema: "skybridge.campaign_draft.v1",
+  draft_id: "draft_matlab_parameter_sweep_6d1f7a8b9c0d",
+  draft_type: "campaign",
+  template_id: "matlab-parameter-sweep.v1",
+  project_id: "skybridge-agent-hub",
+  title: "Chapter 4 MATLAB parameter sweep",
+  summary: "Preview a bounded MATLAB parameter sweep and report request.",
+  risk: "local_experiment",
+  required_capabilities: ["windows", "powershell", "matlab", "codex"],
+  allowed_paths: ["results/skybridge/**", "docs/experiments/**"],
+  blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+  validation: [
+    "Confirm MATLAB is available locally.",
+    "Confirm the experiment entrypoint before future execution.",
+    "Write outputs only under allowed paths.",
+    "Do not execute arbitrary shell commands.",
+  ],
+  runner_id: "matlab-parameter-sweep-runner.v1",
+  evidence_schema: ["run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary"],
+  planner_id: fixtureChatToTaskSession.planner_id,
+  input_preview: fixtureChatToTaskSession.input_preview,
+  input_hash: fixtureChatToTaskSession.input_hash,
+  inputs: {
+    eta_range: [2, 10],
+    h_km: [500, 700],
+    p_values: [6, 8, 10],
+    outputs: ["summary", "report"],
+  },
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureDocsChatToTaskDraft: TaskDraft = {
+  schema: "skybridge.task_draft.v1",
+  draft_id: "draft_docs_report_6d1f7a8b9c0d",
+  draft_type: "task",
+  template_id: "software-docs-task.v1",
+  project_id: "skybridge-agent-hub",
+  title: "Software documentation/report draft",
+  summary: "Preview a documentation or analysis report task with safe evidence and no execution.",
+  risk: "docs_only",
+  required_capabilities: ["windows", "powershell", "git", "codex"],
+  allowed_paths: ["docs/**", "reports/skybridge/**"],
+  blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+  validation: [
+    "Keep changes under docs/** or reports/skybridge/**.",
+    "Do not mutate deployment, server root, GitHub settings, or secrets.",
+    "Return a safe report path, source references, and validation status only.",
+  ],
+  runner_id: "codex-analysis-report-runner.v1",
+  evidence_schema: ["report_path", "source_references", "validation_status", "audit_summary"],
+  planner_id: fixtureChatToTaskSession.planner_id,
+  input_preview: "Draft a software docs report for Bootstrap Alpha worker setup.",
+  input_hash: "4b1f7a8b9c0d4b1f7a8b9c0d",
+  inputs: {
+    output_kind: "summary_report",
+    docs_only: true,
+  },
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureClarifyingChatToTaskDraft: TaskDraftClarifyingQuestion = {
+  schema: "skybridge.task_draft_clarifying_question.v1",
+  draft_id: "draft_clarifying_6d1f7a8b9c0d",
+  draft_type: "clarifying_question",
+  template_id: "needs-clarification.v1",
+  project_id: "skybridge-agent-hub",
+  title: "Clarify task draft request",
+  summary: "The deterministic planner needs more bounded task details before emitting a task or campaign draft.",
+  risk: "needs_clarification",
+  required_capabilities: [],
+  allowed_paths: [],
+  blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+  validation: ["Provide template intent, project scope, allowed paths, and expected evidence before submission review."],
+  runner_id: "not-selected-preview-only",
+  evidence_schema: ["clarifying_answer"],
+  planner_id: fixtureChatToTaskSession.planner_id,
+  input_preview: "please help me with this",
+  input_hash: "5c1f7a8b9c0d5c1f7a8b9c0d",
+  questions: [
+    "Which template should this become?",
+    "What project scope and allowed output paths should be used?",
+    "What evidence should the operator review after future execution?",
+  ],
+  blocked: false,
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  token_printed: false,
+};
+
+export const fixtureChatToTaskDraftPreview: TaskDraftPreview = {
+  schema: "skybridge.task_draft_preview.v1",
+  ok: true,
+  status: "preview",
+  draft_id: fixtureMatlabChatToTaskDraft.draft_id,
+  draft_type: fixtureMatlabChatToTaskDraft.draft_type,
+  template_id: fixtureMatlabChatToTaskDraft.template_id,
+  project_id: fixtureMatlabChatToTaskDraft.project_id,
+  planner_id: fixtureMatlabChatToTaskDraft.planner_id,
+  session: fixtureChatToTaskSession,
+  draft: fixtureMatlabChatToTaskDraft,
+  command_text_detected: false,
+  unsafe_request_detected: false,
+  blockers: [],
+  warnings: ["preview_only_no_task_creation_no_claim_no_execution"],
+  next_safe_action: "review_preview_only",
+  input_preview: fixtureChatToTaskSession.input_preview,
+  input_hash: fixtureChatToTaskSession.input_hash,
+  raw_prompt_persisted: false,
+  raw_response_persisted: false,
+  task_created: false,
+  campaign_created: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
   token_printed: false,
 };
 

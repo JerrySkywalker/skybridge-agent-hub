@@ -381,6 +381,112 @@ export type ManualTaskQueue = z.infer<typeof ManualTaskQueueSchema>;
 export type ManualTaskProviderList = z.infer<typeof ManualTaskProviderListSchema>;
 export type ManualTaskProviderReport = z.infer<typeof ManualTaskProviderReportSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
+
+export const ChatToTaskDraftTypeSchema = z.enum([
+  "task",
+  "campaign",
+  "clarifying_question",
+]);
+export const ChatToTaskSessionSchema = z.object({
+  schema: z.literal("skybridge.chat_to_task_session.v1"),
+  session_id: z.string().min(1),
+  project_id: z.string().min(1),
+  planner_id: z.string().min(1),
+  input_preview: z.string().max(240),
+  input_hash: z.string().min(12),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  task_created: z.literal(false),
+  campaign_created: z.literal(false),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+const ChatToTaskDraftCommonSchema = z.object({
+  draft_id: z.string().min(1),
+  template_id: z.string().min(1),
+  project_id: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  risk: z.string().min(1),
+  required_capabilities: z.array(z.string()),
+  allowed_paths: z.array(z.string()),
+  blocked_paths: z.array(z.string()),
+  validation: z.array(z.string()),
+  runner_id: z.string().min(1),
+  evidence_schema: z.array(z.string()),
+  planner_id: z.string().min(1),
+  input_preview: z.string().max(240),
+  input_hash: z.string().min(12),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  task_created: z.literal(false),
+  campaign_created: z.literal(false),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const TaskDraftSchema = ChatToTaskDraftCommonSchema.extend({
+  schema: z.literal("skybridge.task_draft.v1"),
+  draft_type: z.literal("task"),
+  inputs: z.record(z.unknown()).default({}),
+});
+export const CampaignDraftSchema = ChatToTaskDraftCommonSchema.extend({
+  schema: z.literal("skybridge.campaign_draft.v1"),
+  draft_type: z.literal("campaign"),
+  inputs: z.record(z.unknown()).default({}),
+});
+export const TaskDraftClarifyingQuestionSchema = ChatToTaskDraftCommonSchema.extend({
+  schema: z.literal("skybridge.task_draft_clarifying_question.v1"),
+  draft_type: z.literal("clarifying_question"),
+  questions: z.array(z.string()).min(1),
+  blocked: z.boolean().default(false),
+});
+export const TaskDraftPreviewSchema = z.object({
+  schema: z.literal("skybridge.task_draft_preview.v1"),
+  ok: z.boolean(),
+  status: z.enum(["preview", "needs_clarification", "blocked"]),
+  draft_id: z.string().min(1),
+  draft_type: ChatToTaskDraftTypeSchema,
+  template_id: z.string().min(1),
+  project_id: z.string().min(1),
+  planner_id: z.string().min(1),
+  session: ChatToTaskSessionSchema,
+  draft: z.union([
+    TaskDraftSchema,
+    CampaignDraftSchema,
+    TaskDraftClarifyingQuestionSchema,
+  ]),
+  command_text_detected: z.boolean(),
+  unsafe_request_detected: z.boolean(),
+  blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
+  next_safe_action: z.string().min(1),
+  input_preview: z.string().max(240),
+  input_hash: z.string().min(12),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  task_created: z.literal(false),
+  campaign_created: z.literal(false),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+export type ChatToTaskDraftType = z.infer<typeof ChatToTaskDraftTypeSchema>;
+export type ChatToTaskSession = z.infer<typeof ChatToTaskSessionSchema>;
+export type TaskDraft = z.infer<typeof TaskDraftSchema>;
+export type CampaignDraft = z.infer<typeof CampaignDraftSchema>;
+export type TaskDraftClarifyingQuestion = z.infer<typeof TaskDraftClarifyingQuestionSchema>;
+export type TaskDraftPreview = z.infer<typeof TaskDraftPreviewSchema>;
 export type TaskRisk = "low" | "medium" | "high";
 export type GoalRisk = TaskRisk;
 export type GoalPriority = "low" | "normal" | "high" | "urgent";

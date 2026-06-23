@@ -33,6 +33,12 @@ MG325 covers local worker service visibility only. Worker task claim, Codex
 execution, MATLAB execution, worker loop start, notification send, and apply
 installation remain disabled or future reviewed work.
 
+MG326 covers natural-language-to-draft visibility only. It may produce local
+preview records for task, campaign, clarifying-question, and blocked-request
+drafts, but it does not create server tasks or campaigns, claim tasks, run
+Codex, run MATLAB, start worker loops, send notifications, or persist raw
+prompts.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,
