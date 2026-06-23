@@ -249,8 +249,13 @@ if ([string]::IsNullOrWhiteSpace($resolvedApiBase)) { $resolvedApiBase = Read-Co
 $workerIdExplicit = $PSBoundParameters.ContainsKey("WorkerId") -and -not [string]::IsNullOrWhiteSpace($WorkerId)
 $configuredWorkerId = $null
 if ([string]::IsNullOrWhiteSpace($WorkerId) -or $WorkerId -eq "local-windows-worker") {
-  $configuredWorkerId = Read-ConfigValue -Path $workerConfig -Keys @("SKYBRIDGE_WORKER_ID")
-  if (-not [string]::IsNullOrWhiteSpace($configuredWorkerId)) { $WorkerId = $configuredWorkerId }
+  if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_WORKER_ID)) {
+    $configuredWorkerId = $env:SKYBRIDGE_WORKER_ID
+    $WorkerId = $configuredWorkerId
+  } else {
+    $configuredWorkerId = Read-ConfigValue -Path $workerConfig -Keys @("SKYBRIDGE_WORKER_ID")
+    if (-not [string]::IsNullOrWhiteSpace($configuredWorkerId)) { $WorkerId = $configuredWorkerId }
+  }
 }
 $workerIdConfiguredForMutation = $workerIdExplicit -or -not [string]::IsNullOrWhiteSpace($configuredWorkerId)
 

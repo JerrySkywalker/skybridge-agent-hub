@@ -21,6 +21,11 @@ Install and repair are preview-only in MG325. MG330 adds exact-confirmed local
 apply for a non-admin user-level heartbeat-only wrapper and a heartbeat pairing
 drill. Apply remains local and bounded; it does not start task execution.
 
+MG331 adds safe local worker identity activation and a live heartbeat-only
+pairing path for `worker_id=jerry-win-local-01`. It persists only safe identity
+metadata and may register/heartbeat the worker with the cloud server after exact
+confirmation. It does not claim or execute tasks.
+
 MG326 adds a separate Desktop Chat-to-Task panel. MG327 adds a separate Desktop
 Task Templates panel. MG328 adds reviewed queued-record submit. MG329 adds a
 separate Worker Runner Preview panel and PowerShell-only one-task fixture
@@ -68,9 +73,18 @@ The status and doctor scripts inspect presence and safe key names only. They do
 not dot-source these files and do not print token values.
 
 `skybridge.env.ps1` is expected to contain `SKYBRIDGE_API_BASE`.
-`worker.env.ps1` is expected to contain `SKYBRIDGE_WORKER_ID`,
-`SKYBRIDGE_REPO_ROOT`, and `SKYBRIDGE_WORKER_SERVICE_NAME`. The token file is
-read only for authenticated heartbeat pairing; its value is never printed.
+`worker.env.ps1` is expected to contain:
+
+- `SKYBRIDGE_WORKER_ID`, with MG331 baseline `jerry-win-local-01`;
+- `SKYBRIDGE_WORKER_NAME`, with baseline `Jerry Windows Local Worker`;
+- `SKYBRIDGE_WORKER_PROVIDER`, with baseline `local-windows`;
+- optional `SKYBRIDGE_WORKER_LABELS`;
+- optional `SKYBRIDGE_WORKER_CAPABILITIES`;
+- `SKYBRIDGE_REPO_ROOT`;
+- `SKYBRIDGE_WORKER_SERVICE_NAME`.
+
+The token file is read only for authenticated heartbeat pairing; its value is
+never printed.
 
 ## Manual Status And Doctor
 
@@ -82,6 +96,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-wor
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-service-install.ps1 -Command preview -Json
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-service-repair.ps1 -Command repair-preview -Json
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-preview -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-identity.ps1 -Command preview -WorkerId jerry-win-local-01 -WorkerName 'Jerry Windows Local Worker' -Provider local-windows -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-live-heartbeat.ps1 -Command preview -Json
 ```
 
 The main status schema is `skybridge.local_worker_service_status.v1`.
@@ -106,6 +122,18 @@ Heartbeat pairing apply:
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-heartbeat-pairing-drill.ps1 -Command heartbeat-apply -Confirm -ConfirmationText I_UNDERSTAND_REGISTER_AND_HEARTBEAT_WORKER_ONLY_NO_TASK_CLAIM -Json
 ```
 
+Worker identity apply:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-identity.ps1 -Command apply -WorkerId jerry-win-local-01 -WorkerName 'Jerry Windows Local Worker' -Provider local-windows -Confirm -ConfirmationText I_UNDERSTAND_CONFIGURE_LOCAL_WORKER_IDENTITY_NO_TASK_EXECUTION -Json
+```
+
+Live heartbeat apply:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-live-heartbeat.ps1 -Command apply -Confirm -ConfirmationText I_UNDERSTAND_REGISTER_AND_HEARTBEAT_WORKER_ONLY_NO_TASK_CLAIM -Json
+```
+
 These commands are exact-confirmed because they mutate local config/state or
 register and heartbeat the worker. They do not claim tasks, start the worker
 template runner, start a loop, run Codex, run MATLAB, create PRs, send
@@ -124,6 +152,14 @@ The drill reports the worker id, redacted API host, registration status,
 online/offline status, and last heartbeat time. It does not call task claim,
 task start, task complete, task fail, campaign execution, or runner endpoints.
 
+MG331 live heartbeat uses the same endpoint boundary but sends the configured
+worker name, provider, and detected safe capabilities. Verify cloud visibility
+with:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-live-heartbeat.ps1 -Command status -Json
+```
+
 ## Interpreting Blockers
 
 - `service_not_installed`: run the install preview and review planned local
@@ -131,6 +167,8 @@ task start, task complete, task fail, campaign execution, or runner endpoints.
 - `api_base_not_configured`: add safe API base config to
   `$HOME\.skybridge\skybridge.env.ps1`.
 - `worker_token_file_missing`: create the local token file outside the repo.
+- `worker_id_not_configured`: run the worker identity preview and exact
+  confirmation apply for `jerry-win-local-01`.
 - `repo_root_not_detected`: run the scripts from the SkyBridge Agent Hub repo or
   pass the intended repo root.
 - `tool_missing_*`: install the required local tool before future worker
@@ -140,7 +178,7 @@ Warnings identify degraded capabilities, such as missing `gh`, Codex, or MATLAB.
 
 ## Still Disabled
 
-MG330 keeps these fields false:
+MG331 keeps these fields false:
 
 - `claim_enabled=false`
 - `execute_enabled=false`

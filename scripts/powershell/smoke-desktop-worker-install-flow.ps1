@@ -13,7 +13,7 @@ $heartbeatScript = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "scripts\p
 
 foreach ($needle in @(
   "Bootstrap Alpha Worker Setup",
-  "MG330 install apply is PowerShell exact-confirmation only",
+  "MG331 identity and live heartbeat apply are PowerShell exact-confirmation only",
   "Install apply available",
   "Repair apply available",
   "Heartbeat preview",

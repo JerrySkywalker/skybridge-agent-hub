@@ -1,5 +1,23 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 331 Local Worker Identity Activation And Live Heartbeat
+
+- Added `skybridge-worker-identity.ps1` for exact-confirmed safe local worker
+  identity config with `worker_id=jerry-win-local-01`.
+- Added `skybridge-worker-live-heartbeat.ps1` for preview and exact-confirmed
+  register/heartbeat-only pairing through worker APIs.
+- Hardened worker service status with identity status, worker name/provider,
+  identity apply availability, live heartbeat availability, and last live
+  heartbeat result fields.
+- Updated Desktop Bootstrap Alpha Worker Setup to show identity, live heartbeat,
+  cloud worker status, blockers, and disabled execution flags. Desktop live
+  apply remains PowerShell-only.
+- Added identity preview/apply, live heartbeat preview/fixture, and Desktop
+  identity/heartbeat smokes plus Bootstrap Alpha acceptance coverage.
+- Kept live task claim, task execution, worker template runner live apply,
+  Codex execution, MATLAB execution, arbitrary shell, worker loop start,
+  notification send, project-control unpause, and token printing disabled.
+
 ## 2026-06-24 Mega Goal 330 Local Worker Install Apply And Heartbeat Pairing
 
 - Added exact-confirmed local worker install and repair scripts:

@@ -12,6 +12,7 @@ The Desktop client is the local operator application. It is responsible for:
 - Bootstrap Alpha worker service setup status using
   `skybridge.local_worker_service_status.v1`;
 - MG330 local install/repair apply availability and heartbeat pairing status;
+- MG331 worker identity status and live heartbeat-only registration status;
 - natural-language chat UI using `skybridge.task_draft_preview.v1` for MG326
   deterministic local draft previews;
 - preview and review UI for planner drafts;
@@ -53,6 +54,9 @@ MG330 adds non-admin local user-level install/repair apply and a heartbeat
 pairing drill. That drill may register and heartbeat the worker only; it does
 not call task claim, task start, task complete, campaign execution, or runner
 endpoints.
+MG331 configures `worker_id=jerry-win-local-01` with safe local identity
+metadata and performs live register/heartbeat only. It does not start a worker
+loop or claim tasks.
 MG329 adds a PowerShell-only `apply-one` path that may claim/start/complete one
 eligible `safe-local-smoke.v1` fixture task after exact confirmation. Codex
 execution, MATLAB execution, arbitrary shell, unbounded loops, and project

@@ -29,6 +29,8 @@ $requiredScripts = @{
   worker_service_install = "scripts/powershell/skybridge-worker-service-install.ps1"
   worker_service_repair = "scripts/powershell/skybridge-worker-service-repair.ps1"
   worker_heartbeat_pairing_drill = "scripts/powershell/skybridge-worker-heartbeat-pairing-drill.ps1"
+  worker_identity = "scripts/powershell/skybridge-worker-identity.ps1"
+  worker_live_heartbeat = "scripts/powershell/skybridge-worker-live-heartbeat.ps1"
   chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
   task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
   draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
@@ -111,6 +113,11 @@ $requiredPackageScripts = @(
   "smoke:worker-service-repair-preview",
   "smoke:worker-heartbeat-pairing-fixture",
   "smoke:desktop-worker-install-flow",
+  "smoke:worker-identity-preview",
+  "smoke:worker-identity-apply-fixture",
+  "smoke:worker-live-heartbeat-preview",
+  "smoke:worker-live-heartbeat-fixture",
+  "smoke:desktop-worker-identity-heartbeat",
   "smoke:chat-to-task-draft",
   "smoke:desktop-chat-to-task",
   "smoke:chat-to-task-matlab-example",
@@ -161,6 +168,7 @@ $desktopTaskTemplateRegistryPanelPresent = $false
 $desktopDraftReviewSubmitPanelPresent = $false
 $desktopWorkerTemplateRunnerPanelPresent = $false
 $desktopWorkerInstallFlowPresent = $false
+$desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -172,13 +180,21 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("worker_loop_started=false; token_printed=false")
   )
   $desktopWorkerInstallFlowPresent = (
-    $desktopSource -match [regex]::Escape("MG330 install apply is PowerShell exact-confirmation only") -and
+    $desktopSource -match [regex]::Escape("MG331 identity and live heartbeat apply are PowerShell exact-confirmation only") -and
     $desktopSource -match [regex]::Escape("Install apply unavailable in Desktop") -and
     $desktopSource -match [regex]::Escape("Repair apply unavailable in Desktop") -and
     $desktopSource -match [regex]::Escape("Heartbeat pairing preview") -and
     $desktopSource -match [regex]::Escape("Heartbeat apply unavailable in Desktop") -and
     $desktopSource -match [regex]::Escape("Cloud worker registered") -and
     $desktopSource -match [regex]::Escape("template_runner_enabled=false; worker_loop_started=false; token_printed=false")
+  )
+  $desktopWorkerIdentityHeartbeatPresent = (
+    $desktopSource -match [regex]::Escape("Worker identity status") -and
+    $desktopSource -match [regex]::Escape("Identity setup preview") -and
+    $desktopSource -match [regex]::Escape("Identity apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("Live heartbeat preview") -and
+    $desktopSource -match [regex]::Escape("Live heartbeat last result") -and
+    $desktopSource -match [regex]::Escape("Live heartbeat apply unavailable in Desktop")
   )
   $desktopChatToTaskPanelPresent = (
     $desktopSource -match [regex]::Escape("Bootstrap Alpha Chat-to-Task") -and
@@ -238,6 +254,12 @@ $workerInstallPreviewError = $null
 $workerHeartbeatPreviewContract = $null
 $workerHeartbeatPreviewContractOk = $false
 $workerHeartbeatPreviewError = $null
+$workerIdentityPreviewContract = $null
+$workerIdentityPreviewContractOk = $false
+$workerIdentityPreviewError = $null
+$workerLiveHeartbeatPreviewContract = $null
+$workerLiveHeartbeatPreviewContractOk = $false
+$workerLiveHeartbeatPreviewError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -298,6 +320,49 @@ try {
       [bool]$workerHeartbeatPreviewContract.matlab_run_called -eq $false -and
       [bool]$workerHeartbeatPreviewContract.arbitrary_shell_enabled -eq $false -and
       [bool]$workerHeartbeatPreviewContract.token_printed -eq $false
+    )
+  }
+  $identityScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-worker-identity.ps1"
+  if (Test-Path -LiteralPath $identityScriptPath -PathType Leaf) {
+    $rawIdentityPreview = & pwsh -NoProfile -ExecutionPolicy Bypass -File $identityScriptPath -Command preview -HomeRoot $tempHome -RepoRoot $RepoRoot -WorkerId "jerry-win-local-01" -WorkerName "Jerry Windows Local Worker" -Provider "local-windows" -Json
+    $identityPreviewText = ($rawIdentityPreview | Out-String).Trim()
+    Assert-NoUnsafeText $identityPreviewText
+    $workerIdentityPreviewContract = $identityPreviewText | ConvertFrom-Json
+    $workerIdentityPreviewContractOk = (
+      [string]$workerIdentityPreviewContract.schema -eq "skybridge.worker_identity.v1" -and
+      [string]$workerIdentityPreviewContract.mode -eq "preview" -and
+      [string]$workerIdentityPreviewContract.worker_id -eq "jerry-win-local-01" -and
+      [bool]$workerIdentityPreviewContract.would_mutate -eq $false -and
+      [bool]$workerIdentityPreviewContract.did_mutate -eq $false -and
+      [bool]$workerIdentityPreviewContract.claim_enabled -eq $false -and
+      [bool]$workerIdentityPreviewContract.execute_enabled -eq $false -and
+      [bool]$workerIdentityPreviewContract.worker_loop_started -eq $false -and
+      [bool]$workerIdentityPreviewContract.codex_run_called -eq $false -and
+      [bool]$workerIdentityPreviewContract.matlab_run_called -eq $false -and
+      [bool]$workerIdentityPreviewContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$workerIdentityPreviewContract.token_printed -eq $false
+    )
+  }
+  $liveHeartbeatScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-worker-live-heartbeat.ps1"
+  if (Test-Path -LiteralPath $liveHeartbeatScriptPath -PathType Leaf) {
+    $rawLiveHeartbeatPreview = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveHeartbeatScriptPath -Command preview -HomeRoot $tempHome -RepoRoot $RepoRoot -WorkerId "jerry-win-local-01" -WorkerName "Jerry Windows Local Worker" -Provider "local-windows" -Json
+    $liveHeartbeatPreviewText = ($rawLiveHeartbeatPreview | Out-String).Trim()
+    Assert-NoUnsafeText $liveHeartbeatPreviewText
+    $workerLiveHeartbeatPreviewContract = $liveHeartbeatPreviewText | ConvertFrom-Json
+    $workerLiveHeartbeatPreviewContractOk = (
+      [string]$workerLiveHeartbeatPreviewContract.schema -eq "skybridge.worker_live_heartbeat.v1" -and
+      [string]$workerLiveHeartbeatPreviewContract.mode -eq "preview" -and
+      [bool]$workerLiveHeartbeatPreviewContract.would_mutate_server -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.server_mutation_performed -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.claim_enabled -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.execute_enabled -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.claim_created -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.execution_started -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.worker_loop_started -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.codex_run_called -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.matlab_run_called -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$workerLiveHeartbeatPreviewContract.token_printed -eq $false
     )
   }
   $chatScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-chat-to-task-draft.ps1"
@@ -429,6 +494,12 @@ try {
   if (-not $workerHeartbeatPreviewContractOk) {
     $workerHeartbeatPreviewError = "worker_heartbeat_preview_contract_failed"
   }
+  if (-not $workerIdentityPreviewContractOk) {
+    $workerIdentityPreviewError = "worker_identity_preview_contract_failed"
+  }
+  if (-not $workerLiveHeartbeatPreviewContractOk) {
+    $workerLiveHeartbeatPreviewError = "worker_live_heartbeat_preview_contract_failed"
+  }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -446,9 +517,12 @@ $ok = (
   $desktopDraftReviewSubmitPanelPresent -and
   $desktopWorkerTemplateRunnerPanelPresent -and
   $desktopWorkerInstallFlowPresent -and
+  $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
   $workerInstallPreviewContractOk -and
   $workerHeartbeatPreviewContractOk -and
+  $workerIdentityPreviewContractOk -and
+  $workerLiveHeartbeatPreviewContractOk -and
   $chatToTaskContractOk -and
   $taskTemplateRegistryContractOk -and
   $draftSubmitStatusContractOk -and
@@ -470,6 +544,7 @@ $report = [pscustomobject]@{
   desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
   desktop_worker_template_runner_panel_present = $desktopWorkerTemplateRunnerPanelPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
+  desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -521,6 +596,44 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   worker_heartbeat_preview_error = $workerHeartbeatPreviewError
+  worker_identity_preview_contract_ok = $workerIdentityPreviewContractOk
+  worker_identity_preview_contract = if ($workerIdentityPreviewContract) {
+    [pscustomobject]@{
+      schema = $workerIdentityPreviewContract.schema
+      mode = $workerIdentityPreviewContract.mode
+      worker_id = $workerIdentityPreviewContract.worker_id
+      would_mutate = $workerIdentityPreviewContract.would_mutate
+      did_mutate = $workerIdentityPreviewContract.did_mutate
+      claim_enabled = $workerIdentityPreviewContract.claim_enabled
+      execute_enabled = $workerIdentityPreviewContract.execute_enabled
+      worker_loop_started = $workerIdentityPreviewContract.worker_loop_started
+      codex_run_called = $workerIdentityPreviewContract.codex_run_called
+      matlab_run_called = $workerIdentityPreviewContract.matlab_run_called
+      arbitrary_shell_enabled = $workerIdentityPreviewContract.arbitrary_shell_enabled
+      token_printed = $workerIdentityPreviewContract.token_printed
+    }
+  } else { $null }
+  worker_identity_preview_error = $workerIdentityPreviewError
+  worker_live_heartbeat_preview_contract_ok = $workerLiveHeartbeatPreviewContractOk
+  worker_live_heartbeat_preview_contract = if ($workerLiveHeartbeatPreviewContract) {
+    [pscustomobject]@{
+      schema = $workerLiveHeartbeatPreviewContract.schema
+      mode = $workerLiveHeartbeatPreviewContract.mode
+      worker_id = $workerLiveHeartbeatPreviewContract.worker_id
+      would_mutate_server = $workerLiveHeartbeatPreviewContract.would_mutate_server
+      server_mutation_performed = $workerLiveHeartbeatPreviewContract.server_mutation_performed
+      claim_enabled = $workerLiveHeartbeatPreviewContract.claim_enabled
+      execute_enabled = $workerLiveHeartbeatPreviewContract.execute_enabled
+      claim_created = $workerLiveHeartbeatPreviewContract.claim_created
+      execution_started = $workerLiveHeartbeatPreviewContract.execution_started
+      worker_loop_started = $workerLiveHeartbeatPreviewContract.worker_loop_started
+      codex_run_called = $workerLiveHeartbeatPreviewContract.codex_run_called
+      matlab_run_called = $workerLiveHeartbeatPreviewContract.matlab_run_called
+      arbitrary_shell_enabled = $workerLiveHeartbeatPreviewContract.arbitrary_shell_enabled
+      token_printed = $workerLiveHeartbeatPreviewContract.token_printed
+    }
+  } else { $null }
+  worker_live_heartbeat_preview_error = $workerLiveHeartbeatPreviewError
   chat_to_task_contract_ok = $chatToTaskContractOk
   chat_to_task_contract = if ($chatToTaskContract) {
     [pscustomobject]@{

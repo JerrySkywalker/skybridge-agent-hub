@@ -12,7 +12,8 @@ automation.
 2. Install the local Rust/Tauri Desktop client.
 3. The Desktop client installs, repairs, or reports status for the local Windows
    worker service. MG330 adds exact-confirmed local install/repair apply and a
-   heartbeat pairing drill while keeping execution disabled.
+   heartbeat pairing drill while keeping execution disabled. MG331 activates a
+   safe local worker identity and live heartbeat-only registration.
 4. The Desktop client provides a natural-language chat window for task intent.
 5. A local Hermes planner or server-mediated Hermes planner converts natural
    language into structured task or campaign drafts.
@@ -135,6 +136,25 @@ heartbeat, cloud worker registration, cloud worker online/offline status, and
 the recommended next action. Desktop does not perform live apply in MG330.
 
 MG330 keeps `claim_enabled=false`, `execute_enabled=false`,
+`template_runner_enabled=false`, `worker_loop_started=false`,
+`codex_run_called=false`, `matlab_run_called=false`,
+`arbitrary_shell_enabled=false`, and `token_printed=false`.
+
+## MG331 Local Worker Identity And Live Heartbeat
+
+MG331 configures the local Bootstrap Alpha worker identity:
+`worker_id=jerry-win-local-01`, `worker_name=Jerry Windows Local Worker`, and
+`provider=local-windows`. The identity script writes only safe metadata to
+`$HOME\.skybridge\worker.env.ps1` and local state after exact confirmation.
+
+The live heartbeat script previews readiness and, after exact confirmation, may
+call only `POST /v1/workers/register`,
+`POST /v1/workers/:workerId/heartbeat`, and `GET /v1/workers/:workerId`.
+Desktop shows identity status, live heartbeat preview/result state, cloud
+worker registration, cloud worker online/offline status, blockers, and the next
+safe action. Desktop keeps live apply PowerShell-only.
+
+MG331 keeps `claim_enabled=false`, `execute_enabled=false`,
 `template_runner_enabled=false`, `worker_loop_started=false`,
 `codex_run_called=false`, `matlab_run_called=false`,
 `arbitrary_shell_enabled=false`, and `token_printed=false`.
