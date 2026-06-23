@@ -1794,6 +1794,61 @@ describe("server api", () => {
     });
   });
 
+  it("preserves glob path policies for safe template tasks", async () => {
+    const server = await testServer();
+    await server.inject({
+      method: "POST",
+      url: "/v1/projects",
+      payload: { project_id: "proj-glob-policy", name: "Glob policy project" },
+    });
+    const create = await server.inject({
+      method: "POST",
+      url: "/v1/tasks",
+      payload: {
+        task_id: "task-glob-policy",
+        project_id: "proj-glob-policy",
+        title: "Safe template glob policy",
+        risk: "low",
+        source: "manual",
+        task_type: "safe-local-smoke",
+        allowed_paths: [".agent/tmp/**"],
+        blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+        planner_metadata: {
+          adapter: "mg332-live-safe-task-pilot",
+          decision: "continue",
+          reason: "mg332_one_live_safe_template_task",
+          task_type: "safe-local-smoke",
+          template_id: "safe-local-smoke.v1",
+          runner_id: "safe-local-smoke-runner.v1",
+          evidence_schema: ["skybridge.live_safe_template_task_evidence.v1"],
+          allowed_paths: [".agent/tmp/**"],
+          blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+          validation: ["fixed safe-local-smoke runner completed"],
+          stop_criteria_status: ["complete_exact_live_safe_template_task_then_stop"],
+          source_run_id: "mega-goal-332-live-safe-task-pilot",
+        },
+      },
+    });
+
+    expect(create.statusCode).toBe(201);
+    expect(
+      create.json<{
+        task: {
+          allowed_paths?: string[];
+          blocked_paths?: string[];
+          planner_metadata?: { allowed_paths: string[]; blocked_paths: string[] };
+        };
+      }>().task,
+    ).toMatchObject({
+      allowed_paths: [".agent/tmp/**"],
+      blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+      planner_metadata: {
+        allowed_paths: [".agent/tmp/**"],
+        blocked_paths: [".env", "secrets/**", "deploy/**", ".git/**"],
+      },
+    });
+  });
+
   it("prevents disabled and offline workers from claiming tasks", async () => {
     const server = await testServer();
     await server.inject({

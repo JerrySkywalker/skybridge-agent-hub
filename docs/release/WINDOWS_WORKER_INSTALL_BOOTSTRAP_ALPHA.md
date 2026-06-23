@@ -160,6 +160,32 @@ with:
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-worker-live-heartbeat.ps1 -Command status -Json
 ```
 
+## MG332 One Live Safe Template Task
+
+MG332 is the first goal that may claim a live cloud task, but only for the
+deterministic pilot task `live-safe-template-task-332-001` and only through the
+fixed `safe-local-smoke.v1` runner. The local worker identity must be
+`jerry-win-local-01`, the cloud worker must be online, and the task must be low
+risk, queued, unleased, and created by the MG332 pilot helper.
+
+Preview the live pilot before any mutation:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-safe-task-pilot.ps1 -Command preview-create -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-safe-task-pilot.ps1 -Command preview-run -Json
+```
+
+The exact-confirmed apply commands are:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-safe-task-pilot.ps1 -Command apply-create -Confirm -ConfirmationText I_UNDERSTAND_CREATE_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-safe-task-pilot.ps1 -Command apply-run -Confirm -ConfirmationText I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY -Json
+```
+
+MG332 still does not start a worker loop, claim arbitrary tasks, run Codex, run
+MATLAB, run arbitrary shell, create PRs, requeue old tasks, or unpause project
+control.
+
 ## Interpreting Blockers
 
 - `service_not_installed`: run the install preview and review planned local
@@ -178,14 +204,15 @@ Warnings identify degraded capabilities, such as missing `gh`, Codex, or MATLAB.
 
 ## Still Disabled
 
-MG331 keeps these fields false:
+MG331 and MG332 keep these fields false except that MG332 may set
+`claim_created=true` and `execution_started=true` only for the exact pilot task:
 
 - `claim_enabled=false`
 - `execute_enabled=false`
 - `template_runner_enabled=false`
 - `worker_loop_started=false`
-- `claim_created=false`
-- `execution_started=false`
+- `claim_created=false` for all tasks except `live-safe-template-task-332-001`
+- `execution_started=false` for all tasks except `live-safe-template-task-332-001`
 - `codex_run_called=false`
 - `matlab_run_called=false`
 - `arbitrary_shell_enabled=false`

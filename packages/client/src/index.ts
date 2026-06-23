@@ -4714,6 +4714,11 @@ export const fixtureMatlabDraftSubmitResult: DraftSubmitResult = {
 
 export const WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT =
   "I_UNDERSTAND_RUN_ONE_SAFE_TEMPLATE_TASK_ONLY";
+export const LIVE_SAFE_TASK_PILOT_TASK_ID = "live-safe-template-task-332-001";
+export const LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
+export const LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -4781,6 +4786,60 @@ export const fixtureWorkerTemplateRunnerResult: WorkerTemplateRunnerResult = {
   evidence_present: true,
   validation_status: "passed",
   result_summary: "Fixture safe-local-smoke runner completed exactly one task and recorded sanitized evidence.",
+};
+
+export const fixtureLiveSafeTaskPilotPreview: WorkerTemplateRunnerPreview = {
+  schema: "skybridge.worker_template_runner_preview.v1",
+  ok: true,
+  mode: "preview",
+  worker_id: "jerry-win-local-01",
+  project_id: "skybridge-agent-hub",
+  task_id: LIVE_SAFE_TASK_PILOT_TASK_ID,
+  expected_task_id: LIVE_SAFE_TASK_PILOT_TASK_ID,
+  template_id: "safe-local-smoke.v1",
+  runner_id: "safe-local-smoke-runner.v1",
+  evidence_schema: "skybridge.live_safe_template_task_evidence.v1",
+  selected: true,
+  eligible: true,
+  selected_task_count: 1,
+  rejected_reason: "",
+  claim_created: false,
+  task_claimed_count: 0,
+  old_task_claimed: false,
+  execution_started: false,
+  execution_completed: false,
+  execution_failed: false,
+  evidence_present: false,
+  allowed_paths_checked: true,
+  blocked_paths_checked: true,
+  changed_files: [],
+  validation_status: "preview_only",
+  result_summary: "MG332 live pilot fixture: one exact safe-local-smoke task is eligible for PowerShell-only exact-confirmation apply.",
+  final_task_state: "queued",
+  cloud_worker_status: "online",
+  pr_created: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  unbounded_run_enabled: false,
+  project_control_unpaused: false,
+  token_printed: false,
+};
+
+export const fixtureLiveSafeTaskPilotResult: WorkerTemplateRunnerResult = {
+  ...fixtureLiveSafeTaskPilotPreview,
+  schema: "skybridge.worker_template_runner_result.v1",
+  mode: "apply",
+  claim_created: true,
+  task_claimed_count: 1,
+  execution_started: true,
+  execution_completed: true,
+  evidence_present: true,
+  changed_files: [".agent/tmp/live-safe-template-task-332/live-safe-template-task-332-001/evidence.json"],
+  validation_status: "passed",
+  result_summary: "MG332 fixture safe-local-smoke runner completed exactly one live pilot task and recorded sanitized evidence.",
+  final_task_state: "completed",
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

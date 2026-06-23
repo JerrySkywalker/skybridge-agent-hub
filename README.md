@@ -127,6 +127,8 @@ For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For local worker identity activation and live heartbeat-only pairing, use the
 same Windows worker install runbook.
+For the first one-task live safe worker pilot, see
+[docs/product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md](docs/product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md).
 
 ## Quick Start
 

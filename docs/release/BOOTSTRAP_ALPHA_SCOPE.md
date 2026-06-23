@@ -19,6 +19,7 @@ worker execution loop.
 - task template registry target;
 - reviewed draft submit target;
 - worker template runner target;
+- one exact live safe template task pilot;
 - golden path trial target.
 
 ## Excluded
@@ -81,6 +82,16 @@ claim live cloud tasks, execute tasks, run Codex, run MATLAB, start a worker
 template runner, start a loop, send notifications, expose arbitrary shell, run
 unbounded, create PRs, requeue old tasks, unpause project control, or mutate
 production infrastructure.
+
+MG332 covers Live Worker One Safe Template Task only. It may create one live
+cloud task with id `live-safe-template-task-332-001`, then claim, start, and
+complete or fail exactly that task with `worker_id=jerry-win-local-01` after
+exact confirmation. The task must be `safe-local-smoke.v1`,
+`safe-local-smoke-runner.v1`, low risk, unleased, not old residue, and bounded
+to `.agent/tmp/**` evidence. MG332 does not claim arbitrary or old tasks, run
+Codex, run MATLAB, start a worker loop, expose arbitrary shell, run unbounded,
+create PRs, requeue old tasks, unpause project control, or mutate production
+infrastructure.
 
 ## Release Principle
 

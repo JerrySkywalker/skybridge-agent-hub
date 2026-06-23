@@ -52,8 +52,12 @@ import {
   fixtureTaskTemplateRegistry,
   fixtureWorkerTemplateRunnerPreview,
   fixtureWorkerTemplateRunnerResult,
+  fixtureLiveSafeTaskPilotPreview,
+  fixtureLiveSafeTaskPilotResult,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
+  LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
+  LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -1801,6 +1805,8 @@ function App() {
       <BootstrapAlphaWorkerTemplateRunnerPanel
         preview={fixtureWorkerTemplateRunnerPreview}
         lastResult={fixtureWorkerTemplateRunnerResult}
+        livePilotPreview={fixtureLiveSafeTaskPilotPreview}
+        livePilotResult={fixtureLiveSafeTaskPilotResult}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2609,9 +2615,13 @@ function BootstrapAlphaTaskTemplateRegistryPanel({
 function BootstrapAlphaWorkerTemplateRunnerPanel({
   preview,
   lastResult,
+  livePilotPreview,
+  livePilotResult,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
+  livePilotPreview: WorkerTemplateRunnerPreview;
+  livePilotResult: WorkerTemplateRunnerResult;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2623,6 +2633,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
       <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha worker template runner safety flags">
         <span>Desktop preview-only</span>
         <span>MaxTasks=1; claim via PowerShell exact confirmation only</span>
+        <span>MG332 live pilot is PowerShell-only for task live-safe-template-task-332-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2660,6 +2671,20 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="Last evidence present" value={String(lastResult.evidence_present)} />
         <StatusValue label="Last changed files" value={lastResult.changed_files.join("; ") || "none"} />
         <StatusValue label="Confirmation requirement" value={WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT} />
+        <StatusValue label="MG332 live pilot status" value={livePilotPreview.ok ? "exact_task_preview_available" : "no_live_pilot_task"} />
+        <StatusValue label="MG332 target task id" value={livePilotPreview.expected_task_id ?? livePilotPreview.task_id ?? "none"} />
+        <StatusValue label="MG332 worker id" value={livePilotPreview.worker_id} />
+        <StatusValue label="MG332 cloud worker status" value={livePilotPreview.cloud_worker_status ?? "unknown"} />
+        <StatusValue label="MG332 template id" value={livePilotPreview.template_id ?? "none"} />
+        <StatusValue label="MG332 runner id" value={livePilotPreview.runner_id ?? "none"} />
+        <StatusValue label="MG332 evidence schema" value={livePilotPreview.evidence_schema ?? "none"} />
+        <StatusValue label="MG332 selected task count" value={String(livePilotPreview.selected_task_count ?? 0)} />
+        <StatusValue label="MG332 task claimed count" value={String(livePilotResult.task_claimed_count ?? 0)} />
+        <StatusValue label="MG332 old task claimed" value={String(livePilotResult.old_task_claimed ?? false)} />
+        <StatusValue label="MG332 final task state" value={livePilotResult.final_task_state ?? "not_run"} />
+        <StatusValue label="MG332 evidence summary" value={livePilotResult.result_summary} />
+        <StatusValue label="MG332 create confirmation" value={LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG332 run confirmation" value={LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2679,6 +2704,12 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true">
           Arbitrary shell disabled
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-safe-task-pilot.ps1 -Command preview-run">
+          MG332 live pilot preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG332 confirmation">
+          MG332 live apply unavailable in Desktop
         </button>
       </div>
     </section>

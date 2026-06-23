@@ -24,7 +24,8 @@ automation.
    evidence state.
 9. The local worker actively pulls from the server and claims compatible tasks.
 10. The worker executes only template runners. MG329 starts with one
-    safe-local-smoke fixture runner; Codex and MATLAB runners remain future
+    safe-local-smoke fixture runner. MG332 proves one exact live
+    safe-local-smoke pilot task; Codex and MATLAB runners remain future
     reviewed goals.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
@@ -158,5 +159,27 @@ MG331 keeps `claim_enabled=false`, `execute_enabled=false`,
 `template_runner_enabled=false`, `worker_loop_started=false`,
 `codex_run_called=false`, `matlab_run_called=false`,
 `arbitrary_shell_enabled=false`, and `token_printed=false`.
+
+## MG332 Live Worker One Safe Template Task
+
+MG332 proves the first live end-to-end task lifecycle for exactly one task:
+`live-safe-template-task-332-001`. The live task must be
+`template_id=safe-local-smoke.v1`, `runner_id=safe-local-smoke-runner.v1`,
+`risk=low`, queued, unleased, and created by the MG332 pilot helper.
+
+The pilot script can preview/create the task and preview/run the exact task.
+Create apply requires
+`I_UNDERSTAND_CREATE_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY`. Run apply requires
+`I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY`.
+
+The fixed runner claims, starts, and completes or fails only that task with
+sanitized `skybridge.live_safe_template_task_evidence.v1` evidence under
+`.agent/tmp/**`. Desktop shows live pilot status and evidence fixture state,
+but live apply remains PowerShell-only.
+
+MG332 keeps `codex_run_called=false`, `matlab_run_called=false`,
+`arbitrary_shell_enabled=false`, `worker_loop_started=false`,
+`project_control_unpaused=false`, `old_task_claimed=false`, and
+`token_printed=false`.
 
 token_printed=false

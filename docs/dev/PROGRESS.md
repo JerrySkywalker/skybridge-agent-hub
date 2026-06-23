@@ -1,5 +1,23 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 332 Live Worker One Safe Template Task
+
+- Added `skybridge-live-safe-task-pilot.ps1` to preview/create, preview/run,
+  apply-run, and report the deterministic live pilot task
+  `live-safe-template-task-332-001`.
+- Hardened `skybridge-worker-template-runner.ps1` with MG332 live-only modes,
+  exact task id checks, low-risk/template/runner validation, old-residue
+  rejection, MaxTasks=1 enforcement, and sanitized
+  `skybridge.live_safe_template_task_evidence.v1` output.
+- Updated Desktop Worker Runner Preview with MG332 live pilot status, target
+  task id, cloud worker status, evidence schema, final state, and disabled
+  PowerShell-only apply labels.
+- Added live pilot preview, fixture apply, unsafe rejection, and Desktop fixture
+  smokes plus Bootstrap Alpha acceptance coverage.
+- Kept Codex execution, MATLAB execution, arbitrary shell, worker loop start,
+  PR creation, project-control unpause, old task requeue, arbitrary task claim,
+  and token printing disabled.
+
 ## 2026-06-24 Mega Goal 331 Local Worker Identity Activation And Live Heartbeat
 
 - Added `skybridge-worker-identity.ps1` for exact-confirmed safe local worker

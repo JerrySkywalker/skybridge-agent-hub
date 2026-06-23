@@ -115,4 +115,14 @@ MG331 activates the real local worker identity
 cloud server. It does not make the Worker Template Runner live against cloud
 tasks, does not claim tasks, and does not start a loop.
 
+MG332 adds the first live one-task runner pilot. The only live target is
+`live-safe-template-task-332-001` for `safe-local-smoke.v1` and
+`safe-local-smoke-runner.v1`, with `jerry-win-local-01` as the worker. Live
+apply requires `I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY`,
+rejects old residue and unsafe templates, claims exactly one task, and writes
+sanitized evidence under `.agent/tmp/live-safe-template-task-332/**`.
+
+MG332 still does not run Codex, run MATLAB, start a worker loop, create PRs,
+unpause project control, requeue old tasks, or claim arbitrary queued work.
+
 token_printed=false
