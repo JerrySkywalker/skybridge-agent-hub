@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 333 MATLAB Experiment Golden Trial v1
+
+- Added shared MATLAB golden-trial contracts:
+  `skybridge.matlab_parameter_sweep_runner.v1`,
+  `skybridge.matlab_sweep_manifest.v1`,
+  `skybridge.matlab_sweep_summary.v1`, and
+  `skybridge.matlab_sweep_evidence.v1`.
+- Added the fixed `skybridge-matlab-parameter-sweep-runner.ps1` and
+  toolbox-free `scripts/matlab/skybridge_run_parameter_sweep.m` synthetic
+  runner for the tiny grid `eta=[2,3]`, `h_km=[500]`, `P=[6]`.
+- Added `skybridge-live-matlab-golden-trial.ps1` for preview/create and
+  preview/run of the exact live task `live-matlab-golden-task-333-001`, with
+  exact confirmations for task creation and one fixed MATLAB run.
+- Updated Desktop Worker Runner Preview with MG333 MATLAB Golden Trial status,
+  target task id, parameter grid, output paths, evidence summary, and disabled
+  live apply labels.
+- Added MATLAB runner preview/fixture, live trial preview/rejection, Desktop
+  fixture smokes, Bootstrap Alpha acceptance coverage, README link, and product
+  docs.
+- Kept arbitrary MATLAB command text, Codex execution, arbitrary shell, worker
+  loop start, PR creation, project-control unpause, old task requeue, raw
+  stdout/stderr reporting, and token printing disabled.
+
 ## 2026-06-24 Mega Goal 332 Live Worker One Safe Template Task
 
 - Added `skybridge-live-safe-task-pilot.ps1` to preview/create, preview/run,

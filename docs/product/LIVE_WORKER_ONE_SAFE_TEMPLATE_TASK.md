@@ -83,4 +83,8 @@ Desktop displays the pilot status and evidence fixture, but live apply remains P
 
 ## Next Steps
 
-After MG332, remaining Bootstrap Alpha options are local worker service install activation if still needed, or the MATLAB Experiment Golden Trial as a separate bounded goal.
+MG333 follows this pilot with
+[MATLAB Experiment Golden Trial](MATLAB_EXPERIMENT_GOLDEN_TRIAL.md), which is a
+separate exact-task MATLAB runner validation for
+`live-matlab-golden-task-333-001`. It does not change the MG332 safe-local-smoke
+scope or allow arbitrary task claims.

@@ -88,6 +88,13 @@ MG329 does not change the registry safety flags: templates still report
 `execution_supported=false` and runner execution is separately gated by the
 PowerShell runner contract.
 
+MG333 uses the existing `matlab-parameter-sweep.v1` id for one exact
+golden-trial task, `live-matlab-golden-task-333-001`, through the fixed
+`matlab-parameter-sweep-runner.v1`. This is not a generic template execution
+flip in the registry. The registry remains the metadata source, while the
+MG333 PowerShell scripts enforce exact task id, tiny synthetic grid, output
+path bounds, MATLAB availability, and exact confirmation.
+
 ## Disabled In MG327
 
 - `execution_supported=false`

@@ -55,6 +55,10 @@ import type {
   WorkerTemplateRunner as WorkerTemplateRunnerContract,
   WorkerTemplateRunnerPreview as WorkerTemplateRunnerPreviewContract,
   WorkerTemplateRunnerResult as WorkerTemplateRunnerResultContract,
+  MatlabParameterSweepRunner as MatlabParameterSweepRunnerContract,
+  MatlabSweepEvidence as MatlabSweepEvidenceContract,
+  MatlabSweepManifest as MatlabSweepManifestContract,
+  MatlabSweepSummary as MatlabSweepSummaryContract,
 } from "@skybridge-agent-hub/event-schema";
 
 import {
@@ -1975,6 +1979,10 @@ export type WorkerTemplateRunner = WorkerTemplateRunnerContract;
 export type WorkerTemplateRunnerPreview = WorkerTemplateRunnerPreviewContract;
 export type WorkerTemplateRunnerResult = WorkerTemplateRunnerResultContract;
 export type TemplateRunnerEvidence = TemplateRunnerEvidenceContract;
+export type MatlabParameterSweepRunner = MatlabParameterSweepRunnerContract;
+export type MatlabSweepEvidence = MatlabSweepEvidenceContract;
+export type MatlabSweepManifest = MatlabSweepManifestContract;
+export type MatlabSweepSummary = MatlabSweepSummaryContract;
 export type TaskTemplate = TaskTemplateContract;
 export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
@@ -4719,6 +4727,15 @@ export const LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CREATE_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
 export const LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
+export const MATLAB_GOLDEN_TRIAL_TASK_ID = "live-matlab-golden-task-333-001";
+export const MATLAB_GOLDEN_TRIAL_TEMPLATE_ID = "matlab-parameter-sweep.v1";
+export const MATLAB_GOLDEN_TRIAL_RUNNER_ID = "matlab-parameter-sweep-runner.v1";
+export const MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_GOLDEN_TASK_ONLY";
+export const MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_GOLDEN_TASK_ONLY";
+export const MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_RUN_ONE_FIXED_MATLAB_SWEEP_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -4840,6 +4857,117 @@ export const fixtureLiveSafeTaskPilotResult: WorkerTemplateRunnerResult = {
   validation_status: "passed",
   result_summary: "MG332 fixture safe-local-smoke runner completed exactly one live pilot task and recorded sanitized evidence.",
   final_task_state: "completed",
+};
+
+export const fixtureMatlabGoldenRunnerPreview: MatlabParameterSweepRunner = {
+  schema: "skybridge.matlab_parameter_sweep_runner.v1",
+  ok: true,
+  mode: "preview",
+  task_id: MATLAB_GOLDEN_TRIAL_TASK_ID,
+  worker_id: "jerry-win-local-01",
+  template_id: MATLAB_GOLDEN_TRIAL_TEMPLATE_ID,
+  runner_id: MATLAB_GOLDEN_TRIAL_RUNNER_ID,
+  parameter_grid_summary: "eta=[2,3]; h_km=[500]; P=[6]; combinations=2",
+  combination_count: 2,
+  completed_count: 0,
+  failed_count: 0,
+  output_dir: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001",
+  manifest_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/manifest.json",
+  summary_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/summary.json",
+  metrics_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/metrics.csv",
+  validation_status: "preview_only",
+  matlab_available: true,
+  would_invoke_matlab: true,
+  matlab_invoked: false,
+  matlab_exit_code: null,
+  blockers: [],
+  warnings: ["PowerShell-only exact confirmation required before fixed MATLAB runner apply."],
+  raw_stdout_included: false,
+  raw_stderr_included: false,
+  raw_mat_files_uploaded: false,
+  codex_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  token_printed: false,
+};
+
+export const fixtureMatlabGoldenEvidence: MatlabSweepEvidence = {
+  schema: "skybridge.matlab_sweep_evidence.v1",
+  ok: true,
+  task_id: MATLAB_GOLDEN_TRIAL_TASK_ID,
+  worker_id: "jerry-win-local-01",
+  template_id: MATLAB_GOLDEN_TRIAL_TEMPLATE_ID,
+  runner_id: MATLAB_GOLDEN_TRIAL_RUNNER_ID,
+  parameter_grid_summary: fixtureMatlabGoldenRunnerPreview.parameter_grid_summary,
+  combination_count: 2,
+  completed_count: 2,
+  failed_count: 0,
+  output_dir: fixtureMatlabGoldenRunnerPreview.output_dir,
+  manifest_path: fixtureMatlabGoldenRunnerPreview.manifest_path,
+  summary_path: fixtureMatlabGoldenRunnerPreview.summary_path,
+  metrics_path: fixtureMatlabGoldenRunnerPreview.metrics_path,
+  validation_status: "passed",
+  matlab_invoked: true,
+  matlab_exit_code: 0,
+  started_at: "2026-06-24T00:00:00.000Z",
+  completed_at: "2026-06-24T00:00:01.000Z",
+  failed_at: null,
+  allowed_paths_checked: true,
+  blocked_paths_checked: true,
+  changed_files: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/metrics.csv",
+  ],
+  result_summary: "MG333 synthetic MATLAB parameter sweep completed two toy combinations with sanitized manifest, summary, and metrics evidence.",
+  pr_created: false,
+  codex_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  project_control_unpaused: false,
+  raw_stdout_included: false,
+  raw_stderr_included: false,
+  raw_mat_files_uploaded: false,
+  token_printed: false,
+};
+
+export const fixtureMatlabGoldenTrialPreview: WorkerTemplateRunnerPreview = {
+  schema: "skybridge.worker_template_runner_preview.v1",
+  ok: true,
+  mode: "preview",
+  worker_id: "jerry-win-local-01",
+  project_id: "skybridge-agent-hub",
+  task_id: MATLAB_GOLDEN_TRIAL_TASK_ID,
+  expected_task_id: MATLAB_GOLDEN_TRIAL_TASK_ID,
+  template_id: MATLAB_GOLDEN_TRIAL_TEMPLATE_ID,
+  runner_id: MATLAB_GOLDEN_TRIAL_RUNNER_ID,
+  evidence_schema: "skybridge.matlab_sweep_evidence.v1",
+  selected: true,
+  eligible: true,
+  selected_task_count: 1,
+  rejected_reason: "",
+  claim_created: false,
+  task_claimed_count: 0,
+  old_task_claimed: false,
+  execution_started: false,
+  execution_completed: false,
+  execution_failed: false,
+  evidence_present: false,
+  allowed_paths_checked: true,
+  blocked_paths_checked: true,
+  changed_files: [],
+  validation_status: "preview_only",
+  result_summary: "MG333 live MATLAB golden trial fixture: one exact tiny matlab-parameter-sweep task is eligible for PowerShell-only exact-confirmation apply.",
+  final_task_state: "queued",
+  cloud_worker_status: "online",
+  pr_created: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  unbounded_run_enabled: false,
+  project_control_unpaused: false,
+  token_printed: false,
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

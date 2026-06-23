@@ -186,6 +186,34 @@ MG332 still does not start a worker loop, claim arbitrary tasks, run Codex, run
 MATLAB, run arbitrary shell, create PRs, requeue old tasks, or unpause project
 control.
 
+## MG333 MATLAB Golden Trial
+
+MG333 is the first controlled MATLAB execution goal. It is separate from worker
+service install and still does not start a service loop. The exact live task is
+`live-matlab-golden-task-333-001` and the fixed runner is
+`matlab-parameter-sweep-runner.v1`.
+
+Preview the fixed runner and live task flow:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-matlab-parameter-sweep-runner.ps1 -Command preview -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-matlab-golden-trial.ps1 -Command preview-create -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-matlab-golden-trial.ps1 -Command preview-run -Json
+```
+
+The exact-confirmed apply commands are:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-matlab-golden-trial.ps1 -Command apply-create -Confirm -ConfirmationText I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_GOLDEN_TASK_ONLY -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-live-matlab-golden-trial.ps1 -Command apply-run -Confirm -ConfirmationText I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_GOLDEN_TASK_ONLY -Json
+```
+
+Apply is allowed only if MATLAB is detected, the worker is online, the task id
+matches exactly, and the output path is under `.agent/tmp/matlab-golden-trial/**`
+or `results/skybridge/matlab-golden-trial/**`. It does not allow arbitrary
+MATLAB commands, Codex, arbitrary shell, PR creation, loops, project-control
+unpause, old task requeue, or raw stdout/stderr reporting.
+
 ## Interpreting Blockers
 
 - `service_not_installed`: run the install preview and review planned local
@@ -204,17 +232,21 @@ Warnings identify degraded capabilities, such as missing `gh`, Codex, or MATLAB.
 
 ## Still Disabled
 
-MG331 and MG332 keep these fields false except that MG332 may set
-`claim_created=true` and `execution_started=true` only for the exact pilot task:
+MG331, MG332, and MG333 keep these fields false except that MG332 may set
+`claim_created=true` and `execution_started=true` only for the exact safe-local
+pilot task, and MG333 may do the same only for the exact MATLAB golden task:
 
 - `claim_enabled=false`
 - `execute_enabled=false`
 - `template_runner_enabled=false`
 - `worker_loop_started=false`
 - `claim_created=false` for all tasks except `live-safe-template-task-332-001`
+  and `live-matlab-golden-task-333-001`
 - `execution_started=false` for all tasks except `live-safe-template-task-332-001`
+  and `live-matlab-golden-task-333-001`
 - `codex_run_called=false`
-- `matlab_run_called=false`
+- `matlab_run_called=false` for non-MG333 flows; MG333 reports fixed
+  `matlab_invoked=true` only when the confirmed MATLAB runner actually runs
 - `arbitrary_shell_enabled=false`
 - `notification_sent=false`
 - `token_printed=false`

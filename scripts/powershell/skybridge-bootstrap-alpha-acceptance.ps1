@@ -14,6 +14,7 @@ $requiredDocs = @(
   "docs/product/DRAFT_REVIEW_AND_SUBMIT.md",
   "docs/product/WORKER_TEMPLATE_RUNNER_V1.md",
   "docs/product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md",
+  "docs/product/MATLAB_EXPERIMENT_GOLDEN_TRIAL.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -37,6 +38,8 @@ $requiredScripts = @{
   draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
   worker_template_runner = "scripts/powershell/skybridge-worker-template-runner.ps1"
   live_safe_task_pilot = "scripts/powershell/skybridge-live-safe-task-pilot.ps1"
+  matlab_parameter_sweep_runner = "scripts/powershell/skybridge-matlab-parameter-sweep-runner.ps1"
+  live_matlab_golden_trial = "scripts/powershell/skybridge-live-matlab-golden-trial.ps1"
 }
 
 $componentPaths = @{
@@ -137,7 +140,12 @@ $requiredPackageScripts = @(
   "smoke:live-safe-task-pilot-preview",
   "smoke:live-safe-task-pilot-fixture",
   "smoke:live-safe-task-pilot-reject-unsafe",
-  "smoke:desktop-live-safe-task-pilot"
+  "smoke:desktop-live-safe-task-pilot",
+  "smoke:matlab-golden-runner-preview",
+  "smoke:matlab-golden-runner-fixture",
+  "smoke:matlab-golden-trial-preview",
+  "smoke:matlab-golden-trial-reject-unsafe",
+  "smoke:desktop-matlab-golden-trial"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -174,6 +182,7 @@ $desktopTaskTemplateRegistryPanelPresent = $false
 $desktopDraftReviewSubmitPanelPresent = $false
 $desktopWorkerTemplateRunnerPanelPresent = $false
 $desktopLiveSafeTaskPilotPresent = $false
+$desktopMatlabGoldenTrialPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -244,6 +253,13 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MG332 task claimed count") -and
     $desktopSource -match [regex]::Escape("MG332 live apply unavailable in Desktop")
   )
+  $desktopMatlabGoldenTrialPresent = (
+    $desktopSource -match [regex]::Escape("MG333 MATLAB golden trial is PowerShell-only for task live-matlab-golden-task-333-001") -and
+    $desktopSource -match [regex]::Escape("MG333 target task id") -and
+    $desktopSource -match [regex]::Escape("MG333 parameter grid") -and
+    $desktopSource -match [regex]::Escape("MG333 raw_stdout_included") -and
+    $desktopSource -match [regex]::Escape("MG333 MATLAB apply unavailable in Desktop")
+  )
 }
 
 $workerStatusContract = $null
@@ -264,6 +280,12 @@ $workerTemplateRunnerStatusError = $null
 $liveSafeTaskPilotStatusContract = $null
 $liveSafeTaskPilotStatusContractOk = $false
 $liveSafeTaskPilotStatusError = $null
+$matlabGoldenRunnerStatusContract = $null
+$matlabGoldenRunnerStatusContractOk = $false
+$matlabGoldenRunnerStatusError = $null
+$liveMatlabGoldenTrialStatusContract = $null
+$liveMatlabGoldenTrialStatusContractOk = $false
+$liveMatlabGoldenTrialStatusError = $null
 $workerInstallPreviewContract = $null
 $workerInstallPreviewContractOk = $false
 $workerInstallPreviewError = $null
@@ -510,6 +532,49 @@ try {
       [bool]$liveSafeTaskPilotStatusContract.token_printed -eq $false
     )
   }
+  $matlabRunnerScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-matlab-parameter-sweep-runner.ps1"
+  if (Test-Path -LiteralPath $matlabRunnerScriptPath -PathType Leaf) {
+    $rawMatlabRunner = & pwsh -NoProfile -ExecutionPolicy Bypass -File $matlabRunnerScriptPath -Command status -TaskId "live-matlab-golden-task-333-001" -WorkerId "jerry-win-local-01" -Json
+    $matlabRunnerText = ($rawMatlabRunner | Out-String).Trim()
+    Assert-NoUnsafeText $matlabRunnerText
+    $matlabGoldenRunnerStatusContract = $matlabRunnerText | ConvertFrom-Json
+    $matlabGoldenRunnerStatusContractOk = (
+      [string]$matlabGoldenRunnerStatusContract.schema -eq "skybridge.matlab_parameter_sweep_runner.v1" -and
+      [string]$matlabGoldenRunnerStatusContract.task_id -eq "live-matlab-golden-task-333-001" -and
+      [string]$matlabGoldenRunnerStatusContract.template_id -eq "matlab-parameter-sweep.v1" -and
+      [string]$matlabGoldenRunnerStatusContract.runner_id -eq "matlab-parameter-sweep-runner.v1" -and
+      [int]$matlabGoldenRunnerStatusContract.combination_count -eq 2 -and
+      [bool]$matlabGoldenRunnerStatusContract.matlab_invoked -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.raw_stdout_included -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.raw_stderr_included -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.raw_mat_files_uploaded -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.codex_run_called -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.worker_loop_started -eq $false -and
+      [bool]$matlabGoldenRunnerStatusContract.token_printed -eq $false
+    )
+  }
+  $liveMatlabGoldenTrialScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-live-matlab-golden-trial.ps1"
+  if (Test-Path -LiteralPath $liveMatlabGoldenTrialScriptPath -PathType Leaf) {
+    $rawMatlabTrial = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveMatlabGoldenTrialScriptPath -Command safe-summary -WorkerId "jerry-win-local-01" -TaskId "live-matlab-golden-task-333-001" -Json
+    $matlabTrialText = ($rawMatlabTrial | Out-String).Trim()
+    Assert-NoUnsafeText $matlabTrialText
+    $liveMatlabGoldenTrialStatusContract = $matlabTrialText | ConvertFrom-Json
+    $liveMatlabGoldenTrialStatusContractOk = (
+      [string]$liveMatlabGoldenTrialStatusContract.schema -eq "skybridge.live_matlab_golden_trial_safe_summary.v1" -and
+      [string]$liveMatlabGoldenTrialStatusContract.worker_id -eq "jerry-win-local-01" -and
+      [string]$liveMatlabGoldenTrialStatusContract.task_id -eq "live-matlab-golden-task-333-001" -and
+      [string]$liveMatlabGoldenTrialStatusContract.template_id -eq "matlab-parameter-sweep.v1" -and
+      [string]$liveMatlabGoldenTrialStatusContract.runner_id -eq "matlab-parameter-sweep-runner.v1" -and
+      [bool]$liveMatlabGoldenTrialStatusContract.claim_created -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.execution_started -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.worker_loop_started -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.codex_run_called -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.project_control_unpaused -eq $false -and
+      [bool]$liveMatlabGoldenTrialStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -528,6 +593,12 @@ try {
   }
   if (-not $liveSafeTaskPilotStatusContractOk) {
     $liveSafeTaskPilotStatusError = "live_safe_task_pilot_status_contract_failed"
+  }
+  if (-not $matlabGoldenRunnerStatusContractOk) {
+    $matlabGoldenRunnerStatusError = "matlab_golden_runner_status_contract_failed"
+  }
+  if (-not $liveMatlabGoldenTrialStatusContractOk) {
+    $liveMatlabGoldenTrialStatusError = "live_matlab_golden_trial_status_contract_failed"
   }
   if (-not $workerInstallPreviewContractOk) {
     $workerInstallPreviewError = "worker_install_preview_contract_failed"
@@ -558,6 +629,7 @@ $ok = (
   $desktopDraftReviewSubmitPanelPresent -and
   $desktopWorkerTemplateRunnerPanelPresent -and
   $desktopLiveSafeTaskPilotPresent -and
+  $desktopMatlabGoldenTrialPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -569,7 +641,9 @@ $ok = (
   $taskTemplateRegistryContractOk -and
   $draftSubmitStatusContractOk -and
   $workerTemplateRunnerStatusContractOk -and
-  $liveSafeTaskPilotStatusContractOk
+  $liveSafeTaskPilotStatusContractOk -and
+  $matlabGoldenRunnerStatusContractOk -and
+  $liveMatlabGoldenTrialStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -587,6 +661,7 @@ $report = [pscustomobject]@{
   desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
   desktop_worker_template_runner_panel_present = $desktopWorkerTemplateRunnerPanelPresent
   desktop_live_safe_task_pilot_present = $desktopLiveSafeTaskPilotPresent
+  desktop_matlab_golden_trial_present = $desktopMatlabGoldenTrialPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
@@ -771,6 +846,45 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   live_safe_task_pilot_status_error = $liveSafeTaskPilotStatusError
+  matlab_golden_runner_status_contract_ok = $matlabGoldenRunnerStatusContractOk
+  matlab_golden_runner_status_contract = if ($matlabGoldenRunnerStatusContract) {
+    [pscustomobject]@{
+      schema = $matlabGoldenRunnerStatusContract.schema
+      mode = $matlabGoldenRunnerStatusContract.mode
+      task_id = $matlabGoldenRunnerStatusContract.task_id
+      template_id = $matlabGoldenRunnerStatusContract.template_id
+      runner_id = $matlabGoldenRunnerStatusContract.runner_id
+      combination_count = $matlabGoldenRunnerStatusContract.combination_count
+      matlab_available = $matlabGoldenRunnerStatusContract.matlab_available
+      matlab_invoked = $matlabGoldenRunnerStatusContract.matlab_invoked
+      raw_stdout_included = $matlabGoldenRunnerStatusContract.raw_stdout_included
+      raw_stderr_included = $matlabGoldenRunnerStatusContract.raw_stderr_included
+      raw_mat_files_uploaded = $matlabGoldenRunnerStatusContract.raw_mat_files_uploaded
+      codex_run_called = $matlabGoldenRunnerStatusContract.codex_run_called
+      arbitrary_shell_enabled = $matlabGoldenRunnerStatusContract.arbitrary_shell_enabled
+      worker_loop_started = $matlabGoldenRunnerStatusContract.worker_loop_started
+      token_printed = $matlabGoldenRunnerStatusContract.token_printed
+    }
+  } else { $null }
+  matlab_golden_runner_status_error = $matlabGoldenRunnerStatusError
+  live_matlab_golden_trial_status_contract_ok = $liveMatlabGoldenTrialStatusContractOk
+  live_matlab_golden_trial_status_contract = if ($liveMatlabGoldenTrialStatusContract) {
+    [pscustomobject]@{
+      schema = $liveMatlabGoldenTrialStatusContract.schema
+      worker_id = $liveMatlabGoldenTrialStatusContract.worker_id
+      task_id = $liveMatlabGoldenTrialStatusContract.task_id
+      template_id = $liveMatlabGoldenTrialStatusContract.template_id
+      runner_id = $liveMatlabGoldenTrialStatusContract.runner_id
+      claim_created = $liveMatlabGoldenTrialStatusContract.claim_created
+      execution_started = $liveMatlabGoldenTrialStatusContract.execution_started
+      worker_loop_started = $liveMatlabGoldenTrialStatusContract.worker_loop_started
+      codex_run_called = $liveMatlabGoldenTrialStatusContract.codex_run_called
+      arbitrary_shell_enabled = $liveMatlabGoldenTrialStatusContract.arbitrary_shell_enabled
+      project_control_unpaused = $liveMatlabGoldenTrialStatusContract.project_control_unpaused
+      token_printed = $liveMatlabGoldenTrialStatusContract.token_printed
+    }
+  } else { $null }
+  live_matlab_golden_trial_status_error = $liveMatlabGoldenTrialStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts
