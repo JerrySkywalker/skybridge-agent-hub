@@ -26,6 +26,9 @@ $requiredScripts = @{
   worker_service_doctor = "scripts/powershell/skybridge-worker-service-doctor.ps1"
   worker_service_install_preview = "scripts/powershell/skybridge-worker-service-install-preview.ps1"
   worker_service_repair_preview = "scripts/powershell/skybridge-worker-service-repair-preview.ps1"
+  worker_service_install = "scripts/powershell/skybridge-worker-service-install.ps1"
+  worker_service_repair = "scripts/powershell/skybridge-worker-service-repair.ps1"
+  worker_heartbeat_pairing_drill = "scripts/powershell/skybridge-worker-heartbeat-pairing-drill.ps1"
   chat_to_task_draft = "scripts/powershell/skybridge-chat-to-task-draft.ps1"
   task_template_registry = "scripts/powershell/skybridge-task-template-registry.ps1"
   draft_submit = "scripts/powershell/skybridge-draft-submit.ps1"
@@ -103,6 +106,11 @@ $requiredPackageScripts = @(
   "smoke:worker-service-status",
   "smoke:worker-service-doctor",
   "smoke:desktop-worker-service-manager",
+  "smoke:worker-service-install-preview",
+  "smoke:worker-service-install-apply-fixture",
+  "smoke:worker-service-repair-preview",
+  "smoke:worker-heartbeat-pairing-fixture",
+  "smoke:desktop-worker-install-flow",
   "smoke:chat-to-task-draft",
   "smoke:desktop-chat-to-task",
   "smoke:chat-to-task-matlab-example",
@@ -152,6 +160,7 @@ $desktopChatToTaskPanelPresent = $false
 $desktopTaskTemplateRegistryPanelPresent = $false
 $desktopDraftReviewSubmitPanelPresent = $false
 $desktopWorkerTemplateRunnerPanelPresent = $false
+$desktopWorkerInstallFlowPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
 if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
   $desktopSource = Get-Content -Raw -LiteralPath $desktopSourcePath
@@ -161,6 +170,15 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("claim_enabled=false") -and
     $desktopSource -match [regex]::Escape("execute_enabled=false") -and
     $desktopSource -match [regex]::Escape("worker_loop_started=false; token_printed=false")
+  )
+  $desktopWorkerInstallFlowPresent = (
+    $desktopSource -match [regex]::Escape("MG330 install apply is PowerShell exact-confirmation only") -and
+    $desktopSource -match [regex]::Escape("Install apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("Repair apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("Heartbeat pairing preview") -and
+    $desktopSource -match [regex]::Escape("Heartbeat apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("Cloud worker registered") -and
+    $desktopSource -match [regex]::Escape("template_runner_enabled=false; worker_loop_started=false; token_printed=false")
   )
   $desktopChatToTaskPanelPresent = (
     $desktopSource -match [regex]::Escape("Bootstrap Alpha Chat-to-Task") -and
@@ -214,6 +232,12 @@ $draftSubmitStatusError = $null
 $workerTemplateRunnerStatusContract = $null
 $workerTemplateRunnerStatusContractOk = $false
 $workerTemplateRunnerStatusError = $null
+$workerInstallPreviewContract = $null
+$workerInstallPreviewContractOk = $false
+$workerInstallPreviewError = $null
+$workerHeartbeatPreviewContract = $null
+$workerHeartbeatPreviewContractOk = $false
+$workerHeartbeatPreviewError = $null
 $tempHome = Join-Path ([System.IO.Path]::GetTempPath()) ("skybridge-bootstrap-alpha-acceptance-" + [Guid]::NewGuid().ToString("n"))
 New-Item -ItemType Directory -Path $tempHome | Out-Null
 try {
@@ -229,6 +253,51 @@ try {
       [bool]$workerStatusContract.execute_enabled -eq $false -and
       [bool]$workerStatusContract.worker_loop_started -eq $false -and
       [bool]$workerStatusContract.token_printed -eq $false
+    )
+  }
+  $installScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-worker-service-install.ps1"
+  if (Test-Path -LiteralPath $installScriptPath -PathType Leaf) {
+    $rawInstallPreview = & pwsh -NoProfile -ExecutionPolicy Bypass -File $installScriptPath -Command preview -HomeRoot $tempHome -RepoRoot $RepoRoot -Json
+    $installPreviewText = ($rawInstallPreview | Out-String).Trim()
+    Assert-NoUnsafeText $installPreviewText
+    $workerInstallPreviewContract = $installPreviewText | ConvertFrom-Json
+    $workerInstallPreviewContractOk = (
+      [string]$workerInstallPreviewContract.schema -eq "skybridge.local_worker_service_install.v1" -and
+      [string]$workerInstallPreviewContract.mode -eq "preview" -and
+      [bool]$workerInstallPreviewContract.would_mutate -eq $false -and
+      [bool]$workerInstallPreviewContract.did_mutate -eq $false -and
+      [bool]$workerInstallPreviewContract.confirmation_required -eq $true -and
+      [bool]$workerInstallPreviewContract.claim_enabled -eq $false -and
+      [bool]$workerInstallPreviewContract.execute_enabled -eq $false -and
+      [bool]$workerInstallPreviewContract.template_runner_enabled -eq $false -and
+      [bool]$workerInstallPreviewContract.worker_loop_started -eq $false -and
+      [bool]$workerInstallPreviewContract.codex_run_called -eq $false -and
+      [bool]$workerInstallPreviewContract.matlab_run_called -eq $false -and
+      [bool]$workerInstallPreviewContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$workerInstallPreviewContract.token_printed -eq $false
+    )
+  }
+  $heartbeatScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-worker-heartbeat-pairing-drill.ps1"
+  if (Test-Path -LiteralPath $heartbeatScriptPath -PathType Leaf) {
+    $rawHeartbeatPreview = & pwsh -NoProfile -ExecutionPolicy Bypass -File $heartbeatScriptPath -Command heartbeat-preview -HomeRoot $tempHome -RepoRoot $RepoRoot -Json
+    $heartbeatPreviewText = ($rawHeartbeatPreview | Out-String).Trim()
+    Assert-NoUnsafeText $heartbeatPreviewText
+    $workerHeartbeatPreviewContract = $heartbeatPreviewText | ConvertFrom-Json
+    $workerHeartbeatPreviewContractOk = (
+      [string]$workerHeartbeatPreviewContract.schema -eq "skybridge.worker_heartbeat_pairing_drill.v1" -and
+      [string]$workerHeartbeatPreviewContract.mode -eq "preview" -and
+      [bool]$workerHeartbeatPreviewContract.would_mutate_server -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.server_mutation_performed -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.claim_enabled -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.execute_enabled -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.template_runner_enabled -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.claim_created -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.execution_started -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.worker_loop_started -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.codex_run_called -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.matlab_run_called -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$workerHeartbeatPreviewContract.token_printed -eq $false
     )
   }
   $chatScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-chat-to-task-draft.ps1"
@@ -354,6 +423,12 @@ try {
   if (-not $workerTemplateRunnerStatusContractOk) {
     $workerTemplateRunnerStatusError = "worker_template_runner_status_contract_failed"
   }
+  if (-not $workerInstallPreviewContractOk) {
+    $workerInstallPreviewError = "worker_install_preview_contract_failed"
+  }
+  if (-not $workerHeartbeatPreviewContractOk) {
+    $workerHeartbeatPreviewError = "worker_heartbeat_preview_contract_failed"
+  }
 } finally {
   Remove-Item -LiteralPath $tempHome -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -370,7 +445,10 @@ $ok = (
   $desktopTaskTemplateRegistryPanelPresent -and
   $desktopDraftReviewSubmitPanelPresent -and
   $desktopWorkerTemplateRunnerPanelPresent -and
+  $desktopWorkerInstallFlowPresent -and
   $workerStatusContractOk -and
+  $workerInstallPreviewContractOk -and
+  $workerHeartbeatPreviewContractOk -and
   $chatToTaskContractOk -and
   $taskTemplateRegistryContractOk -and
   $draftSubmitStatusContractOk -and
@@ -391,6 +469,7 @@ $report = [pscustomobject]@{
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
   desktop_draft_review_submit_panel_present = $desktopDraftReviewSubmitPanelPresent
   desktop_worker_template_runner_panel_present = $desktopWorkerTemplateRunnerPanelPresent
+  desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   worker_service_status_contract_ok = $workerStatusContractOk
   worker_service_status_contract = if ($workerStatusContract) {
     [pscustomobject]@{
@@ -403,6 +482,45 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   worker_service_status_error = $workerStatusError
+  worker_install_preview_contract_ok = $workerInstallPreviewContractOk
+  worker_install_preview_contract = if ($workerInstallPreviewContract) {
+    [pscustomobject]@{
+      schema = $workerInstallPreviewContract.schema
+      mode = $workerInstallPreviewContract.mode
+      would_mutate = $workerInstallPreviewContract.would_mutate
+      did_mutate = $workerInstallPreviewContract.did_mutate
+      confirmation_required = $workerInstallPreviewContract.confirmation_required
+      claim_enabled = $workerInstallPreviewContract.claim_enabled
+      execute_enabled = $workerInstallPreviewContract.execute_enabled
+      template_runner_enabled = $workerInstallPreviewContract.template_runner_enabled
+      worker_loop_started = $workerInstallPreviewContract.worker_loop_started
+      codex_run_called = $workerInstallPreviewContract.codex_run_called
+      matlab_run_called = $workerInstallPreviewContract.matlab_run_called
+      arbitrary_shell_enabled = $workerInstallPreviewContract.arbitrary_shell_enabled
+      token_printed = $workerInstallPreviewContract.token_printed
+    }
+  } else { $null }
+  worker_install_preview_error = $workerInstallPreviewError
+  worker_heartbeat_preview_contract_ok = $workerHeartbeatPreviewContractOk
+  worker_heartbeat_preview_contract = if ($workerHeartbeatPreviewContract) {
+    [pscustomobject]@{
+      schema = $workerHeartbeatPreviewContract.schema
+      mode = $workerHeartbeatPreviewContract.mode
+      would_mutate_server = $workerHeartbeatPreviewContract.would_mutate_server
+      server_mutation_performed = $workerHeartbeatPreviewContract.server_mutation_performed
+      claim_enabled = $workerHeartbeatPreviewContract.claim_enabled
+      execute_enabled = $workerHeartbeatPreviewContract.execute_enabled
+      template_runner_enabled = $workerHeartbeatPreviewContract.template_runner_enabled
+      claim_created = $workerHeartbeatPreviewContract.claim_created
+      execution_started = $workerHeartbeatPreviewContract.execution_started
+      worker_loop_started = $workerHeartbeatPreviewContract.worker_loop_started
+      codex_run_called = $workerHeartbeatPreviewContract.codex_run_called
+      matlab_run_called = $workerHeartbeatPreviewContract.matlab_run_called
+      arbitrary_shell_enabled = $workerHeartbeatPreviewContract.arbitrary_shell_enabled
+      token_printed = $workerHeartbeatPreviewContract.token_printed
+    }
+  } else { $null }
+  worker_heartbeat_preview_error = $workerHeartbeatPreviewError
   chat_to_task_contract_ok = $chatToTaskContractOk
   chat_to_task_contract = if ($chatToTaskContract) {
     [pscustomobject]@{

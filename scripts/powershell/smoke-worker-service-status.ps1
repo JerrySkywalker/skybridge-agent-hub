@@ -55,10 +55,11 @@ try {
   Assert-NoUnsafeText (($previewRaw | Out-String).Trim())
   $preview = (($previewRaw | Out-String).Trim() | ConvertFrom-Json)
   Assert-False $preview.would_mutate "install preview would_mutate"
-  Assert-False $preview.apply_supported "install preview apply_supported"
+  Assert-True $preview.apply_supported "install preview apply_supported"
   Assert-False $preview.task_claimed "install preview task_claimed"
-  Assert-False $preview.codex_executed "install preview codex_executed"
-  Assert-False $preview.matlab_executed "install preview matlab_executed"
+  Assert-False $preview.codex_run_called "install preview codex_run_called"
+  Assert-False $preview.matlab_run_called "install preview matlab_run_called"
+  Assert-False $preview.arbitrary_shell_enabled "install preview arbitrary_shell_enabled"
   Assert-False $preview.worker_loop_started "install preview worker_loop_started"
   Assert-TokenPrintedFalse $preview
   $after = @(Get-ChildItem -LiteralPath $tempHome -Recurse -Force)

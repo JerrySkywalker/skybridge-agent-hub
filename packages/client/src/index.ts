@@ -1876,9 +1876,13 @@ export interface LocalWorkerServiceCapabilities {
   install_preview: true;
   repair_preview: true;
   doctor_readonly: true;
-  service_apply: false;
+  service_apply: boolean;
+  repair_apply?: boolean;
+  heartbeat_pairing?: boolean;
+  heartbeat_apply?: boolean;
   task_claim: false;
   task_execute: false;
+  template_runner?: false;
   worker_loop: false;
   codex_execution: false;
   matlab_execution: false;
@@ -1903,13 +1907,29 @@ export interface LocalWorkerServiceStatus {
   service_installed: boolean;
   service_running: boolean;
   service_start_type: string;
+  install_strategy?: string;
   install_state: string;
   repair_state: string;
   install_preview_available: true;
   repair_preview_available: true;
+  install_apply_available?: boolean;
+  repair_apply_available?: boolean;
+  heartbeat_preview_available?: boolean;
+  heartbeat_apply_available?: boolean;
   api_base_configured: boolean;
+  api_base_host?: string | null;
   token_file_present: boolean;
+  worker_id_configured?: boolean;
+  repo_root_configured?: boolean;
   repo_root_detected: boolean;
+  skybridge_config_path?: string;
+  worker_config_path?: string;
+  worker_token_path?: string;
+  service_state_path?: string;
+  service_command_preview?: string;
+  last_heartbeat_at?: string | null;
+  cloud_worker_registered?: boolean;
+  cloud_worker_status?: string;
   powershell_available: boolean;
   git_available: boolean;
   gh_available: boolean;
@@ -1924,7 +1944,11 @@ export interface LocalWorkerServiceStatus {
   recommended_next_action: string;
   claim_enabled: false;
   execute_enabled: false;
+  template_runner_enabled?: false;
   worker_loop_started: false;
+  codex_run_called?: false;
+  matlab_run_called?: false;
+  arbitrary_shell_enabled?: false;
   token_printed: false;
 }
 
@@ -4318,13 +4342,29 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   service_installed: false,
   service_running: false,
   service_start_type: "not_installed",
+  install_strategy: "not_installed",
   install_state: "not_installed_preview_available",
   repair_state: "install_required_before_repair",
   install_preview_available: true,
   repair_preview_available: true,
+  install_apply_available: true,
+  repair_apply_available: true,
+  heartbeat_preview_available: true,
+  heartbeat_apply_available: true,
   api_base_configured: false,
+  api_base_host: null,
   token_file_present: false,
+  worker_id_configured: false,
+  repo_root_configured: false,
   repo_root_detected: true,
+  skybridge_config_path: "$HOME\\.skybridge\\skybridge.env.ps1",
+  worker_config_path: "$HOME\\.skybridge\\worker.env.ps1",
+  worker_token_path: "$HOME\\.skybridge\\worker-token.txt",
+  service_state_path: "$HOME\\.skybridge\\state\\worker-service.json",
+  service_command_preview: "pwsh -NoProfile -ExecutionPolicy Bypass -File $HOME\\.skybridge\\worker-heartbeat.ps1 -Command heartbeat-preview",
+  last_heartbeat_at: null,
+  cloud_worker_registered: false,
+  cloud_worker_status: "unknown",
   powershell_available: true,
   git_available: true,
   gh_available: false,
@@ -4337,9 +4377,13 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
     install_preview: true,
     repair_preview: true,
     doctor_readonly: true,
-    service_apply: false,
+    service_apply: true,
+    repair_apply: true,
+    heartbeat_pairing: true,
+    heartbeat_apply: true,
     task_claim: false,
     task_execute: false,
+    template_runner: false,
     worker_loop: false,
     codex_execution: false,
     matlab_execution: false,
@@ -4361,7 +4405,11 @@ export const fixtureLocalWorkerServiceStatus: LocalWorkerServiceStatus = {
   recommended_next_action: "run_install_preview",
   claim_enabled: false,
   execute_enabled: false,
+  template_runner_enabled: false,
   worker_loop_started: false,
+  codex_run_called: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
   token_printed: false,
 };
 
