@@ -277,6 +277,22 @@ function Write-FixtureOutputs {
   New-SweepEvidence -Config $Config -ValidationStatus "passed" -MatlabInvoked:$MatlabInvoked -MatlabExitCode $MatlabExitCode -CompletedCount ([int]$Config.combination_count) -FailedCount 0
 }
 
+function Get-ExistingOutputPaths {
+  param($Config)
+  $existing = New-Object System.Collections.Generic.List[string]
+  $pairs = @(
+    @{ full = (Join-Path $Config.output_dir_full "manifest.json"); relative = $Config.manifest_path },
+    @{ full = (Join-Path $Config.output_dir_full "summary.json"); relative = $Config.summary_path },
+    @{ full = (Join-Path $Config.output_dir_full "metrics.csv"); relative = $Config.metrics_path }
+  )
+  foreach ($pair in $pairs) {
+    if (Test-Path -LiteralPath $pair.full -PathType Leaf) {
+      $existing.Add([string]$pair.relative) | Out-Null
+    }
+  }
+  @($existing.ToArray())
+}
+
 function New-SweepEvidence {
   param(
     $Config,
@@ -285,8 +301,16 @@ function New-SweepEvidence {
     [Nullable[int]]$MatlabExitCode,
     [int]$CompletedCount,
     [int]$FailedCount,
-    [string]$ResultSummary = "MG333 synthetic MATLAB parameter sweep produced sanitized manifest, summary, and metrics."
+    [string]$ResultSummary = ""
   )
+  $changedFiles = @(Get-ExistingOutputPaths -Config $Config)
+  if ([string]::IsNullOrWhiteSpace($ResultSummary)) {
+    $ResultSummary = if ($ValidationStatus -eq "passed") {
+      "MG333 synthetic MATLAB parameter sweep produced sanitized manifest, summary, and metrics."
+    } else {
+      "MG333 synthetic MATLAB parameter sweep failed before producing the complete sanitized output set."
+    }
+  }
   [pscustomobject]@{
     schema = "skybridge.matlab_sweep_evidence.v1"
     ok = ($ValidationStatus -eq "passed")
@@ -310,7 +334,7 @@ function New-SweepEvidence {
     failed_at = if ($ValidationStatus -eq "passed") { $null } else { (Get-Date).ToUniversalTime().ToString("o") }
     allowed_paths_checked = $true
     blocked_paths_checked = $true
-    changed_files = @($Config.manifest_path, $Config.summary_path, $Config.metrics_path)
+    changed_files = @($changedFiles)
     result_summary = $ResultSummary
     pr_created = $false
     codex_run_called = $false
