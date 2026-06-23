@@ -755,3 +755,10 @@
 - Added OS/tool/project/repo access checks and explicit `max_parallel_per_repo=1` guard.
 - Integrated routing readiness into `queue_control_readiness`, Desktop/Web panels, and attention events.
 - Execution remains disabled: no task claim, no task execution, no worker loop, and no queue start.
+
+## 2026-06-23 Mega Goal 324 Bootstrap Alpha Product Flow Freeze
+
+- Added Bootstrap Alpha product-flow, client/worker/server architecture, natural-language-to-task, task-template model, scope, and roadmap documents.
+- Froze the next Mega Goal sequence from MG325 through MG331 around Desktop installer, chat planner, template registry, draft review, worker template runner, MATLAB golden trial, and end-to-end release.
+- Added the read-only `skybridge-bootstrap-alpha-acceptance.ps1` smoke and `smoke:bootstrap-alpha-acceptance` package script.
+- Kept the current safety boundary unchanged: no task claims, no Codex execution, no MATLAB execution, no worker loop start, no notification send, no unbounded run, no daemon path, and `token_printed=false`.
