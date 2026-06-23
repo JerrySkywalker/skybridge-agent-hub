@@ -41,7 +41,11 @@ import {
   parseWorkerRegistration,
   redactForTelemetry,
   SharedRedactionRules,
+  TASK_TEMPLATE_REGISTRY,
   TaskDraftPreviewSchema,
+  TaskTemplateRegistrySchema,
+  getTaskTemplate,
+  listTaskTemplates,
 } from "./index.js";
 
 describe("event schema", () => {
@@ -398,6 +402,60 @@ describe("event schema", () => {
       codex_run_called: false,
       token_printed: false,
     });
+  });
+
+  it("validates the Bootstrap Alpha task template registry without execution support", () => {
+    const registry = TaskTemplateRegistrySchema.parse(TASK_TEMPLATE_REGISTRY);
+    const templateIds = registry.templates.map((template) => template.template_id);
+
+    expect(templateIds).toEqual(
+      expect.arrayContaining([
+        "software-docs-task.v1",
+        "codex-analysis-report.v1",
+        "safe-local-smoke.v1",
+        "matlab-parameter-sweep.v1",
+        "matlab-result-analysis.v1",
+      ]),
+    );
+    expect(registry.execution_supported).toBe(false);
+    expect(registry.task_creation_supported).toBe(false);
+    expect(registry.campaign_creation_supported).toBe(false);
+    expect(registry.claim_supported).toBe(false);
+    expect(registry.codex_run_supported).toBe(false);
+    expect(registry.matlab_run_supported).toBe(false);
+    expect(registry.arbitrary_shell_enabled).toBe(false);
+    expect(registry.token_printed).toBe(false);
+
+    for (const template of listTaskTemplates()) {
+      expect(template.template_id).toBeTruthy();
+      expect(template.required_capabilities.length).toBeGreaterThan(0);
+      expect(template.allowed_paths.length).toBeGreaterThan(0);
+      expect(template.blocked_paths.length).toBeGreaterThan(0);
+      expect(template.runner_id).toMatch(/\.v1$/);
+      expect(template.evidence_schema[0]).toMatch(/^skybridge\..+_evidence\.v1$/);
+      expect(template.execution_supported).toBe(false);
+      expect(template.task_creation_supported).toBe(false);
+      expect(template.campaign_creation_supported).toBe(false);
+      expect(template.claim_supported).toBe(false);
+      expect(template.codex_run_supported).toBe(false);
+      expect(template.matlab_run_supported).toBe(false);
+      expect(template.arbitrary_shell_enabled).toBe(false);
+      expect(template.token_printed).toBe(false);
+    }
+
+    const matlabTemplate = getTaskTemplate("matlab-parameter-sweep.v1");
+    expect(matlabTemplate).toMatchObject({
+      draft_type: "campaign",
+      risk_class: "medium",
+      runner_id: "matlab-parameter-sweep-runner.v1",
+    });
+    expect(matlabTemplate?.allowed_paths).toEqual(
+      expect.arrayContaining(["experiments/matlab/**", "results/skybridge/**", "docs/experiments/**"]),
+    );
+    expect(matlabTemplate?.blocked_paths).toEqual(
+      expect.arrayContaining([".env", "secrets/**", "deploy/**", ".git/**", "Cloudflare", "OpenResty", "Authelia"]),
+    );
+    expect(matlabTemplate?.evidence_schema).toContain("skybridge.matlab_sweep_evidence.v1");
   });
 
   it("models Hermes DeepSeek provider preview disabled by default", () => {

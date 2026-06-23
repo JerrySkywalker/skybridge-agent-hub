@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. "$PSScriptRoot\task-template-registry-data.ps1"
 
 $PlannerId = "deterministic-local-chat-to-task.v1"
 $MatlabSample = "帮我用 MATLAB 跑第四章参数扫描实验，eta=2..10，h=500/700km，P=6/8/10，输出 summary 和报告。"
@@ -67,6 +68,14 @@ function Get-UnsafeReasons {
     if ($Text -match $entry.Value) { $reasons += $entry.Key }
   }
   $reasons
+}
+
+function Get-RequestedTemplateId {
+  param([string]$Text)
+  if ($Text -match "(?i)\btemplate[_ -]?id\s*[:=]\s*([A-Za-z0-9._-]+)") {
+    return $Matches[1]
+  }
+  $null
 }
 
 function New-SafetyFields {
@@ -139,29 +148,27 @@ function New-DraftCommon {
 
 function New-MatlabDraft {
   param([string]$Text, [string]$Hash, [string]$Preview)
+  $template = Get-TaskTemplate -TemplateId "matlab-parameter-sweep.v1"
+  if (-not $template) { throw "Known MATLAB template missing from registry." }
   $needsReport = [bool]($Text -match "(?i)report|summary|报告|总结")
-  $capabilities = @("windows", "powershell", "matlab")
-  if ($needsReport) { $capabilities += "codex" }
+  $capabilities = @($template.required_capabilities)
+  if ($needsReport -and @($template.optional_capabilities) -contains "codex" -and $capabilities -notcontains "codex") {
+    $capabilities += "codex"
+  }
   $common = New-DraftCommon `
     -Hash $Hash `
     -Preview $Preview `
     -DraftType "campaign" `
-    -TemplateId "matlab-parameter-sweep.v1" `
+    -TemplateId $template.template_id `
     -Title "Chapter 4 MATLAB parameter sweep" `
-    -Summary "Preview a bounded MATLAB parameter sweep for eta, h, and P values with safe summary/report outputs." `
-    -Risk "local_experiment" `
+    -Summary $template.description `
+    -Risk $template.risk_class `
     -RequiredCapabilities $capabilities `
-    -AllowedPaths @("results/skybridge/**", "docs/experiments/**") `
-    -BlockedPaths @(".env", "secrets/**", "deploy/**", ".git/**") `
-    -Validation @(
-      "Confirm MATLAB is available locally.",
-      "Confirm experiment entrypoint before future execution.",
-      "Validate eta range, h values, and P values before future execution.",
-      "Write outputs only under results/skybridge/** and docs/experiments/**.",
-      "Do not execute arbitrary shell commands."
-    ) `
-    -RunnerId "matlab-parameter-sweep-runner.v1" `
-    -EvidenceSchema @("run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary")
+    -AllowedPaths @($template.allowed_paths) `
+    -BlockedPaths @($template.blocked_paths) `
+    -Validation @(Get-TaskTemplateValidationSummary $template) `
+    -RunnerId $template.runner_id `
+    -EvidenceSchema @($template.evidence_schema)
   $common.schema = "skybridge.campaign_draft.v1"
   $common.inputs = [ordered]@{
     eta_range = @(2, 10)
@@ -174,11 +181,9 @@ function New-MatlabDraft {
 
 function New-DocsDraft {
   param([string]$Hash, [string]$Preview, [bool]$CommandTextDetected)
-  $validation = @(
-    "Keep changes under docs/** or reports/skybridge/**.",
-    "Do not mutate deployment, server root, GitHub settings, or secrets.",
-    "Return a safe report path, source references, and validation status only."
-  )
+  $template = Get-TaskTemplate -TemplateId "software-docs-task.v1"
+  if (-not $template) { throw "Known docs template missing from registry." }
+  $validation = @(Get-TaskTemplateValidationSummary $template)
   if ($CommandTextDetected) {
     $validation += "Command-looking text is advisory only and must not be executed."
   }
@@ -186,16 +191,16 @@ function New-DocsDraft {
     -Hash $Hash `
     -Preview $Preview `
     -DraftType "task" `
-    -TemplateId "software-docs-task.v1" `
-    -Title "Software documentation/report draft" `
-    -Summary "Preview a documentation or analysis report task with safe evidence and no execution." `
-    -Risk "docs_only" `
-    -RequiredCapabilities @("windows", "powershell", "git", "codex") `
-    -AllowedPaths @("docs/**", "reports/skybridge/**") `
-    -BlockedPaths @(".env", "secrets/**", "deploy/**", ".git/**") `
+    -TemplateId $template.template_id `
+    -Title $template.title `
+    -Summary $template.description `
+    -Risk $template.risk_class `
+    -RequiredCapabilities @($template.required_capabilities) `
+    -AllowedPaths @($template.allowed_paths) `
+    -BlockedPaths @($template.blocked_paths) `
     -Validation $validation `
-    -RunnerId "codex-analysis-report-runner.v1" `
-    -EvidenceSchema @("report_path", "source_references", "validation_status", "audit_summary")
+    -RunnerId $template.runner_id `
+    -EvidenceSchema @($template.evidence_schema)
   $common.schema = "skybridge.task_draft.v1"
   $common.inputs = [ordered]@{
     output_kind = "summary_report"
@@ -246,7 +251,7 @@ function New-BlockedDraft {
     -DraftType "task" `
     -TemplateId "blocked-request.v1" `
     -Title "Blocked request preview" `
-    -Summary "The request crosses Bootstrap Alpha safety boundaries and cannot become a task draft in MG326." `
+    -Summary "The request crosses Bootstrap Alpha safety boundaries and cannot become a task draft in MG327." `
     -Risk "blocked" `
     -RequiredCapabilities @() `
     -AllowedPaths @() `
@@ -301,8 +306,22 @@ function New-DraftPreview {
   $session = New-Session -Hash $hash -Preview $preview
   $commandTextDetected = Test-CommandText $Text
   $unsafeReasons = @(Get-UnsafeReasons $Text)
+  $requestedTemplateId = Get-RequestedTemplateId $Text
   $warnings = @("preview_only_no_task_creation_no_claim_no_execution")
   if ($commandTextDetected) { $warnings += "command_text_detected_not_executed" }
+
+  if ($requestedTemplateId -and -not (Get-TaskTemplate -TemplateId $requestedTemplateId)) {
+    $draft = New-BlockedDraft -Hash $hash -Preview $preview -Reasons @("unknown_template_id")
+    return New-Preview `
+      -Draft $draft `
+      -Session $session `
+      -Status "blocked" `
+      -CommandTextDetected $commandTextDetected `
+      -UnsafeRequestDetected $true `
+      -Blockers @("unknown_template_id") `
+      -Warnings $warnings `
+      -NextSafeAction "choose_known_registry_template"
+  }
 
   if ($unsafeReasons.Count -gt 0) {
     $draft = New-BlockedDraft -Hash $hash -Preview $preview -Reasons $unsafeReasons
@@ -356,6 +375,7 @@ function New-DraftPreview {
 }
 
 if ($Command -eq "status") {
+  $registry = Get-TaskTemplateRegistry
   $result = [pscustomobject]@{
     schema = "skybridge.chat_to_task_planner_status.v1"
     ok = $true
@@ -363,7 +383,8 @@ if ($Command -eq "status") {
     deterministic = $true
     preview_only = $true
     live_hermes_required = $false
-    supported_templates = @("matlab-parameter-sweep.v1", "software-docs-task.v1", "blocked-request.v1", "needs-clarification.v1")
+    template_registry_schema = $registry.schema
+    supported_templates = @($registry.templates | ForEach-Object { [string]$_.template_id })
     task_created = $false
     campaign_created = $false
     claim_created = $false

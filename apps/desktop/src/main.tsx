@@ -47,6 +47,7 @@ import {
   fixtureLocalResourcePolicy,
   fixtureLocalWorkerServiceStatus,
   fixtureChatToTaskDraftPreview,
+  fixtureTaskTemplateRegistry,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -80,6 +81,8 @@ import {
   type LocalResourcePolicy,
   type LocalWorkerServiceStatus,
   type TaskDraftPreview,
+  type TaskTemplate,
+  type TaskTemplateRegistry,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -165,6 +168,7 @@ const matlabChatToTaskSample =
 const docsChatToTaskSample =
   "Draft a software docs report for Bootstrap Alpha worker setup and summarize the current disabled execution boundary.";
 const chatToTaskPreviewSchema = "skybridge.task_draft_preview.v1";
+const taskTemplateRegistrySchema = "skybridge.task_template_registry.v1";
 
 const emptyStatus: DesktopStatus = {
   ok: false,
@@ -1496,6 +1500,9 @@ function App() {
   const [chatToTaskInput, setChatToTaskInput] = React.useState(matlabChatToTaskSample);
   const [chatToTaskPreview, setChatToTaskPreview] = React.useState<TaskDraftPreview>(fixtureChatToTaskDraftPreview);
   const [chatToTaskMessage, setChatToTaskMessage] = React.useState("Preview-only fixture loaded");
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState(
+    fixtureTaskTemplateRegistry.templates[0]?.template_id ?? "software-docs-task.v1",
+  );
   const [nowSeconds, setNowSeconds] = React.useState(() => Math.floor(Date.now() / 1000));
 
   const refresh = React.useCallback(async () => {
@@ -1707,6 +1714,11 @@ function App() {
         onGenerate={() => void generateChatToTaskDraft()}
         onSampleMatlab={useMatlabChatToTaskSample}
         onSampleDocs={useDocsChatToTaskSample}
+      />
+      <BootstrapAlphaTaskTemplateRegistryPanel
+        registry={fixtureTaskTemplateRegistry}
+        selectedTemplateId={selectedTemplateId}
+        onSelectTemplate={setSelectedTemplateId}
       />
 
       <section className="toolbar" aria-label="Queue dashboard actions">
@@ -2320,6 +2332,85 @@ function BootstrapAlphaChatToTaskPanel({
         <StatusValue label="token_printed" value={String(preview.token_printed)} />
         <StatusValue label="Planner message" value={message} />
       </dl>
+    </section>
+  );
+}
+
+function BootstrapAlphaTaskTemplateRegistryPanel({
+  registry,
+  selectedTemplateId,
+  onSelectTemplate,
+}: {
+  registry: TaskTemplateRegistry;
+  selectedTemplateId: string;
+  onSelectTemplate: (value: string) => void;
+}) {
+  const selectedTemplate =
+    registry.templates.find((template) => template.template_id === selectedTemplateId) ?? registry.templates[0];
+
+  return (
+    <section className="panel bootstrap-task-template-registry-panel" aria-label="Bootstrap Alpha Task Templates">
+      <h2>Bootstrap Alpha Task Templates</h2>
+      <div className="mode-strip execution-disabled-banner" aria-label="Bootstrap Alpha task template registry disabled execution flags">
+        <span>execution_supported=false</span>
+        <span>task_creation_supported=false; campaign_creation_supported=false; claim_supported=false</span>
+        <span>codex_run_supported=false; matlab_run_supported=false; arbitrary_shell_enabled=false; token_printed=false</span>
+      </div>
+      <label className="manual-task-input-label" htmlFor="bootstrap-task-template-select">
+        Available templates
+      </label>
+      <select
+        id="bootstrap-task-template-select"
+        className="manual-task-input"
+        value={selectedTemplate?.template_id ?? ""}
+        onChange={(event) => onSelectTemplate(event.currentTarget.value)}
+        aria-label="Bootstrap Alpha Task Template Registry selector"
+      >
+        {registry.templates.map((template) => (
+          <option key={template.template_id} value={template.template_id}>
+            {template.template_id}
+          </option>
+        ))}
+      </select>
+      <dl>
+        <StatusValue label="Registry schema" value={taskTemplateRegistrySchema} />
+        <StatusValue label="Registry id" value={registry.registry_id} />
+        <StatusValue label="Version" value={registry.version} />
+        <StatusValue label="Template count" value={String(registry.templates.length)} />
+        <StatusValue label="Template id" value={selectedTemplate?.template_id ?? "none"} />
+        <StatusValue label="Category" value={selectedTemplate?.category ?? "none"} />
+        <StatusValue label="Draft type" value={selectedTemplate?.draft_type ?? "none"} />
+        <StatusValue label="Risk class" value={selectedTemplate?.risk_class ?? "none"} />
+        <StatusValue label="Required capabilities" value={selectedTemplate?.required_capabilities.join("; ") ?? "none"} />
+        <StatusValue label="Optional capabilities" value={selectedTemplate?.optional_capabilities.join("; ") ?? "none"} />
+        <StatusValue label="Input schema summary" value={selectedTemplate?.input_schema_summary.join("; ") ?? "none"} />
+        <StatusValue label="Allowed paths" value={selectedTemplate?.allowed_paths.join("; ") ?? "none"} />
+        <StatusValue label="Blocked paths" value={selectedTemplate?.blocked_paths.join("; ") ?? "none"} />
+        <StatusValue label="Validation rules" value={selectedTemplate?.validation_rules.map((rule) => rule.summary).join("; ") ?? "none"} />
+        <StatusValue label="Runner id" value={selectedTemplate?.runner_id ?? "none"} />
+        <StatusValue label="Evidence schema" value={selectedTemplate?.evidence_schema.join("; ") ?? "none"} />
+        <StatusValue label="Output paths" value={selectedTemplate?.output_paths.join("; ") ?? "none"} />
+        <StatusValue label="execution_supported" value={String(selectedTemplate?.execution_supported ?? false)} />
+        <StatusValue label="draft_only" value={String(selectedTemplate?.draft_only ?? true)} />
+        <StatusValue label="task_creation_supported" value={String(selectedTemplate?.task_creation_supported ?? false)} />
+        <StatusValue label="campaign_creation_supported" value={String(selectedTemplate?.campaign_creation_supported ?? false)} />
+        <StatusValue label="claim_supported" value={String(selectedTemplate?.claim_supported ?? false)} />
+        <StatusValue label="codex_run_supported" value={String(selectedTemplate?.codex_run_supported ?? false)} />
+        <StatusValue label="matlab_run_supported" value={String(selectedTemplate?.matlab_run_supported ?? false)} />
+        <StatusValue label="arbitrary_shell_enabled" value={String(selectedTemplate?.arbitrary_shell_enabled ?? false)} />
+        <StatusValue label="token_printed" value={String(selectedTemplate?.token_printed ?? false)} />
+      </dl>
+      <div className="queue-action-grid">
+        <button type="button" disabled aria-disabled="true">
+          Review and Submit (MG328 future work)
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Template execution unavailable
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          Worker runner deferred to MG329
+        </button>
+      </div>
     </section>
   );
 }

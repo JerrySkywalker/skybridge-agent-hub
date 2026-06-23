@@ -20,9 +20,10 @@ start task execution.
 Install and repair are preview-only in MG325. Apply is future work and must keep
 exact confirmation, local user-level scope, and the no-execution boundary.
 
-MG326 adds a separate Desktop Chat-to-Task panel. That panel may reference local
-tool capabilities from worker setup, but it still produces draft previews only
-and does not start the worker service or execute Codex or MATLAB.
+MG326 adds a separate Desktop Chat-to-Task panel. MG327 adds a separate Desktop
+Task Templates panel. These panels may reference local tool capabilities from
+worker setup, but they still produce or display previews only and do not start
+the worker service, claim tasks, execute Codex, or execute MATLAB.
 
 ## Worker Service Meaning
 

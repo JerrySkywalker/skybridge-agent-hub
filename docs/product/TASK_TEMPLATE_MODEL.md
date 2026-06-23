@@ -1,27 +1,28 @@
 # Task Template Model
 
 Bootstrap Alpha tasks are created from templates. A template constrains planner
-drafts and worker execution so natural language cannot become arbitrary
-commands.
+drafts and future worker execution so natural language cannot become arbitrary
+commands. MG327 makes the first templates first-class in
+`docs/product/TASK_TEMPLATE_REGISTRY.md` and
+`packages/event-schema/src/task-template-registry.json`.
 
 ## Template Fields
 
 - `template_id`: stable identifier and version, for example
   `software-docs-task.v1`.
-- `input_schema`: structured inputs accepted by the template.
+- `input_schema_summary`: structured inputs accepted by the template.
 - `required_capabilities`: worker capabilities required before claim.
 - `allowed_paths`: repository or workspace paths the runner may read or write.
 - `blocked_paths`: paths the runner must never access or mutate.
-- `risk_class`: operator-facing risk category such as `docs_only`,
-  `local_smoke`, `local_experiment`, or `review_required`.
+- `risk_class`: operator-facing risk category: `low`, `medium`, or `high`.
 - `validation_rules`: preflight and post-run checks required for the task.
 - `runner_id`: worker runner implementation that may execute the template.
 - `evidence_schema`: safe result fields returned to the server.
 
 ## First Planned Templates
 
-MG326 uses these template ids for deterministic draft previews only. Template
-execution remains future reviewed work.
+MG327 registers these template ids for deterministic draft previews only.
+Template execution remains future reviewed work.
 
 ### `software-docs-task.v1`
 
@@ -53,8 +54,13 @@ or reports.
 
 ## Freeze Boundary
 
-This goal documents and freezes the model only. It does not implement full
+MG327 documents, types, and validates the registry only. It does not implement
 template execution, MATLAB execution, Codex execution, task claims, worker
-loops, notification sends, daemon paths, or project-control changes.
+loops, notification sends, daemon paths, or project-control changes. Every
+registered template keeps `execution_supported=false`,
+`task_creation_supported=false`, `campaign_creation_supported=false`,
+`claim_supported=false`, `codex_run_supported=false`,
+`matlab_run_supported=false`, `arbitrary_shell_enabled=false`, and
+`token_printed=false`.
 
 token_printed=false

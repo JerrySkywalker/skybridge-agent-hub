@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-06-23 Mega Goal 327 Task Template Registry
+
+- Added the shared Bootstrap Alpha task template registry contract:
+  `skybridge.task_template_registry.v1`, `skybridge.task_template.v1`,
+  `skybridge.task_template_validation.v1`, and
+  `skybridge.task_template_evidence_schema.v1`.
+- Added five preview-only templates: `software-docs-task.v1`,
+  `codex-analysis-report.v1`, `safe-local-smoke.v1`,
+  `matlab-parameter-sweep.v1`, and `matlab-result-analysis.v1`.
+- Added the read-only `skybridge-task-template-registry.ps1` script and
+  registry smokes for general, MATLAB, and Desktop fixture coverage.
+- Updated Chat-to-Task so known MATLAB and docs/report drafts pull runner id,
+  path policy, validation rules, risk class, and evidence schema from the
+  registry.
+- Added the Desktop Bootstrap Alpha Task Templates panel with execution, task
+  creation, campaign creation, claim, Codex, MATLAB, arbitrary shell, and token
+  output disabled.
+- Added registry docs and Bootstrap Alpha doc updates. MG327 remains
+  no-execution and creates no server tasks or campaigns.
+
 ## 2026-06-23 Mega Goal 326 Chat-to-Task Draft Planner
 
 - Added shared Chat-to-Task draft contracts for session, task draft, campaign

@@ -19,6 +19,11 @@ Future goals may add Hermes or local model integration behind the same draft
 schema. That integration must keep review-before-submit and no-execution
 defaults.
 
+MG327 adds the Bootstrap Alpha Task Template Registry. Known MATLAB and
+docs/report drafts now use registry metadata for `template_id`, `runner_id`,
+allowed paths, blocked paths, validation rules, risk class, and evidence
+schema. The planner remains deterministic and preview-only.
+
 ## Draft Schemas
 
 The shared preview contracts are:
@@ -87,6 +92,7 @@ Expected draft:
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-chat-to-task-draft.ps1 -Command sample-matlab -Json
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-chat-to-task-draft.ps1 -Command sample-docs -Json
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-chat-to-task-draft.ps1 -Command status -Json
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-task-template-registry.ps1 -Command list -Json
 ```
 
 Do not paste secrets, tokens, cookies, provider headers, raw prompts, stdout,

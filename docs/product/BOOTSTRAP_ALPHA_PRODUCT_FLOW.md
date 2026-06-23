@@ -83,4 +83,16 @@ draft, a clarifying question, or a blocked request preview. It keeps
 `execution_started=false`, `codex_run_called=false`, `matlab_run_called=false`,
 `arbitrary_shell_enabled=false`, and `token_printed=false`.
 
+## MG327 Task Template Registry
+
+The first registry reports `skybridge.task_template_registry.v1` and defines
+the Bootstrap Alpha templates used by planner drafts:
+`software-docs-task.v1`, `codex-analysis-report.v1`, `safe-local-smoke.v1`,
+`matlab-parameter-sweep.v1`, and `matlab-result-analysis.v1`. Desktop shows
+the registry metadata as read-only template information. The registry keeps
+`execution_supported=false`, `task_creation_supported=false`,
+`campaign_creation_supported=false`, `claim_supported=false`,
+`codex_run_supported=false`, `matlab_run_supported=false`,
+`arbitrary_shell_enabled=false`, and `token_printed=false`.
+
 token_printed=false

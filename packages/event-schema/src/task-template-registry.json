@@ -1,0 +1,407 @@
+{
+  "schema": "skybridge.task_template_registry.v1",
+  "registry_id": "bootstrap-alpha-task-template-registry",
+  "version": "mg327-bootstrap-alpha",
+  "title": "Bootstrap Alpha Task Template Registry",
+  "description": "Preview-only registry for Bootstrap Alpha draft templates. MG327 does not execute templates or create tasks.",
+  "templates": [
+    {
+      "schema": "skybridge.task_template.v1",
+      "template_id": "software-docs-task.v1",
+      "version": "1.0.0",
+      "title": "Software Docs Task",
+      "description": "Draft a bounded documentation update or report with safe path limits and operator review before any future submit flow.",
+      "category": "docs",
+      "draft_type": "task",
+      "risk_class": "low",
+      "required_capabilities": ["git", "codex"],
+      "optional_capabilities": ["markdown", "powershell"],
+      "input_schema_summary": [
+        "title",
+        "documentation scope",
+        "allowed docs path",
+        "expected evidence summary"
+      ],
+      "allowed_paths": ["docs/**", "README.md"],
+      "blocked_paths": [
+        ".env",
+        "secrets/**",
+        "deploy/**",
+        ".git/**",
+        "server-root",
+        "DNS",
+        "Cloudflare",
+        "OpenResty",
+        "Authelia",
+        "GitHub settings"
+      ],
+      "validation_rules": [
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "docs-path-bounds",
+          "summary": "Keep changed files under docs/** or README.md.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "docs-no-runtime-mutation",
+          "summary": "Do not mutate runtime code, deployment settings, secrets, server root, DNS, Cloudflare, OpenResty, Authelia, or GitHub settings.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "docs-safe-evidence",
+          "summary": "Return only safe report metadata and validation status.",
+          "required": true
+        }
+      ],
+      "runner_id": "software-docs-task-runner.v1",
+      "evidence_schema": [
+        "skybridge.docs_task_evidence.v1",
+        "report_path",
+        "changed_docs",
+        "validation_status",
+        "audit_summary"
+      ],
+      "output_paths": ["docs/**", "README.md"],
+      "default_project_id_hint": "skybridge-agent-hub",
+      "execution_supported": false,
+      "draft_only": true,
+      "task_creation_supported": false,
+      "campaign_creation_supported": false,
+      "claim_supported": false,
+      "codex_run_supported": false,
+      "matlab_run_supported": false,
+      "arbitrary_shell_enabled": false,
+      "token_printed": false
+    },
+    {
+      "schema": "skybridge.task_template.v1",
+      "template_id": "codex-analysis-report.v1",
+      "version": "1.0.0",
+      "title": "Codex Analysis Report",
+      "description": "Draft a bounded analysis/report task over summarized experiment or repository evidence without raw log persistence.",
+      "category": "analysis",
+      "draft_type": "task",
+      "risk_class": "medium",
+      "required_capabilities": ["codex", "git"],
+      "optional_capabilities": ["powershell", "markdown"],
+      "input_schema_summary": [
+        "analysis target",
+        "source summary paths",
+        "report output path",
+        "validation expectations"
+      ],
+      "allowed_paths": ["docs/experiments/**", "results/skybridge/**"],
+      "blocked_paths": [
+        "raw logs",
+        ".env",
+        "secrets/**",
+        "deploy/**",
+        ".git/**",
+        "server-root",
+        "production",
+        "GitHub settings"
+      ],
+      "validation_rules": [
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "analysis-summary-only",
+          "summary": "Use summarized result files only; raw logs are blocked by default.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "analysis-safe-output",
+          "summary": "Write report outputs only under docs/experiments/** or results/skybridge/**.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "analysis-no-execution",
+          "summary": "Do not run Codex, MATLAB, shell commands, task claims, or worker loops in MG327.",
+          "required": true
+        }
+      ],
+      "runner_id": "codex-analysis-report-runner.v1",
+      "evidence_schema": [
+        "skybridge.analysis_report_evidence.v1",
+        "report_path",
+        "source_summaries",
+        "validation_status",
+        "audit_summary"
+      ],
+      "output_paths": ["docs/experiments/**", "results/skybridge/**"],
+      "default_project_id_hint": "skybridge-agent-hub",
+      "execution_supported": false,
+      "draft_only": true,
+      "task_creation_supported": false,
+      "campaign_creation_supported": false,
+      "claim_supported": false,
+      "codex_run_supported": false,
+      "matlab_run_supported": false,
+      "arbitrary_shell_enabled": false,
+      "token_printed": false
+    },
+    {
+      "schema": "skybridge.task_template.v1",
+      "template_id": "safe-local-smoke.v1",
+      "version": "1.0.0",
+      "title": "Safe Local Smoke",
+      "description": "Draft a future local smoke validation task with fixed script/path bounds and no task execution in MG327.",
+      "category": "local-validation",
+      "draft_type": "task",
+      "risk_class": "low",
+      "required_capabilities": ["powershell", "node", "pnpm"],
+      "optional_capabilities": ["git"],
+      "input_schema_summary": [
+        "smoke script id",
+        "fixture path",
+        "expected contract fields",
+        "timeout budget"
+      ],
+      "allowed_paths": ["scripts/powershell/smoke-*.ps1", "tests/fixtures/**"],
+      "blocked_paths": [
+        "production",
+        "deploy/**",
+        "server-root",
+        ".env",
+        "secrets/**",
+        ".git/**",
+        "GitHub settings"
+      ],
+      "validation_rules": [
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "smoke-fixed-script-only",
+          "summary": "Use only named smoke scripts and fixture paths; do not accept arbitrary shell text.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "smoke-local-only",
+          "summary": "Do not touch production, deployment paths, server root, secrets, or GitHub settings.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "smoke-safe-summary",
+          "summary": "Return safe booleans/counts/status only.",
+          "required": true
+        }
+      ],
+      "runner_id": "safe-local-smoke-runner.v1",
+      "evidence_schema": [
+        "skybridge.local_smoke_evidence.v1",
+        "smoke_name",
+        "contract_status",
+        "safe_summary",
+        "audit_summary"
+      ],
+      "output_paths": ["tests/fixtures/**"],
+      "default_project_id_hint": "skybridge-agent-hub",
+      "execution_supported": false,
+      "draft_only": true,
+      "task_creation_supported": false,
+      "campaign_creation_supported": false,
+      "claim_supported": false,
+      "codex_run_supported": false,
+      "matlab_run_supported": false,
+      "arbitrary_shell_enabled": false,
+      "token_printed": false
+    },
+    {
+      "schema": "skybridge.task_template.v1",
+      "template_id": "matlab-parameter-sweep.v1",
+      "version": "1.0.0",
+      "title": "MATLAB Parameter Sweep",
+      "description": "Draft a bounded MATLAB parameter-grid campaign for future worker execution, with report generation deferred to reviewable steps.",
+      "category": "matlab-experiment",
+      "draft_type": "campaign",
+      "risk_class": "medium",
+      "required_capabilities": ["windows", "powershell", "matlab"],
+      "optional_capabilities": ["codex", "git", "gh"],
+      "input_schema_summary": [
+        "parameter grid",
+        "script path",
+        "output dir",
+        "max runtime"
+      ],
+      "allowed_paths": ["experiments/matlab/**", "results/skybridge/**", "docs/experiments/**"],
+      "blocked_paths": [
+        ".env",
+        "secrets/**",
+        "deploy/**",
+        ".git/**",
+        "server-root",
+        "DNS",
+        "Cloudflare",
+        "OpenResty",
+        "Authelia",
+        "GitHub settings"
+      ],
+      "validation_rules": [
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-tool-available",
+          "summary": "Confirm MATLAB is available locally before future execution.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-entrypoint-confirmed",
+          "summary": "Confirm the experiment script path before future execution.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-grid-bounded",
+          "summary": "Validate eta range, h values, P values, and max runtime before future execution.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-output-bounds",
+          "summary": "Write outputs only under experiments/matlab/**, results/skybridge/**, or docs/experiments/**.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-no-shell",
+          "summary": "Do not execute arbitrary shell commands.",
+          "required": true
+        }
+      ],
+      "runner_id": "matlab-parameter-sweep-runner.v1",
+      "evidence_schema": [
+        "skybridge.matlab_sweep_evidence.v1",
+        "run_manifest",
+        "parameter_matrix",
+        "result_summary",
+        "report_path",
+        "audit_summary"
+      ],
+      "output_paths": ["results/skybridge/**", "docs/experiments/**"],
+      "default_project_id_hint": "skybridge-agent-hub",
+      "execution_supported": false,
+      "draft_only": true,
+      "task_creation_supported": false,
+      "campaign_creation_supported": false,
+      "claim_supported": false,
+      "codex_run_supported": false,
+      "matlab_run_supported": false,
+      "arbitrary_shell_enabled": false,
+      "token_printed": false
+    },
+    {
+      "schema": "skybridge.task_template.v1",
+      "template_id": "matlab-result-analysis.v1",
+      "version": "1.0.0",
+      "title": "MATLAB Result Analysis",
+      "description": "Draft a summarized MATLAB result analysis task over safe outputs, with raw logs blocked by default.",
+      "category": "matlab-analysis",
+      "draft_type": "task",
+      "risk_class": "medium",
+      "required_capabilities": ["codex", "git"],
+      "optional_capabilities": ["matlab", "powershell"],
+      "input_schema_summary": [
+        "result summary path",
+        "analysis question",
+        "report output path",
+        "raw-log exclusion confirmation"
+      ],
+      "allowed_paths": ["results/skybridge/**", "docs/experiments/**"],
+      "blocked_paths": [
+        "raw logs",
+        ".env",
+        "secrets/**",
+        "deploy/**",
+        ".git/**",
+        "server-root",
+        "production"
+      ],
+      "validation_rules": [
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-analysis-summary-only",
+          "summary": "Analyze summarized MATLAB outputs only; raw logs are blocked by default.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-analysis-safe-output",
+          "summary": "Write reports only under docs/experiments/** or results/skybridge/**.",
+          "required": true
+        },
+        {
+          "schema": "skybridge.task_template_validation.v1",
+          "validation_id": "matlab-analysis-no-execution",
+          "summary": "Do not run Codex, MATLAB, shell commands, task claims, or worker loops in MG327.",
+          "required": true
+        }
+      ],
+      "runner_id": "matlab-result-analysis-runner.v1",
+      "evidence_schema": [
+        "skybridge.matlab_result_analysis_evidence.v1",
+        "source_summary_path",
+        "analysis_report_path",
+        "validation_status",
+        "audit_summary"
+      ],
+      "output_paths": ["docs/experiments/**", "results/skybridge/**"],
+      "default_project_id_hint": "skybridge-agent-hub",
+      "execution_supported": false,
+      "draft_only": true,
+      "task_creation_supported": false,
+      "campaign_creation_supported": false,
+      "claim_supported": false,
+      "codex_run_supported": false,
+      "matlab_run_supported": false,
+      "arbitrary_shell_enabled": false,
+      "token_printed": false
+    }
+  ],
+  "evidence_schemas": [
+    {
+      "schema": "skybridge.task_template_evidence_schema.v1",
+      "evidence_schema_id": "skybridge.docs_task_evidence.v1",
+      "summary": "Safe docs task evidence.",
+      "required_fields": ["report_path", "changed_docs", "validation_status", "audit_summary"]
+    },
+    {
+      "schema": "skybridge.task_template_evidence_schema.v1",
+      "evidence_schema_id": "skybridge.analysis_report_evidence.v1",
+      "summary": "Safe analysis report evidence.",
+      "required_fields": ["report_path", "source_summaries", "validation_status", "audit_summary"]
+    },
+    {
+      "schema": "skybridge.task_template_evidence_schema.v1",
+      "evidence_schema_id": "skybridge.local_smoke_evidence.v1",
+      "summary": "Safe local smoke evidence.",
+      "required_fields": ["smoke_name", "contract_status", "safe_summary", "audit_summary"]
+    },
+    {
+      "schema": "skybridge.task_template_evidence_schema.v1",
+      "evidence_schema_id": "skybridge.matlab_sweep_evidence.v1",
+      "summary": "Safe MATLAB parameter sweep evidence.",
+      "required_fields": ["run_manifest", "parameter_matrix", "result_summary", "report_path", "audit_summary"]
+    },
+    {
+      "schema": "skybridge.task_template_evidence_schema.v1",
+      "evidence_schema_id": "skybridge.matlab_result_analysis_evidence.v1",
+      "summary": "Safe MATLAB result analysis evidence.",
+      "required_fields": ["source_summary_path", "analysis_report_path", "validation_status", "audit_summary"]
+    }
+  ],
+  "execution_supported": false,
+  "draft_only": true,
+  "task_creation_supported": false,
+  "campaign_creation_supported": false,
+  "claim_supported": false,
+  "codex_run_supported": false,
+  "matlab_run_supported": false,
+  "arbitrary_shell_enabled": false,
+  "raw_prompt_persisted": false,
+  "raw_response_persisted": false,
+  "token_printed": false
+}

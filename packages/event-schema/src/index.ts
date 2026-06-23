@@ -1,5 +1,6 @@
 import { z } from "zod";
 import redactionRules from "./redaction-rules.json" with { type: "json" };
+import taskTemplateRegistryData from "./task-template-registry.json" with { type: "json" };
 export * from "./control-plane.js";
 export * from "./reliability.js";
 
@@ -487,6 +488,95 @@ export type TaskDraft = z.infer<typeof TaskDraftSchema>;
 export type CampaignDraft = z.infer<typeof CampaignDraftSchema>;
 export type TaskDraftClarifyingQuestion = z.infer<typeof TaskDraftClarifyingQuestionSchema>;
 export type TaskDraftPreview = z.infer<typeof TaskDraftPreviewSchema>;
+
+export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
+export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
+export const TaskTemplateValidationSchema = z.object({
+  schema: z.literal("skybridge.task_template_validation.v1"),
+  validation_id: z.string().min(1),
+  summary: z.string().min(1),
+  required: z.boolean().default(true),
+});
+export const TaskTemplateEvidenceSchema = z.object({
+  schema: z.literal("skybridge.task_template_evidence_schema.v1"),
+  evidence_schema_id: z.string().min(1),
+  summary: z.string().min(1),
+  required_fields: z.array(z.string().min(1)).min(1),
+});
+export const TaskTemplateSchema = z.object({
+  schema: z.literal("skybridge.task_template.v1"),
+  template_id: z.string().min(1),
+  version: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  category: z.string().min(1),
+  draft_type: TaskTemplateDraftTypeSchema,
+  risk_class: TaskTemplateRiskClassSchema,
+  required_capabilities: z.array(z.string().min(1)).min(1),
+  optional_capabilities: z.array(z.string().min(1)).default([]),
+  input_schema_summary: z.array(z.string().min(1)).min(1),
+  allowed_paths: z.array(z.string().min(1)).min(1),
+  blocked_paths: z.array(z.string().min(1)).min(1),
+  validation_rules: z.array(TaskTemplateValidationSchema).min(1),
+  runner_id: z.string().min(1),
+  evidence_schema: z.array(z.string().min(1)).min(1),
+  output_paths: z.array(z.string().min(1)).default([]),
+  default_project_id_hint: z.string().min(1).optional(),
+  execution_supported: z.literal(false),
+  draft_only: z.literal(true),
+  task_creation_supported: z.literal(false),
+  campaign_creation_supported: z.literal(false),
+  claim_supported: z.literal(false),
+  codex_run_supported: z.literal(false),
+  matlab_run_supported: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const TaskTemplateRegistrySchema = z.object({
+  schema: z.literal("skybridge.task_template_registry.v1"),
+  registry_id: z.string().min(1),
+  version: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  templates: z.array(TaskTemplateSchema).min(1),
+  evidence_schemas: z.array(TaskTemplateEvidenceSchema).min(1),
+  execution_supported: z.literal(false),
+  draft_only: z.literal(true),
+  task_creation_supported: z.literal(false),
+  campaign_creation_supported: z.literal(false),
+  claim_supported: z.literal(false),
+  codex_run_supported: z.literal(false),
+  matlab_run_supported: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export type TaskTemplateDraftType = z.infer<typeof TaskTemplateDraftTypeSchema>;
+export type TaskTemplateRiskClass = z.infer<typeof TaskTemplateRiskClassSchema>;
+export type TaskTemplateValidation = z.infer<typeof TaskTemplateValidationSchema>;
+export type TaskTemplateEvidenceSchemaDefinition = z.infer<typeof TaskTemplateEvidenceSchema>;
+export type TaskTemplate = z.infer<typeof TaskTemplateSchema>;
+export type TaskTemplateRegistry = z.infer<typeof TaskTemplateRegistrySchema>;
+export const TASK_TEMPLATE_REGISTRY = TaskTemplateRegistrySchema.parse(taskTemplateRegistryData);
+export const TASK_TEMPLATE_IDS = TASK_TEMPLATE_REGISTRY.templates.map(
+  (template) => template.template_id,
+);
+export function listTaskTemplates(): TaskTemplate[] {
+  return TASK_TEMPLATE_REGISTRY.templates;
+}
+export function getTaskTemplate(templateId: string): TaskTemplate | undefined {
+  return TASK_TEMPLATE_REGISTRY.templates.find(
+    (template) => template.template_id === templateId,
+  );
+}
+export function assertKnownTaskTemplate(templateId: string): TaskTemplate {
+  const template = getTaskTemplate(templateId);
+  if (!template) {
+    throw new Error(`Unknown task template: ${templateId}`);
+  }
+  return template;
+}
 export type TaskRisk = "low" | "medium" | "high";
 export type GoalRisk = TaskRisk;
 export type GoalPriority = "low" | "normal" | "high" | "urgent";
