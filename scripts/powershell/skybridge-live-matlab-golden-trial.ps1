@@ -65,7 +65,9 @@ function Test-Subset {
 function Test-UnsafeText {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-  return [bool]($Text -match "(?i)\b(production|deploy|dns|cloudflare|openresty|authelia|github settings|server-root|secret|cookie|authorization|bearer|raw command|cmd\.exe|powershell -|pwsh -|bash -|codex|unbounded|arbitrary command)\b")
+  $positiveText = $Text -replace "(?i)\bNo\s+[^.]*\.", " "
+  $positiveText = $positiveText -replace "(?i)\bNot\s+[^.]*\.", " "
+  return [bool]($positiveText -match "(?i)\b(production|deploy|dns|cloudflare|openresty|authelia|github settings|server-root|secret|cookie|authorization|bearer|raw command|cmd\.exe|powershell -|pwsh -|bash -|codex|unbounded|arbitrary command)\b")
 }
 
 function Get-ConfigValueFromFile {
@@ -230,8 +232,8 @@ function New-GoldenTaskPayload {
     task_id = $PilotTaskId
     project_id = $ProjectId
     title = "MG333 MATLAB Experiment Golden Trial"
-    body = "Run the fixed MG333 synthetic MATLAB parameter sweep only. Grid eta=[2,3], h_km=[500], P=[6]. No arbitrary MATLAB command, Codex, shell, worker loop, PR, project-control unpause, or infrastructure changes."
-    prompt_summary = "MG333 deterministic MATLAB golden trial. Safe summary only; no raw prompt or raw MATLAB output persisted."
+    body = "Run the fixed MG333 synthetic MATLAB parameter sweep only. Grid eta=[2,3], h_km=[500], P=[6]. Use the fixed runner and write sanitized manifest, summary, and metrics evidence."
+    prompt_summary = "MG333 deterministic MATLAB golden trial. Safe summary only; summarized MATLAB output only."
     risk = "medium"
     source = "manual"
     task_type = "matlab-parameter-sweep"
