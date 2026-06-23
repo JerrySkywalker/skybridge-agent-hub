@@ -93,6 +93,18 @@ Codex, run MATLAB, start a worker loop, expose arbitrary shell, run unbounded,
 create PRs, requeue old tasks, unpause project control, or mutate production
 infrastructure.
 
+MG333 covers MATLAB Experiment Golden Trial v1 only. It may create one live
+cloud task with id `live-matlab-golden-task-333-001`, then claim, start, and
+complete or fail exactly that task with `worker_id=jerry-win-local-01` after
+exact confirmation and only if MATLAB is detected. The task must use
+`matlab-parameter-sweep.v1`, `matlab-parameter-sweep-runner.v1`, the tiny
+synthetic grid `eta=[2,3]`, `h_km=[500]`, `P=[6]`, and output only sanitized
+manifest/summary/metrics files under the allowed MATLAB golden-trial paths.
+MG333 does not allow arbitrary MATLAB command text, Codex execution, report
+generation by Codex, worker loops, run-until-hold, multiple task execution,
+arbitrary shell, PR creation, old task requeue, project-control unpause, or
+production infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

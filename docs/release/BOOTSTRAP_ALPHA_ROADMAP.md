@@ -162,14 +162,24 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 
 - Objective: run a reviewed MATLAB parameter sweep golden path through the
   template model after the one-safe-task live lifecycle has been proven.
-- Likely touched: MATLAB template docs, worker runner, fixture experiment
-  assets, evidence schemas, Desktop/server reports.
-- Acceptance criteria: operator confirms a MATLAB draft; worker runs only the
-  MATLAB template runner; result summary and report are returned; no arbitrary
-  shell is used.
-- Forbidden scope: production automation, unrelated project deployment,
-  background daemon expansion, automatic merge.
-- Live deployment expected: maybe, if the server must store golden-path state.
+- Implementation note: MG333 adds
+  [MATLAB Experiment Golden Trial](../product/MATLAB_EXPERIMENT_GOLDEN_TRIAL.md),
+  the fixed `skybridge-matlab-parameter-sweep-runner.ps1`, the deterministic
+  `scripts/matlab/skybridge_run_parameter_sweep.m` fixture, the
+  `skybridge-live-matlab-golden-trial.ps1` live orchestrator, Desktop preview
+  fields, shared MATLAB runner/evidence schemas, and fixture/rejection smokes.
+- Acceptance criteria: exactly one task id,
+  `live-matlab-golden-task-333-001`, may be created and run by
+  `worker_id=jerry-win-local-01`; MATLAB is invoked only by the fixed runner
+  after exact confirmation; manifest, summary, metrics, and sanitized evidence
+  are present; raw stdout/stderr are not reported.
+- Forbidden scope: arbitrary MATLAB command text, Codex execution, production
+  automation, unrelated project deployment, worker loops, run-until-hold,
+  multiple task execution, background daemon expansion, PR creation, automatic
+  merge, project-control unpause, and old task requeue.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  run read-only MATLAB golden previews. The one live MATLAB apply may run only
+  if exact target preconditions hold.
 
 ## MG334 End-to-end Bootstrap Alpha Release
 

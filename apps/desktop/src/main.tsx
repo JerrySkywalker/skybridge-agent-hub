@@ -54,10 +54,16 @@ import {
   fixtureWorkerTemplateRunnerResult,
   fixtureLiveSafeTaskPilotPreview,
   fixtureLiveSafeTaskPilotResult,
+  fixtureMatlabGoldenRunnerPreview,
+  fixtureMatlabGoldenEvidence,
+  fixtureMatlabGoldenTrialPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT,
+  MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -97,6 +103,8 @@ import {
   type TaskTemplateRegistry,
   type WorkerTemplateRunnerPreview,
   type WorkerTemplateRunnerResult,
+  type MatlabParameterSweepRunner,
+  type MatlabSweepEvidence,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -1807,6 +1815,9 @@ function App() {
         lastResult={fixtureWorkerTemplateRunnerResult}
         livePilotPreview={fixtureLiveSafeTaskPilotPreview}
         livePilotResult={fixtureLiveSafeTaskPilotResult}
+        matlabGoldenPreview={fixtureMatlabGoldenTrialPreview}
+        matlabGoldenRunnerPreview={fixtureMatlabGoldenRunnerPreview}
+        matlabGoldenEvidence={fixtureMatlabGoldenEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2617,11 +2628,17 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   lastResult,
   livePilotPreview,
   livePilotResult,
+  matlabGoldenPreview,
+  matlabGoldenRunnerPreview,
+  matlabGoldenEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
   livePilotPreview: WorkerTemplateRunnerPreview;
   livePilotResult: WorkerTemplateRunnerResult;
+  matlabGoldenPreview: WorkerTemplateRunnerPreview;
+  matlabGoldenRunnerPreview: MatlabParameterSweepRunner;
+  matlabGoldenEvidence: MatlabSweepEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2634,6 +2651,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>Desktop preview-only</span>
         <span>MaxTasks=1; claim via PowerShell exact confirmation only</span>
         <span>MG332 live pilot is PowerShell-only for task live-safe-template-task-332-001</span>
+        <span>MG333 MATLAB golden trial is PowerShell-only for task live-matlab-golden-task-333-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2685,6 +2703,29 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG332 evidence summary" value={livePilotResult.result_summary} />
         <StatusValue label="MG332 create confirmation" value={LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG332 run confirmation" value={LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG333 MATLAB Golden Trial status" value={matlabGoldenPreview.ok ? "exact_matlab_task_preview_available" : "no_matlab_golden_task"} />
+        <StatusValue label="MG333 target task id" value={matlabGoldenPreview.expected_task_id ?? matlabGoldenPreview.task_id ?? "none"} />
+        <StatusValue label="MG333 worker id" value={matlabGoldenPreview.worker_id} />
+        <StatusValue label="MG333 cloud worker status" value={matlabGoldenPreview.cloud_worker_status ?? "unknown"} />
+        <StatusValue label="MG333 template id" value={matlabGoldenPreview.template_id ?? "none"} />
+        <StatusValue label="MG333 runner id" value={matlabGoldenPreview.runner_id ?? "none"} />
+        <StatusValue label="MG333 evidence schema" value={matlabGoldenPreview.evidence_schema ?? "none"} />
+        <StatusValue label="MG333 parameter grid" value={matlabGoldenRunnerPreview.parameter_grid_summary} />
+        <StatusValue label="MG333 combination count" value={String(matlabGoldenRunnerPreview.combination_count)} />
+        <StatusValue label="MG333 MATLAB capability detected" value={String(matlabGoldenRunnerPreview.matlab_available ?? false)} />
+        <StatusValue label="MG333 preview matlab_invoked" value={String(matlabGoldenRunnerPreview.matlab_invoked)} />
+        <StatusValue label="MG333 output dir" value={matlabGoldenRunnerPreview.output_dir} />
+        <StatusValue label="MG333 manifest path" value={matlabGoldenRunnerPreview.manifest_path} />
+        <StatusValue label="MG333 summary path" value={matlabGoldenRunnerPreview.summary_path} />
+        <StatusValue label="MG333 metrics path" value={matlabGoldenRunnerPreview.metrics_path} />
+        <StatusValue label="MG333 evidence summary" value={matlabGoldenEvidence.result_summary} />
+        <StatusValue label="MG333 evidence validation" value={matlabGoldenEvidence.validation_status} />
+        <StatusValue label="MG333 raw_stdout_included" value={String(matlabGoldenEvidence.raw_stdout_included)} />
+        <StatusValue label="MG333 raw_stderr_included" value={String(matlabGoldenEvidence.raw_stderr_included)} />
+        <StatusValue label="MG333 raw_mat_files_uploaded" value={String(matlabGoldenEvidence.raw_mat_files_uploaded)} />
+        <StatusValue label="MG333 create confirmation" value={MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG333 run confirmation" value={MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG333 fixed runner confirmation" value={MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2700,7 +2741,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
           Codex execution disabled
         </button>
         <button type="button" disabled aria-disabled="true">
-          MATLAB execution disabled
+          MATLAB execution disabled except MG333 fixed runner
         </button>
         <button type="button" disabled aria-disabled="true">
           Arbitrary shell disabled
@@ -2710,6 +2751,12 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG332 confirmation">
           MG332 live apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-matlab-golden-trial.ps1 -Command preview-run">
+          MG333 MATLAB golden preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG333 confirmation">
+          MG333 MATLAB apply unavailable in Desktop
         </button>
       </div>
     </section>

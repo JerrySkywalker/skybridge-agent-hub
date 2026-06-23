@@ -641,6 +641,83 @@ export type WorkerTemplateRunnerPreview = z.infer<typeof WorkerTemplateRunnerPre
 export type WorkerTemplateRunnerResult = z.infer<typeof WorkerTemplateRunnerResultSchema>;
 export type TemplateRunnerEvidence = z.infer<typeof TemplateRunnerEvidenceSchema>;
 
+const MatlabSweepPathsSchema = z.object({
+  output_dir: z.string().min(1),
+  manifest_path: z.string().min(1),
+  summary_path: z.string().min(1),
+  metrics_path: z.string().min(1),
+});
+const MatlabSweepSafetySchema = z.object({
+  raw_stdout_included: z.literal(false),
+  raw_stderr_included: z.literal(false),
+  raw_mat_files_uploaded: z.literal(false),
+  codex_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  token_printed: z.literal(false),
+});
+const MatlabSweepCommonSchema = MatlabSweepPathsSchema.merge(MatlabSweepSafetySchema).extend({
+  task_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  template_id: z.literal("matlab-parameter-sweep.v1"),
+  runner_id: z.literal("matlab-parameter-sweep-runner.v1"),
+  parameter_grid_summary: z.string().min(1),
+  combination_count: z.number().int().min(0).max(16),
+  completed_count: z.number().int().min(0),
+  failed_count: z.number().int().min(0),
+  validation_status: z.string().min(1),
+  matlab_invoked: z.boolean(),
+  matlab_exit_code: z.number().int().nullable(),
+});
+export const MatlabParameterSweepRunnerSchema = MatlabSweepCommonSchema.extend({
+  schema: z.literal("skybridge.matlab_parameter_sweep_runner.v1"),
+  ok: z.boolean(),
+  mode: z.enum(["status", "preview", "apply", "fixture", "validate-output", "safe-summary"]),
+  matlab_available: z.boolean().optional(),
+  would_invoke_matlab: z.boolean().optional(),
+  blockers: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+});
+export const MatlabSweepManifestSchema = MatlabSweepPathsSchema.merge(MatlabSweepSafetySchema).extend({
+  schema: z.literal("skybridge.matlab_sweep_manifest.v1"),
+  task_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  template_id: z.literal("matlab-parameter-sweep.v1"),
+  runner_id: z.literal("matlab-parameter-sweep-runner.v1"),
+  parameter_grid_summary: z.string().min(1),
+  combination_count: z.number().int().min(0).max(16),
+  generated_at: z.string().min(1),
+});
+export const MatlabSweepSummarySchema = MatlabSweepSafetySchema.extend({
+  schema: z.literal("skybridge.matlab_sweep_summary.v1"),
+  task_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  combination_count: z.number().int().min(0).max(16),
+  completed_count: z.number().int().min(0),
+  failed_count: z.number().int().min(0),
+  min_score: z.number().nullable(),
+  max_score: z.number().nullable(),
+  mean_score: z.number().nullable(),
+  validation_status: z.string().min(1),
+});
+export const MatlabSweepEvidenceSchema = MatlabSweepCommonSchema.extend({
+  schema: z.literal("skybridge.matlab_sweep_evidence.v1"),
+  ok: z.boolean(),
+  started_at: z.string().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  failed_at: z.string().nullable().optional(),
+  allowed_paths_checked: z.literal(true),
+  blocked_paths_checked: z.literal(true),
+  changed_files: z.array(z.string()),
+  result_summary: z.string().min(1),
+  pr_created: z.literal(false),
+  project_control_unpaused: z.literal(false),
+});
+export type MatlabParameterSweepRunner = z.infer<typeof MatlabParameterSweepRunnerSchema>;
+export type MatlabSweepManifest = z.infer<typeof MatlabSweepManifestSchema>;
+export type MatlabSweepSummary = z.infer<typeof MatlabSweepSummarySchema>;
+export type MatlabSweepEvidence = z.infer<typeof MatlabSweepEvidenceSchema>;
+
 export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
 export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
 export const TaskTemplateValidationSchema = z.object({

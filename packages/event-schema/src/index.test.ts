@@ -44,6 +44,10 @@ import {
   TASK_TEMPLATE_REGISTRY,
   DraftSubmitPreviewSchema,
   DraftSubmitResultSchema,
+  MatlabParameterSweepRunnerSchema,
+  MatlabSweepEvidenceSchema,
+  MatlabSweepManifestSchema,
+  MatlabSweepSummarySchema,
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
@@ -588,6 +592,94 @@ describe("event schema", () => {
       token_printed: false,
     });
     expect(evidence.raw_logs_included).toBe(false);
+    expect(evidence.token_printed).toBe(false);
+  });
+
+  it("models MG333 MATLAB golden trial runner contracts safely", () => {
+    const common = {
+      task_id: "live-matlab-golden-task-333-001",
+      worker_id: "jerry-win-local-01",
+      template_id: "matlab-parameter-sweep.v1" as const,
+      runner_id: "matlab-parameter-sweep-runner.v1" as const,
+      parameter_grid_summary: "eta=[2,3]; h_km=[500]; P=[6]; combinations=2",
+      combination_count: 2,
+      output_dir: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001",
+      manifest_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/manifest.json",
+      summary_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/summary.json",
+      metrics_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/metrics.csv",
+      raw_stdout_included: false as const,
+      raw_stderr_included: false as const,
+      raw_mat_files_uploaded: false as const,
+      codex_run_called: false as const,
+      arbitrary_shell_enabled: false as const,
+      worker_loop_started: false as const,
+      token_printed: false as const,
+    };
+
+    const runner = MatlabParameterSweepRunnerSchema.parse({
+      schema: "skybridge.matlab_parameter_sweep_runner.v1",
+      ok: true,
+      mode: "preview",
+      ...common,
+      completed_count: 0,
+      failed_count: 0,
+      validation_status: "preview_only",
+      matlab_available: true,
+      would_invoke_matlab: true,
+      matlab_invoked: false,
+      matlab_exit_code: null,
+      blockers: [],
+      warnings: [],
+    });
+    expect(runner.combination_count).toBe(2);
+    expect(runner.matlab_invoked).toBe(false);
+
+    const manifest = MatlabSweepManifestSchema.parse({
+      schema: "skybridge.matlab_sweep_manifest.v1",
+      ...common,
+      generated_at: "2026-06-24T00:00:00.000Z",
+    });
+    expect(manifest.raw_stdout_included).toBe(false);
+
+    const summary = MatlabSweepSummarySchema.parse({
+      schema: "skybridge.matlab_sweep_summary.v1",
+      task_id: common.task_id,
+      worker_id: common.worker_id,
+      combination_count: 2,
+      completed_count: 2,
+      failed_count: 0,
+      min_score: 0.024,
+      max_score: 0.036,
+      mean_score: 0.03,
+      validation_status: "passed",
+      raw_stdout_included: false,
+      raw_stderr_included: false,
+      raw_mat_files_uploaded: false,
+      codex_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      token_printed: false,
+    });
+    expect(summary.failed_count).toBe(0);
+
+    const evidence = MatlabSweepEvidenceSchema.parse({
+      schema: "skybridge.matlab_sweep_evidence.v1",
+      ok: true,
+      ...common,
+      completed_count: 2,
+      failed_count: 0,
+      validation_status: "passed",
+      matlab_invoked: true,
+      matlab_exit_code: 0,
+      allowed_paths_checked: true,
+      blocked_paths_checked: true,
+      changed_files: [common.manifest_path, common.summary_path, common.metrics_path],
+      result_summary: "Synthetic MATLAB golden trial completed with sanitized evidence.",
+      pr_created: false,
+      project_control_unpaused: false,
+    });
+    expect(evidence.matlab_invoked).toBe(true);
+    expect(evidence.raw_stderr_included).toBe(false);
     expect(evidence.token_printed).toBe(false);
   });
 

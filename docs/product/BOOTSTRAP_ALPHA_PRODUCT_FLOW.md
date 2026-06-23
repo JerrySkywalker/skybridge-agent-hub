@@ -25,7 +25,8 @@ automation.
 9. The local worker actively pulls from the server and claims compatible tasks.
 10. The worker executes only template runners. MG329 starts with one
     safe-local-smoke fixture runner. MG332 proves one exact live
-    safe-local-smoke pilot task; Codex and MATLAB runners remain future
+    safe-local-smoke pilot task. MG333 adds one exact fixed MATLAB golden-trial
+    task for a tiny synthetic parameter sweep. Codex runners remain future
     reviewed goals.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
@@ -181,5 +182,23 @@ MG332 keeps `codex_run_called=false`, `matlab_run_called=false`,
 `arbitrary_shell_enabled=false`, `worker_loop_started=false`,
 `project_control_unpaused=false`, `old_task_claimed=false`, and
 `token_printed=false`.
+
+## MG333 MATLAB Experiment Golden Trial
+
+MG333 proves the first controlled MATLAB execution path for exactly one task:
+`live-matlab-golden-task-333-001`. The task must be
+`template_id=matlab-parameter-sweep.v1`,
+`runner_id=matlab-parameter-sweep-runner.v1`, queued, unleased, created by the
+MG333 helper, and run by `worker_id=jerry-win-local-01`.
+
+The fixed runner executes only the synthetic grid `eta=[2,3]`, `h_km=[500]`,
+`P=[6]` and writes sanitized `manifest.json`, `summary.json`, and `metrics.csv`
+under `.agent/tmp/matlab-golden-trial/**` or
+`results/skybridge/matlab-golden-trial/**`. Desktop shows MATLAB Golden Trial
+preview and evidence fixture state, but live apply remains PowerShell-only.
+
+MG333 keeps arbitrary MATLAB command text, Codex execution, arbitrary shell,
+worker loop start, PR creation, project-control unpause, old task requeue, raw
+stdout/stderr reporting, and `token_printed=false` disabled.
 
 token_printed=false

@@ -125,4 +125,16 @@ sanitized evidence under `.agent/tmp/live-safe-template-task-332/**`.
 MG332 still does not run Codex, run MATLAB, start a worker loop, create PRs,
 unpause project control, requeue old tasks, or claim arbitrary queued work.
 
+MG333 adds the first fixed MATLAB runner, but only for the exact golden-trial
+task `live-matlab-golden-task-333-001`. The runner id is
+`matlab-parameter-sweep-runner.v1` and the PowerShell entry point is
+`skybridge-matlab-parameter-sweep-runner.ps1`. It executes only the tiny
+synthetic grid documented in
+[MATLAB Experiment Golden Trial](MATLAB_EXPERIMENT_GOLDEN_TRIAL.md), writes
+sanitized manifest/summary/metrics evidence, and requires exact confirmation.
+
+MG333 still does not add arbitrary MATLAB command text, Codex execution,
+worker loops, run-until-hold, multiple task execution, PR creation,
+project-control unpause, old task requeue, or a generic MATLAB queue runner.
+
 token_printed=false
