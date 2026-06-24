@@ -59,6 +59,7 @@ import type {
   MatlabSweepEvidence as MatlabSweepEvidenceContract,
   MatlabSweepManifest as MatlabSweepManifestContract,
   MatlabSweepSummary as MatlabSweepSummaryContract,
+  MatlabDoctor as MatlabDoctorContract,
 } from "@skybridge-agent-hub/event-schema";
 
 import {
@@ -1983,6 +1984,7 @@ export type MatlabParameterSweepRunner = MatlabParameterSweepRunnerContract;
 export type MatlabSweepEvidence = MatlabSweepEvidenceContract;
 export type MatlabSweepManifest = MatlabSweepManifestContract;
 export type MatlabSweepSummary = MatlabSweepSummaryContract;
+export type MatlabDoctor = MatlabDoctorContract;
 export type TaskTemplate = TaskTemplateContract;
 export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
@@ -4728,6 +4730,7 @@ export const LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT =
 export const LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
 export const MATLAB_GOLDEN_TRIAL_TASK_ID = "live-matlab-golden-task-333-001";
+export const MATLAB_GOLDEN_RECOVERY_TASK_ID = "live-matlab-golden-task-334-001";
 export const MATLAB_GOLDEN_TRIAL_TEMPLATE_ID = "matlab-parameter-sweep.v1";
 export const MATLAB_GOLDEN_TRIAL_RUNNER_ID = "matlab-parameter-sweep-runner.v1";
 export const MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT =
@@ -4736,6 +4739,12 @@ export const MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_GOLDEN_TASK_ONLY";
 export const MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT =
   "I_UNDERSTAND_RUN_ONE_FIXED_MATLAB_SWEEP_ONLY";
+export const MATLAB_DOCTOR_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_RUN_FIXED_MATLAB_STARTUP_DIAGNOSTIC_ONLY";
+export const MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_RECOVERY_TASK_ONLY";
+export const MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_RECOVERY_TASK_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -4919,6 +4928,13 @@ export const fixtureMatlabGoldenEvidence: MatlabSweepEvidence = {
     ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/summary.json",
     ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/metrics.csv",
   ],
+  existing_outputs: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-333-001/metrics.csv",
+  ],
+  expected_outputs_missing: [],
+  failure_category: "",
   result_summary: "MG333 synthetic MATLAB parameter sweep completed two toy combinations with sanitized manifest, summary, and metrics evidence.",
   pr_created: false,
   codex_run_called: false,
@@ -4968,6 +4984,79 @@ export const fixtureMatlabGoldenTrialPreview: WorkerTemplateRunnerPreview = {
   unbounded_run_enabled: false,
   project_control_unpaused: false,
   token_printed: false,
+};
+
+export const fixtureMatlabDoctorPreview: MatlabDoctor = {
+  schema: "skybridge.matlab_doctor.v1",
+  ok: true,
+  mode: "preview",
+  matlab_detected: true,
+  matlab_executable: "matlab",
+  matlab_version_summary: "preview_not_invoked",
+  batch_supported: false,
+  startup_ok: false,
+  license_ok: false,
+  license_status: "not_checked",
+  fixed_script_visible: true,
+  output_dir: ".agent/tmp/matlab-doctor/startup",
+  doctor_summary_path: ".agent/tmp/matlab-doctor/startup/doctor_summary.json",
+  doctor_metrics_path: ".agent/tmp/matlab-doctor/startup/doctor_metrics.csv",
+  output_write_ok: false,
+  minimal_compute_ok: false,
+  matlab_invoked: false,
+  failure_category: "",
+  failure_summary: "preview_only_no_matlab_invocation",
+  blockers: [],
+  warnings: ["PowerShell-only exact confirmation required before MATLAB startup diagnostic apply."],
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  project_control_unpaused: false,
+  raw_stdout_included: false,
+  raw_stderr_included: false,
+  token_printed: false,
+};
+
+export const fixtureMatlabRecoveryRunnerPreview: MatlabParameterSweepRunner = {
+  ...fixtureMatlabGoldenRunnerPreview,
+  task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
+  output_dir: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001",
+  manifest_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/manifest.json",
+  summary_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/summary.json",
+  metrics_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/metrics.csv",
+  warnings: ["Doctor preflight must pass before MG334 live recovery apply."],
+};
+
+export const fixtureMatlabRecoveryEvidence: MatlabSweepEvidence = {
+  ...fixtureMatlabGoldenEvidence,
+  task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
+  parameter_grid_summary: fixtureMatlabRecoveryRunnerPreview.parameter_grid_summary,
+  output_dir: fixtureMatlabRecoveryRunnerPreview.output_dir,
+  manifest_path: fixtureMatlabRecoveryRunnerPreview.manifest_path,
+  summary_path: fixtureMatlabRecoveryRunnerPreview.summary_path,
+  metrics_path: fixtureMatlabRecoveryRunnerPreview.metrics_path,
+  changed_files: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/metrics.csv",
+  ],
+  existing_outputs: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-334-001/metrics.csv",
+  ],
+  expected_outputs_missing: [],
+  failure_category: "",
+  result_summary: "MG334 recovery fixture: doctor passed, fixed MATLAB sweep completed, and evidence lists only existing manifest, summary, and metrics files.",
+};
+
+export const fixtureMatlabRecoveryPreview: WorkerTemplateRunnerPreview = {
+  ...fixtureMatlabGoldenTrialPreview,
+  task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
+  expected_task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
+  result_summary: "MG334 recovery fixture: one exact MATLAB recovery task is eligible only after doctor preflight passes.",
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

@@ -214,6 +214,12 @@ or `results/skybridge/matlab-golden-trial/**`. It does not allow arbitrary
 MATLAB commands, Codex, arbitrary shell, PR creation, loops, project-control
 unpause, old task requeue, or raw stdout/stderr reporting.
 
+MG334 adds startup diagnostics and recovery for this MATLAB path. Run
+`skybridge-matlab-doctor.ps1` first, then use
+`skybridge-live-matlab-golden-recovery.ps1` for the exact recovery task
+`live-matlab-golden-task-334-001` only. Do not requeue or reclaim
+`live-matlab-golden-task-333-001`.
+
 ## Interpreting Blockers
 
 - `service_not_installed`: run the install preview and review planned local

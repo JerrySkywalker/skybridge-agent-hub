@@ -57,6 +57,10 @@ import {
   fixtureMatlabGoldenRunnerPreview,
   fixtureMatlabGoldenEvidence,
   fixtureMatlabGoldenTrialPreview,
+  fixtureMatlabDoctorPreview,
+  fixtureMatlabRecoveryRunnerPreview,
+  fixtureMatlabRecoveryEvidence,
+  fixtureMatlabRecoveryPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
@@ -64,6 +68,9 @@ import {
   MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT,
   MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT,
+  MATLAB_DOCTOR_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -105,6 +112,7 @@ import {
   type WorkerTemplateRunnerResult,
   type MatlabParameterSweepRunner,
   type MatlabSweepEvidence,
+  type MatlabDoctor,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -1818,6 +1826,10 @@ function App() {
         matlabGoldenPreview={fixtureMatlabGoldenTrialPreview}
         matlabGoldenRunnerPreview={fixtureMatlabGoldenRunnerPreview}
         matlabGoldenEvidence={fixtureMatlabGoldenEvidence}
+        matlabDoctorPreview={fixtureMatlabDoctorPreview}
+        matlabRecoveryPreview={fixtureMatlabRecoveryPreview}
+        matlabRecoveryRunnerPreview={fixtureMatlabRecoveryRunnerPreview}
+        matlabRecoveryEvidence={fixtureMatlabRecoveryEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2631,6 +2643,10 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabGoldenPreview,
   matlabGoldenRunnerPreview,
   matlabGoldenEvidence,
+  matlabDoctorPreview,
+  matlabRecoveryPreview,
+  matlabRecoveryRunnerPreview,
+  matlabRecoveryEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
@@ -2639,6 +2655,10 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabGoldenPreview: WorkerTemplateRunnerPreview;
   matlabGoldenRunnerPreview: MatlabParameterSweepRunner;
   matlabGoldenEvidence: MatlabSweepEvidence;
+  matlabDoctorPreview: MatlabDoctor;
+  matlabRecoveryPreview: WorkerTemplateRunnerPreview;
+  matlabRecoveryRunnerPreview: MatlabParameterSweepRunner;
+  matlabRecoveryEvidence: MatlabSweepEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2652,6 +2672,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>MaxTasks=1; claim via PowerShell exact confirmation only</span>
         <span>MG332 live pilot is PowerShell-only for task live-safe-template-task-332-001</span>
         <span>MG333 MATLAB golden trial is PowerShell-only for task live-matlab-golden-task-333-001</span>
+        <span>MG334 MATLAB recovery is PowerShell-only for task live-matlab-golden-task-334-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2726,6 +2747,38 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG333 create confirmation" value={MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG333 run confirmation" value={MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT} />
         <StatusValue label="MG333 fixed runner confirmation" value={MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT} />
+        <StatusValue label="MG334 MATLAB doctor status" value={matlabDoctorPreview.ok ? "doctor_preview_available" : "doctor_blocked"} />
+        <StatusValue label="MG334 doctor schema" value={matlabDoctorPreview.schema} />
+        <StatusValue label="MG334 doctor mode" value={matlabDoctorPreview.mode} />
+        <StatusValue label="MG334 doctor matlab_detected" value={String(matlabDoctorPreview.matlab_detected)} />
+        <StatusValue label="MG334 doctor batch_supported" value={String(matlabDoctorPreview.batch_supported)} />
+        <StatusValue label="MG334 doctor startup_ok" value={String(matlabDoctorPreview.startup_ok)} />
+        <StatusValue label="MG334 doctor license_status" value={matlabDoctorPreview.license_status} />
+        <StatusValue label="MG334 doctor fixed_script_visible" value={String(matlabDoctorPreview.fixed_script_visible)} />
+        <StatusValue label="MG334 doctor output_write_ok" value={String(matlabDoctorPreview.output_write_ok)} />
+        <StatusValue label="MG334 doctor minimal_compute_ok" value={String(matlabDoctorPreview.minimal_compute_ok)} />
+        <StatusValue label="MG334 doctor failure category" value={matlabDoctorPreview.failure_category || "none"} />
+        <StatusValue label="MG334 doctor raw_stdout_included" value={String(matlabDoctorPreview.raw_stdout_included)} />
+        <StatusValue label="MG334 doctor raw_stderr_included" value={String(matlabDoctorPreview.raw_stderr_included)} />
+        <StatusValue label="MG334 recovery status" value={matlabRecoveryPreview.ok ? "exact_recovery_task_preview_available" : "no_recovery_task"} />
+        <StatusValue label="MG334 recovery task id" value={matlabRecoveryPreview.expected_task_id ?? matlabRecoveryPreview.task_id ?? "none"} />
+        <StatusValue label="MG334 recovery worker id" value={matlabRecoveryPreview.worker_id} />
+        <StatusValue label="MG334 recovery cloud worker status" value={matlabRecoveryPreview.cloud_worker_status ?? "unknown"} />
+        <StatusValue label="MG334 recovery template id" value={matlabRecoveryPreview.template_id ?? "none"} />
+        <StatusValue label="MG334 recovery runner id" value={matlabRecoveryPreview.runner_id ?? "none"} />
+        <StatusValue label="MG334 recovery parameter grid" value={matlabRecoveryRunnerPreview.parameter_grid_summary} />
+        <StatusValue label="MG334 recovery combination count" value={String(matlabRecoveryRunnerPreview.combination_count)} />
+        <StatusValue label="MG334 recovery output dir" value={matlabRecoveryRunnerPreview.output_dir} />
+        <StatusValue label="MG334 recovery manifest path" value={matlabRecoveryRunnerPreview.manifest_path} />
+        <StatusValue label="MG334 recovery summary path" value={matlabRecoveryRunnerPreview.summary_path} />
+        <StatusValue label="MG334 recovery metrics path" value={matlabRecoveryRunnerPreview.metrics_path} />
+        <StatusValue label="MG334 recovery evidence summary" value={matlabRecoveryEvidence.result_summary} />
+        <StatusValue label="MG334 recovery existing outputs" value={matlabRecoveryEvidence.existing_outputs.join("; ") || "none"} />
+        <StatusValue label="MG334 recovery expected outputs missing" value={matlabRecoveryEvidence.expected_outputs_missing.join("; ") || "none"} />
+        <StatusValue label="MG334 recovery failure category" value={matlabRecoveryEvidence.failure_category || "none"} />
+        <StatusValue label="MG334 doctor confirmation" value={MATLAB_DOCTOR_CONFIRMATION_TEXT} />
+        <StatusValue label="MG334 create confirmation" value={MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG334 run confirmation" value={MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2757,6 +2810,15 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG333 confirmation">
           MG333 MATLAB apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-matlab-doctor.ps1 -Command preview">
+          MG334 MATLAB doctor preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-matlab-golden-recovery.ps1 -Command preview-run">
+          MG334 recovery preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG334 confirmation">
+          MG334 recovery apply unavailable in Desktop
         </button>
       </div>
     </section>

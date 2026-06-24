@@ -124,4 +124,12 @@ production infrastructure changes.
 Desktop shows the MATLAB Golden Trial preview and evidence fixture state, but
 live apply remains PowerShell-only.
 
+## MG334 Recovery Note
+
+The first live MG333 run failed safely with `matlab_exit_code=1`. MG334 adds
+[MATLAB Startup Diagnostics And Recovery](MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md)
+before any new claim. The recovery task id is
+`live-matlab-golden-task-334-001`, and the failed MG333 task must not be
+requeued or reused.
+
 token_printed=false

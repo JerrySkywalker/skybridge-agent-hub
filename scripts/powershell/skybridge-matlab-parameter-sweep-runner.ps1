@@ -17,7 +17,9 @@ $RunnerId = "matlab-parameter-sweep-runner.v1"
 $ConfirmationPhrase = "I_UNDERSTAND_RUN_ONE_FIXED_MATLAB_SWEEP_ONLY"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $MatlabScriptPath = Join-Path $RepoRoot "scripts\matlab\skybridge_run_parameter_sweep.m"
+$MatlabDoctorScriptPath = Join-Path $PSScriptRoot "skybridge-matlab-doctor.ps1"
 $MaxCombinationCount = 16
+$MatlabTimeoutSeconds = 180
 $DefaultEta = @(2, 3)
 $DefaultHKm = @(500)
 $DefaultP = @(6)
@@ -293,6 +295,22 @@ function Get-ExistingOutputPaths {
   @($existing.ToArray())
 }
 
+function Get-MissingOutputPaths {
+  param($Config)
+  $missing = New-Object System.Collections.Generic.List[string]
+  $pairs = @(
+    @{ full = (Join-Path $Config.output_dir_full "manifest.json"); relative = $Config.manifest_path },
+    @{ full = (Join-Path $Config.output_dir_full "summary.json"); relative = $Config.summary_path },
+    @{ full = (Join-Path $Config.output_dir_full "metrics.csv"); relative = $Config.metrics_path }
+  )
+  foreach ($pair in $pairs) {
+    if (-not (Test-Path -LiteralPath $pair.full -PathType Leaf)) {
+      $missing.Add([string]$pair.relative) | Out-Null
+    }
+  }
+  @($missing.ToArray())
+}
+
 function New-SweepEvidence {
   param(
     $Config,
@@ -301,15 +319,20 @@ function New-SweepEvidence {
     [Nullable[int]]$MatlabExitCode,
     [int]$CompletedCount,
     [int]$FailedCount,
-    [string]$ResultSummary = ""
+    [string]$ResultSummary = "",
+    [string]$FailureCategory = ""
   )
   $changedFiles = @(Get-ExistingOutputPaths -Config $Config)
+  $missingOutputs = @(Get-MissingOutputPaths -Config $Config)
   if ([string]::IsNullOrWhiteSpace($ResultSummary)) {
     $ResultSummary = if ($ValidationStatus -eq "passed") {
-      "MG333 synthetic MATLAB parameter sweep produced sanitized manifest, summary, and metrics."
+      "Synthetic MATLAB parameter sweep produced sanitized manifest, summary, and metrics."
     } else {
-      "MG333 synthetic MATLAB parameter sweep failed before producing the complete sanitized output set."
+      "Synthetic MATLAB parameter sweep failed before producing the complete sanitized output set."
     }
+  }
+  if ([string]::IsNullOrWhiteSpace($FailureCategory) -and $ValidationStatus -ne "passed") {
+    $FailureCategory = $ValidationStatus
   }
   [pscustomobject]@{
     schema = "skybridge.matlab_sweep_evidence.v1"
@@ -335,6 +358,9 @@ function New-SweepEvidence {
     allowed_paths_checked = $true
     blocked_paths_checked = $true
     changed_files = @($changedFiles)
+    existing_outputs = @($changedFiles)
+    expected_outputs_missing = @($missingOutputs)
+    failure_category = $FailureCategory
     result_summary = $ResultSummary
     pr_created = $false
     codex_run_called = $false
@@ -375,6 +401,87 @@ function Escape-MatlabLiteral {
   $Value.Replace("'", "''").Replace("\", "/")
 }
 
+function Invoke-MatlabDoctorPreflight {
+  param($Config)
+  if (-not (Test-Path -LiteralPath $MatlabDoctorScriptPath -PathType Leaf)) {
+    return [pscustomobject]@{
+      ok = $false
+      skipped = $false
+      failure_category = "matlab_doctor_script_missing"
+      failure_summary = "MATLAB doctor script was not found."
+      matlab_invoked = $false
+      token_printed = $false
+    }
+  }
+  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $MatlabDoctorScriptPath `
+    -Command apply `
+    -OutputDir $Config.output_dir `
+    -Confirm `
+    -ConfirmationText "I_UNDERSTAND_RUN_FIXED_MATLAB_STARTUP_DIAGNOSTIC_ONLY" `
+    -Json
+  $text = ($raw | Out-String).Trim()
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return [pscustomobject]@{
+      ok = $false
+      skipped = $false
+      failure_category = "matlab_doctor_empty_response"
+      failure_summary = "MATLAB doctor returned no safe summary."
+      matlab_invoked = $false
+      token_printed = $false
+    }
+  }
+  $text | ConvertFrom-Json
+}
+
+function Invoke-FixedMatlabProcess {
+  param(
+    $Config,
+    [string]$InputPath,
+    [ValidateSet("batch", "fallback")]
+    [string]$Mode,
+    [string]$StdoutPath,
+    [string]$StderrPath
+  )
+  $matlab = Get-MatlabCommand
+  if (-not $matlab) {
+    return [pscustomobject]@{ exit_code = $null; timed_out = $false; mode = $Mode; failure_category = "matlab_not_available" }
+  }
+  $matlabDir = Split-Path -Parent $MatlabScriptPath
+  $fixedCode = "try, addpath('$(Escape-MatlabLiteral $matlabDir)'); skybridge_run_parameter_sweep('$(Escape-MatlabLiteral $InputPath)', '$(Escape-MatlabLiteral $Config.output_dir_full)'); catch, exit(1); end; exit(0);"
+  $argumentList = if ($Mode -eq "batch") {
+    @("-batch", $fixedCode)
+  } else {
+    @("-nosplash", "-nodesktop", "-r", $fixedCode)
+  }
+  $startParams = @{
+    FilePath = if ($matlab.Source) { $matlab.Source } else { $matlab.Path }
+    ArgumentList = $argumentList
+    PassThru = $true
+    RedirectStandardOutput = $StdoutPath
+    RedirectStandardError = $StderrPath
+    WorkingDirectory = $matlabDir
+  }
+  if ($IsWindows) { $startParams.WindowStyle = "Hidden" }
+  $process = Start-Process @startParams
+  $completed = $process.WaitForExit($MatlabTimeoutSeconds * 1000)
+  if (-not $completed) {
+    try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    return [pscustomobject]@{ exit_code = $null; timed_out = $true; mode = $Mode; failure_category = "matlab_runner_timeout" }
+  }
+  [pscustomobject]@{ exit_code = [int]$process.ExitCode; timed_out = $false; mode = $Mode; failure_category = "" }
+}
+
+function Get-RunnerFailureCategory {
+  param([string[]]$Errors, $ProcessResult, [bool]$BatchAttempted, [bool]$FallbackAttempted)
+  if ($ProcessResult -and $ProcessResult.timed_out) { return "matlab_runner_timeout" }
+  if (@($Errors).Count -gt 0) { return "matlab_outputs_missing_or_invalid" }
+  if ($ProcessResult -and $null -ne $ProcessResult.exit_code -and [int]$ProcessResult.exit_code -ne 0) {
+    if ($BatchAttempted -and -not $FallbackAttempted) { return "matlab_batch_failed" }
+    return "matlab_runner_exit_nonzero"
+  }
+  "matlab_runner_failed"
+}
+
 function Invoke-MatlabFixedRunner {
   param($Config)
   $matlab = Get-MatlabCommand
@@ -383,7 +490,19 @@ function Invoke-MatlabFixedRunner {
       ok = $false
       exit_code = $null
       reason = "matlab_not_available"
-      evidence = New-SweepEvidence -Config $Config -ValidationStatus "matlab_not_available" -MatlabInvoked:$false -MatlabExitCode $null -CompletedCount 0 -FailedCount ([int]$Config.combination_count) -ResultSummary "MATLAB was not available; no fixed runner invocation occurred."
+      evidence = New-SweepEvidence -Config $Config -ValidationStatus "matlab_not_available" -MatlabInvoked:$false -MatlabExitCode $null -CompletedCount 0 -FailedCount ([int]$Config.combination_count) -ResultSummary "MATLAB was not available; no fixed runner invocation occurred." -FailureCategory "matlab_not_available"
+    }
+  }
+
+  $doctor = Invoke-MatlabDoctorPreflight -Config $Config
+  if ($doctor.ok -ne $true) {
+    $category = if (-not [string]::IsNullOrWhiteSpace([string]$doctor.failure_category)) { [string]$doctor.failure_category } else { "matlab_doctor_failed" }
+    return [pscustomobject]@{
+      ok = $false
+      exit_code = $null
+      reason = $category
+      evidence = New-SweepEvidence -Config $Config -ValidationStatus "failed" -MatlabInvoked:([bool]$doctor.matlab_invoked) -MatlabExitCode $null -CompletedCount 0 -FailedCount ([int]$Config.combination_count) -ResultSummary "MATLAB doctor preflight failed; fixed parameter sweep was not invoked." -FailureCategory $category
+      doctor = $doctor
     }
   }
 
@@ -400,20 +519,27 @@ function Invoke-MatlabFixedRunner {
   $stdoutPath = [IO.Path]::GetTempFileName()
   $stderrPath = [IO.Path]::GetTempFileName()
   try {
-    $matlabDir = Split-Path -Parent $MatlabScriptPath
-    $batch = "try, addpath('$(Escape-MatlabLiteral $matlabDir)'); skybridge_run_parameter_sweep('$(Escape-MatlabLiteral $inputPath)', '$(Escape-MatlabLiteral $Config.output_dir_full)'); catch ex, disp(getReport(ex,'basic')); exit(1); end; exit(0);"
-    $startParams = @{
-      FilePath = if ($matlab.Source) { $matlab.Source } else { $matlab.Path }
-      ArgumentList = @("-batch", $batch)
-      Wait = $true
-      PassThru = $true
-      RedirectStandardOutput = $stdoutPath
-      RedirectStandardError = $stderrPath
-    }
-    if ($IsWindows) { $startParams.WindowStyle = "Hidden" }
-    $process = Start-Process @startParams
+    $batchAttempt = Invoke-FixedMatlabProcess -Config $Config -InputPath $inputPath -Mode "batch" -StdoutPath $stdoutPath -StderrPath $stderrPath
     $errors = Test-OutputFiles -Config $Config
-    $passed = ($process.ExitCode -eq 0 -and @($errors).Count -eq 0)
+    $process = $batchAttempt
+    $fallbackAttempted = $false
+    $batchExitCode = 1
+    if ($null -ne $batchAttempt.exit_code) { $batchExitCode = [int]$batchAttempt.exit_code }
+    if ($batchExitCode -ne 0 -or @($errors).Count -ne 0) {
+      $fallbackAttempted = $true
+      $fallbackAttempt = Invoke-FixedMatlabProcess -Config $Config -InputPath $inputPath -Mode "fallback" -StdoutPath $stdoutPath -StderrPath $stderrPath
+      $fallbackErrors = Test-OutputFiles -Config $Config
+      $fallbackExitCode = 1
+      if ($null -ne $fallbackAttempt.exit_code) { $fallbackExitCode = [int]$fallbackAttempt.exit_code }
+      if ($fallbackExitCode -eq 0 -and @($fallbackErrors).Count -eq 0) {
+        $process = $fallbackAttempt
+        $errors = @()
+      } else {
+        $process = $fallbackAttempt
+        $errors = $fallbackErrors
+      }
+    }
+    $passed = ($null -ne $process.exit_code -and [int]$process.exit_code -eq 0 -and @($errors).Count -eq 0)
     $validationStatus = "failed"
     $completedCount = 0
     $failedCount = [int]$Config.combination_count
@@ -422,11 +548,15 @@ function Invoke-MatlabFixedRunner {
       $completedCount = [int]$Config.combination_count
       $failedCount = 0
     }
+    $failureCategory = if ($passed) { "" } else { Get-RunnerFailureCategory -Errors $errors -ProcessResult $process -BatchAttempted $true -FallbackAttempted $fallbackAttempted }
+    $matlabExitCodeValue = $null
+    if ($null -ne $process.exit_code) { $matlabExitCodeValue = [int]$process.exit_code }
     [pscustomobject]@{
       ok = $passed
-      exit_code = [int]$process.ExitCode
-      reason = if ($passed) { "passed" } else { (@($errors) + "matlab_exit_$($process.ExitCode)") -join ";" }
-      evidence = New-SweepEvidence -Config $Config -ValidationStatus $validationStatus -MatlabInvoked:$true -MatlabExitCode ([int]$process.ExitCode) -CompletedCount $completedCount -FailedCount $failedCount
+      exit_code = $matlabExitCodeValue
+      reason = if ($passed) { "passed" } else { (@($errors) + $failureCategory) -join ";" }
+      evidence = New-SweepEvidence -Config $Config -ValidationStatus $validationStatus -MatlabInvoked:$true -MatlabExitCode $matlabExitCodeValue -CompletedCount $completedCount -FailedCount $failedCount -FailureCategory $failureCategory
+      doctor = $doctor
     }
   } finally {
     Remove-Item -LiteralPath $inputPath -Force -ErrorAction SilentlyContinue

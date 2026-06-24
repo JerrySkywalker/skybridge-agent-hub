@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 334 MATLAB Startup Diagnostics And Golden Trial Recovery
+
+- Added `skybridge-matlab-doctor.ps1` and
+  `scripts/matlab/skybridge_matlab_startup_doctor.m` for fixed MATLAB startup,
+  batch/fallback, license/status, output-write, and tiny no-toolbox diagnostics.
+- Hardened `skybridge-matlab-parameter-sweep-runner.ps1` with doctor preflight,
+  timeout-bounded fixed invocation, fallback support, and failed evidence that
+  separates actual `existing_outputs` from `expected_outputs_missing`.
+- Added `skybridge-live-matlab-golden-recovery.ps1` for the exact recovery task
+  `live-matlab-golden-task-334-001` and explicit non-reuse of
+  `live-matlab-golden-task-333-001`.
+- Updated shared schemas, client fixtures, and Desktop Worker Runner Preview
+  with MATLAB doctor/recovery status and disabled live apply controls.
+- Added doctor, recovery, failed-evidence accuracy, and Desktop recovery smokes
+  plus Bootstrap Alpha acceptance coverage.
+- Kept arbitrary MATLAB command text, Codex execution, arbitrary shell, worker
+  loop start, PR creation, project-control unpause, old task requeue, raw
+  stdout/stderr reporting, and token printing disabled.
+
 ## 2026-06-24 Mega Goal 333 MATLAB Experiment Golden Trial v1
 
 - Added shared MATLAB golden-trial contracts:
