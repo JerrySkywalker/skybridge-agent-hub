@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 336 MATLAB Golden Recovery Live Success
+
+- Added `skybridge-live-matlab-golden-success.ps1` for the exact
+  `live-matlab-golden-task-336-001` path, with doctor-gated create/run
+  previews, exact confirmations, MG333/MG334 task-id reuse rejection, optional
+  heartbeat-only refresh, and one-task claim/start/complete/fail semantics.
+- Hardened MATLAB sweep evidence with expected combination count and
+  manifest/summary/metrics existence booleans, plus stricter output validation
+  for manifest schema, summary counts, and metrics row count.
+- Added Desktop MG336 success fixture visibility and CI-safe smokes for preview,
+  fixture output, unsafe rejection, evidence validation, and Desktop contract.
+- Documented the repaired success path in
+  `docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md` and linked it from Bootstrap
+  Alpha scope, roadmap, flow, MATLAB diagnostic, runtime repair, and README
+  docs.
+- Kept the boundary to one exact live MATLAB task only; no Codex, no arbitrary
+  MATLAB command text, no arbitrary shell, no worker loop, no PR creation, no
+  project-control unpause, no old task requeue, and `token_printed=false`.
+
 ## 2026-06-24 Mega Goal 335 MATLAB Local Runtime Repair And Successful Doctor
 
 - Hardened `skybridge-matlab-doctor.ps1` with safe MATLAB executable

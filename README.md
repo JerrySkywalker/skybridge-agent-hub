@@ -125,6 +125,8 @@ For MATLAB startup diagnostics and the golden recovery task, see
 [docs/product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md](docs/product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md).
 For local MATLAB runtime repair and precise doctor classification, see
 [docs/product/MATLAB_LOCAL_RUNTIME_REPAIR.md](docs/product/MATLAB_LOCAL_RUNTIME_REPAIR.md).
+For the repaired MATLAB golden recovery success path, see
+[docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md](docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see

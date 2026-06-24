@@ -217,4 +217,19 @@ outputs separately from missing expected outputs.
 Desktop shows MATLAB doctor/recovery fixture state and keeps live apply
 PowerShell-only.
 
+## MG335 MATLAB Local Runtime Repair
+
+MG335 repairs the local MATLAB runtime path without creating or claiming tasks.
+It makes the fixed doctor resolve configured/common MATLAB executables, classify
+startup/license/batch/output failures, and prove `startup_ok=true`,
+`license_status=available`, and `minimal_compute_ok=true` before a later run.
+
+## MG336 MATLAB Golden Recovery Success
+
+MG336 creates and may claim only `live-matlab-golden-task-336-001`. It refuses
+the failed MG333 and MG334 task ids, requires the MG335 doctor precondition,
+then runs the fixed tiny sweep through `matlab-parameter-sweep-runner.v1`.
+Evidence must list only existing manifest, summary, and metrics files and keep
+raw stdout/stderr excluded.
+
 token_printed=false

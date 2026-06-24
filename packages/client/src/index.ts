@@ -4731,6 +4731,7 @@ export const LIVE_SAFE_TASK_PILOT_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_SAFE_TEMPLATE_TASK_ONLY";
 export const MATLAB_GOLDEN_TRIAL_TASK_ID = "live-matlab-golden-task-333-001";
 export const MATLAB_GOLDEN_RECOVERY_TASK_ID = "live-matlab-golden-task-334-001";
+export const MATLAB_GOLDEN_SUCCESS_TASK_ID = "live-matlab-golden-task-336-001";
 export const MATLAB_GOLDEN_TRIAL_TEMPLATE_ID = "matlab-parameter-sweep.v1";
 export const MATLAB_GOLDEN_TRIAL_RUNNER_ID = "matlab-parameter-sweep-runner.v1";
 export const MATLAB_GOLDEN_TRIAL_CREATE_CONFIRMATION_TEXT =
@@ -4747,6 +4748,10 @@ export const MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_RECOVERY_TASK_ONLY";
 export const MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_RECOVERY_TASK_ONLY";
+export const MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_SUCCESS_TASK_ONLY";
+export const MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_SUCCESS_TASK_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -4911,12 +4916,16 @@ export const fixtureMatlabGoldenEvidence: MatlabSweepEvidence = {
   runner_id: MATLAB_GOLDEN_TRIAL_RUNNER_ID,
   parameter_grid_summary: fixtureMatlabGoldenRunnerPreview.parameter_grid_summary,
   combination_count: 2,
+  expected_combination_count: 2,
   completed_count: 2,
   failed_count: 0,
   output_dir: fixtureMatlabGoldenRunnerPreview.output_dir,
   manifest_path: fixtureMatlabGoldenRunnerPreview.manifest_path,
+  manifest_exists: true,
   summary_path: fixtureMatlabGoldenRunnerPreview.summary_path,
+  summary_exists: true,
   metrics_path: fixtureMatlabGoldenRunnerPreview.metrics_path,
+  metrics_exists: true,
   validation_status: "passed",
   matlab_invoked: true,
   matlab_exit_code: 0,
@@ -5030,26 +5039,26 @@ export const fixtureMatlabDoctorPreview: MatlabDoctor = {
 
 export const fixtureMatlabRuntimeRepairDoctor: MatlabDoctor = {
   ...fixtureMatlabDoctorPreview,
-  ok: false,
+  ok: true,
   mode: "apply",
   matlab_executable: "C:/Program Files/MATLAB/R2025b/bin/matlab.exe",
   matlab_executable_source: "common_install_path",
   matlab_version_summary: "release_hint=R2025b",
-  batch_supported: false,
+  batch_supported: true,
   fallback_supported: false,
-  run_mode: "not_available",
-  startup_ok: false,
-  license_ok: false,
-  license_status: "unavailable",
-  output_write_ok: false,
-  minimal_compute_ok: false,
+  run_mode: "batch",
+  startup_ok: true,
+  license_ok: true,
+  license_status: "available",
+  output_write_ok: true,
+  minimal_compute_ok: true,
   matlab_invoked: true,
-  matlab_exit_code: 1,
-  failure_category: "matlab_license_unavailable",
-  failure_summary: "Fixture runtime repair state classifies a MATLAB startup or license blocker without exposing raw stdout or stderr.",
-  recommended_next_action: "repair_matlab_license_or_sign_in_locally_then_rerun_doctor",
-  blockers: ["matlab_license_unavailable"],
-  warnings: ["MG335 task claim and recovery run remain disabled until doctor passes."],
+  matlab_exit_code: 0,
+  failure_category: "none",
+  failure_summary: "Fixture runtime repair state shows the fixed MATLAB doctor passed without exposing raw stdout or stderr.",
+  recommended_next_action: "mg336_may_run_exact_matlab_success_task_with_confirmation",
+  blockers: [],
+  warnings: ["MG336 live apply remains PowerShell-only and exact-task constrained."],
 };
 
 export const fixtureMatlabLocalConfigPreview = {
@@ -5124,6 +5133,49 @@ export const fixtureMatlabRecoveryPreview: WorkerTemplateRunnerPreview = {
   task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
   expected_task_id: MATLAB_GOLDEN_RECOVERY_TASK_ID,
   result_summary: "MG334 recovery fixture: one exact MATLAB recovery task is eligible only after doctor preflight passes.",
+};
+
+export const fixtureMatlabGoldenSuccessRunnerPreview: MatlabParameterSweepRunner = {
+  ...fixtureMatlabGoldenRunnerPreview,
+  task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
+  output_dir: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001",
+  manifest_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
+  summary_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
+  metrics_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+  warnings: ["Doctor must pass before MG336 live success apply; Desktop remains preview-only."],
+};
+
+export const fixtureMatlabGoldenSuccessEvidence: MatlabSweepEvidence = {
+  ...fixtureMatlabGoldenEvidence,
+  task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
+  parameter_grid_summary: fixtureMatlabGoldenSuccessRunnerPreview.parameter_grid_summary,
+  output_dir: fixtureMatlabGoldenSuccessRunnerPreview.output_dir,
+  manifest_path: fixtureMatlabGoldenSuccessRunnerPreview.manifest_path,
+  manifest_exists: true,
+  summary_path: fixtureMatlabGoldenSuccessRunnerPreview.summary_path,
+  summary_exists: true,
+  metrics_path: fixtureMatlabGoldenSuccessRunnerPreview.metrics_path,
+  metrics_exists: true,
+  changed_files: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+  ],
+  existing_outputs: [
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+  ],
+  expected_outputs_missing: [],
+  failure_category: "",
+  result_summary: "MG336 success fixture: doctor passed, fixed MATLAB sweep completed, and evidence lists only existing manifest, summary, and metrics files.",
+};
+
+export const fixtureMatlabGoldenSuccessPreview: WorkerTemplateRunnerPreview = {
+  ...fixtureMatlabGoldenTrialPreview,
+  task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
+  expected_task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
+  result_summary: "MG336 success fixture: one exact MATLAB success task is eligible only after doctor precondition passes.",
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

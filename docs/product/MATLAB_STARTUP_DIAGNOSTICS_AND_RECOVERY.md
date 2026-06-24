@@ -90,3 +90,11 @@ classification, fixed fallback invocation reporting, and Desktop runtime repair
 visibility. A future recovery run should proceed only after the fixed doctor
 reports `startup_ok=true`, `license_status=available`, `minimal_compute_ok=true`,
 and `token_printed=false`.
+
+## MG336 Success Note
+
+MG336 follows this recovery chain with a new success task,
+`live-matlab-golden-task-336-001`. It does not requeue or reclaim
+`live-matlab-golden-task-333-001` or `live-matlab-golden-task-334-001`. The
+MG336 evidence requires manifest, summary, and metrics existence booleans and
+actual-file-only `changed_files`.
