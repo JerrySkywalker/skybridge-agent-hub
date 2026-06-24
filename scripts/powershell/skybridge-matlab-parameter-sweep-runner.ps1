@@ -245,8 +245,8 @@ function New-RunnerRecord {
     would_invoke_matlab = $WouldInvokeMatlab
     matlab_invoked = $MatlabInvoked
     matlab_exit_code = $MatlabExitCode
-    blockers = @($Blockers)
-    warnings = @($Warnings)
+    blockers = @($Blockers | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    warnings = @($Warnings | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     raw_stdout_included = $false
     raw_stderr_included = $false
     raw_mat_files_uploaded = $false
@@ -513,27 +513,37 @@ function Invoke-FixedMatlabProcess {
     return [pscustomobject]@{ exit_code = $null; timed_out = $false; mode = $Mode; failure_category = "matlab_not_available" }
   }
   $matlabDir = Split-Path -Parent $MatlabScriptPath
-  $fixedCode = "try, addpath('$(Escape-MatlabLiteral $matlabDir)'); skybridge_run_parameter_sweep('$(Escape-MatlabLiteral $InputPath)', '$(Escape-MatlabLiteral $Config.output_dir_full)'); catch, exit(1); end; exit(0);"
+  $fixedCode = "try, cd('$(Escape-MatlabLiteral $matlabDir)'); addpath('$(Escape-MatlabLiteral $matlabDir)'); skybridge_run_parameter_sweep('$(Escape-MatlabLiteral $InputPath)', '$(Escape-MatlabLiteral $Config.output_dir_full)'); catch, exit(1); end; exit(0);"
   $argumentList = if ($Mode -eq "batch") {
     @("-batch", $fixedCode)
   } else {
     @("-nosplash", "-nodesktop", "-r", $fixedCode)
   }
-  $startParams = @{
-    FilePath = if ($matlab.Source) { $matlab.Source } else { $matlab.Path }
-    ArgumentList = $argumentList
-    PassThru = $true
-    RedirectStandardOutput = $StdoutPath
-    RedirectStandardError = $StderrPath
-    WorkingDirectory = $matlabDir
+  $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $processInfo.FileName = if ($matlab.Source) { $matlab.Source } else { $matlab.Path }
+  foreach ($argument in $argumentList) {
+    [void]$processInfo.ArgumentList.Add($argument)
   }
-  if ($IsWindows) { $startParams.WindowStyle = "Hidden" }
-  $process = Start-Process @startParams
+  $processInfo.WorkingDirectory = $matlabDir
+  $processInfo.UseShellExecute = $false
+  $processInfo.RedirectStandardOutput = $true
+  $processInfo.RedirectStandardError = $true
+  $processInfo.CreateNoWindow = $true
+  $process = [System.Diagnostics.Process]::new()
+  $process.StartInfo = $processInfo
+  [void]$process.Start()
+  $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+  $stderrTask = $process.StandardError.ReadToEndAsync()
   $completed = $process.WaitForExit($MatlabTimeoutSeconds * 1000)
   if (-not $completed) {
     try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
     return [pscustomobject]@{ exit_code = $null; timed_out = $true; mode = $Mode; failure_category = "matlab_runner_timeout" }
   }
+  $process.WaitForExit()
+  $stdout = $stdoutTask.GetAwaiter().GetResult()
+  $stderr = $stderrTask.GetAwaiter().GetResult()
+  Set-Content -LiteralPath $StdoutPath -Value $stdout -Encoding UTF8
+  Set-Content -LiteralPath $StderrPath -Value $stderr -Encoding UTF8
   [pscustomobject]@{ exit_code = [int]$process.ExitCode; timed_out = $false; mode = $Mode; failure_category = "" }
 }
 
