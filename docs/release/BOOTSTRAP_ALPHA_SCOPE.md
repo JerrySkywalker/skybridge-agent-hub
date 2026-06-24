@@ -105,6 +105,16 @@ generation by Codex, worker loops, run-until-hold, multiple task execution,
 arbitrary shell, PR creation, old task requeue, project-control unpause, or
 production infrastructure mutation.
 
+MG334 covers MATLAB Startup Diagnostics and Golden Trial Recovery only. It may
+run a fixed MATLAB startup doctor and, only if the doctor passes, create and
+claim/start/complete/fail exactly one recovery task:
+`live-matlab-golden-task-334-001`. It must not requeue or reclaim
+`live-matlab-golden-task-333-001`. Failed evidence must list only files that
+actually exist as changed files and report missing expected outputs separately.
+MG334 does not allow arbitrary MATLAB command text, Codex execution, worker
+loops, arbitrary shell, PR creation, old task requeue, project-control unpause,
+or production infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

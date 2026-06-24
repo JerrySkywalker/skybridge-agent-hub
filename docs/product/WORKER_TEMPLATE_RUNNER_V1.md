@@ -137,4 +137,10 @@ MG333 still does not add arbitrary MATLAB command text, Codex execution,
 worker loops, run-until-hold, multiple task execution, PR creation,
 project-control unpause, old task requeue, or a generic MATLAB queue runner.
 
+MG334 adds a MATLAB doctor and one recovery task,
+`live-matlab-golden-task-334-001`, after the MG333 task failed safely. The
+doctor must pass before a live recovery claim. Failed MATLAB evidence now
+separates actual `existing_outputs` from `expected_outputs_missing` so server
+evidence cannot list nonexistent files as changed files.
+
 token_printed=false

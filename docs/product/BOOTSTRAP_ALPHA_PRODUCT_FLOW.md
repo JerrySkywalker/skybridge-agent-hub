@@ -201,4 +201,20 @@ MG333 keeps arbitrary MATLAB command text, Codex execution, arbitrary shell,
 worker loop start, PR creation, project-control unpause, old task requeue, raw
 stdout/stderr reporting, and `token_printed=false` disabled.
 
+## MG334 MATLAB Startup Diagnostics And Recovery
+
+MG334 adds a fixed MATLAB doctor and a new recovery task id,
+`live-matlab-golden-task-334-001`, because the MG333 live task failed safely
+before producing complete MATLAB outputs. Doctor preview is read-only. Doctor
+apply requires exact confirmation and runs only
+`scripts/matlab/skybridge_matlab_startup_doctor.m`.
+
+The recovery orchestrator may create and run only the MG334 recovery task. It
+does not requeue or reclaim `live-matlab-golden-task-333-001`. If doctor apply
+fails, no recovery task is claimed. Failed evidence reports actual existing
+outputs separately from missing expected outputs.
+
+Desktop shows MATLAB doctor/recovery fixture state and keeps live apply
+PowerShell-only.
+
 token_printed=false

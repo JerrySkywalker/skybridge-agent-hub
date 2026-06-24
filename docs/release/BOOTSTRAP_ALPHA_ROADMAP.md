@@ -181,18 +181,26 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   run read-only MATLAB golden previews. The one live MATLAB apply may run only
   if exact target preconditions hold.
 
-## MG334 End-to-end Bootstrap Alpha Release
+## MG334 MATLAB Startup Diagnostics And Golden Recovery
 
-- Objective: release the complete Bootstrap Alpha golden path.
-- Likely touched: release docs, server deploy scripts, Desktop package docs,
-  acceptance scripts, operator runbooks, CI/release workflows.
-- Acceptance criteria: cloud server parity passes; Desktop install target works;
-  worker service target works; chat-to-task draft review works; template runner
-  evidence returns; operator report and review gate are clean.
-- Forbidden scope: general remote shell, multi-user permissions, mobile/watch
-  client, automatic merge without operator review, production infrastructure
-  changes outside the existing SkyBridge deploy contract.
-- Live deployment expected: yes, using the existing SkyBridge server deploy
-  workflow only.
+- Objective: diagnose MATLAB startup/license/batch availability and recover
+  the MG333 failed golden trial with a new exact task id,
+  `live-matlab-golden-task-334-001`.
+- Implementation note: MG334 adds
+  [MATLAB Startup Diagnostics And Recovery](../product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md),
+  `skybridge-matlab-doctor.ps1`,
+  `scripts/matlab/skybridge_matlab_startup_doctor.m`,
+  `skybridge-live-matlab-golden-recovery.ps1`, recovery Desktop fixture fields,
+  and failed-evidence accuracy smokes.
+- Acceptance criteria: doctor preview is read-only; doctor apply requires exact
+  confirmation; recovery create/run require exact confirmations; the recovery
+  path does not reuse `live-matlab-golden-task-333-001`; failed evidence lists
+  only actual files in `changed_files`.
+- Forbidden scope: arbitrary MATLAB command text, Codex execution, arbitrary
+  shell, worker loop, PR creation, old task requeue, project-control unpause,
+  and production infrastructure mutation.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  run read-only doctor/recovery previews. The one live recovery apply may run
+  only if doctor apply passes and exact target preconditions hold.
 
 token_printed=false

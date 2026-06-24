@@ -709,14 +709,50 @@ export const MatlabSweepEvidenceSchema = MatlabSweepCommonSchema.extend({
   allowed_paths_checked: z.literal(true),
   blocked_paths_checked: z.literal(true),
   changed_files: z.array(z.string()),
+  existing_outputs: z.array(z.string()).default([]),
+  expected_outputs_missing: z.array(z.string()).default([]),
+  failure_category: z.string().default(""),
   result_summary: z.string().min(1),
   pr_created: z.literal(false),
   project_control_unpaused: z.literal(false),
+});
+export const MatlabDoctorSchema = z.object({
+  schema: z.literal("skybridge.matlab_doctor.v1"),
+  ok: z.boolean(),
+  mode: z.enum(["status", "preview", "fixture", "apply", "safe-summary"]),
+  matlab_detected: z.boolean(),
+  matlab_executable: z.string(),
+  matlab_version_summary: z.string(),
+  batch_supported: z.boolean(),
+  startup_ok: z.boolean(),
+  license_ok: z.boolean(),
+  license_status: z.string().min(1),
+  fixed_script_visible: z.boolean(),
+  output_dir: z.string().min(1),
+  doctor_summary_path: z.string().min(1),
+  doctor_metrics_path: z.string().min(1),
+  output_write_ok: z.boolean(),
+  minimal_compute_ok: z.boolean(),
+  matlab_invoked: z.boolean(),
+  failure_category: z.string(),
+  failure_summary: z.string(),
+  blockers: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  claim_created: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  raw_stdout_included: z.literal(false),
+  raw_stderr_included: z.literal(false),
+  token_printed: z.literal(false),
 });
 export type MatlabParameterSweepRunner = z.infer<typeof MatlabParameterSweepRunnerSchema>;
 export type MatlabSweepManifest = z.infer<typeof MatlabSweepManifestSchema>;
 export type MatlabSweepSummary = z.infer<typeof MatlabSweepSummarySchema>;
 export type MatlabSweepEvidence = z.infer<typeof MatlabSweepEvidenceSchema>;
+export type MatlabDoctor = z.infer<typeof MatlabDoctorSchema>;
 
 export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
 export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
