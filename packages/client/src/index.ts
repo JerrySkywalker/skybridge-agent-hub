@@ -4741,6 +4741,8 @@ export const MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT =
   "I_UNDERSTAND_RUN_ONE_FIXED_MATLAB_SWEEP_ONLY";
 export const MATLAB_DOCTOR_CONFIRMATION_TEXT =
   "I_UNDERSTAND_RUN_FIXED_MATLAB_STARTUP_DIAGNOSTIC_ONLY";
+export const MATLAB_LOCAL_CONFIG_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CONFIGURE_LOCAL_MATLAB_EXECUTABLE_ONLY";
 export const MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_RECOVERY_TASK_ONLY";
 export const MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT =
@@ -4992,8 +4994,12 @@ export const fixtureMatlabDoctorPreview: MatlabDoctor = {
   mode: "preview",
   matlab_detected: true,
   matlab_executable: "matlab",
+  matlab_executable_source: "path",
+  matlab_config_path: "C:/Users/jerry/.skybridge/matlab.env.ps1",
   matlab_version_summary: "preview_not_invoked",
   batch_supported: false,
+  fallback_supported: false,
+  run_mode: "not_available",
   startup_ok: false,
   license_ok: false,
   license_status: "not_checked",
@@ -5004,8 +5010,11 @@ export const fixtureMatlabDoctorPreview: MatlabDoctor = {
   output_write_ok: false,
   minimal_compute_ok: false,
   matlab_invoked: false,
+  matlab_exit_code: null,
+  existing_outputs: [],
   failure_category: "",
   failure_summary: "preview_only_no_matlab_invocation",
+  recommended_next_action: "inspect_preview_then_run_fixed_doctor_apply_with_exact_confirmation",
   blockers: [],
   warnings: ["PowerShell-only exact confirmation required before MATLAB startup diagnostic apply."],
   claim_created: false,
@@ -5018,6 +5027,64 @@ export const fixtureMatlabDoctorPreview: MatlabDoctor = {
   raw_stderr_included: false,
   token_printed: false,
 };
+
+export const fixtureMatlabRuntimeRepairDoctor: MatlabDoctor = {
+  ...fixtureMatlabDoctorPreview,
+  ok: false,
+  mode: "apply",
+  matlab_executable: "C:/Program Files/MATLAB/R2025b/bin/matlab.exe",
+  matlab_executable_source: "common_install_path",
+  matlab_version_summary: "release_hint=R2025b",
+  batch_supported: false,
+  fallback_supported: false,
+  run_mode: "not_available",
+  startup_ok: false,
+  license_ok: false,
+  license_status: "unavailable",
+  output_write_ok: false,
+  minimal_compute_ok: false,
+  matlab_invoked: true,
+  matlab_exit_code: 1,
+  failure_category: "matlab_license_unavailable",
+  failure_summary: "Fixture runtime repair state classifies a MATLAB startup or license blocker without exposing raw stdout or stderr.",
+  recommended_next_action: "repair_matlab_license_or_sign_in_locally_then_rerun_doctor",
+  blockers: ["matlab_license_unavailable"],
+  warnings: ["MG335 task claim and recovery run remain disabled until doctor passes."],
+};
+
+export const fixtureMatlabLocalConfigPreview = {
+  schema: "skybridge.matlab_local_config.v1",
+  ok: true,
+  mode: "preview",
+  config_path: "C:/Users/jerry/.skybridge/matlab.env.ps1",
+  config_present: false,
+  matlab_executable: "C:/Program Files/MATLAB/R2025b/bin/matlab.exe",
+  matlab_executable_source: "parameter",
+  matlab_executable_exists: true,
+  run_mode: "batch",
+  confirmation_required: true,
+  confirmation_text: MATLAB_LOCAL_CONFIG_CONFIRMATION_TEXT,
+  would_mutate: true,
+  did_mutate: false,
+  writes_user_config_only: true,
+  writes_token: false,
+  writes_license_key: false,
+  modifies_matlab_installation: false,
+  modifies_system_path: false,
+  modifies_registry: false,
+  claim_created: false,
+  execution_started: false,
+  codex_run_called: false,
+  matlab_invoked: false,
+  worker_loop_started: false,
+  arbitrary_shell_enabled: false,
+  project_control_unpaused: false,
+  failure_category: "",
+  failure_summary: "preview_only_no_config_write",
+  blockers: [],
+  warnings: ["Exact confirmation required before user-level MATLAB executable config write."],
+  token_printed: false,
+} as const;
 
 export const fixtureMatlabRecoveryRunnerPreview: MatlabParameterSweepRunner = {
   ...fixtureMatlabGoldenRunnerPreview,

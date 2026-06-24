@@ -203,4 +203,25 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   run read-only doctor/recovery previews. The one live recovery apply may run
   only if doctor apply passes and exact target preconditions hold.
 
+## MG335 MATLAB Local Runtime Repair
+
+- Objective: make the fixed MATLAB doctor precise enough to prove local runtime
+  readiness or classify the blocker before any recovery task is created.
+- Implementation note: MG335 adds
+  [MATLAB Local Runtime Repair](../product/MATLAB_LOCAL_RUNTIME_REPAIR.md),
+  `skybridge-matlab-local-config.ps1`, expanded
+  `skybridge.matlab_doctor.v1` fields, precise fixture classifications,
+  stricter fixed diagnostic output checks, and Desktop runtime repair fields.
+- Acceptance criteria: config preview is read-only; config apply requires exact
+  confirmation and writes only user-level MATLAB executable/run-mode config;
+  doctor classification covers executable, batch, license, startup, working
+  directory, output write, fixed script, fallback, and unknown failures; raw
+  stdout/stderr and tokens are not reported.
+- Forbidden scope: task claim, recovery task creation, Codex execution, worker
+  loop, PR creation, project-control unpause, arbitrary MATLAB command text,
+  arbitrary shell, MATLAB installation mutation, license mutation, registry
+  mutation, and system PATH mutation.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  run read-only smokes and an optional fixed doctor only, with no task claim.
+
 token_printed=false

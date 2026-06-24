@@ -16,6 +16,7 @@ $requiredDocs = @(
   "docs/product/LIVE_WORKER_ONE_SAFE_TEMPLATE_TASK.md",
   "docs/product/MATLAB_EXPERIMENT_GOLDEN_TRIAL.md",
   "docs/product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md",
+  "docs/product/MATLAB_LOCAL_RUNTIME_REPAIR.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -42,6 +43,7 @@ $requiredScripts = @{
   matlab_parameter_sweep_runner = "scripts/powershell/skybridge-matlab-parameter-sweep-runner.ps1"
   live_matlab_golden_trial = "scripts/powershell/skybridge-live-matlab-golden-trial.ps1"
   matlab_doctor = "scripts/powershell/skybridge-matlab-doctor.ps1"
+  matlab_local_config = "scripts/powershell/skybridge-matlab-local-config.ps1"
   live_matlab_golden_recovery = "scripts/powershell/skybridge-live-matlab-golden-recovery.ps1"
 }
 
@@ -149,6 +151,11 @@ $requiredPackageScripts = @(
   "smoke:matlab-golden-trial-preview",
   "smoke:matlab-golden-trial-reject-unsafe",
   "smoke:desktop-matlab-golden-trial",
+  "smoke:matlab-local-config-preview",
+  "smoke:matlab-local-config-fixture",
+  "smoke:matlab-doctor-classification",
+  "smoke:matlab-doctor-fallback-fixture",
+  "smoke:desktop-matlab-runtime-repair",
   "smoke:matlab-doctor-preview",
   "smoke:matlab-doctor-fixture",
   "smoke:matlab-recovery-preview",
@@ -193,6 +200,7 @@ $desktopWorkerTemplateRunnerPanelPresent = $false
 $desktopLiveSafeTaskPilotPresent = $false
 $desktopMatlabGoldenTrialPresent = $false
 $desktopMatlabRecoveryPresent = $false
+$desktopMatlabRuntimeRepairPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -278,6 +286,16 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MG334 recovery existing outputs") -and
     $desktopSource -match [regex]::Escape("MG334 recovery expected outputs missing") -and
     $desktopSource -match [regex]::Escape("MG334 recovery apply unavailable in Desktop")
+  )
+  $desktopMatlabRuntimeRepairPresent = (
+    $desktopSource -match [regex]::Escape("MG335 MATLAB runtime repair status") -and
+    $desktopSource -match [regex]::Escape("MG335 configured MATLAB executable") -and
+    $desktopSource -match [regex]::Escape("MG335 fallback_supported") -and
+    $desktopSource -match [regex]::Escape("MG335 recommended next action") -and
+    $desktopSource -match [regex]::Escape("MG335 MATLAB local config preview") -and
+    $desktopSource -match [regex]::Escape("MG335 MATLAB local config apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("MG335 MATLAB doctor apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("MG335 task claim disabled")
   )
 }
 
@@ -705,6 +723,7 @@ $ok = (
   $desktopLiveSafeTaskPilotPresent -and
   $desktopMatlabGoldenTrialPresent -and
   $desktopMatlabRecoveryPresent -and
+  $desktopMatlabRuntimeRepairPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -740,6 +759,7 @@ $report = [pscustomobject]@{
   desktop_live_safe_task_pilot_present = $desktopLiveSafeTaskPilotPresent
   desktop_matlab_golden_trial_present = $desktopMatlabGoldenTrialPresent
   desktop_matlab_recovery_present = $desktopMatlabRecoveryPresent
+  desktop_matlab_runtime_repair_present = $desktopMatlabRuntimeRepairPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk

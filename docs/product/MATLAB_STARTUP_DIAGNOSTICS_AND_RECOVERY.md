@@ -80,3 +80,13 @@ Server evidence must not list nonexistent files as changed files.
 
 If MATLAB remains unavailable due to license, startup, or environment failure,
 MG334 fails closed with a sanitized blocker and keeps `token_printed=false`.
+
+## MG335 Runtime Repair Note
+
+MG335 adds [MATLAB Local Runtime Repair](MATLAB_LOCAL_RUNTIME_REPAIR.md). It
+does not create or claim the recovery task. It improves executable resolution,
+optional user-level MATLAB executable config, precise doctor failure
+classification, fixed fallback invocation reporting, and Desktop runtime repair
+visibility. A future recovery run should proceed only after the fixed doctor
+reports `startup_ok=true`, `license_status=available`, `minimal_compute_ok=true`,
+and `token_printed=false`.
