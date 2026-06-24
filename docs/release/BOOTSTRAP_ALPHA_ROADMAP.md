@@ -224,4 +224,26 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
 - Live deployment expected: no server runtime change; post-deploy checks may
   run read-only smokes and an optional fixed doctor only, with no task claim.
 
+## MG336 MATLAB Golden Recovery Success
+
+- Objective: prove the repaired MATLAB runtime can complete the fixed tiny
+  sweep through one live SkyBridge task lifecycle.
+- Implementation note: MG336 adds
+  [MATLAB Golden Recovery Success](../product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md),
+  `skybridge-live-matlab-golden-success.ps1`, explicit output existence fields
+  in MATLAB sweep evidence, Desktop success fixture fields, and success
+  preview/fixture/rejection/evidence smokes.
+- Acceptance criteria: only `live-matlab-golden-task-336-001` may be created
+  and claimed; doctor apply must pass first; the runner writes manifest,
+  summary, and metrics for exactly two combinations; evidence lists only actual
+  output files and keeps raw stdout/stderr excluded.
+- Forbidden scope: requeue or reclaim of `live-matlab-golden-task-333-001` or
+  `live-matlab-golden-task-334-001`, arbitrary MATLAB command text, Codex
+  execution, arbitrary shell, worker loop, PR creation, project-control unpause,
+  old task requeue, generic MATLAB queue execution, and production
+  infrastructure mutation.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  include exactly one live MG336 success apply if the doctor, worker, API, token,
+  task id, and output-path preconditions hold.
+
 token_printed=false

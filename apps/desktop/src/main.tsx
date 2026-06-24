@@ -63,6 +63,9 @@ import {
   fixtureMatlabRecoveryRunnerPreview,
   fixtureMatlabRecoveryEvidence,
   fixtureMatlabRecoveryPreview,
+  fixtureMatlabGoldenSuccessRunnerPreview,
+  fixtureMatlabGoldenSuccessEvidence,
+  fixtureMatlabGoldenSuccessPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
@@ -74,6 +77,8 @@ import {
   MATLAB_LOCAL_CONFIG_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT,
+  MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -1835,6 +1840,9 @@ function App() {
         matlabRecoveryPreview={fixtureMatlabRecoveryPreview}
         matlabRecoveryRunnerPreview={fixtureMatlabRecoveryRunnerPreview}
         matlabRecoveryEvidence={fixtureMatlabRecoveryEvidence}
+        matlabSuccessPreview={fixtureMatlabGoldenSuccessPreview}
+        matlabSuccessRunnerPreview={fixtureMatlabGoldenSuccessRunnerPreview}
+        matlabSuccessEvidence={fixtureMatlabGoldenSuccessEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2654,6 +2662,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabRecoveryPreview,
   matlabRecoveryRunnerPreview,
   matlabRecoveryEvidence,
+  matlabSuccessPreview,
+  matlabSuccessRunnerPreview,
+  matlabSuccessEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
@@ -2668,6 +2679,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabRecoveryPreview: WorkerTemplateRunnerPreview;
   matlabRecoveryRunnerPreview: MatlabParameterSweepRunner;
   matlabRecoveryEvidence: MatlabSweepEvidence;
+  matlabSuccessPreview: WorkerTemplateRunnerPreview;
+  matlabSuccessRunnerPreview: MatlabParameterSweepRunner;
+  matlabSuccessEvidence: MatlabSweepEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2682,6 +2696,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>MG332 live pilot is PowerShell-only for task live-safe-template-task-332-001</span>
         <span>MG333 MATLAB golden trial is PowerShell-only for task live-matlab-golden-task-333-001</span>
         <span>MG334 MATLAB recovery is PowerShell-only for task live-matlab-golden-task-334-001</span>
+        <span>MG336 MATLAB golden success is PowerShell-only for task live-matlab-golden-task-336-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2807,6 +2822,31 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG334 doctor confirmation" value={MATLAB_DOCTOR_CONFIRMATION_TEXT} />
         <StatusValue label="MG334 create confirmation" value={MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG334 run confirmation" value={MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG336 MATLAB Golden Success status" value={matlabSuccessPreview.ok ? "exact_success_task_preview_available" : "no_success_task"} />
+        <StatusValue label="MG336 success task id" value={matlabSuccessPreview.expected_task_id ?? matlabSuccessPreview.task_id ?? "none"} />
+        <StatusValue label="MG336 success worker id" value={matlabSuccessPreview.worker_id} />
+        <StatusValue label="MG336 success cloud worker status" value={matlabSuccessPreview.cloud_worker_status ?? "unknown"} />
+        <StatusValue label="MG336 success template id" value={matlabSuccessPreview.template_id ?? "none"} />
+        <StatusValue label="MG336 success runner id" value={matlabSuccessPreview.runner_id ?? "none"} />
+        <StatusValue label="MG336 doctor precondition" value={matlabRuntimeRepairDoctor.ok ? "doctor_passed" : "doctor_required"} />
+        <StatusValue label="MG336 MATLAB executable" value={matlabRuntimeRepairDoctor.matlab_executable || "not_detected"} />
+        <StatusValue label="MG336 run mode" value={matlabRuntimeRepairDoctor.run_mode ?? "not_available"} />
+        <StatusValue label="MG336 tiny grid" value={matlabSuccessRunnerPreview.parameter_grid_summary} />
+        <StatusValue label="MG336 expected combinations" value={String(matlabSuccessEvidence.expected_combination_count ?? matlabSuccessRunnerPreview.combination_count)} />
+        <StatusValue label="MG336 completed count" value={String(matlabSuccessEvidence.completed_count)} />
+        <StatusValue label="MG336 failed count" value={String(matlabSuccessEvidence.failed_count)} />
+        <StatusValue label="MG336 manifest path" value={matlabSuccessEvidence.manifest_path} />
+        <StatusValue label="MG336 manifest exists" value={String(matlabSuccessEvidence.manifest_exists ?? false)} />
+        <StatusValue label="MG336 summary path" value={matlabSuccessEvidence.summary_path} />
+        <StatusValue label="MG336 summary exists" value={String(matlabSuccessEvidence.summary_exists ?? false)} />
+        <StatusValue label="MG336 metrics path" value={matlabSuccessEvidence.metrics_path} />
+        <StatusValue label="MG336 metrics exists" value={String(matlabSuccessEvidence.metrics_exists ?? false)} />
+        <StatusValue label="MG336 evidence validation" value={matlabSuccessEvidence.validation_status} />
+        <StatusValue label="MG336 evidence changed files" value={matlabSuccessEvidence.changed_files.join("; ") || "none"} />
+        <StatusValue label="MG336 raw_stdout_included" value={String(matlabSuccessEvidence.raw_stdout_included)} />
+        <StatusValue label="MG336 raw_stderr_included" value={String(matlabSuccessEvidence.raw_stderr_included)} />
+        <StatusValue label="MG336 create confirmation" value={MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG336 run confirmation" value={MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2856,6 +2896,12 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG334 confirmation">
           MG334 recovery apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-matlab-golden-success.ps1 -Command preview-run">
+          MG336 success preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG336 confirmation">
+          MG336 success apply unavailable in Desktop
         </button>
       </div>
     </section>

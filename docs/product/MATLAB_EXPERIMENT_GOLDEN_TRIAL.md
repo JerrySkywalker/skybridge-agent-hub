@@ -140,4 +140,11 @@ rerun. The next MATLAB task run remains deferred until the doctor can prove the
 local runtime starts, checks out a license, writes summary/metrics files, and
 keeps `token_printed=false`.
 
+## MG336 Success Note
+
+MG336 adds [MATLAB Golden Recovery Success](MATLAB_GOLDEN_RECOVERY_SUCCESS.md).
+It creates and may claim only `live-matlab-golden-task-336-001` after the fixed
+doctor passes. The failed MG333 and MG334 task ids remain historical evidence
+and must not be requeued or reclaimed.
+
 token_printed=false

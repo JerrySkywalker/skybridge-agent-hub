@@ -123,6 +123,17 @@ command text, expose arbitrary shell, create PRs, requeue old tasks, unpause
 project control, mutate MATLAB installation or license files, edit system PATH,
 edit the registry, or mutate production infrastructure.
 
+MG336 covers MATLAB Golden Recovery Success only. It may create, claim, start,
+and complete or fail exactly one new task,
+`live-matlab-golden-task-336-001`, after the fixed doctor passes. It must not
+requeue or reclaim `live-matlab-golden-task-333-001` or
+`live-matlab-golden-task-334-001`. Evidence must prove the tiny two-combination
+grid, manifest/summary/metrics existence, actual-file-only changed files, and
+raw stdout/stderr exclusion. MG336 does not allow arbitrary MATLAB command text,
+Codex execution, worker loops, arbitrary shell, PR creation, old task requeue,
+project-control unpause, generic MATLAB queue execution, or production
+infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

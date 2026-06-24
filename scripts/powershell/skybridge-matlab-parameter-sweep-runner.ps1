@@ -66,11 +66,56 @@ function Test-UnsafeCommandText {
   return [bool]($Text -match "(?i)\b(command|cmd|shell|powershell|pwsh|bash|system\s*\(|eval\s*\(|dos\s*\(|unix\s*\(|!matlab|!cmd|!powershell|!pwsh|!bash|deploy|dns|cloudflare|openresty|authelia|github settings|server-root|secret|authorization|bearer|cookie)\b")
 }
 
+function Read-MatlabConfigValue {
+  param([string]$Path, [string]$Name)
+  if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return "" }
+  $text = Get-Content -Raw -LiteralPath $Path
+  $pattern = "(?m)^\s*(?:\`$env:)?$([regex]::Escape($Name))\s*=\s*['""]?([^'""]+)"
+  $match = [regex]::Match($text, $pattern)
+  if ($match.Success) { return $match.Groups[1].Value.Trim() }
+  ""
+}
+
+function Find-CommonMatlabExecutable {
+  $root = "C:\Program Files\MATLAB"
+  if (-not (Test-Path -LiteralPath $root -PathType Container)) { return "" }
+  $candidates = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match "^R[0-9]{4}[ab]$" } |
+    Sort-Object Name -Descending |
+    ForEach-Object { Join-Path $_.FullName "bin\matlab.exe" } |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+  if ($candidates.Count -gt 0) { return [string]$candidates[0] }
+  ""
+}
+
+function New-MatlabCommandInfo {
+  param([string]$Path, [string]$Source)
+  [pscustomobject]@{
+    Source = $Path
+    Path = $Path
+    Name = Split-Path -Leaf $Path
+    ResolutionSource = $Source
+  }
+}
+
 function Get-MatlabCommand {
+  $profileHome = [Environment]::GetFolderPath("UserProfile")
+  $configPath = Join-Path $profileHome ".skybridge\matlab.env.ps1"
+  $configured = if (-not [string]::IsNullOrWhiteSpace($env:SKYBRIDGE_MATLAB_EXE)) { $env:SKYBRIDGE_MATLAB_EXE } else { Read-MatlabConfigValue -Path $configPath -Name "SKYBRIDGE_MATLAB_EXE" }
+  if (-not [string]::IsNullOrWhiteSpace($configured)) {
+    $candidate = $configured.Trim().Trim('"').Trim("'")
+    if (-not (Test-UnsafeCommandText $candidate) -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+      return New-MatlabCommandInfo -Path ([IO.Path]::GetFullPath($candidate)) -Source "user_config"
+    }
+  }
   $cmd = Get-Command matlab -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($cmd) { return $cmd }
   $cmd = Get-Command matlab.exe -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($cmd) { return $cmd }
+  $common = Find-CommonMatlabExecutable
+  if (-not [string]::IsNullOrWhiteSpace($common)) {
+    return New-MatlabCommandInfo -Path ([IO.Path]::GetFullPath($common)) -Source "common_install_path"
+  }
   return $null
 }
 
@@ -343,12 +388,16 @@ function New-SweepEvidence {
     runner_id = $RunnerId
     parameter_grid_summary = $Config.parameter_grid_summary
     combination_count = [int]$Config.combination_count
+    expected_combination_count = [int]$Config.combination_count
     completed_count = $CompletedCount
     failed_count = $FailedCount
     output_dir = $Config.output_dir
     manifest_path = $Config.manifest_path
+    manifest_exists = $changedFiles -contains $Config.manifest_path
     summary_path = $Config.summary_path
+    summary_exists = $changedFiles -contains $Config.summary_path
     metrics_path = $Config.metrics_path
+    metrics_exists = $changedFiles -contains $Config.metrics_path
     validation_status = $ValidationStatus
     matlab_invoked = $MatlabInvoked
     matlab_exit_code = $MatlabExitCode
@@ -384,13 +433,30 @@ function Test-OutputFiles {
   }
   if ($errors.Count -eq 0) {
     try {
+      $manifest = Get-Content -Raw -LiteralPath (Join-Path $Config.output_dir_full "manifest.json") | ConvertFrom-Json
+      if ([string]$manifest.schema -ne "skybridge.matlab_sweep_manifest.v1") { $errors.Add("manifest_schema_mismatch") | Out-Null }
+      if ([string]$manifest.task_id -ne $TaskId) { $errors.Add("manifest_task_id_mismatch") | Out-Null }
+      if ([int]$manifest.combination_count -ne [int]$Config.combination_count) { $errors.Add("manifest_combination_count_mismatch") | Out-Null }
+      if ($manifest.raw_stdout_included -ne $false) { $errors.Add("manifest_raw_stdout_flag_not_false") | Out-Null }
+      if ($manifest.raw_stderr_included -ne $false) { $errors.Add("manifest_raw_stderr_flag_not_false") | Out-Null }
+
       $summary = Get-Content -Raw -LiteralPath (Join-Path $Config.output_dir_full "summary.json") | ConvertFrom-Json
+      if ([string]$summary.schema -ne "skybridge.matlab_sweep_summary.v1") { $errors.Add("summary_schema_mismatch") | Out-Null }
+      if ([string]$summary.task_id -ne $TaskId) { $errors.Add("summary_task_id_mismatch") | Out-Null }
       if ([int]$summary.combination_count -ne [int]$Config.combination_count) { $errors.Add("summary_combination_count_mismatch") | Out-Null }
       if ([int]$summary.completed_count -ne [int]$Config.combination_count) { $errors.Add("summary_completed_count_mismatch") | Out-Null }
+      if ([int]$summary.failed_count -ne 0) { $errors.Add("summary_failed_count_mismatch") | Out-Null }
       if ($summary.raw_stdout_included -ne $false) { $errors.Add("raw_stdout_flag_not_false") | Out-Null }
       if ($summary.raw_stderr_included -ne $false) { $errors.Add("raw_stderr_flag_not_false") | Out-Null }
     } catch {
       $errors.Add("summary_parse_failed") | Out-Null
+    }
+    try {
+      $metricsLines = @(Get-Content -LiteralPath (Join-Path $Config.output_dir_full "metrics.csv") | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+      if ($metricsLines.Count -ne ([int]$Config.combination_count + 1)) { $errors.Add("metrics_combination_count_mismatch") | Out-Null }
+      if ($metricsLines[0] -ne "eta,h_km,P,score") { $errors.Add("metrics_header_mismatch") | Out-Null }
+    } catch {
+      $errors.Add("metrics_parse_failed") | Out-Null
     }
   }
   @($errors.ToArray())

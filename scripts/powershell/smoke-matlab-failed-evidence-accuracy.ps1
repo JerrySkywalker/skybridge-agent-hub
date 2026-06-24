@@ -10,16 +10,19 @@ $fullOutputDir = Join-Path $RepoRoot $outputDir
 $runnerScript = Join-Path $PSScriptRoot "skybridge-matlab-parameter-sweep-runner.ps1"
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("skybridge-fake-matlab-" + [Guid]::NewGuid().ToString("n"))
 $oldPath = $env:PATH
+$oldMatlabExe = $env:SKYBRIDGE_MATLAB_EXE
 
 try {
   New-Item -ItemType Directory -Path $tempDir | Out-Null
   if ($IsWindows) {
-    Set-Content -LiteralPath (Join-Path $tempDir "matlab.cmd") -Value "@echo off`r`nexit /b 1`r`n" -Encoding ASCII
+    $fakePath = Join-Path $tempDir "matlab.cmd"
+    Set-Content -LiteralPath $fakePath -Value "@echo off`r`nexit /b 1`r`n" -Encoding ASCII
   } else {
     $fakePath = Join-Path $tempDir "matlab"
     Set-Content -LiteralPath $fakePath -Value "#!/bin/sh`nexit 1`n" -Encoding ASCII
     & chmod +x $fakePath
   }
+  $env:SKYBRIDGE_MATLAB_EXE = $fakePath
   $env:PATH = $tempDir + [IO.Path]::PathSeparator + $oldPath
 
   $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $runnerScript `
@@ -65,6 +68,7 @@ try {
   } | ConvertTo-Json -Depth 8 -Compress
 } finally {
   $env:PATH = $oldPath
+  if ($null -eq $oldMatlabExe) { Remove-Item Env:SKYBRIDGE_MATLAB_EXE -ErrorAction SilentlyContinue } else { $env:SKYBRIDGE_MATLAB_EXE = $oldMatlabExe }
   Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $fullOutputDir -Recurse -Force -ErrorAction SilentlyContinue
 }

@@ -17,6 +17,7 @@ $requiredDocs = @(
   "docs/product/MATLAB_EXPERIMENT_GOLDEN_TRIAL.md",
   "docs/product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md",
   "docs/product/MATLAB_LOCAL_RUNTIME_REPAIR.md",
+  "docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -45,6 +46,7 @@ $requiredScripts = @{
   matlab_doctor = "scripts/powershell/skybridge-matlab-doctor.ps1"
   matlab_local_config = "scripts/powershell/skybridge-matlab-local-config.ps1"
   live_matlab_golden_recovery = "scripts/powershell/skybridge-live-matlab-golden-recovery.ps1"
+  live_matlab_golden_success = "scripts/powershell/skybridge-live-matlab-golden-success.ps1"
 }
 
 $componentPaths = @{
@@ -161,6 +163,11 @@ $requiredPackageScripts = @(
   "smoke:matlab-recovery-preview",
   "smoke:matlab-recovery-fixture",
   "smoke:matlab-failed-evidence-accuracy",
+  "smoke:matlab-golden-success-preview",
+  "smoke:matlab-golden-success-fixture",
+  "smoke:matlab-golden-success-reject-unsafe",
+  "smoke:matlab-success-evidence-validation",
+  "smoke:desktop-matlab-golden-success",
   "smoke:desktop-matlab-recovery"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
@@ -201,6 +208,7 @@ $desktopLiveSafeTaskPilotPresent = $false
 $desktopMatlabGoldenTrialPresent = $false
 $desktopMatlabRecoveryPresent = $false
 $desktopMatlabRuntimeRepairPresent = $false
+$desktopMatlabGoldenSuccessPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -297,6 +305,16 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MG335 MATLAB doctor apply unavailable in Desktop") -and
     $desktopSource -match [regex]::Escape("MG335 task claim disabled")
   )
+  $desktopMatlabGoldenSuccessPresent = (
+    $desktopSource -match [regex]::Escape("MG336 MATLAB golden success is PowerShell-only for task live-matlab-golden-task-336-001") -and
+    $desktopSource -match [regex]::Escape("MG336 MATLAB Golden Success status") -and
+    $desktopSource -match [regex]::Escape("MG336 success task id") -and
+    $desktopSource -match [regex]::Escape("MG336 doctor precondition") -and
+    $desktopSource -match [regex]::Escape("MG336 manifest exists") -and
+    $desktopSource -match [regex]::Escape("MG336 summary exists") -and
+    $desktopSource -match [regex]::Escape("MG336 metrics exists") -and
+    $desktopSource -match [regex]::Escape("MG336 success apply unavailable in Desktop")
+  )
 }
 
 $workerStatusContract = $null
@@ -329,6 +347,9 @@ $matlabDoctorStatusError = $null
 $liveMatlabRecoveryStatusContract = $null
 $liveMatlabRecoveryStatusContractOk = $false
 $liveMatlabRecoveryStatusError = $null
+$liveMatlabSuccessStatusContract = $null
+$liveMatlabSuccessStatusContractOk = $false
+$liveMatlabSuccessStatusError = $null
 $workerInstallPreviewContract = $null
 $workerInstallPreviewContractOk = $false
 $workerInstallPreviewError = $null
@@ -661,6 +682,29 @@ try {
       [bool]$liveMatlabRecoveryStatusContract.token_printed -eq $false
     )
   }
+  $liveMatlabSuccessScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-live-matlab-golden-success.ps1"
+  if (Test-Path -LiteralPath $liveMatlabSuccessScriptPath -PathType Leaf) {
+    $rawMatlabSuccess = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveMatlabSuccessScriptPath -Command safe-summary -WorkerId "jerry-win-local-01" -TaskId "live-matlab-golden-task-336-001" -Json
+    $matlabSuccessText = ($rawMatlabSuccess | Out-String).Trim()
+    Assert-NoUnsafeText $matlabSuccessText
+    $liveMatlabSuccessStatusContract = $matlabSuccessText | ConvertFrom-Json
+    $liveMatlabSuccessStatusContractOk = (
+      [string]$liveMatlabSuccessStatusContract.schema -eq "skybridge.live_matlab_golden_success_safe_summary.v1" -and
+      [string]$liveMatlabSuccessStatusContract.worker_id -eq "jerry-win-local-01" -and
+      [string]$liveMatlabSuccessStatusContract.task_id -eq "live-matlab-golden-task-336-001" -and
+      @($liveMatlabSuccessStatusContract.do_not_reuse_task_ids) -contains "live-matlab-golden-task-333-001" -and
+      @($liveMatlabSuccessStatusContract.do_not_reuse_task_ids) -contains "live-matlab-golden-task-334-001" -and
+      [string]$liveMatlabSuccessStatusContract.template_id -eq "matlab-parameter-sweep.v1" -and
+      [string]$liveMatlabSuccessStatusContract.runner_id -eq "matlab-parameter-sweep-runner.v1" -and
+      [bool]$liveMatlabSuccessStatusContract.claim_created -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.execution_started -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.worker_loop_started -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.codex_run_called -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.project_control_unpaused -eq $false -and
+      [bool]$liveMatlabSuccessStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -691,6 +735,9 @@ try {
   }
   if (-not $liveMatlabRecoveryStatusContractOk) {
     $liveMatlabRecoveryStatusError = "live_matlab_recovery_status_contract_failed"
+  }
+  if (-not $liveMatlabSuccessStatusContractOk) {
+    $liveMatlabSuccessStatusError = "live_matlab_success_status_contract_failed"
   }
   if (-not $workerInstallPreviewContractOk) {
     $workerInstallPreviewError = "worker_install_preview_contract_failed"
@@ -724,6 +771,7 @@ $ok = (
   $desktopMatlabGoldenTrialPresent -and
   $desktopMatlabRecoveryPresent -and
   $desktopMatlabRuntimeRepairPresent -and
+  $desktopMatlabGoldenSuccessPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -739,7 +787,8 @@ $ok = (
   $matlabGoldenRunnerStatusContractOk -and
   $liveMatlabGoldenTrialStatusContractOk -and
   $matlabDoctorStatusContractOk -and
-  $liveMatlabRecoveryStatusContractOk
+  $liveMatlabRecoveryStatusContractOk -and
+  $liveMatlabSuccessStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -760,6 +809,7 @@ $report = [pscustomobject]@{
   desktop_matlab_golden_trial_present = $desktopMatlabGoldenTrialPresent
   desktop_matlab_recovery_present = $desktopMatlabRecoveryPresent
   desktop_matlab_runtime_repair_present = $desktopMatlabRuntimeRepairPresent
+  desktop_matlab_golden_success_present = $desktopMatlabGoldenSuccessPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
@@ -1020,6 +1070,25 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   live_matlab_recovery_status_error = $liveMatlabRecoveryStatusError
+  live_matlab_success_status_contract_ok = $liveMatlabSuccessStatusContractOk
+  live_matlab_success_status_contract = if ($liveMatlabSuccessStatusContract) {
+    [pscustomobject]@{
+      schema = $liveMatlabSuccessStatusContract.schema
+      worker_id = $liveMatlabSuccessStatusContract.worker_id
+      task_id = $liveMatlabSuccessStatusContract.task_id
+      do_not_reuse_task_ids = $liveMatlabSuccessStatusContract.do_not_reuse_task_ids
+      template_id = $liveMatlabSuccessStatusContract.template_id
+      runner_id = $liveMatlabSuccessStatusContract.runner_id
+      claim_created = $liveMatlabSuccessStatusContract.claim_created
+      execution_started = $liveMatlabSuccessStatusContract.execution_started
+      worker_loop_started = $liveMatlabSuccessStatusContract.worker_loop_started
+      codex_run_called = $liveMatlabSuccessStatusContract.codex_run_called
+      arbitrary_shell_enabled = $liveMatlabSuccessStatusContract.arbitrary_shell_enabled
+      project_control_unpaused = $liveMatlabSuccessStatusContract.project_control_unpaused
+      token_printed = $liveMatlabSuccessStatusContract.token_printed
+    }
+  } else { $null }
+  live_matlab_success_status_error = $liveMatlabSuccessStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

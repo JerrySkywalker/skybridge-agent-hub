@@ -703,6 +703,10 @@ export const MatlabSweepSummarySchema = MatlabSweepSafetySchema.extend({
 export const MatlabSweepEvidenceSchema = MatlabSweepCommonSchema.extend({
   schema: z.literal("skybridge.matlab_sweep_evidence.v1"),
   ok: z.boolean(),
+  expected_combination_count: z.number().int().min(0).max(16).optional(),
+  manifest_exists: z.boolean().optional(),
+  summary_exists: z.boolean().optional(),
+  metrics_exists: z.boolean().optional(),
   started_at: z.string().nullable().optional(),
   completed_at: z.string().nullable().optional(),
   failed_at: z.string().nullable().optional(),

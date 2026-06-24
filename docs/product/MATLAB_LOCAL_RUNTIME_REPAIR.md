@@ -99,4 +99,11 @@ The next recovery task should wait until the doctor reports:
 - `output_write_ok=true`;
 - `token_printed=false`.
 
+## MG336 Success Note
+
+MG336 uses the repaired doctor result to run a new task,
+`live-matlab-golden-task-336-001`, through the fixed MATLAB sweep runner. The
+runtime repair path remains separate: MG335 configures and proves local MATLAB,
+while MG336 may claim only the exact success task after doctor apply passes.
+
 token_printed=false
