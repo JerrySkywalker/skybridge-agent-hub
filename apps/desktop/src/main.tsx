@@ -58,6 +58,8 @@ import {
   fixtureMatlabGoldenEvidence,
   fixtureMatlabGoldenTrialPreview,
   fixtureMatlabDoctorPreview,
+  fixtureMatlabRuntimeRepairDoctor,
+  fixtureMatlabLocalConfigPreview,
   fixtureMatlabRecoveryRunnerPreview,
   fixtureMatlabRecoveryEvidence,
   fixtureMatlabRecoveryPreview,
@@ -69,6 +71,7 @@ import {
   MATLAB_GOLDEN_TRIAL_RUN_CONFIRMATION_TEXT,
   MATLAB_PARAMETER_SWEEP_RUNNER_CONFIRMATION_TEXT,
   MATLAB_DOCTOR_CONFIRMATION_TEXT,
+  MATLAB_LOCAL_CONFIG_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_RECOVERY_CREATE_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
@@ -1827,6 +1830,8 @@ function App() {
         matlabGoldenRunnerPreview={fixtureMatlabGoldenRunnerPreview}
         matlabGoldenEvidence={fixtureMatlabGoldenEvidence}
         matlabDoctorPreview={fixtureMatlabDoctorPreview}
+        matlabRuntimeRepairDoctor={fixtureMatlabRuntimeRepairDoctor}
+        matlabLocalConfigPreview={fixtureMatlabLocalConfigPreview}
         matlabRecoveryPreview={fixtureMatlabRecoveryPreview}
         matlabRecoveryRunnerPreview={fixtureMatlabRecoveryRunnerPreview}
         matlabRecoveryEvidence={fixtureMatlabRecoveryEvidence}
@@ -2644,6 +2649,8 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabGoldenRunnerPreview,
   matlabGoldenEvidence,
   matlabDoctorPreview,
+  matlabRuntimeRepairDoctor,
+  matlabLocalConfigPreview,
   matlabRecoveryPreview,
   matlabRecoveryRunnerPreview,
   matlabRecoveryEvidence,
@@ -2656,6 +2663,8 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabGoldenRunnerPreview: MatlabParameterSweepRunner;
   matlabGoldenEvidence: MatlabSweepEvidence;
   matlabDoctorPreview: MatlabDoctor;
+  matlabRuntimeRepairDoctor: MatlabDoctor;
+  matlabLocalConfigPreview: typeof fixtureMatlabLocalConfigPreview;
   matlabRecoveryPreview: WorkerTemplateRunnerPreview;
   matlabRecoveryRunnerPreview: MatlabParameterSweepRunner;
   matlabRecoveryEvidence: MatlabSweepEvidence;
@@ -2760,6 +2769,25 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG334 doctor failure category" value={matlabDoctorPreview.failure_category || "none"} />
         <StatusValue label="MG334 doctor raw_stdout_included" value={String(matlabDoctorPreview.raw_stdout_included)} />
         <StatusValue label="MG334 doctor raw_stderr_included" value={String(matlabDoctorPreview.raw_stderr_included)} />
+        <StatusValue label="MG335 MATLAB runtime repair status" value={matlabRuntimeRepairDoctor.ok ? "doctor_passed" : "doctor_blocked"} />
+        <StatusValue label="MG335 configured MATLAB executable" value={matlabLocalConfigPreview.matlab_executable || "not_configured"} />
+        <StatusValue label="MG335 MATLAB executable source" value={matlabRuntimeRepairDoctor.matlab_executable_source ?? matlabLocalConfigPreview.matlab_executable_source} />
+        <StatusValue label="MG335 MATLAB config path" value={matlabLocalConfigPreview.config_path} />
+        <StatusValue label="MG335 run mode" value={matlabRuntimeRepairDoctor.run_mode ?? matlabLocalConfigPreview.run_mode} />
+        <StatusValue label="MG335 batch_supported" value={String(matlabRuntimeRepairDoctor.batch_supported)} />
+        <StatusValue label="MG335 fallback_supported" value={String(matlabRuntimeRepairDoctor.fallback_supported)} />
+        <StatusValue label="MG335 startup_ok" value={String(matlabRuntimeRepairDoctor.startup_ok)} />
+        <StatusValue label="MG335 license_status" value={matlabRuntimeRepairDoctor.license_status} />
+        <StatusValue label="MG335 output_write_ok" value={String(matlabRuntimeRepairDoctor.output_write_ok)} />
+        <StatusValue label="MG335 minimal_compute_ok" value={String(matlabRuntimeRepairDoctor.minimal_compute_ok)} />
+        <StatusValue label="MG335 failure category" value={matlabRuntimeRepairDoctor.failure_category || "none"} />
+        <StatusValue label="MG335 recommended next action" value={matlabRuntimeRepairDoctor.recommended_next_action} />
+        <StatusValue label="MG335 local config confirmation" value={MATLAB_LOCAL_CONFIG_CONFIRMATION_TEXT} />
+        <StatusValue label="MG335 local config did_mutate" value={String(matlabLocalConfigPreview.did_mutate)} />
+        <StatusValue label="MG335 modifies MATLAB installation" value={String(matlabLocalConfigPreview.modifies_matlab_installation)} />
+        <StatusValue label="MG335 modifies system PATH" value={String(matlabLocalConfigPreview.modifies_system_path)} />
+        <StatusValue label="MG335 modifies registry" value={String(matlabLocalConfigPreview.modifies_registry)} />
+        <StatusValue label="MG335 task claim disabled" value="claim_created=false; execution_started=false; worker_loop_started=false; token_printed=false" />
         <StatusValue label="MG334 recovery status" value={matlabRecoveryPreview.ok ? "exact_recovery_task_preview_available" : "no_recovery_task"} />
         <StatusValue label="MG334 recovery task id" value={matlabRecoveryPreview.expected_task_id ?? matlabRecoveryPreview.task_id ?? "none"} />
         <StatusValue label="MG334 recovery worker id" value={matlabRecoveryPreview.worker_id} />
@@ -2813,6 +2841,15 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-matlab-doctor.ps1 -Command preview">
           MG334 MATLAB doctor preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-matlab-local-config.ps1 -Command preview">
+          MG335 MATLAB local config preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: config apply requires exact MG335 confirmation">
+          MG335 MATLAB local config apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-matlab-doctor.ps1 -Command apply with fixed diagnostic only">
+          MG335 MATLAB doctor apply unavailable in Desktop
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-matlab-golden-recovery.ps1 -Command preview-run">
           MG334 recovery preview

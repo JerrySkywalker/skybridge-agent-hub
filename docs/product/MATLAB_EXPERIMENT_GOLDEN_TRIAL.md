@@ -132,4 +132,12 @@ before any new claim. The recovery task id is
 `live-matlab-golden-task-334-001`, and the failed MG333 task must not be
 requeued or reused.
 
+## MG335 Runtime Repair Note
+
+MG335 adds [MATLAB Local Runtime Repair](MATLAB_LOCAL_RUNTIME_REPAIR.md). It is
+local diagnostic work only: no golden or recovery task is created, claimed, or
+rerun. The next MATLAB task run remains deferred until the doctor can prove the
+local runtime starts, checks out a license, writes summary/metrics files, and
+keeps `token_printed=false`.
+
 token_printed=false

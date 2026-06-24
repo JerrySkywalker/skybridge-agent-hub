@@ -16,6 +16,10 @@ if exist(outputDir, 'dir') ~= 7
 end
 
 score = 2 * 3 / 500;
+if ~isfinite(score) || abs(score - 0.012) > 1e-12
+    error('skybridge:minimalComputeFailed', 'Minimal no-toolbox calculation failed.');
+end
+
 metricsPath = fullfile(outputDir, 'doctor_metrics.csv');
 fid = fopen(metricsPath, 'w');
 if fid < 0
@@ -35,7 +39,15 @@ summary = struct( ...
     'raw_stderr_included', false, ...
     'token_printed', false);
 
-writeJson(fullfile(outputDir, 'doctor_summary.json'), summary);
+summaryPath = fullfile(outputDir, 'doctor_summary.json');
+writeJson(summaryPath, summary);
+
+if exist(summaryPath, 'file') ~= 2
+    error('skybridge:summaryMissing', 'doctor_summary.json was not written.');
+end
+if exist(metricsPath, 'file') ~= 2
+    error('skybridge:metricsMissing', 'doctor_metrics.csv was not written.');
+end
 end
 
 function writeJson(path, value)

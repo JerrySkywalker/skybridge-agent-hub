@@ -115,6 +115,14 @@ MG334 does not allow arbitrary MATLAB command text, Codex execution, worker
 loops, arbitrary shell, PR creation, old task requeue, project-control unpause,
 or production infrastructure mutation.
 
+MG335 covers MATLAB Local Runtime Repair only. It may resolve MATLAB executable
+candidates, preview or exact-confirm user-level MATLAB executable config, and
+run the fixed startup doctor. It must not create or claim recovery tasks, run the
+MATLAB sweep runner, run Codex, start a worker loop, expose arbitrary MATLAB
+command text, expose arbitrary shell, create PRs, requeue old tasks, unpause
+project control, mutate MATLAB installation or license files, edit system PATH,
+edit the registry, or mutate production infrastructure.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

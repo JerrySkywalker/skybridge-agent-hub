@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-06-24 Mega Goal 335 MATLAB Local Runtime Repair And Successful Doctor
+
+- Hardened `skybridge-matlab-doctor.ps1` with safe MATLAB executable
+  resolution, user-level MATLAB config loading, fallback invocation reporting,
+  and precise sanitized classifications for executable, batch, license,
+  startup, working-directory, output-write, fixed-script, and unknown failures.
+- Added `skybridge-matlab-local-config.ps1` for preview and exact-confirmed
+  user-level MATLAB executable/run-mode config under `$HOME\.skybridge`, without
+  writing tokens, license keys, system `PATH`, registry entries, or MATLAB
+  installation files.
+- Tightened `scripts/matlab/skybridge_matlab_startup_doctor.m` so a successful
+  fixed doctor requires the no-toolbox compute and both doctor output files.
+- Updated shared schemas, client fixtures, Desktop Worker Runner Preview, and
+  Bootstrap Alpha acceptance with MATLAB runtime repair fields and disabled
+  Desktop apply controls.
+- Added local config, doctor classification, fallback fixture, and Desktop
+  runtime repair smokes. MG335 creates no recovery tasks, claims no tasks, runs
+  no Codex, starts no worker loop, exposes no arbitrary MATLAB command text, and
+  keeps `token_printed=false`.
+
 ## 2026-06-24 Mega Goal 334 MATLAB Startup Diagnostics And Golden Trial Recovery
 
 - Added `skybridge-matlab-doctor.ps1` and
