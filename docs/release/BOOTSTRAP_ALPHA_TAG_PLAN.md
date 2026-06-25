@@ -33,10 +33,15 @@ after PR CI, Deploy Cloud, `/v1/version`, cloud parity, and RC gate audit pass.
 The exact final tag target commit and image ref are recorded in the post-tag
 audit report under `.agent/tmp/bootstrap-alpha-rc/`.
 
-`tag_created=true` only after the annotated tag is created locally, pushed to
-origin, verified on origin, and confirmed to point at the intended final commit.
+MG340 tag preview left `tag_created=false` before operator authorization.
 
-Post-tag audit result: `to be filled by MG341 post-tag audit report`
+MG341 tag result: `tag_created=true` after the annotated tag was created
+locally, pushed to origin, verified on origin, and confirmed to point at
+`4473257548bd0fc26e05002d968f8525b37bac8b`.
+
+Post-tag audit result: passed with the expected
+`tag_already_exists_on_target_commit` warning after tag creation. The handoff
+summary is in [BOOTSTRAP_ALPHA_RC1_HANDOFF.md](BOOTSTRAP_ALPHA_RC1_HANDOFF.md).
 
 ## Required Checks Before Tag
 
