@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\smoke-productization-common.ps1"
 
 $runnerScript = Join-Path $PSScriptRoot "skybridge-codex-analysis-report-runner.ps1"
-$taskId = "live-codex-analysis-report-task-338-001"
+$taskId = "smoke-codex-artifact-path-contract-338-001"
 $inputDir = ".agent/tmp/matlab-golden-trial/smoke-codex-artifact-path-contract"
 $outputDir = ".agent/tmp/codex-analysis-report/$taskId"
 $fullInputDir = Join-Path $RepoRoot $inputDir

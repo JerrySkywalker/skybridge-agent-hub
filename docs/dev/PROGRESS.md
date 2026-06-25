@@ -17,6 +17,11 @@
   recovery fields, Bootstrap Alpha acceptance, README, and product/release docs.
 - Added artifact path, fallback writer, evidence validation, recovery preview,
   recovery fixture, unsafe rejection, and Desktop artifact recovery smokes.
+- Repaired server-side task evidence persistence so
+  `skybridge.codex_analysis_report_evidence.v1` keeps bounded artifact fields
+  such as `output_report_path`, `report_exists`, `report_size_bytes`,
+  `fallback_report_used`, Codex invocation metadata, and disabled-action flags
+  instead of collapsing the record to generic task evidence only.
 - Kept arbitrary prompt text, arbitrary shell, MATLAB execution, worker loops,
   PR creation, project-control unpause, old task requeue, raw Codex logs,
   stdout/stderr/prompt exposure, and token printing disabled.

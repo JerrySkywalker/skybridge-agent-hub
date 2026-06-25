@@ -111,6 +111,11 @@ includes:
 - `project_control_unpaused=false`;
 - `token_printed=false`.
 
+The server task evidence sanitizer must preserve these bounded scalar fields
+and path arrays. It must still redact unsafe payloads and must not persist raw
+Codex logs, raw prompts, stdout, stderr, auth material, provider headers,
+proxy profiles, or process metadata dumps.
+
 ## Boundary
 
 MG338 adds no new product feature. It closes the Bootstrap Alpha Codex artifact
@@ -126,7 +131,7 @@ Still disabled:
 - queue/run-until-hold execution;
 - project-control unpause;
 - old task requeue;
-- raw Codex logs, raw prompts, process streams, tokens, credentials, cookies, or
-  process environment details in server evidence.
+- raw Codex logs, raw prompts, process streams, auth material, or process
+  metadata details in server evidence.
 
 token_printed=false

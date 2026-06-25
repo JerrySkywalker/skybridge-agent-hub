@@ -11,7 +11,9 @@ $outputDir = ".agent/tmp/codex-analysis-report/$taskId"
 $fullInputDir = Join-Path $RepoRoot $inputDir
 $fullOutputDir = Join-Path $RepoRoot $outputDir
 $inputBackupDir = Join-Path ([IO.Path]::GetTempPath()) ("skybridge-mg336-input-backup-" + [guid]::NewGuid().ToString("N"))
+$outputBackupDir = Join-Path ([IO.Path]::GetTempPath()) ("skybridge-mg338-output-backup-" + [guid]::NewGuid().ToString("N"))
 $inputHadPreexisting = $false
+$outputHadPreexisting = $false
 $fakeCodexDir = Join-Path ([IO.Path]::GetTempPath()) ("skybridge-fake-codex-" + [Guid]::NewGuid().ToString("n"))
 $oldPath = $env:PATH
 
@@ -30,6 +32,23 @@ function Restore-FixtureInputs {
     Copy-Item -LiteralPath $script:inputBackupDir -Destination $fullInputDir -Recurse -Force
   }
   Remove-Item -LiteralPath $script:inputBackupDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+function Backup-OutputArtifact {
+  if (Test-Path -LiteralPath $fullOutputDir) {
+    $script:outputHadPreexisting = $true
+    Copy-Item -LiteralPath $fullOutputDir -Destination $script:outputBackupDir -Recurse -Force
+  }
+}
+
+function Restore-OutputArtifact {
+  if (Test-Path -LiteralPath $fullOutputDir) {
+    Remove-Item -LiteralPath $fullOutputDir -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  if ($script:outputHadPreexisting -and (Test-Path -LiteralPath $script:outputBackupDir)) {
+    Copy-Item -LiteralPath $script:outputBackupDir -Destination $fullOutputDir -Recurse -Force
+  }
+  Remove-Item -LiteralPath $script:outputBackupDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 function Write-FixtureInputs {
@@ -89,6 +108,7 @@ function Invoke-Recovery {
 
 try {
   Backup-FixtureInputs
+  Backup-OutputArtifact
   Write-FixtureInputs
   Remove-Item -LiteralPath $fullOutputDir -Recurse -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force -Path $fakeCodexDir | Out-Null
@@ -163,6 +183,6 @@ try {
   $env:PATH = $oldPath
   Stop-WorkerTemplateRunnerSmokeServer
   Restore-FixtureInputs
-  Remove-Item -LiteralPath $fullOutputDir -Recurse -Force -ErrorAction SilentlyContinue
+  Restore-OutputArtifact
   Remove-Item -LiteralPath $fakeCodexDir -Recurse -Force -ErrorAction SilentlyContinue
 }

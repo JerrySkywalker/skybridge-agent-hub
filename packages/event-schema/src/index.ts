@@ -1218,16 +1218,46 @@ export interface TaskResult {
 }
 
 export interface EvidenceSummary {
+  schema?: string;
   task_id?: string;
   goal_id?: string;
+  worker_id?: string;
+  template_id?: string;
+  runner_id?: string;
   pr_url?: string;
   commit_sha?: string;
   changed_files?: string[];
+  existing_outputs?: string[];
+  expected_outputs_missing?: string[];
+  report_validation_errors?: string[];
   validation_status?: string;
   ci_status?: string;
   risk_status?: string;
   recovered?: boolean;
   recovery_status?: string;
+  input_manifest_path?: string;
+  input_summary_path?: string;
+  input_metrics_path?: string;
+  input_manifest_exists?: boolean;
+  input_summary_exists?: boolean;
+  input_metrics_exists?: boolean;
+  output_report_path?: string;
+  report_exists?: boolean;
+  report_size_bytes?: number;
+  fallback_report_used?: boolean;
+  codex_invoked?: boolean;
+  codex_exit_code?: number;
+  codex_failure_category?: string;
+  raw_codex_log_included?: boolean;
+  raw_prompt_included?: boolean;
+  raw_stdout_included?: boolean;
+  raw_stderr_included?: boolean;
+  matlab_run_called?: boolean;
+  arbitrary_shell_enabled?: boolean;
+  worker_loop_started?: boolean;
+  project_control_unpaused?: boolean;
+  pr_created?: boolean;
+  token_printed?: boolean;
   summary: string;
   created_at: string;
 }
