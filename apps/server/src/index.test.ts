@@ -1402,19 +1402,93 @@ describe("server api", () => {
       payload: {
         summary: "Task done.",
         evidence_summary: {
+          schema: "skybridge.codex_analysis_report_evidence.v1",
           task_id: "evidence-task-1",
           goal_id: "goal-evidence-1",
+          worker_id: "jerry-win-local-01",
+          template_id: "codex-analysis-report.v1",
+          runner_id: "codex-analysis-report-runner.v1",
           pr_url: "https://example.invalid/pull/1",
           commit_sha: "abc123",
           changed_files: ["docs/example.md"],
+          existing_outputs: [".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md"],
+          expected_outputs_missing: [],
+          report_validation_errors: [],
           validation_status: "passed",
           ci_status: "pending",
           risk_status: "low",
+          input_manifest_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
+          input_summary_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
+          input_metrics_path: ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+          input_manifest_exists: true,
+          input_summary_exists: true,
+          input_metrics_exists: true,
+          output_report_path: ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md",
+          report_exists: true,
+          report_size_bytes: 1413,
+          fallback_report_used: false,
+          codex_invoked: true,
+          codex_exit_code: 0,
+          codex_failure_category: "",
+          raw_codex_log_included: false,
+          raw_prompt_included: false,
+          raw_stdout_included: false,
+          raw_stderr_included: false,
+          matlab_run_called: false,
+          arbitrary_shell_enabled: false,
+          worker_loop_started: false,
+          project_control_unpaused: false,
+          pr_created: false,
+          token_printed: false,
           summary: "Docs changed and validation passed.",
         },
       },
     });
     expect(complete.statusCode).toBe(200);
+    const completedEvidence = complete.json<{
+      task: {
+        result: {
+          evidence_summary: {
+            schema?: string;
+            worker_id?: string;
+            output_report_path?: string;
+            report_exists?: boolean;
+            report_size_bytes?: number;
+            fallback_report_used?: boolean;
+            codex_invoked?: boolean;
+            codex_exit_code?: number;
+            changed_files?: string[];
+            raw_codex_log_included?: boolean;
+            raw_prompt_included?: boolean;
+            raw_stdout_included?: boolean;
+            raw_stderr_included?: boolean;
+            matlab_run_called?: boolean;
+            worker_loop_started?: boolean;
+            pr_created?: boolean;
+            token_printed?: boolean;
+          };
+        };
+      };
+    }>().task.result.evidence_summary;
+    expect(completedEvidence).toMatchObject({
+      schema: "skybridge.codex_analysis_report_evidence.v1",
+      worker_id: "jerry-win-local-01",
+      output_report_path: ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md",
+      report_exists: true,
+      report_size_bytes: 1413,
+      fallback_report_used: false,
+      codex_invoked: true,
+      codex_exit_code: 0,
+      raw_codex_log_included: false,
+      raw_prompt_included: false,
+      raw_stdout_included: false,
+      raw_stderr_included: false,
+      matlab_run_called: false,
+      worker_loop_started: false,
+      pr_created: false,
+      token_printed: false,
+    });
+    expect(completedEvidence.changed_files).toEqual(["docs/example.md"]);
 
     const detail = await server.inject({
       method: "GET",

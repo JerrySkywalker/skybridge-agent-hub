@@ -4545,6 +4545,14 @@ function safeOptionalInteger(input: unknown, min: number, max: number): number |
   return input;
 }
 
+function safeOptionalBoolean(input: unknown): boolean | undefined {
+  return typeof input === "boolean" ? input : undefined;
+}
+
+function safeFalseOnlyBoolean(input: unknown): false | undefined {
+  return input === false ? false : undefined;
+}
+
 function safeNullableString(input: unknown, fallback: string | undefined): string | undefined {
   if (input === null) return undefined;
   return safeString(input) ?? fallback;
@@ -6218,20 +6226,51 @@ function safeModelBackendMetadata(input: unknown) {
 function safeEvidenceSummary(input: unknown, fallback?: EvidenceSummary): EvidenceSummary | undefined {
   if (input === null) return undefined;
   if (!input || typeof input !== "object" || Array.isArray(input)) return fallback;
+  const source = input as Record<string, unknown>;
   const record = redactUnsafePayload(input) as Record<string, unknown>;
   const summary = safeString(record.summary);
   if (!summary) return fallback;
   return {
+    schema: safeString(record.schema),
     task_id: safeString(record.task_id),
     goal_id: safeString(record.goal_id),
+    worker_id: safeString(record.worker_id),
+    template_id: safeString(record.template_id),
+    runner_id: safeString(record.runner_id),
     pr_url: safeString(record.pr_url),
     commit_sha: safeString(record.commit_sha),
     changed_files: safePathArray(record.changed_files) ?? [],
+    existing_outputs: safePathArray(source.existing_outputs) ?? [],
+    expected_outputs_missing: safePathArray(source.expected_outputs_missing) ?? [],
+    report_validation_errors: safeStringArray(record.report_validation_errors) ?? [],
     validation_status: safeString(record.validation_status),
     ci_status: safeString(record.ci_status),
     risk_status: safeString(record.risk_status),
     recovered: record.recovered === true,
     recovery_status: safeString(record.recovery_status),
+    input_manifest_path: safeString(record.input_manifest_path),
+    input_summary_path: safeString(record.input_summary_path),
+    input_metrics_path: safeString(record.input_metrics_path),
+    input_manifest_exists: safeOptionalBoolean(record.input_manifest_exists),
+    input_summary_exists: safeOptionalBoolean(record.input_summary_exists),
+    input_metrics_exists: safeOptionalBoolean(record.input_metrics_exists),
+    output_report_path: safeString(source.output_report_path),
+    report_exists: safeOptionalBoolean(record.report_exists),
+    report_size_bytes: safeOptionalInteger(record.report_size_bytes, 0, 1_000_000_000),
+    fallback_report_used: safeOptionalBoolean(record.fallback_report_used),
+    codex_invoked: safeOptionalBoolean(record.codex_invoked),
+    codex_exit_code: safeOptionalInteger(record.codex_exit_code, -1, 100_000),
+    codex_failure_category: safeString(record.codex_failure_category),
+    raw_codex_log_included: safeFalseOnlyBoolean(source.raw_codex_log_included),
+    raw_prompt_included: safeFalseOnlyBoolean(source.raw_prompt_included),
+    raw_stdout_included: safeFalseOnlyBoolean(source.raw_stdout_included),
+    raw_stderr_included: safeFalseOnlyBoolean(source.raw_stderr_included),
+    matlab_run_called: safeOptionalBoolean(record.matlab_run_called),
+    arbitrary_shell_enabled: safeOptionalBoolean(record.arbitrary_shell_enabled),
+    worker_loop_started: safeOptionalBoolean(record.worker_loop_started),
+    project_control_unpaused: safeOptionalBoolean(record.project_control_unpaused),
+    pr_created: safeOptionalBoolean(record.pr_created),
+    token_printed: safeFalseOnlyBoolean(source.token_printed),
     summary,
     created_at: safeIsoString(record.created_at) ?? new Date().toISOString(),
   };
