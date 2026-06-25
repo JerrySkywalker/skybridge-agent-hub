@@ -171,6 +171,16 @@ project-control unpause, old task requeue, generic Codex queue execution,
 notification send, raw Codex logs, raw prompts, process streams, credentials,
 tokens, runtime environment details, or production infrastructure mutation.
 
+MG340 covers Bootstrap Alpha RC Release Gate only. It freezes, audits,
+documents, and validates the current Bootstrap Alpha state as a release
+candidate. It may read local files, cloud version/parity, operator report,
+review gate, self-bootstrap convergence, worker status, and live task evidence.
+It may write safe local RC reports under `.agent/tmp/bootstrap-alpha-rc/` and
+prepare a tag preview only. MG340 does not create tasks, claim tasks, execute
+tasks, run Codex, run MATLAB, start worker loops, send notifications, unpause
+project control, create tags, create GitHub releases, requeue old tasks,
+auto-merge, or mutate production infrastructure.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

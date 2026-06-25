@@ -321,4 +321,26 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   exact task id, input-file, no-lease, no-residue, and output-path preconditions
   hold.
 
+## MG340 Bootstrap Alpha RC Release Gate
+
+- Objective: freeze and audit the completed Bootstrap Alpha chain as a release
+  candidate package.
+- Implementation note: MG340 adds
+  [Bootstrap Alpha RC Release Notes](BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md),
+  [Bootstrap Alpha RC Runbook](BOOTSTRAP_ALPHA_RC_RUNBOOK.md),
+  [Bootstrap Alpha Disabled Features](BOOTSTRAP_ALPHA_DISABLED_FEATURES.md),
+  [Bootstrap Alpha Tag Plan](BOOTSTRAP_ALPHA_TAG_PLAN.md), and
+  `skybridge-bootstrap-alpha-rc-gate.ps1`.
+- Acceptance criteria: RC gate local mode passes; cloud and live checks are
+  read-only and skip safely when API/token configuration is unavailable; safe
+  Markdown/JSON reports are written only under `.agent/tmp/bootstrap-alpha-rc/`;
+  tag preview leaves `tag_created=false`.
+- Forbidden scope: task creation, task claim, task execution, Codex execution,
+  MATLAB execution, worker loop, arbitrary shell, unbounded run, project-control
+  unpause, old task requeue, notification send, deployment mutation, real tag
+  creation, GitHub release creation, and raw prompt/log/stdout/stderr/token
+  inclusion.
+- Live deployment expected: no new deploy path. Post-deploy checks are
+  read-only version/parity/audit checks only.
+
 token_printed=false

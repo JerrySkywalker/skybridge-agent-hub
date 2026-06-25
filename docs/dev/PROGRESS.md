@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-06-26 Mega Goal 340 Bootstrap Alpha RC Release Gate
+
+- Added Bootstrap Alpha RC release notes, runbook, disabled-features inventory,
+  and preview-only tag plan for `v0.1.0-bootstrap-alpha-rc1`.
+- Added `skybridge-bootstrap-alpha-rc-gate.ps1` with read-only `status`,
+  `local`, `cloud`, `live-evidence`, `audit`, `tag-preview`, and
+  `safe-summary` commands.
+- RC gate checks local artifacts, package scripts, cloud version/parity,
+  operator report, review gate, self-bootstrap convergence, worker identity and
+  heartbeat support, and read-only live evidence for MG332, MG336, and MG339.
+- RC reports write only safe Markdown/JSON under
+  `.agent/tmp/bootstrap-alpha-rc/` when explicitly requested.
+- Added RC gate, local, report, disabled-features, and tag-preview smokes.
+- Updated Bootstrap Alpha acceptance and README to include MG340 RC artifacts.
+- Kept task creation, task claim, task execution, Codex execution, MATLAB
+  execution, worker loops, notification sends, project-control unpause, deploy
+  mutation, tag creation, GitHub release creation, raw logs/prompts/process
+  streams, credentials, and token printing disabled.
+
 ## 2026-06-26 Mega Goal 339 Codex Native Report Validation Success
 
 - Hardened `skybridge-codex-analysis-report-runner.ps1` so native Codex
