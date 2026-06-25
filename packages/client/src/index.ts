@@ -4760,6 +4760,8 @@ export const MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_SUCCESS_TASK_ONLY";
 export const CODEX_ANALYSIS_REPORT_TASK_ID =
   "live-codex-analysis-report-task-337-001";
+export const CODEX_ARTIFACT_RECOVERY_TASK_ID =
+  "live-codex-analysis-report-task-338-001";
 export const CODEX_ANALYSIS_REPORT_TEMPLATE_ID = "codex-analysis-report.v1";
 export const CODEX_ANALYSIS_REPORT_RUNNER_ID =
   "codex-analysis-report-runner.v1";
@@ -4769,6 +4771,10 @@ export const CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_CODEX_ANALYSIS_REPORT_TASK_ONLY";
 export const CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT =
   "I_UNDERSTAND_RUN_ONE_FIXED_CODEX_ANALYSIS_REPORT_ONLY";
+export const CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_CODEX_REPORT_RECOVERY_TASK_ONLY";
+export const CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_CODEX_REPORT_RECOVERY_TASK_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -5209,14 +5215,20 @@ export const fixtureCodexAnalysisReportRunnerPreview: CodexAnalysisReportRunner 
     ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
   input_metrics_path:
     ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+  input_manifest_exists: true,
+  input_summary_exists: true,
+  input_metrics_exists: true,
   output_report_path:
     ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-337-001/report.md",
   report_exists: false,
+  report_size_bytes: 0,
+  fallback_report_used: false,
   validation_status: "preview_only",
   codex_available: true,
   would_invoke_codex: true,
   codex_invoked: false,
   codex_exit_code: null,
+  codex_failure_category: "",
   blockers: [],
   warnings: ["PowerShell-only exact confirmation required before fixed Codex report runner apply."],
   raw_codex_log_included: false,
@@ -5240,11 +5252,17 @@ export const fixtureCodexAnalysisReportEvidence: CodexAnalysisReportEvidence = {
   input_manifest_path: fixtureCodexAnalysisReportRunnerPreview.input_manifest_path,
   input_summary_path: fixtureCodexAnalysisReportRunnerPreview.input_summary_path,
   input_metrics_path: fixtureCodexAnalysisReportRunnerPreview.input_metrics_path,
+  input_manifest_exists: true,
+  input_summary_exists: true,
+  input_metrics_exists: true,
   output_report_path: fixtureCodexAnalysisReportRunnerPreview.output_report_path,
   report_exists: true,
+  report_size_bytes: 864,
+  fallback_report_used: false,
   validation_status: "passed",
   codex_invoked: true,
   codex_exit_code: 0,
+  codex_failure_category: "",
   allowed_paths_checked: true,
   blocked_paths_checked: true,
   changed_files: [
@@ -5267,6 +5285,57 @@ export const fixtureCodexAnalysisReportEvidence: CodexAnalysisReportEvidence = {
   worker_loop_started: false,
   pr_created: false,
   token_printed: false,
+};
+
+export const fixtureCodexArtifactRecoveryRunnerPreview: CodexAnalysisReportRunner = {
+  ...fixtureCodexAnalysisReportRunnerPreview,
+  task_id: CODEX_ARTIFACT_RECOVERY_TASK_ID,
+  output_report_path:
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md",
+  report_exists: false,
+  report_size_bytes: 0,
+  fallback_report_used: false,
+  validation_status: "preview_only",
+  warnings: [
+    "MG338 recovery is PowerShell-only and requires exact confirmation before one fixed-runner apply.",
+  ],
+};
+
+export const fixtureCodexArtifactRecoveryEvidence: CodexAnalysisReportEvidence = {
+  ...fixtureCodexAnalysisReportEvidence,
+  task_id: CODEX_ARTIFACT_RECOVERY_TASK_ID,
+  output_report_path: fixtureCodexArtifactRecoveryRunnerPreview.output_report_path,
+  report_exists: true,
+  report_size_bytes: 932,
+  fallback_report_used: true,
+  validation_status: "passed",
+  codex_invoked: true,
+  codex_exit_code: 0,
+  codex_failure_category: "report_missing_after_codex",
+  changed_files: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md",
+  ],
+  existing_outputs: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md",
+  ],
+  expected_outputs_missing: [],
+  report_validation_errors: [],
+  result_summary:
+    "MG338 fixture: Codex exited successfully without report.md, so the deterministic fallback writer persisted and validated the recovery report.",
+};
+
+export const fixtureCodexArtifactRecoveryPreview: WorkerTemplateRunnerPreview = {
+  ...fixtureMatlabGoldenTrialPreview,
+  task_id: CODEX_ARTIFACT_RECOVERY_TASK_ID,
+  expected_task_id: CODEX_ARTIFACT_RECOVERY_TASK_ID,
+  template_id: CODEX_ANALYSIS_REPORT_TEMPLATE_ID,
+  runner_id: CODEX_ANALYSIS_REPORT_RUNNER_ID,
+  evidence_schema: "skybridge.codex_analysis_report_evidence.v1",
+  result_summary:
+    "MG338 fixture: one exact Codex artifact recovery task is eligible for PowerShell-only fixed-runner apply after MG336 output files are present.",
+  final_task_state: "queued",
+  codex_run_called: false,
+  matlab_run_called: false,
 };
 
 export const fixtureCodexAnalysisReportPreview: WorkerTemplateRunnerPreview = {

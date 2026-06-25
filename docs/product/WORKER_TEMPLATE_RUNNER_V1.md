@@ -151,4 +151,17 @@ manifest/summary/metrics files, writes one Markdown report under
 run MATLAB, accept arbitrary prompt text, start a loop, or expose raw Codex
 logs in server evidence.
 
+MG338 hardens that same fixed Codex runner after the MG337 live artifact path
+failure. It may create and run only
+`live-codex-analysis-report-task-338-001` through
+`codex-analysis-report-runner.v1`. The runner now rejects output paths outside
+`.agent/tmp/codex-analysis-report/**`, rejects suspiciously truncated paths,
+creates `.agent/tmp/codex-analysis-report/<task-id>/` before invoking Codex,
+validates `.agent/tmp/codex-analysis-report/<task-id>/report.md`, and writes a
+deterministic fallback report only when Codex exits successfully without the
+report. Evidence records actual-file-only `changed_files`,
+`report_size_bytes`, `fallback_report_used`, and `codex_failure_category` while
+keeping raw Codex logs, raw prompt text, stdout, stderr, MATLAB execution, PR
+creation, worker loops, and project-control unpause disabled.
+
 token_printed=false

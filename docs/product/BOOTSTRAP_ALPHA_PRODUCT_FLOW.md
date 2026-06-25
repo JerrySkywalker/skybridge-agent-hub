@@ -24,10 +24,11 @@ automation.
    evidence state.
 9. The local worker actively pulls from the server and claims compatible tasks.
 10. The worker executes only template runners. MG329 starts with one
-    safe-local-smoke fixture runner. MG332 proves one exact live
-    safe-local-smoke pilot task. MG333 adds one exact fixed MATLAB golden-trial
-    task for a tiny synthetic parameter sweep. MG337 adds one exact fixed Codex
-    analysis report over the MG336 summary artifacts.
+     safe-local-smoke fixture runner. MG332 proves one exact live
+     safe-local-smoke pilot task. MG333 adds one exact fixed MATLAB golden-trial
+     task for a tiny synthetic parameter sweep. MG337 adds one exact fixed Codex
+     analysis report over the MG336 summary artifacts. MG338 hardens Codex
+     report artifact persistence with a deterministic `report.md` contract.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
 12. The operator reviews the result through Desktop and server reports and
@@ -244,5 +245,23 @@ Desktop shows the Codex report preview state and keeps live apply
 PowerShell-only. MG337 keeps arbitrary prompts, MATLAB execution, arbitrary
 shell, source edits, PR creation, worker loops, project-control unpause, old
 task requeue, raw Codex logs, and token printing disabled.
+
+## MG338 Codex Artifact Persistence Recovery
+
+MG338 creates and may claim only
+`live-codex-analysis-report-task-338-001`. It does not requeue or reclaim
+`live-codex-analysis-report-task-337-001`. The fixed runner computes
+`.agent/tmp/codex-analysis-report/<task-id>/report.md`, rejects truncated or
+outside paths, validates actual report existence and size, and records only
+actual existing changed files.
+
+If Codex exits successfully without a report, MG338 writes a deterministic
+fallback Markdown report from the safe MG336 manifest, summary, and metrics
+files and sets `fallback_report_used=true`. If Codex fails, the task fails
+closed. Desktop shows recovery fields and disabled live apply controls; live
+apply remains PowerShell-only with exact confirmation. MG338 keeps arbitrary
+prompts, MATLAB execution, arbitrary shell, PR creation, worker loops,
+project-control unpause, old task requeue, raw Codex logs, raw prompts, stdout,
+stderr, credentials, and token printing disabled.
 
 token_printed=false

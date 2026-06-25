@@ -129,6 +129,9 @@ For the repaired MATLAB golden recovery success path, see
 [docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md](docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md).
 For the first fixed Codex analysis report over MG336 outputs, see
 [docs/product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md](docs/product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md).
+For the Codex artifact persistence recovery and deterministic `report.md`
+contract, see
+[docs/product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md](docs/product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see
