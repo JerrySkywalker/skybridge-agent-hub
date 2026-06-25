@@ -125,13 +125,18 @@
       ],
       "runner_id": "codex-analysis-report-runner.v1",
       "evidence_schema": [
-        "skybridge.analysis_report_evidence.v1",
-        "report_path",
-        "source_summaries",
+        "skybridge.codex_analysis_report_evidence.v1",
+        "input_manifest_path",
+        "input_summary_path",
+        "input_metrics_path",
+        "output_report_path",
+        "report_exists",
         "validation_status",
-        "audit_summary"
+        "codex_invoked",
+        "raw_codex_log_included",
+        "token_printed"
       ],
-      "output_paths": ["docs/experiments/**", "results/skybridge/**"],
+      "output_paths": ["docs/experiments/**", "results/skybridge/**", ".agent/tmp/codex-analysis-report/**"],
       "default_project_id_hint": "skybridge-agent-hub",
       "execution_supported": false,
       "draft_only": true,
@@ -370,9 +375,9 @@
     },
     {
       "schema": "skybridge.task_template_evidence_schema.v1",
-      "evidence_schema_id": "skybridge.analysis_report_evidence.v1",
-      "summary": "Safe analysis report evidence.",
-      "required_fields": ["report_path", "source_summaries", "validation_status", "audit_summary"]
+      "evidence_schema_id": "skybridge.codex_analysis_report_evidence.v1",
+      "summary": "Safe Codex analysis report evidence over bounded summary inputs.",
+      "required_fields": ["input_manifest_path", "input_summary_path", "input_metrics_path", "output_report_path", "report_exists", "validation_status", "codex_invoked", "raw_codex_log_included", "token_printed"]
     },
     {
       "schema": "skybridge.task_template_evidence_schema.v1",

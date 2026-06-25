@@ -23,7 +23,7 @@ function Assert-FileExists([string]$RelativePath) {
 
 function Assert-NoUnsafeText([string]$Text) {
   $tokenTrue = 'token_printed"\s*:\s*tr' + 'ue'
-  if ($Text -match "(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout(?!_included)|raw_stderr(?!_included)|raw_prompt(?!_persisted)|raw_worker_log|raw_codex_transcript|raw_ci_log|environment dump|env_dump|cookie\s*[:=]|$tokenTrue") {
+  if ($Text -match "(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|raw_stdout(?!_included)|raw_stderr(?!_included)|raw_prompt(?!(?:_persisted|_included))|raw_worker_log|raw_codex_transcript|raw_ci_log|environment dump|env_dump|cookie\s*[:=]|$tokenTrue") {
     throw "Unsafe text detected."
   }
 }

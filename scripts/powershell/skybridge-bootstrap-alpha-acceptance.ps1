@@ -18,6 +18,7 @@ $requiredDocs = @(
   "docs/product/MATLAB_STARTUP_DIAGNOSTICS_AND_RECOVERY.md",
   "docs/product/MATLAB_LOCAL_RUNTIME_REPAIR.md",
   "docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md",
+  "docs/product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -47,6 +48,8 @@ $requiredScripts = @{
   matlab_local_config = "scripts/powershell/skybridge-matlab-local-config.ps1"
   live_matlab_golden_recovery = "scripts/powershell/skybridge-live-matlab-golden-recovery.ps1"
   live_matlab_golden_success = "scripts/powershell/skybridge-live-matlab-golden-success.ps1"
+  codex_analysis_report_runner = "scripts/powershell/skybridge-codex-analysis-report-runner.ps1"
+  live_codex_analysis_report_trial = "scripts/powershell/skybridge-live-codex-analysis-report-trial.ps1"
 }
 
 $componentPaths = @{
@@ -168,6 +171,11 @@ $requiredPackageScripts = @(
   "smoke:matlab-golden-success-reject-unsafe",
   "smoke:matlab-success-evidence-validation",
   "smoke:desktop-matlab-golden-success",
+  "smoke:codex-analysis-report-preview",
+  "smoke:codex-analysis-report-fixture",
+  "smoke:codex-analysis-report-reject-unsafe",
+  "smoke:codex-analysis-report-evidence-validation",
+  "smoke:desktop-codex-analysis-report",
   "smoke:desktop-matlab-recovery"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
@@ -209,6 +217,7 @@ $desktopMatlabGoldenTrialPresent = $false
 $desktopMatlabRecoveryPresent = $false
 $desktopMatlabRuntimeRepairPresent = $false
 $desktopMatlabGoldenSuccessPresent = $false
+$desktopCodexAnalysisReportPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -315,6 +324,16 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MG336 metrics exists") -and
     $desktopSource -match [regex]::Escape("MG336 success apply unavailable in Desktop")
   )
+  $desktopCodexAnalysisReportPresent = (
+    $desktopSource -match [regex]::Escape("MG337 Codex analysis report is PowerShell-only for task live-codex-analysis-report-task-337-001") -and
+    $desktopSource -match [regex]::Escape("MG337 Codex Analysis Report status") -and
+    $desktopSource -match [regex]::Escape("MG337 target task id") -and
+    $desktopSource -match [regex]::Escape("MG337 input manifest exists") -and
+    $desktopSource -match [regex]::Escape("MG337 output report path") -and
+    $desktopSource -match [regex]::Escape("MG337 report exists") -and
+    $desktopSource -match [regex]::Escape("MG337 Codex apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("PR creation disabled for MG337")
+  )
 }
 
 $workerStatusContract = $null
@@ -350,6 +369,12 @@ $liveMatlabRecoveryStatusError = $null
 $liveMatlabSuccessStatusContract = $null
 $liveMatlabSuccessStatusContractOk = $false
 $liveMatlabSuccessStatusError = $null
+$codexAnalysisReportRunnerStatusContract = $null
+$codexAnalysisReportRunnerStatusContractOk = $false
+$codexAnalysisReportRunnerStatusError = $null
+$liveCodexAnalysisReportStatusContract = $null
+$liveCodexAnalysisReportStatusContractOk = $false
+$liveCodexAnalysisReportStatusError = $null
 $workerInstallPreviewContract = $null
 $workerInstallPreviewContractOk = $false
 $workerInstallPreviewError = $null
@@ -705,6 +730,52 @@ try {
       [bool]$liveMatlabSuccessStatusContract.token_printed -eq $false
     )
   }
+  $codexAnalysisReportRunnerScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-codex-analysis-report-runner.ps1"
+  if (Test-Path -LiteralPath $codexAnalysisReportRunnerScriptPath -PathType Leaf) {
+    $rawCodexRunner = & pwsh -NoProfile -ExecutionPolicy Bypass -File $codexAnalysisReportRunnerScriptPath -Command status -TaskId "live-codex-analysis-report-task-337-001" -WorkerId "jerry-win-local-01" -Json
+    $codexRunnerText = ($rawCodexRunner | Out-String).Trim()
+    Assert-NoUnsafeText $codexRunnerText
+    $codexAnalysisReportRunnerStatusContract = $codexRunnerText | ConvertFrom-Json
+    $codexAnalysisReportRunnerStatusContractOk = (
+      [string]$codexAnalysisReportRunnerStatusContract.schema -eq "skybridge.codex_analysis_report_runner.v1" -and
+      [string]$codexAnalysisReportRunnerStatusContract.task_id -eq "live-codex-analysis-report-task-337-001" -and
+      [string]$codexAnalysisReportRunnerStatusContract.template_id -eq "codex-analysis-report.v1" -and
+      [string]$codexAnalysisReportRunnerStatusContract.runner_id -eq "codex-analysis-report-runner.v1" -and
+      [bool]$codexAnalysisReportRunnerStatusContract.would_invoke_codex -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.codex_invoked -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.raw_codex_log_included -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.raw_prompt_included -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.raw_stdout_included -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.raw_stderr_included -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.matlab_run_called -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.worker_loop_started -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.pr_created -eq $false -and
+      [bool]$codexAnalysisReportRunnerStatusContract.token_printed -eq $false
+    )
+  }
+  $liveCodexAnalysisReportScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-live-codex-analysis-report-trial.ps1"
+  if (Test-Path -LiteralPath $liveCodexAnalysisReportScriptPath -PathType Leaf) {
+    $rawCodexTrial = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveCodexAnalysisReportScriptPath -Command safe-summary -WorkerId "jerry-win-local-01" -TaskId "live-codex-analysis-report-task-337-001" -Json
+    $codexTrialText = ($rawCodexTrial | Out-String).Trim()
+    Assert-NoUnsafeText $codexTrialText
+    $liveCodexAnalysisReportStatusContract = $codexTrialText | ConvertFrom-Json
+    $liveCodexAnalysisReportStatusContractOk = (
+      [string]$liveCodexAnalysisReportStatusContract.schema -eq "skybridge.live_codex_analysis_report_safe_summary.v1" -and
+      [string]$liveCodexAnalysisReportStatusContract.worker_id -eq "jerry-win-local-01" -and
+      [string]$liveCodexAnalysisReportStatusContract.task_id -eq "live-codex-analysis-report-task-337-001" -and
+      [string]$liveCodexAnalysisReportStatusContract.template_id -eq "codex-analysis-report.v1" -and
+      [string]$liveCodexAnalysisReportStatusContract.runner_id -eq "codex-analysis-report-runner.v1" -and
+      [bool]$liveCodexAnalysisReportStatusContract.claim_created -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.execution_started -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.matlab_run_called -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.worker_loop_started -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.project_control_unpaused -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.pr_created -eq $false -and
+      [bool]$liveCodexAnalysisReportStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -739,6 +810,12 @@ try {
   if (-not $liveMatlabSuccessStatusContractOk) {
     $liveMatlabSuccessStatusError = "live_matlab_success_status_contract_failed"
   }
+  if (-not $codexAnalysisReportRunnerStatusContractOk) {
+    $codexAnalysisReportRunnerStatusError = "codex_analysis_report_runner_status_contract_failed"
+  }
+  if (-not $liveCodexAnalysisReportStatusContractOk) {
+    $liveCodexAnalysisReportStatusError = "live_codex_analysis_report_status_contract_failed"
+  }
   if (-not $workerInstallPreviewContractOk) {
     $workerInstallPreviewError = "worker_install_preview_contract_failed"
   }
@@ -772,6 +849,7 @@ $ok = (
   $desktopMatlabRecoveryPresent -and
   $desktopMatlabRuntimeRepairPresent -and
   $desktopMatlabGoldenSuccessPresent -and
+  $desktopCodexAnalysisReportPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -788,7 +866,9 @@ $ok = (
   $liveMatlabGoldenTrialStatusContractOk -and
   $matlabDoctorStatusContractOk -and
   $liveMatlabRecoveryStatusContractOk -and
-  $liveMatlabSuccessStatusContractOk
+  $liveMatlabSuccessStatusContractOk -and
+  $codexAnalysisReportRunnerStatusContractOk -and
+  $liveCodexAnalysisReportStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -810,6 +890,7 @@ $report = [pscustomobject]@{
   desktop_matlab_recovery_present = $desktopMatlabRecoveryPresent
   desktop_matlab_runtime_repair_present = $desktopMatlabRuntimeRepairPresent
   desktop_matlab_golden_success_present = $desktopMatlabGoldenSuccessPresent
+  desktop_codex_analysis_report_present = $desktopCodexAnalysisReportPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
@@ -1089,6 +1170,53 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   live_matlab_success_status_error = $liveMatlabSuccessStatusError
+  codex_analysis_report_runner_status_contract_ok = $codexAnalysisReportRunnerStatusContractOk
+  codex_analysis_report_runner_status_contract = if ($codexAnalysisReportRunnerStatusContract) {
+    [pscustomobject]@{
+      schema = $codexAnalysisReportRunnerStatusContract.schema
+      mode = $codexAnalysisReportRunnerStatusContract.mode
+      task_id = $codexAnalysisReportRunnerStatusContract.task_id
+      template_id = $codexAnalysisReportRunnerStatusContract.template_id
+      runner_id = $codexAnalysisReportRunnerStatusContract.runner_id
+      input_manifest_path = $codexAnalysisReportRunnerStatusContract.input_manifest_path
+      input_summary_path = $codexAnalysisReportRunnerStatusContract.input_summary_path
+      input_metrics_path = $codexAnalysisReportRunnerStatusContract.input_metrics_path
+      output_report_path = $codexAnalysisReportRunnerStatusContract.output_report_path
+      report_exists = $codexAnalysisReportRunnerStatusContract.report_exists
+      codex_available = $codexAnalysisReportRunnerStatusContract.codex_available
+      would_invoke_codex = $codexAnalysisReportRunnerStatusContract.would_invoke_codex
+      codex_invoked = $codexAnalysisReportRunnerStatusContract.codex_invoked
+      raw_codex_log_included = $codexAnalysisReportRunnerStatusContract.raw_codex_log_included
+      raw_prompt_included = $codexAnalysisReportRunnerStatusContract.raw_prompt_included
+      raw_stdout_included = $codexAnalysisReportRunnerStatusContract.raw_stdout_included
+      raw_stderr_included = $codexAnalysisReportRunnerStatusContract.raw_stderr_included
+      matlab_run_called = $codexAnalysisReportRunnerStatusContract.matlab_run_called
+      arbitrary_shell_enabled = $codexAnalysisReportRunnerStatusContract.arbitrary_shell_enabled
+      worker_loop_started = $codexAnalysisReportRunnerStatusContract.worker_loop_started
+      pr_created = $codexAnalysisReportRunnerStatusContract.pr_created
+      token_printed = $codexAnalysisReportRunnerStatusContract.token_printed
+    }
+  } else { $null }
+  codex_analysis_report_runner_status_error = $codexAnalysisReportRunnerStatusError
+  live_codex_analysis_report_status_contract_ok = $liveCodexAnalysisReportStatusContractOk
+  live_codex_analysis_report_status_contract = if ($liveCodexAnalysisReportStatusContract) {
+    [pscustomobject]@{
+      schema = $liveCodexAnalysisReportStatusContract.schema
+      worker_id = $liveCodexAnalysisReportStatusContract.worker_id
+      task_id = $liveCodexAnalysisReportStatusContract.task_id
+      template_id = $liveCodexAnalysisReportStatusContract.template_id
+      runner_id = $liveCodexAnalysisReportStatusContract.runner_id
+      claim_created = $liveCodexAnalysisReportStatusContract.claim_created
+      execution_started = $liveCodexAnalysisReportStatusContract.execution_started
+      matlab_run_called = $liveCodexAnalysisReportStatusContract.matlab_run_called
+      worker_loop_started = $liveCodexAnalysisReportStatusContract.worker_loop_started
+      arbitrary_shell_enabled = $liveCodexAnalysisReportStatusContract.arbitrary_shell_enabled
+      project_control_unpaused = $liveCodexAnalysisReportStatusContract.project_control_unpaused
+      pr_created = $liveCodexAnalysisReportStatusContract.pr_created
+      token_printed = $liveCodexAnalysisReportStatusContract.token_printed
+    }
+  } else { $null }
+  live_codex_analysis_report_status_error = $liveCodexAnalysisReportStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

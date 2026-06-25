@@ -26,8 +26,8 @@ automation.
 10. The worker executes only template runners. MG329 starts with one
     safe-local-smoke fixture runner. MG332 proves one exact live
     safe-local-smoke pilot task. MG333 adds one exact fixed MATLAB golden-trial
-    task for a tiny synthetic parameter sweep. Codex runners remain future
-    reviewed goals.
+    task for a tiny synthetic parameter sweep. MG337 adds one exact fixed Codex
+    analysis report over the MG336 summary artifacts.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
 12. The operator reviews the result through Desktop and server reports and
@@ -231,5 +231,18 @@ the failed MG333 and MG334 task ids, requires the MG335 doctor precondition,
 then runs the fixed tiny sweep through `matlab-parameter-sweep-runner.v1`.
 Evidence must list only existing manifest, summary, and metrics files and keep
 raw stdout/stderr excluded.
+
+## MG337 Codex Analysis Report Golden Trial
+
+MG337 creates and may claim only
+`live-codex-analysis-report-task-337-001`. It reads the MG336
+manifest/summary/metrics files, invokes Codex only through
+`codex-analysis-report-runner.v1` with a fixed prompt template, and writes one
+Markdown report under `.agent/tmp/codex-analysis-report/**`.
+
+Desktop shows the Codex report preview state and keeps live apply
+PowerShell-only. MG337 keeps arbitrary prompts, MATLAB execution, arbitrary
+shell, source edits, PR creation, worker loops, project-control unpause, old
+task requeue, raw Codex logs, and token printing disabled.
 
 token_printed=false

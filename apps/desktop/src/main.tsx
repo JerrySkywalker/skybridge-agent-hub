@@ -66,6 +66,9 @@ import {
   fixtureMatlabGoldenSuccessRunnerPreview,
   fixtureMatlabGoldenSuccessEvidence,
   fixtureMatlabGoldenSuccessPreview,
+  fixtureCodexAnalysisReportRunnerPreview,
+  fixtureCodexAnalysisReportEvidence,
+  fixtureCodexAnalysisReportPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
@@ -79,6 +82,9 @@ import {
   MATLAB_GOLDEN_RECOVERY_RUN_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT,
   MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT,
+  CODEX_ANALYSIS_REPORT_CREATE_CONFIRMATION_TEXT,
+  CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT,
+  CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -121,6 +127,8 @@ import {
   type MatlabParameterSweepRunner,
   type MatlabSweepEvidence,
   type MatlabDoctor,
+  type CodexAnalysisReportRunner,
+  type CodexAnalysisReportEvidence,
   type LocalResourcePolicyEnforcement,
   type LocalWorkerSupervisorState,
   type ManagedModeV0Status,
@@ -1843,6 +1851,9 @@ function App() {
         matlabSuccessPreview={fixtureMatlabGoldenSuccessPreview}
         matlabSuccessRunnerPreview={fixtureMatlabGoldenSuccessRunnerPreview}
         matlabSuccessEvidence={fixtureMatlabGoldenSuccessEvidence}
+        codexReportPreview={fixtureCodexAnalysisReportPreview}
+        codexReportRunnerPreview={fixtureCodexAnalysisReportRunnerPreview}
+        codexReportEvidence={fixtureCodexAnalysisReportEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2665,6 +2676,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabSuccessPreview,
   matlabSuccessRunnerPreview,
   matlabSuccessEvidence,
+  codexReportPreview,
+  codexReportRunnerPreview,
+  codexReportEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
@@ -2682,6 +2696,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   matlabSuccessPreview: WorkerTemplateRunnerPreview;
   matlabSuccessRunnerPreview: MatlabParameterSweepRunner;
   matlabSuccessEvidence: MatlabSweepEvidence;
+  codexReportPreview: WorkerTemplateRunnerPreview;
+  codexReportRunnerPreview: CodexAnalysisReportRunner;
+  codexReportEvidence: CodexAnalysisReportEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2697,6 +2714,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>MG333 MATLAB golden trial is PowerShell-only for task live-matlab-golden-task-333-001</span>
         <span>MG334 MATLAB recovery is PowerShell-only for task live-matlab-golden-task-334-001</span>
         <span>MG336 MATLAB golden success is PowerShell-only for task live-matlab-golden-task-336-001</span>
+        <span>MG337 Codex analysis report is PowerShell-only for task live-codex-analysis-report-task-337-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2847,6 +2865,28 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG336 raw_stderr_included" value={String(matlabSuccessEvidence.raw_stderr_included)} />
         <StatusValue label="MG336 create confirmation" value={MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG336 run confirmation" value={MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG337 Codex Analysis Report status" value={codexReportPreview.ok ? "exact_codex_report_task_preview_available" : "no_codex_report_task"} />
+        <StatusValue label="MG337 target task id" value={codexReportPreview.expected_task_id ?? codexReportPreview.task_id ?? "none"} />
+        <StatusValue label="MG337 worker id" value={codexReportPreview.worker_id} />
+        <StatusValue label="MG337 cloud worker status" value={codexReportPreview.cloud_worker_status ?? "unknown"} />
+        <StatusValue label="MG337 template id" value={codexReportPreview.template_id ?? "none"} />
+        <StatusValue label="MG337 runner id" value={codexReportPreview.runner_id ?? "none"} />
+        <StatusValue label="MG337 Codex capability detected" value={String(codexReportRunnerPreview.codex_available ?? false)} />
+        <StatusValue label="MG337 input manifest exists" value={String(codexReportRunnerPreview.input_manifest_path.length > 0)} />
+        <StatusValue label="MG337 input summary exists" value={String(codexReportRunnerPreview.input_summary_path.length > 0)} />
+        <StatusValue label="MG337 input metrics exists" value={String(codexReportRunnerPreview.input_metrics_path.length > 0)} />
+        <StatusValue label="MG337 output report path" value={codexReportEvidence.output_report_path} />
+        <StatusValue label="MG337 report exists" value={String(codexReportEvidence.report_exists)} />
+        <StatusValue label="MG337 evidence validation" value={codexReportEvidence.validation_status} />
+        <StatusValue label="MG337 evidence changed files" value={codexReportEvidence.changed_files.join("; ") || "none"} />
+        <StatusValue label="MG337 raw_codex_log_included" value={String(codexReportEvidence.raw_codex_log_included)} />
+        <StatusValue label="MG337 raw_prompt_included" value={String(codexReportEvidence.raw_prompt_included)} />
+        <StatusValue label="MG337 raw_stdout_included" value={String(codexReportEvidence.raw_stdout_included)} />
+        <StatusValue label="MG337 raw_stderr_included" value={String(codexReportEvidence.raw_stderr_included)} />
+        <StatusValue label="MG337 matlab_run_called" value={String(codexReportEvidence.matlab_run_called)} />
+        <StatusValue label="MG337 create confirmation" value={CODEX_ANALYSIS_REPORT_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG337 run confirmation" value={CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG337 fixed runner confirmation" value={CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2902,6 +2942,15 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG336 confirmation">
           MG336 success apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-codex-analysis-report-trial.ps1 -Command preview-run">
+          MG337 Codex report preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG337 confirmation">
+          MG337 Codex apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          PR creation disabled for MG337
         </button>
       </div>
     </section>

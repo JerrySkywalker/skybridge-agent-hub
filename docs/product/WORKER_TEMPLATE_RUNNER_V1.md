@@ -143,4 +143,12 @@ doctor must pass before a live recovery claim. Failed MATLAB evidence now
 separates actual `existing_outputs` from `expected_outputs_missing` so server
 evidence cannot list nonexistent files as changed files.
 
+MG337 adds the first fixed Codex analysis report runner for exactly one task,
+`live-codex-analysis-report-task-337-001`. It reads only the MG336
+manifest/summary/metrics files, writes one Markdown report under
+`.agent/tmp/codex-analysis-report/**`, and returns
+`skybridge.codex_analysis_report_evidence.v1`. It still does not create PRs,
+run MATLAB, accept arbitrary prompt text, start a loop, or expose raw Codex
+logs in server evidence.
+
 token_printed=false

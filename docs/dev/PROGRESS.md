@@ -976,3 +976,26 @@
 - Added fixture/local smokes for preview, apply-one, unsafe rejection, and Desktop runner preview contract.
 - Added a Desktop Bootstrap Alpha Worker Runner Preview panel and the product doc `docs/product/WORKER_TEMPLATE_RUNNER_V1.md`.
 - Kept Codex execution, MATLAB execution, arbitrary shell, worker loop, unbounded run, project-control unpause, PR creation, old task requeue, live cloud task claim, and `token_printed=false`.
+
+## 2026-06-24 Mega Goal 337 Codex Analysis Report Golden Trial
+
+- Added the first fixed Codex analysis report runner contract,
+  `skybridge.codex_analysis_report_runner.v1`, and evidence contract,
+  `skybridge.codex_analysis_report_evidence.v1`.
+- Added `scripts/powershell/skybridge-codex-analysis-report-runner.ps1` and
+  `scripts/powershell/skybridge-live-codex-analysis-report-trial.ps1` for one
+  exact task, `live-codex-analysis-report-task-337-001`.
+- Added the fixed prompt template at
+  `docs/product/prompts/CODEX_ANALYSIS_REPORT_PROMPT_V1.md` and the product doc
+  `docs/product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md`.
+- Added fixture, preview, rejection, evidence-validation, and Desktop contract
+  smokes for the Codex report flow.
+- Live task `live-codex-analysis-report-task-337-001` was created and claimed
+  exactly once, then failed closed with sanitized evidence after the runner
+  returned no usable report evidence. No second live retry was attempted.
+- Hardened the fixed runner to prefer Windows `codex.cmd`, wrap PowerShell
+  shims through `pwsh`, and classify process-start failures without exposing
+  raw stdout, stderr, or Codex logs.
+- Kept arbitrary prompt text, MATLAB execution, arbitrary shell, worker loops,
+  source edits, PR creation, project-control unpause, raw Codex log exposure,
+  old task requeue, and token printing disabled.

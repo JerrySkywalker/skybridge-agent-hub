@@ -42,7 +42,8 @@ Each template includes:
 - `software-docs-task.v1`: low-risk docs/report draft bounded to `docs/**` and
   `README.md`.
 - `codex-analysis-report.v1`: medium-risk summarized analysis/report draft over
-  `docs/experiments/**` and `results/skybridge/**`.
+  `docs/experiments/**`, `results/skybridge/**`, and the MG337 temporary
+  report output path `.agent/tmp/codex-analysis-report/**`.
 - `safe-local-smoke.v1`: low-risk local smoke draft constrained to known smoke
   scripts and fixtures.
 - `matlab-parameter-sweep.v1`: medium-risk campaign draft for future bounded
@@ -94,6 +95,13 @@ golden-trial task, `live-matlab-golden-task-333-001`, through the fixed
 flip in the registry. The registry remains the metadata source, while the
 MG333 PowerShell scripts enforce exact task id, tiny synthetic grid, output
 path bounds, MATLAB availability, and exact confirmation.
+
+MG337 uses the existing `codex-analysis-report.v1` id for one exact Codex
+analysis report task, `live-codex-analysis-report-task-337-001`, through the
+fixed `codex-analysis-report-runner.v1`. The registry now names
+`skybridge.codex_analysis_report_evidence.v1` as the evidence schema, but keeps
+`execution_supported=false`; the live run is authorized only by the MG337
+PowerShell orchestrator and exact confirmation.
 
 ## Disabled In MG327
 
