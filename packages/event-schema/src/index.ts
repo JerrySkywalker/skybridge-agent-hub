@@ -795,6 +795,14 @@ const CodexAnalysisReportCommonSchema = CodexAnalysisReportPathsSchema.merge(
   report_exists: z.boolean(),
   report_size_bytes: z.number().int().min(0).optional(),
   fallback_report_used: z.boolean().optional(),
+  native_report_attempted: z.boolean().optional(),
+  native_report_valid: z.boolean().optional(),
+  native_report_validation_failure_category: z.string().optional(),
+  native_report_validation_failure_summary: z.string().optional(),
+  native_report_validation_checks: z.array(z.string()).default([]),
+  final_report_source: z
+    .enum(["codex_native", "deterministic_fallback", "none"])
+    .optional(),
   validation_status: z.string().min(1),
   codex_invoked: z.boolean(),
   codex_exit_code: z.number().int().nullable(),
@@ -1245,6 +1253,12 @@ export interface EvidenceSummary {
   report_exists?: boolean;
   report_size_bytes?: number;
   fallback_report_used?: boolean;
+  native_report_attempted?: boolean;
+  native_report_valid?: boolean;
+  native_report_validation_failure_category?: string;
+  native_report_validation_failure_summary?: string;
+  native_report_validation_checks?: string[];
+  final_report_source?: "codex_native" | "deterministic_fallback" | "none";
   codex_invoked?: boolean;
   codex_exit_code?: number;
   codex_failure_category?: string;
