@@ -196,3 +196,7 @@ corepack pnpm smoke:codex-stop-hook-hygiene
 ```
 
 See [BOOTSTRAP_ALPHA_RC1_HANDOFF.md](BOOTSTRAP_ALPHA_RC1_HANDOFF.md).
+
+For post-RC1 docs/script deploys, keep tag verification pinned to the RC1 tag
+target and pass the live cloud commit/image separately with the RC1 handoff
+checker.

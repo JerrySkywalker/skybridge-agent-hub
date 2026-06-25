@@ -1091,6 +1091,9 @@
   `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b`.
 - Added the read-only RC1 handoff checker and smokes for local handoff, report
   safety, stop-hook hygiene, and tag verification.
+- Split RC1 tag-target validation from post-RC1 cloud deployment validation so
+  the immutable RC1 tag can remain on its target while docs/script deploys are
+  verified against their own image.
 - Documented the post-MG341 stop-hook timeout as non-blocking when git, tag,
   deploy, audit, and checks are clean; local Codex hook configuration is not
   read or mutated by the repo checker.
