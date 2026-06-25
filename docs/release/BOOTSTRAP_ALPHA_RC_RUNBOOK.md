@@ -185,3 +185,14 @@ values, runtime snapshots, provider auth headers, cookies, or proxy profiles.
 After operator review, a future explicitly authorized goal may create the tag
 from [Bootstrap Alpha Tag Plan](BOOTSTRAP_ALPHA_TAG_PLAN.md). MG340 itself
 must leave `tag_created=false`.
+
+MG341 created and pushed `v0.1.0-bootstrap-alpha-rc1`. For post-tag handoff,
+run:
+
+```powershell
+corepack pnpm smoke:bootstrap-alpha-rc1-handoff
+corepack pnpm smoke:bootstrap-alpha-rc1-tag-check
+corepack pnpm smoke:codex-stop-hook-hygiene
+```
+
+See [BOOTSTRAP_ALPHA_RC1_HANDOFF.md](BOOTSTRAP_ALPHA_RC1_HANDOFF.md).

@@ -1,7 +1,9 @@
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\smoke-productization-common.ps1"
 
-$raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-bootstrap-alpha-rc-gate.ps1") -Command status -ApiBase "" -TokenFile "" -Json
+$expectedCommit = "4473257548bd0fc26e05002d968f8525b37bac8b"
+$expectedImageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b"
+$raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-bootstrap-alpha-rc-gate.ps1") -Command status -ApiBase "" -TokenFile "" -ExpectedCommit $expectedCommit -ExpectedImageRef $expectedImageRef -Json
 if ($LASTEXITCODE -ne 0) { throw "RC gate status failed." }
 $result = (($raw | Out-String).Trim() | ConvertFrom-Json)
 

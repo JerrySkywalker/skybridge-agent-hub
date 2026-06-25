@@ -121,5 +121,10 @@ Bootstrap Alpha RC is ready for operator review when
 `skybridge-bootstrap-alpha-rc-gate.ps1 -Command audit` returns
 `status=pass`, `release_candidate_ready=true`, and `tag_created=false`.
 
-This goal prepares the RC gate and tag plan only. A real git tag requires
-explicit operator authorization after MG340.
+MG341 created and pushed the annotated tag `v0.1.0-bootstrap-alpha-rc1` after
+operator authorization. MG342 adds the RC1 handoff package and classifies the
+post-MG341 stop-hook timeout as non-blocking when tag, deploy, audit, and local
+checks remain green.
+
+See [BOOTSTRAP_ALPHA_RC1_HANDOFF.md](BOOTSTRAP_ALPHA_RC1_HANDOFF.md) for the
+current handoff facts and verification commands.

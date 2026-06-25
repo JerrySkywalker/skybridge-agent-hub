@@ -139,6 +139,9 @@ For the Bootstrap Alpha RC gate and audit package, see
 [docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md](docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md),
 [docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md](docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md),
 and [docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md](docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md).
+For the tagged RC1 handoff and stop-hook hygiene guidance, see
+[docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md](docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md)
+and [docs/dev/CODEX_STOP_HOOK_HYGIENE.md](docs/dev/CODEX_STOP_HOOK_HYGIENE.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see

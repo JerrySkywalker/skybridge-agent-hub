@@ -2,8 +2,10 @@ $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\smoke-productization-common.ps1"
 
 $tagName = "v0.1.0-bootstrap-alpha-rc1"
+$expectedCommit = "4473257548bd0fc26e05002d968f8525b37bac8b"
+$expectedImageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b"
 $before = @(& git tag --list $tagName 2>$null)
-$raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-bootstrap-alpha-rc-gate.ps1") -Command tag-preview -ApiBase "" -TokenFile "" -Json
+$raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-bootstrap-alpha-rc-gate.ps1") -Command tag-preview -ApiBase "" -TokenFile "" -ExpectedCommit $expectedCommit -ExpectedImageRef $expectedImageRef -Json
 if ($LASTEXITCODE -ne 0) { throw "RC tag preview failed." }
 $result = (($raw | Out-String).Trim() | ConvertFrom-Json)
 $after = @(& git tag --list $tagName 2>$null)

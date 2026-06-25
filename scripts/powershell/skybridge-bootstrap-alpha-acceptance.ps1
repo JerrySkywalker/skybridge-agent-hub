@@ -27,7 +27,9 @@ $requiredDocs = @(
   "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md",
   "docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md",
   "docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md",
-  "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md"
+  "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md",
+  "docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md",
+  "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
 $requiredScripts = @{
@@ -61,6 +63,10 @@ $requiredScripts = @{
   bootstrap_alpha_rc_gate = "scripts/powershell/skybridge-bootstrap-alpha-rc-gate.ps1"
   bootstrap_alpha_rc_report_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc-report.ps1"
   bootstrap_alpha_tag_preview_smoke = "scripts/powershell/smoke-bootstrap-alpha-tag-preview.ps1"
+  bootstrap_alpha_rc1_handoff = "scripts/powershell/skybridge-bootstrap-alpha-rc1-handoff.ps1"
+  bootstrap_alpha_rc1_handoff_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc1-handoff.ps1"
+  codex_stop_hook_hygiene_smoke = "scripts/powershell/smoke-codex-stop-hook-hygiene.ps1"
+  bootstrap_alpha_rc1_tag_check_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc1-tag-check.ps1"
 }
 
 $componentPaths = @{
@@ -205,7 +211,12 @@ $requiredPackageScripts = @(
   "smoke:bootstrap-alpha-rc-gate-local",
   "smoke:bootstrap-alpha-rc-report",
   "smoke:bootstrap-alpha-disabled-features",
-  "smoke:bootstrap-alpha-tag-preview"
+  "smoke:bootstrap-alpha-tag-preview",
+  "smoke:bootstrap-alpha-rc1-handoff",
+  "smoke:bootstrap-alpha-rc1-handoff-local",
+  "smoke:bootstrap-alpha-rc1-handoff-report",
+  "smoke:codex-stop-hook-hygiene",
+  "smoke:bootstrap-alpha-rc1-tag-check"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -1012,6 +1023,11 @@ $report = [pscustomobject]@{
   bootstrap_alpha_tag_plan_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md" -Leaf)
   bootstrap_alpha_rc_report_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-bootstrap-alpha-rc-report.ps1" -Leaf)
   bootstrap_alpha_tag_preview_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-bootstrap-alpha-tag-preview.ps1" -Leaf)
+  bootstrap_alpha_rc1_handoff_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md" -Leaf)
+  bootstrap_alpha_rc1_handoff_checker_present = (Test-RelativePath -RelativePath "scripts/powershell/skybridge-bootstrap-alpha-rc1-handoff.ps1" -Leaf)
+  codex_stop_hook_hygiene_present = (Test-RelativePath -RelativePath "docs/dev/CODEX_STOP_HOOK_HYGIENE.md" -Leaf)
+  bootstrap_alpha_rc1_handoff_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-bootstrap-alpha-rc1-handoff.ps1" -Leaf)
+  codex_stop_hook_hygiene_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-codex-stop-hook-hygiene.ps1" -Leaf)
   desktop_worker_service_manager_present = $desktopWorkerServiceManagerPresent
   desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent

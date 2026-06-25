@@ -1082,3 +1082,18 @@
 - Kept arbitrary prompt text, MATLAB execution, arbitrary shell, worker loops,
   source edits, PR creation, project-control unpause, raw Codex log exposure,
   old task requeue, and token printing disabled.
+
+## 2026-06-26 Mega Goal 342 Bootstrap Alpha RC1 Handoff
+
+- Added the Bootstrap Alpha RC1 handoff document for tag
+  `v0.1.0-bootstrap-alpha-rc1`, target
+  `4473257548bd0fc26e05002d968f8525b37bac8b`, and image
+  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b`.
+- Added the read-only RC1 handoff checker and smokes for local handoff, report
+  safety, stop-hook hygiene, and tag verification.
+- Documented the post-MG341 stop-hook timeout as non-blocking when git, tag,
+  deploy, audit, and checks are clean; local Codex hook configuration is not
+  read or mutated by the repo checker.
+- Preserved the RC1 safety boundary: no tag movement, GitHub Release creation,
+  task creation or claim, Codex or MATLAB execution, worker loop,
+  project-control unpause, or token printing.

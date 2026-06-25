@@ -41,3 +41,10 @@ The RC gate and reports must preserve:
 
 If any disabled feature appears enabled in a report, Desktop panel, task
 evidence summary, or release gate output, Bootstrap Alpha RC is blocked.
+
+## RC1 Handoff
+
+MG342 preserves this disabled surface for the tagged RC1 handoff. The handoff
+checker must continue to report no GitHub Release creation, no task claim, no
+task execution, no Codex run, no MATLAB run, no worker loop, no project-control
+unpause, and `token_printed=false`.
