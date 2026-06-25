@@ -4762,6 +4762,8 @@ export const CODEX_ANALYSIS_REPORT_TASK_ID =
   "live-codex-analysis-report-task-337-001";
 export const CODEX_ARTIFACT_RECOVERY_TASK_ID =
   "live-codex-analysis-report-task-338-001";
+export const CODEX_NATIVE_REPORT_TASK_ID =
+  "live-codex-analysis-report-task-339-001";
 export const CODEX_ANALYSIS_REPORT_TEMPLATE_ID = "codex-analysis-report.v1";
 export const CODEX_ANALYSIS_REPORT_RUNNER_ID =
   "codex-analysis-report-runner.v1";
@@ -4775,6 +4777,10 @@ export const CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CREATE_ONE_LIVE_CODEX_REPORT_RECOVERY_TASK_ONLY";
 export const CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_CODEX_REPORT_RECOVERY_TASK_ONLY";
+export const CODEX_NATIVE_REPORT_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_CODEX_NATIVE_REPORT_TASK_ONLY";
+export const CODEX_NATIVE_REPORT_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_CODEX_NATIVE_REPORT_TASK_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -5223,6 +5229,12 @@ export const fixtureCodexAnalysisReportRunnerPreview: CodexAnalysisReportRunner 
   report_exists: false,
   report_size_bytes: 0,
   fallback_report_used: false,
+  native_report_attempted: false,
+  native_report_valid: false,
+  native_report_validation_failure_category: "none",
+  native_report_validation_failure_summary: "none",
+  native_report_validation_checks: [],
+  final_report_source: "none",
   validation_status: "preview_only",
   codex_available: true,
   would_invoke_codex: true,
@@ -5259,6 +5271,18 @@ export const fixtureCodexAnalysisReportEvidence: CodexAnalysisReportEvidence = {
   report_exists: true,
   report_size_bytes: 864,
   fallback_report_used: false,
+  native_report_attempted: true,
+  native_report_valid: true,
+  native_report_validation_failure_category: "none",
+  native_report_validation_failure_summary: "none",
+  native_report_validation_checks: [
+    "report_exists=true",
+    "report_size_bytes_positive=true",
+    "markdown_heading_present=true",
+    "synthetic_runner_validation_stated=true",
+    "completed_count_metric_present=true",
+  ],
+  final_report_source: "codex_native",
   validation_status: "passed",
   codex_invoked: true,
   codex_exit_code: 0,
@@ -5308,6 +5332,16 @@ export const fixtureCodexArtifactRecoveryEvidence: CodexAnalysisReportEvidence =
   report_exists: true,
   report_size_bytes: 932,
   fallback_report_used: true,
+  native_report_attempted: true,
+  native_report_valid: false,
+  native_report_validation_failure_category: "native_report_missing",
+  native_report_validation_failure_summary: "report_missing",
+  native_report_validation_checks: [
+    "report_exists=false",
+    "report_size_bytes_positive=false",
+    "final_report_source=deterministic_fallback",
+  ],
+  final_report_source: "deterministic_fallback",
   validation_status: "passed",
   codex_invoked: true,
   codex_exit_code: 0,
@@ -5333,6 +5367,79 @@ export const fixtureCodexArtifactRecoveryPreview: WorkerTemplateRunnerPreview = 
   evidence_schema: "skybridge.codex_analysis_report_evidence.v1",
   result_summary:
     "MG338 fixture: one exact Codex artifact recovery task is eligible for PowerShell-only fixed-runner apply after MG336 output files are present.",
+  final_task_state: "queued",
+  codex_run_called: false,
+  matlab_run_called: false,
+};
+
+export const fixtureCodexNativeReportRunnerPreview: CodexAnalysisReportRunner = {
+  ...fixtureCodexAnalysisReportRunnerPreview,
+  task_id: CODEX_NATIVE_REPORT_TASK_ID,
+  output_report_path:
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-339-001/report.md",
+  report_exists: false,
+  report_size_bytes: 0,
+  fallback_report_used: false,
+  native_report_attempted: false,
+  native_report_valid: false,
+  native_report_validation_failure_category: "none",
+  native_report_validation_failure_summary: "preview_only",
+  native_report_validation_checks: [],
+  final_report_source: "none",
+  validation_status: "preview_only",
+  warnings: [
+    "MG339 native report success is PowerShell-only and requires exact confirmation before one fixed-runner apply.",
+  ],
+};
+
+export const fixtureCodexNativeReportEvidence: CodexAnalysisReportEvidence = {
+  ...fixtureCodexAnalysisReportEvidence,
+  task_id: CODEX_NATIVE_REPORT_TASK_ID,
+  output_report_path: fixtureCodexNativeReportRunnerPreview.output_report_path,
+  report_exists: true,
+  report_size_bytes: 999,
+  fallback_report_used: false,
+  native_report_attempted: true,
+  native_report_valid: true,
+  native_report_validation_failure_category: "none",
+  native_report_validation_failure_summary: "none",
+  native_report_validation_checks: [
+    "report_exists=true",
+    "report_size_bytes_positive=true",
+    "report_path_exact=true",
+    "report_under_expected_output_dir=true",
+    "markdown_heading_present=true",
+    "synthetic_runner_validation_stated=true",
+    "completed_count_metric_present=true",
+    "failed_count_metric_present=true",
+    "expected_combination_count_metric_present=true",
+    "forbidden_process_markers_absent=true",
+    "secret_patterns_absent=true",
+    "changed_files_actual=true",
+  ],
+  final_report_source: "codex_native",
+  validation_status: "passed",
+  codex_invoked: true,
+  codex_exit_code: 0,
+  codex_failure_category: "none",
+  changed_files: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-339-001/report.md",
+  ],
+  existing_outputs: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-339-001/report.md",
+  ],
+  expected_outputs_missing: [],
+  report_validation_errors: [],
+  result_summary:
+    "MG339 fixture: Codex native Markdown report passed validation, final_report_source=codex_native, and fallback_report_used=false.",
+};
+
+export const fixtureCodexNativeReportPreview: WorkerTemplateRunnerPreview = {
+  ...fixtureCodexArtifactRecoveryPreview,
+  task_id: CODEX_NATIVE_REPORT_TASK_ID,
+  expected_task_id: CODEX_NATIVE_REPORT_TASK_ID,
+  result_summary:
+    "MG339 fixture: one exact Codex native report task is eligible for PowerShell-only fixed-runner apply after MG336 output files are present.",
   final_task_state: "queued",
   codex_run_called: false,
   matlab_run_called: false,

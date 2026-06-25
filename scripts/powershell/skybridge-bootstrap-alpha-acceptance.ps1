@@ -20,6 +20,7 @@ $requiredDocs = @(
   "docs/product/MATLAB_GOLDEN_RECOVERY_SUCCESS.md",
   "docs/product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md",
   "docs/product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md",
+  "docs/product/CODEX_NATIVE_REPORT_VALIDATION_SUCCESS.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
   "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
@@ -52,6 +53,7 @@ $requiredScripts = @{
   codex_analysis_report_runner = "scripts/powershell/skybridge-codex-analysis-report-runner.ps1"
   live_codex_analysis_report_trial = "scripts/powershell/skybridge-live-codex-analysis-report-trial.ps1"
   live_codex_analysis_report_recovery = "scripts/powershell/skybridge-live-codex-analysis-report-recovery.ps1"
+  live_codex_native_report = "scripts/powershell/skybridge-live-codex-analysis-report-native-success.ps1"
 }
 
 $componentPaths = @{
@@ -185,6 +187,12 @@ $requiredPackageScripts = @(
   "smoke:codex-analysis-report-recovery-fixture",
   "smoke:codex-analysis-report-recovery-reject-unsafe",
   "smoke:desktop-codex-artifact-recovery",
+  "smoke:codex-native-report-validation",
+  "smoke:codex-native-report-fixture",
+  "smoke:codex-native-report-fallback-not-used-fixture",
+  "smoke:codex-native-report-reject-unsafe",
+  "smoke:codex-native-report-orchestrator-preview",
+  "smoke:desktop-codex-native-report",
   "smoke:desktop-matlab-recovery"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
@@ -228,6 +236,7 @@ $desktopMatlabRuntimeRepairPresent = $false
 $desktopMatlabGoldenSuccessPresent = $false
 $desktopCodexAnalysisReportPresent = $false
 $desktopCodexArtifactRecoveryPresent = $false
+$desktopCodexNativeReportPresent = $false
 $desktopWorkerInstallFlowPresent = $false
 $desktopWorkerIdentityHeartbeatPresent = $false
 $desktopSourcePath = Join-Path $RepoRoot "apps/desktop/src/main.tsx"
@@ -357,6 +366,21 @@ if (Test-Path -LiteralPath $desktopSourcePath -PathType Leaf) {
     $desktopSource -match [regex]::Escape("MG338 Codex recovery apply unavailable in Desktop") -and
     $desktopSource -match [regex]::Escape("PR creation disabled for MG338")
   )
+  $desktopCodexNativeReportPresent = (
+    $desktopSource -match [regex]::Escape("MG339 Codex native report is PowerShell-only for task live-codex-analysis-report-task-339-001") -and
+    $desktopSource -match [regex]::Escape("MG339 Codex Native Report status") -and
+    $desktopSource -match [regex]::Escape("MG339 native task id") -and
+    $desktopSource -match [regex]::Escape("MG339 input manifest exists") -and
+    $desktopSource -match [regex]::Escape("MG339 report path") -and
+    $desktopSource -match [regex]::Escape("MG339 report exists") -and
+    $desktopSource -match [regex]::Escape("MG339 report_size_bytes") -and
+    $desktopSource -match [regex]::Escape("MG339 final_report_source") -and
+    $desktopSource -match [regex]::Escape("MG339 fallback_report_used") -and
+    $desktopSource -match [regex]::Escape("MG339 native_report_valid") -and
+    $desktopSource -match [regex]::Escape("MG339 native validation failure category") -and
+    $desktopSource -match [regex]::Escape("MG339 Codex native apply unavailable in Desktop") -and
+    $desktopSource -match [regex]::Escape("PR creation disabled for MG339")
+  )
 }
 
 $workerStatusContract = $null
@@ -401,6 +425,9 @@ $liveCodexAnalysisReportStatusError = $null
 $liveCodexArtifactRecoveryStatusContract = $null
 $liveCodexArtifactRecoveryStatusContractOk = $false
 $liveCodexArtifactRecoveryStatusError = $null
+$liveCodexNativeReportStatusContract = $null
+$liveCodexNativeReportStatusContractOk = $false
+$liveCodexNativeReportStatusError = $null
 $workerInstallPreviewContract = $null
 $workerInstallPreviewContractOk = $false
 $workerInstallPreviewError = $null
@@ -825,6 +852,33 @@ try {
       [bool]$liveCodexArtifactRecoveryStatusContract.token_printed -eq $false
     )
   }
+  $liveCodexNativeReportScriptPath = Join-Path $RepoRoot "scripts/powershell/skybridge-live-codex-analysis-report-native-success.ps1"
+  if (Test-Path -LiteralPath $liveCodexNativeReportScriptPath -PathType Leaf) {
+    $rawCodexNative = & pwsh -NoProfile -ExecutionPolicy Bypass -File $liveCodexNativeReportScriptPath -Command safe-summary -WorkerId "jerry-win-local-01" -TaskId "live-codex-analysis-report-task-339-001" -Json
+    $codexNativeText = ($rawCodexNative | Out-String).Trim()
+    Assert-NoUnsafeText $codexNativeText
+    $liveCodexNativeReportStatusContract = $codexNativeText | ConvertFrom-Json
+    $liveCodexNativeReportStatusContractOk = (
+      [string]$liveCodexNativeReportStatusContract.schema -eq "skybridge.live_codex_native_report_safe_summary.v1" -and
+      [string]$liveCodexNativeReportStatusContract.worker_id -eq "jerry-win-local-01" -and
+      [string]$liveCodexNativeReportStatusContract.task_id -eq "live-codex-analysis-report-task-339-001" -and
+      @($liveCodexNativeReportStatusContract.do_not_reuse_task_ids) -contains "live-codex-analysis-report-task-337-001" -and
+      @($liveCodexNativeReportStatusContract.do_not_reuse_task_ids) -contains "live-codex-analysis-report-task-338-001" -and
+      [string]$liveCodexNativeReportStatusContract.template_id -eq "codex-analysis-report.v1" -and
+      [string]$liveCodexNativeReportStatusContract.runner_id -eq "codex-analysis-report-runner.v1" -and
+      [string]$liveCodexNativeReportStatusContract.final_report_source -eq "none" -and
+      [bool]$liveCodexNativeReportStatusContract.fallback_report_used -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.native_report_valid -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.claim_created -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.execution_started -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.matlab_run_called -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.worker_loop_started -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.arbitrary_shell_enabled -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.project_control_unpaused -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.pr_created -eq $false -and
+      [bool]$liveCodexNativeReportStatusContract.token_printed -eq $false
+    )
+  }
 } catch {
   if (-not $workerStatusContractOk) {
     $workerStatusError = "worker_service_status_contract_failed"
@@ -868,6 +922,9 @@ try {
   if (-not $liveCodexArtifactRecoveryStatusContractOk) {
     $liveCodexArtifactRecoveryStatusError = "live_codex_artifact_recovery_status_contract_failed"
   }
+  if (-not $liveCodexNativeReportStatusContractOk) {
+    $liveCodexNativeReportStatusError = "live_codex_native_report_status_contract_failed"
+  }
   if (-not $workerInstallPreviewContractOk) {
     $workerInstallPreviewError = "worker_install_preview_contract_failed"
   }
@@ -903,6 +960,7 @@ $ok = (
   $desktopMatlabGoldenSuccessPresent -and
   $desktopCodexAnalysisReportPresent -and
   $desktopCodexArtifactRecoveryPresent -and
+  $desktopCodexNativeReportPresent -and
   $desktopWorkerInstallFlowPresent -and
   $desktopWorkerIdentityHeartbeatPresent -and
   $workerStatusContractOk -and
@@ -922,7 +980,8 @@ $ok = (
   $liveMatlabSuccessStatusContractOk -and
   $codexAnalysisReportRunnerStatusContractOk -and
   $liveCodexAnalysisReportStatusContractOk -and
-  $liveCodexArtifactRecoveryStatusContractOk
+  $liveCodexArtifactRecoveryStatusContractOk -and
+  $liveCodexNativeReportStatusContractOk
 )
 
 $report = [pscustomobject]@{
@@ -946,6 +1005,7 @@ $report = [pscustomobject]@{
   desktop_matlab_golden_success_present = $desktopMatlabGoldenSuccessPresent
   desktop_codex_analysis_report_present = $desktopCodexAnalysisReportPresent
   desktop_codex_artifact_recovery_present = $desktopCodexArtifactRecoveryPresent
+  desktop_codex_native_report_present = $desktopCodexNativeReportPresent
   desktop_worker_install_flow_present = $desktopWorkerInstallFlowPresent
   desktop_worker_identity_heartbeat_present = $desktopWorkerIdentityHeartbeatPresent
   worker_service_status_contract_ok = $workerStatusContractOk
@@ -1294,6 +1354,31 @@ $report = [pscustomobject]@{
     }
   } else { $null }
   live_codex_artifact_recovery_status_error = $liveCodexArtifactRecoveryStatusError
+  live_codex_native_report_status_contract_ok = $liveCodexNativeReportStatusContractOk
+  live_codex_native_report_status_contract = if ($liveCodexNativeReportStatusContract) {
+    [pscustomobject]@{
+      schema = $liveCodexNativeReportStatusContract.schema
+      worker_id = $liveCodexNativeReportStatusContract.worker_id
+      task_id = $liveCodexNativeReportStatusContract.task_id
+      expected_task_id = $liveCodexNativeReportStatusContract.expected_task_id
+      do_not_reuse_task_ids = $liveCodexNativeReportStatusContract.do_not_reuse_task_ids
+      template_id = $liveCodexNativeReportStatusContract.template_id
+      runner_id = $liveCodexNativeReportStatusContract.runner_id
+      output_report_path = $liveCodexNativeReportStatusContract.output_report_path
+      final_report_source = $liveCodexNativeReportStatusContract.final_report_source
+      fallback_report_used = $liveCodexNativeReportStatusContract.fallback_report_used
+      native_report_valid = $liveCodexNativeReportStatusContract.native_report_valid
+      claim_created = $liveCodexNativeReportStatusContract.claim_created
+      execution_started = $liveCodexNativeReportStatusContract.execution_started
+      matlab_run_called = $liveCodexNativeReportStatusContract.matlab_run_called
+      worker_loop_started = $liveCodexNativeReportStatusContract.worker_loop_started
+      arbitrary_shell_enabled = $liveCodexNativeReportStatusContract.arbitrary_shell_enabled
+      project_control_unpaused = $liveCodexNativeReportStatusContract.project_control_unpaused
+      pr_created = $liveCodexNativeReportStatusContract.pr_created
+      token_printed = $liveCodexNativeReportStatusContract.token_printed
+    }
+  } else { $null }
+  live_codex_native_report_status_error = $liveCodexNativeReportStatusError
   doc_secret_marker_findings = $docSecretFindings
   missing_docs = $missingDocs
   missing_scripts = $missingScripts

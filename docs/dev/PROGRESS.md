@@ -1,5 +1,31 @@
 # Progress Log
 
+## 2026-06-26 Mega Goal 339 Codex Native Report Validation Success
+
+- Hardened `skybridge-codex-analysis-report-runner.ps1` so native Codex
+  reports must include Markdown shape, the synthetic MATLAB runner-validation
+  statement, expected/completed/failed count metrics, and no process stream or
+  secret-like markers.
+- Added native evidence fields:
+  `native_report_attempted`, `native_report_valid`,
+  `native_report_validation_failure_category`,
+  `native_report_validation_checks`, and `final_report_source`.
+- Tightened the fixed prompt to request exactly one Markdown report, no wrapper,
+  no commands, no external facts, no raw logs, no secrets, and no PR
+  instructions.
+- Added safe persistence for usable native Markdown captured from Codex output,
+  while keeping raw Codex logs and process streams out of final evidence.
+- Added `skybridge-live-codex-analysis-report-native-success.ps1` for the exact
+  live task `live-codex-analysis-report-task-339-001`, refusing the MG337 and
+  MG338 task ids.
+- Added native validation, native fixture, fallback-not-used, unsafe rejection,
+  orchestrator preview, and Desktop native report smokes.
+- Updated Desktop Bootstrap Alpha native report fields, Bootstrap Alpha
+  acceptance, README, and product/release docs.
+- Kept arbitrary prompt text, arbitrary shell, MATLAB execution, worker loops,
+  PR creation, project-control unpause, old task requeue, raw Codex logs,
+  process stream exposure, and token printing disabled.
+
 ## 2026-06-25 Mega Goal 338 Codex Artifact Persistence Recovery
 
 - Hardened `skybridge-codex-analysis-report-runner.ps1` so the report output is

@@ -121,6 +121,16 @@ proxy profiles, or process metadata dumps.
 MG338 adds no new product feature. It closes the Bootstrap Alpha Codex artifact
 persistence gap only.
 
+## MG339 Native Follow-Up
+
+MG338 proved the artifact path and fallback writer, but the live recovery used
+`fallback_report_used=true` because the Codex-native output failed validation.
+MG339 keeps the same artifact path contract and fallback safety net, then
+hardens the fixed prompt, native output capture, and validation checks so
+`live-codex-analysis-report-task-339-001` can complete with
+`final_report_source=codex_native`, `fallback_report_used=false`,
+`native_report_valid=true`, and `codex_failure_category=none`.
+
 Still disabled:
 
 - arbitrary prompt input;

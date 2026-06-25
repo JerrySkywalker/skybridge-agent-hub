@@ -164,4 +164,14 @@ report. Evidence records actual-file-only `changed_files`,
 keeping raw Codex logs, raw prompt text, stdout, stderr, MATLAB execution, PR
 creation, worker loops, and project-control unpause disabled.
 
+MG339 hardens native Codex report validation for the same fixed runner. It may
+create and run only `live-codex-analysis-report-task-339-001`, refuses the
+MG337 and MG338 task ids, and expects a Codex-native `report.md` with
+`final_report_source=codex_native`, `fallback_report_used=false`,
+`native_report_valid=true`, and `codex_failure_category=none`. The fallback
+writer remains available for safe failure handling, but native success is the
+acceptance target. Arbitrary prompts, arbitrary shell, MATLAB execution, PR
+creation, worker loops, project-control unpause, old task requeue, raw Codex
+logs, raw prompts, process streams, and token printing remain disabled.
+
 token_printed=false

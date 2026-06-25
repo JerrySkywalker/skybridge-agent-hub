@@ -157,6 +157,20 @@ credentials, process environment details, MATLAB execution, worker loops, PR cre
 old task requeue, project-control unpause, arbitrary shell, and production
 infrastructure mutation.
 
+MG339 covers Codex Native Report Validation Success only. It may create, claim,
+start, and complete or fail exactly one new task,
+`live-codex-analysis-report-task-339-001`, after the MG336 manifest, summary,
+and metrics inputs exist and only if no old residue or active lease is present.
+It must not reuse or requeue `live-codex-analysis-report-task-337-001` or
+`live-codex-analysis-report-task-338-001`. The successful native path requires
+`final_report_source=codex_native`, `fallback_report_used=false`,
+`native_report_valid=true`, `validation_status=passed`, and
+`codex_failure_category=none`. MG339 does not allow arbitrary prompts, MATLAB
+execution, arbitrary shell, PR creation, auto-merge, worker loops,
+project-control unpause, old task requeue, generic Codex queue execution,
+notification send, raw Codex logs, raw prompts, process streams, credentials,
+tokens, runtime environment details, or production infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

@@ -22,6 +22,53 @@ $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $PromptTemplatePath = Join-Path $RepoRoot "docs\product\prompts\CODEX_ANALYSIS_REPORT_PROMPT_V1.md"
 $CodexTimeoutSeconds = 300
 
+if ($args.Count -gt 0) {
+  $unsupportedResult = [pscustomobject]@{
+    schema = "skybridge.codex_analysis_report_runner.v1"
+    ok = $false
+    mode = "blocked"
+    task_id = $TaskId
+    worker_id = $WorkerId
+    template_id = $TemplateId
+    runner_id = $RunnerId
+    input_manifest_path = $InputManifest
+    input_summary_path = $InputSummary
+    input_metrics_path = $InputMetrics
+    input_manifest_exists = $false
+    input_summary_exists = $false
+    input_metrics_exists = $false
+    output_report_path = ".agent/tmp/codex-analysis-report/$TaskId/report.md"
+    report_exists = $false
+    report_size_bytes = 0
+    fallback_report_used = $false
+    native_report_valid = $false
+    final_report_source = "none"
+    validation_status = "blocked"
+    codex_available = $false
+    would_invoke_codex = $false
+    codex_invoked = $false
+    codex_exit_code = $null
+    codex_failure_category = "unsupported_runner_arguments"
+    blockers = @("unsupported_runner_arguments")
+    warnings = @()
+    raw_codex_log_included = $false
+    raw_prompt_included = $false
+    raw_stdout_included = $false
+    raw_stderr_included = $false
+    matlab_run_called = $false
+    arbitrary_shell_enabled = $false
+    worker_loop_started = $false
+    pr_created = $false
+    token_printed = $false
+  }
+  if ($Json) {
+    $unsupportedResult | ConvertTo-Json -Depth 8
+  } else {
+    $unsupportedResult | Format-List
+  }
+  exit 0
+}
+
 function ConvertTo-SafeJson {
   param($Value)
   $Value | ConvertTo-Json -Depth 32

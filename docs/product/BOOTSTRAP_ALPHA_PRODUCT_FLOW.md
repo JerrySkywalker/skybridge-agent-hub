@@ -29,6 +29,8 @@ automation.
      task for a tiny synthetic parameter sweep. MG337 adds one exact fixed Codex
      analysis report over the MG336 summary artifacts. MG338 hardens Codex
      report artifact persistence with a deterministic `report.md` contract.
+     MG339 hardens native Codex report validation so the successful report path
+     no longer requires fallback.
 11. The worker reports evidence, PR, CI, smoke, and audit summaries back to the
     server.
 12. The operator reviews the result through Desktop and server reports and
@@ -263,5 +265,22 @@ apply remains PowerShell-only with exact confirmation. MG338 keeps arbitrary
 prompts, MATLAB execution, arbitrary shell, PR creation, worker loops,
 project-control unpause, old task requeue, raw Codex logs, raw prompts, stdout,
 stderr, credentials, and token printing disabled.
+
+## MG339 Codex Native Report Validation Success
+
+MG339 creates and may claim only
+`live-codex-analysis-report-task-339-001`. It must not reuse or requeue
+`live-codex-analysis-report-task-337-001` or
+`live-codex-analysis-report-task-338-001`. The fixed runner keeps the MG338
+path contract and fallback safety net, but the success target is a native Codex
+Markdown report with `final_report_source=codex_native`,
+`fallback_report_used=false`, `native_report_valid=true`, and
+`validation_status=passed`.
+
+Desktop shows native validation fields and disabled live apply controls; live
+apply remains PowerShell-only with exact confirmation. MG339 keeps arbitrary
+prompts, MATLAB execution, arbitrary shell, PR creation, worker loops,
+project-control unpause, old task requeue, raw Codex logs, raw prompts, process
+streams, credentials, and token printing disabled.
 
 token_printed=false
