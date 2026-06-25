@@ -8,6 +8,9 @@ commands. Do not create or suggest a pull request. Do not include raw logs,
 stdout, stderr, environment values, credentials, cookies, tokens, or provider
 headers.
 
+Do not write a checklist that repeats forbidden process-stream labels. If you
+need a safety note, use the phrase `process streams omitted`.
+
 Write a concise Markdown report with these sections:
 
 - Title

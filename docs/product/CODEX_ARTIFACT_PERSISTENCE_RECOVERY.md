@@ -52,6 +52,9 @@ The artifact outcome is explicit:
 - If Codex exits successfully but `report.md` is missing, the runner writes a
   deterministic fallback Markdown report from the already-safe MG336 manifest,
   summary, and metrics files and sets `fallback_report_used=true`.
+- If Codex exits successfully but `report.md` fails sanitizer validation, the
+  runner replaces it with the deterministic fallback report and records
+  `codex_failure_category=report_validation_failed_after_codex`.
 - If Codex fails, the runner does not fake success. A partial report is reported
   accurately if it exists; otherwise `validation_status=failed`.
 

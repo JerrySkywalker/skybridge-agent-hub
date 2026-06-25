@@ -87,12 +87,48 @@ try {
   Assert-False $failure.evidence.raw_stderr_included "failure raw_stderr_included"
   Assert-TokenPrintedFalse $failure.evidence
 
+  Remove-Item -LiteralPath $fullOutputDir -Recurse -Force -ErrorAction SilentlyContinue
+  @"
+@echo off
+set OUT=
+:loop
+if "%~1"=="" goto done
+if "%~1"=="-o" (
+  set OUT=%~2
+  shift
+  shift
+  goto loop
+)
+shift
+goto loop
+:done
+if not "%OUT%"=="" (
+  > "%OUT%" echo # Invalid Codex Report
+  >> "%OUT%" echo This is a synthetic runner validation for a synthetic MATLAB golden trial, not a scientific conclusion.
+  >> "%OUT%" echo Raw stdout included: false
+  >> "%OUT%" echo Raw stderr included: false
+)
+exit /b 0
+"@ | Set-Content -LiteralPath (Join-Path $fakeCodexDir "codex.cmd") -Encoding ASCII
+  $invalidCodex = Invoke-RunnerApply
+  if ($invalidCodex.ok -ne $true) { throw "Successful Codex with invalid report should use deterministic fallback." }
+  if ($invalidCodex.evidence.validation_status -ne "passed") { throw "Invalid-report fallback validation_status should pass." }
+  if ($invalidCodex.evidence.report_exists -ne $true) { throw "Invalid-report fallback report should exist." }
+  if ($invalidCodex.evidence.fallback_report_used -ne $true) { throw "Invalid-report fallback_report_used should be true." }
+  if ([string]$invalidCodex.evidence.codex_failure_category -ne "report_validation_failed_after_codex") { throw "Expected report_validation_failed_after_codex." }
+  if (@($invalidCodex.evidence.changed_files).Count -ne 1) { throw "Invalid-report fallback should list exactly one changed file." }
+  $fallbackReportText = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot $invalidCodex.evidence.output_report_path)
+  Assert-NoUnsafeText $fallbackReportText
+  if ($fallbackReportText -match "(?i)raw stdout|raw stderr") { throw "Fallback report should not keep forbidden process-stream markers." }
+
   [pscustomobject]@{
     ok = $true
     smoke = "codex-artifact-evidence-validation"
     fixture_report_size_bytes = [int64]$fixture.evidence.report_size_bytes
     nonzero_failure_category = [string]$failure.evidence.codex_failure_category
+    invalid_report_fallback_category = [string]$invalidCodex.evidence.codex_failure_category
     failure_changed_files_count = @($failure.evidence.changed_files).Count
+    invalid_report_changed_files_count = @($invalidCodex.evidence.changed_files).Count
     raw_codex_log_included = $false
     raw_prompt_included = $false
     raw_stdout_included = $false
