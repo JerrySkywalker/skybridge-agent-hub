@@ -4118,6 +4118,14 @@ function safeStringArray(input: unknown): string[] | undefined {
     : undefined;
 }
 
+type CodexFinalReportSource = "codex_native" | "deterministic_fallback" | "none";
+
+function safeCodexFinalReportSource(input: unknown): CodexFinalReportSource | undefined {
+  return input === "codex_native" || input === "deterministic_fallback" || input === "none"
+    ? input
+    : undefined;
+}
+
 function safeRecord(input: unknown): Record<string, unknown> | undefined {
   return input && typeof input === "object" && !Array.isArray(input)
     ? input as Record<string, unknown>
@@ -6273,7 +6281,7 @@ function safeEvidenceSummary(input: unknown, fallback?: EvidenceSummary): Eviden
     native_report_validation_failure_category: safeString(record.native_report_validation_failure_category),
     native_report_validation_failure_summary: safeString(record.native_report_validation_failure_summary),
     native_report_validation_checks: safeStringArray(record.native_report_validation_checks) ?? [],
-    final_report_source: safeString(record.final_report_source),
+    final_report_source: safeCodexFinalReportSource(record.final_report_source),
     codex_invoked: safeOptionalBoolean(record.codex_invoked),
     codex_exit_code: safeOptionalInteger(record.codex_exit_code, -1, 100_000),
     codex_failure_category: safeString(record.codex_failure_category),
