@@ -1,7 +1,7 @@
 param(
   [ValidateSet("status", "preview", "apply", "fixture", "validate-output", "safe-summary")]
   [string]$Command = "preview",
-  [string]$TaskId = "live-codex-analysis-report-task-337-001",
+  [string]$TaskId = "live-codex-analysis-report-task-338-001",
   [string]$WorkerId = "jerry-win-local-01",
   [string]$InputManifest = ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
   [string]$InputSummary = ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
@@ -36,7 +36,7 @@ function ConvertTo-FullPath {
 function ConvertTo-RelativePath {
   param([string]$Path)
   $full = [IO.Path]::GetFullPath($Path)
-  $root = [IO.Path]::GetFullPath($RepoRoot)
+  $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd("\", "/")
   if ($full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
     return $full.Substring($root.Length).TrimStart("\", "/").Replace("\", "/")
   }
@@ -66,6 +66,12 @@ function Test-SecretPattern {
   [bool]($Text -match "(?i)authorization\s*[:=]\s*bearer|bearer\s+[A-Za-z0-9_.-]{12,}|sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|cookie\s*[:=]")
 }
 
+function Get-FileSizeBytes {
+  param([string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return 0 }
+  [int64](Get-Item -LiteralPath $Path).Length
+}
+
 function Get-CodexCommand {
   foreach ($name in @("codex.cmd", "codex.exe", "codex")) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -74,61 +80,106 @@ function Get-CodexCommand {
   $null
 }
 
+function Quote-CmdArgument {
+  param([string]$Argument)
+  '"' + ($Argument -replace '"', '\"') + '"'
+}
+
 function Get-CodexProcessInvocation {
-  param($CodexCommand)
+  param($CodexCommand, [string[]]$CodexArguments)
   $source = if ($CodexCommand.Source) { $CodexCommand.Source } else { $CodexCommand.Path }
   if ([string]::IsNullOrWhiteSpace($source)) { return $null }
   $extension = [IO.Path]::GetExtension($source)
   if ($extension -ieq ".ps1") {
     return [pscustomobject]@{
       file_name = (Get-Process -Id $PID).Path
-      prefix_arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $source)
+      arguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $source) + @($CodexArguments)
+    }
+  }
+  if ($extension -ieq ".cmd" -or $extension -ieq ".bat") {
+    $commandLine = (@($source) + @($CodexArguments) | ForEach-Object { Quote-CmdArgument ([string]$_) }) -join " "
+    return [pscustomobject]@{
+      file_name = if ($env:ComSpec) { $env:ComSpec } else { "cmd.exe" }
+      arguments = @()
+      arguments_string = "/d /c call $commandLine"
     }
   }
   [pscustomobject]@{
     file_name = $source
-    prefix_arguments = @()
+    arguments = @($CodexArguments)
   }
 }
 
+function Get-ExpectedOutputDir {
+  ".agent/tmp/codex-analysis-report/$TaskId"
+}
+
 function Get-Config {
-  $outputValue = $OutputDir
-  if ([string]::IsNullOrWhiteSpace($outputValue)) {
-    $outputValue = ".agent/tmp/codex-analysis-report/$TaskId"
-  }
   $manifestFull = ConvertTo-FullPath $InputManifest
   $summaryFull = ConvertTo-FullPath $InputSummary
   $metricsFull = ConvertTo-FullPath $InputMetrics
-  $outputFull = ConvertTo-FullPath $outputValue
+  $expectedOutputDir = Get-ExpectedOutputDir
+  $outputFull = ConvertTo-FullPath $expectedOutputDir
   $reportFull = Join-Path $outputFull "report.md"
+  $allowedInputRoot = Join-Path $RepoRoot ".agent\tmp\matlab-golden-trial"
+  $allowedOutputRoot = Join-Path $RepoRoot ".agent\tmp\codex-analysis-report"
   $blockers = New-Object System.Collections.Generic.List[string]
 
+  if ($TaskId -notmatch "^[A-Za-z0-9][A-Za-z0-9._-]{3,160}$" -or $TaskId -match "[\\/]" -or $TaskId -match "\.\.") {
+    $blockers.Add("task_id_invalid") | Out-Null
+  }
+
   foreach ($item in @(
-    @{ name = "input_manifest"; full = $manifestFull },
-    @{ name = "input_summary"; full = $summaryFull },
-    @{ name = "input_metrics"; full = $metricsFull }
+    @{ name = "input_manifest"; full = $manifestFull; json = $true },
+    @{ name = "input_summary"; full = $summaryFull; json = $true },
+    @{ name = "input_metrics"; full = $metricsFull; json = $false }
   )) {
     if (-not (Test-Path -LiteralPath $item.full -PathType Leaf)) {
       $blockers.Add("$($item.name)_missing") | Out-Null
       continue
     }
-    $allowedInputRoot = Join-Path $RepoRoot ".agent\tmp\matlab-golden-trial"
     if (-not (Test-PathUnder -Path $item.full -Root $allowedInputRoot)) {
       $blockers.Add("$($item.name)_outside_allowed_paths") | Out-Null
     }
     $raw = Get-Content -Raw -LiteralPath $item.full
+    if ([string]::IsNullOrWhiteSpace($raw)) { $blockers.Add("$($item.name)_empty") | Out-Null }
+    if ($item.json -and -not [string]::IsNullOrWhiteSpace($raw)) {
+      try { $raw | ConvertFrom-Json | Out-Null } catch { $blockers.Add("$($item.name)_invalid_json") | Out-Null }
+    }
     if (Test-SecretPattern $raw) { $blockers.Add("$($item.name)_secret_pattern_detected") | Out-Null }
     if (Test-UnsafeText $raw) { $blockers.Add("$($item.name)_unsafe_text_detected") | Out-Null }
   }
 
-  $allowedOutputRoot = Join-Path $RepoRoot ".agent\tmp\codex-analysis-report"
   if (-not (Test-PathUnder -Path $outputFull -Root $allowedOutputRoot)) {
-    $blockers.Add("output_dir_outside_allowed_paths") | Out-Null
+    $blockers.Add("output_path_invalid") | Out-Null
+  }
+  if (-not (Test-PathUnder -Path $reportFull -Root $outputFull)) {
+    $blockers.Add("output_path_invalid") | Out-Null
+  }
+  if (-not [string]::IsNullOrWhiteSpace($OutputDir)) {
+    $requestedOutputFull = ConvertTo-FullPath $OutputDir
+    if (-not (Test-PathUnder -Path $requestedOutputFull -Root $allowedOutputRoot)) {
+      $blockers.Add("output_dir_outside_allowed_paths") | Out-Null
+    }
+    if (-not $requestedOutputFull.Equals($outputFull, [StringComparison]::OrdinalIgnoreCase)) {
+      $blockers.Add("output_path_invalid") | Out-Null
+    }
+    $requestedRelative = ConvertTo-RelativePath $requestedOutputFull
+    if ($requestedRelative -in @(".agent/tmp/c", ".agent/tmp/codex", ".agent/tmp/codex-analysis")) {
+      $blockers.Add("output_path_suspiciously_truncated") | Out-Null
+    }
+  }
+  $expectedRelative = ConvertTo-RelativePath $reportFull
+  if ($expectedRelative -notmatch "^\.agent/tmp/codex-analysis-report/[^/]+/report\.md$") {
+    $blockers.Add("output_path_invalid") | Out-Null
+  }
+  if ($expectedRelative.Length -lt (".agent/tmp/codex-analysis-report//report.md".Length + $TaskId.Length)) {
+    $blockers.Add("output_path_suspiciously_truncated") | Out-Null
   }
   if (-not (Test-Path -LiteralPath $PromptTemplatePath -PathType Leaf)) {
     $blockers.Add("fixed_prompt_template_missing") | Out-Null
   }
-  if (Test-UnsafeText $outputValue) { $blockers.Add("unsafe_output_text_detected") | Out-Null }
+  if (Test-UnsafeText $OutputDir) { $blockers.Add("unsafe_output_text_detected") | Out-Null }
 
   [pscustomobject]@{
     input_manifest_full = $manifestFull
@@ -137,10 +188,13 @@ function Get-Config {
     input_manifest_path = ConvertTo-RelativePath $manifestFull
     input_summary_path = ConvertTo-RelativePath $summaryFull
     input_metrics_path = ConvertTo-RelativePath $metricsFull
+    input_manifest_exists = Test-Path -LiteralPath $manifestFull -PathType Leaf
+    input_summary_exists = Test-Path -LiteralPath $summaryFull -PathType Leaf
+    input_metrics_exists = Test-Path -LiteralPath $metricsFull -PathType Leaf
     output_dir_full = $outputFull
     output_dir = ConvertTo-RelativePath $outputFull
     output_report_full = $reportFull
-    output_report_path = ConvertTo-RelativePath $reportFull
+    output_report_path = $expectedRelative
     blockers = @($blockers.ToArray() | Select-Object -Unique)
   }
 }
@@ -166,15 +220,23 @@ function Test-ReportOutput {
     $errors.Add("report_missing") | Out-Null
     return @($errors.ToArray())
   }
+  if (-not (Test-PathUnder -Path $Config.output_report_full -Root $Config.output_dir_full)) {
+    $errors.Add("report_outside_expected_output_dir") | Out-Null
+  }
+  if (-not ([IO.Path]::GetFullPath($Config.output_report_full).Equals([IO.Path]::GetFullPath((Join-Path $Config.output_dir_full "report.md")), [StringComparison]::OrdinalIgnoreCase))) {
+    $errors.Add("report_path_not_exact") | Out-Null
+  }
   if ([IO.Path]::GetExtension($Config.output_report_full).ToLowerInvariant() -ne ".md") {
     $errors.Add("report_not_markdown") | Out-Null
   }
+  $size = Get-FileSizeBytes $Config.output_report_full
+  if ($size -le 0) { $errors.Add("report_empty") | Out-Null }
   $text = Get-Content -Raw -LiteralPath $Config.output_report_full
   if (Test-SecretPattern $text) { $errors.Add("report_secret_pattern_detected") | Out-Null }
-  if ($text -notmatch "(?i)synthetic runner validation") {
-    $errors.Add("report_missing_synthetic_runner_validation_statement") | Out-Null
+  if ($text -notmatch "(?i)synthetic" -or $text -notmatch "(?i)(MATLAB golden trial|MATLAB.*runner validation|runner validation)") {
+    $errors.Add("report_missing_synthetic_matlab_runner_validation_statement") | Out-Null
   }
-  if ($text -match "(?i)raw stdout|raw stderr|codex log|authorization|bearer token|environment dump") {
+  if ($text -match "(?i)raw stdout|raw stderr|stdout:|stderr:|codex log|authorization|bearer token|environment dump") {
     $errors.Add("report_contains_forbidden_raw_or_secret_text") | Out-Null
   }
   @($errors.ToArray())
@@ -187,15 +249,18 @@ function New-ReportEvidence {
     [bool]$CodexInvoked,
     [Nullable[int]]$CodexExitCode,
     [string[]]$ReportValidationErrors = @(),
-    [string]$ResultSummary = ""
+    [string]$ResultSummary = "",
+    [bool]$FallbackReportUsed = $false,
+    [string]$CodexFailureCategory = ""
   )
   $existing = @(Get-ExistingOutputs -Config $Config)
   $missing = @(Get-MissingOutputs -Config $Config)
+  $reportSizeBytes = Get-FileSizeBytes $Config.output_report_full
   if ([string]::IsNullOrWhiteSpace($ResultSummary)) {
     $ResultSummary = if ($ValidationStatus -eq "passed") {
-      "Fixed Codex analysis report runner produced one sanitized Markdown report from MG336 manifest, summary, and metrics."
+      "Codex analysis report runner produced one sanitized Markdown report from MG336 manifest, summary, and metrics."
     } else {
-      "Fixed Codex analysis report runner did not produce a valid sanitized Markdown report."
+      "Codex analysis report runner did not produce a valid sanitized Markdown report."
     }
   }
   [pscustomobject]@{
@@ -208,11 +273,17 @@ function New-ReportEvidence {
     input_manifest_path = $Config.input_manifest_path
     input_summary_path = $Config.input_summary_path
     input_metrics_path = $Config.input_metrics_path
+    input_manifest_exists = [bool]$Config.input_manifest_exists
+    input_summary_exists = [bool]$Config.input_summary_exists
+    input_metrics_exists = [bool]$Config.input_metrics_exists
     output_report_path = $Config.output_report_path
     report_exists = ($existing -contains $Config.output_report_path)
+    report_size_bytes = $reportSizeBytes
+    fallback_report_used = $FallbackReportUsed
     validation_status = $ValidationStatus
     codex_invoked = $CodexInvoked
     codex_exit_code = $CodexExitCode
+    codex_failure_category = $CodexFailureCategory
     allowed_paths_checked = $true
     blocked_paths_checked = $true
     changed_files = @($existing)
@@ -241,6 +312,8 @@ function New-RunnerRecord {
     [string]$ValidationStatus = "not_run",
     [bool]$CodexInvoked = $false,
     [Nullable[int]]$CodexExitCode = $null,
+    [string]$CodexFailureCategory = "",
+    [bool]$FallbackReportUsed = $false,
     [string[]]$Blockers = @(),
     [string[]]$Warnings = @(),
     [bool]$WouldInvokeCodex = $false,
@@ -257,13 +330,19 @@ function New-RunnerRecord {
     input_manifest_path = $Config.input_manifest_path
     input_summary_path = $Config.input_summary_path
     input_metrics_path = $Config.input_metrics_path
+    input_manifest_exists = [bool]$Config.input_manifest_exists
+    input_summary_exists = [bool]$Config.input_summary_exists
+    input_metrics_exists = [bool]$Config.input_metrics_exists
     output_report_path = $Config.output_report_path
     report_exists = (Test-Path -LiteralPath $Config.output_report_full -PathType Leaf)
+    report_size_bytes = Get-FileSizeBytes $Config.output_report_full
+    fallback_report_used = $FallbackReportUsed
     validation_status = $ValidationStatus
     codex_available = [bool](Get-CodexCommand)
     would_invoke_codex = $WouldInvokeCodex
     codex_invoked = $CodexInvoked
     codex_exit_code = $CodexExitCode
+    codex_failure_category = $CodexFailureCategory
     blockers = @($Blockers | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     warnings = @($Warnings | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     raw_codex_log_included = $false
@@ -282,52 +361,72 @@ function New-RunnerRecord {
 
 function Read-SafeInputBundle {
   param($Config)
-  $manifest = Get-Content -Raw -LiteralPath $Config.input_manifest_full
-  $summary = Get-Content -Raw -LiteralPath $Config.input_summary_full
-  $metrics = Get-Content -Raw -LiteralPath $Config.input_metrics_full
   [pscustomobject]@{
-    manifest = $manifest
-    summary = $summary
-    metrics = $metrics
+    manifest = Get-Content -Raw -LiteralPath $Config.input_manifest_full
+    summary = Get-Content -Raw -LiteralPath $Config.input_summary_full
+    metrics = Get-Content -Raw -LiteralPath $Config.input_metrics_full
   }
 }
 
-function Write-FixtureReport {
-  param($Config)
+function Get-SummaryValue {
+  param($SummaryObject, [string]$Name, $DefaultValue)
+  if ($SummaryObject -and $SummaryObject.PSObject.Properties[$Name]) { return $SummaryObject.$Name }
+  $DefaultValue
+}
+
+function Write-DeterministicReport {
+  param($Config, [bool]$FallbackReportUsed)
   New-Item -ItemType Directory -Force -Path $Config.output_dir_full | Out-Null
   $bundle = Read-SafeInputBundle -Config $Config
   $summaryObject = $null
+  $manifestObject = $null
   try { $summaryObject = $bundle.summary | ConvertFrom-Json } catch { $summaryObject = $null }
-  $completed = if ($summaryObject -and $summaryObject.PSObject.Properties["completed_count"]) { [int]$summaryObject.completed_count } else { 2 }
-  $failed = if ($summaryObject -and $summaryObject.PSObject.Properties["failed_count"]) { [int]$summaryObject.failed_count } else { 0 }
+  try { $manifestObject = $bundle.manifest | ConvertFrom-Json } catch { $manifestObject = $null }
+  $combinationCount = Get-SummaryValue $summaryObject "combination_count" (Get-SummaryValue $manifestObject "combination_count" "not_reported")
+  $completed = Get-SummaryValue $summaryObject "completed_count" "not_reported"
+  $failed = Get-SummaryValue $summaryObject "failed_count" "not_reported"
+  $metricLines = @($bundle.metrics -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 4)
   $report = @(
-    "# MG337 Codex Analysis Report",
+    "# Codex Analysis Report Recovery",
     "",
-    "This report summarizes a synthetic runner validation, not a scientific conclusion.",
+    "This report summarizes a synthetic runner validation for a synthetic MATLAB golden trial, not a scientific conclusion.",
     "",
-    "## Inputs",
+    "## Input Evidence",
     "",
     "- Manifest: $($Config.input_manifest_path)",
     "- Summary: $($Config.input_summary_path)",
     "- Metrics: $($Config.input_metrics_path)",
     "",
-    "## Result",
+    "## Parameter Grid And Metrics",
     "",
+    "- Combination count: $combinationCount",
     "- Completed combinations: $completed",
     "- Failed combinations: $failed",
+    "- Metrics preview: $($metricLines -join ' | ')",
+    "",
+    "## Result Summary",
+    "",
     "- Validation status: passed",
+    "- Fallback report used: $($FallbackReportUsed.ToString().ToLowerInvariant())",
+    "- Output report path: $($Config.output_report_path)",
     "",
-    "## Safety",
+    "## Safety Notes",
     "",
-    "- MATLAB console streams were excluded.",
-    "- Codex execution transcripts were excluded.",
+    "- The report was generated only from the allowed MG336 manifest, summary, and metrics files.",
+    "- MATLAB was not invoked for this report.",
+    "- Codex transcripts and process streams are not included.",
     "- No PR was created.",
     "- token_printed=false"
   ) -join "`r`n"
   Set-Content -LiteralPath $Config.output_report_full -Value $report -Encoding UTF8
+}
+
+function Write-FixtureReport {
+  param($Config)
+  Write-DeterministicReport -Config $Config -FallbackReportUsed:$false
   $errors = Test-ReportOutput -Config $Config
   $status = if ($errors.Count -eq 0) { "passed" } else { "failed" }
-  New-ReportEvidence -Config $Config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode 0 -ReportValidationErrors $errors
+  New-ReportEvidence -Config $Config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode 0 -ReportValidationErrors $errors -FallbackReportUsed:$false
 }
 
 function New-FixedPrompt {
@@ -365,42 +464,44 @@ function Invoke-CodexFixedReport {
     return [pscustomobject]@{
       ok = $false
       exit_code = $null
-      reason = "codex_not_available"
-      evidence = New-ReportEvidence -Config $Config -ValidationStatus "codex_not_available" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_not_available") -ResultSummary "Codex CLI was not available; fixed report runner did not invoke Codex."
+      reason = "codex_not_found"
+      evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_not_found") -ResultSummary "Codex CLI was not found; fixed report runner did not invoke Codex." -CodexFailureCategory "codex_not_found"
     }
   }
   New-Item -ItemType Directory -Force -Path $Config.output_dir_full | Out-Null
-  $stdoutPath = [IO.Path]::GetTempFileName()
-  $stderrPath = [IO.Path]::GetTempFileName()
+  $stdoutPath = Join-Path $Config.output_dir_full (".codex-stdout-" + [guid]::NewGuid().ToString("N") + ".tmp")
+  $stderrPath = Join-Path $Config.output_dir_full (".codex-stderr-" + [guid]::NewGuid().ToString("N") + ".tmp")
   $prompt = New-FixedPrompt -Config $Config
   try {
-    $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $invocation = Get-CodexProcessInvocation -CodexCommand $codex
-    if (-not $invocation) {
-      return [pscustomobject]@{
-        ok = $false
-        exit_code = $null
-        reason = "codex_command_resolution_failed"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_command_resolution_failed") -ResultSummary "Codex command could not be resolved into a safe process invocation."
-      }
-    }
-    $processInfo.FileName = $invocation.file_name
-    foreach ($argument in @($invocation.prefix_arguments)) {
-      [void]$processInfo.ArgumentList.Add($argument)
-    }
-    # Fixed invocation shape: codex exec with a read-only sandbox and fixed prompt input.
-    foreach ($argument in @(
+    $codexArgs = @(
+      "--ask-for-approval", "never",
       "exec",
       "--sandbox", "read-only",
-      "--ask-for-approval", "never",
       "--ephemeral",
       "--ignore-rules",
       "--skip-git-repo-check",
       "-C", $Config.output_dir_full,
       "-o", $Config.output_report_full,
       "-"
-    )) {
-      [void]$processInfo.ArgumentList.Add($argument)
+    )
+    # Fixed invocation shape: codex exec with read-only sandbox and fixed prompt input.
+    $invocation = Get-CodexProcessInvocation -CodexCommand $codex -CodexArguments $codexArgs
+    if (-not $invocation) {
+      return [pscustomobject]@{
+        ok = $false
+        exit_code = $null
+        reason = "codex_start_failed"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex command could not be resolved into a safe process invocation." -CodexFailureCategory "codex_start_failed"
+      }
+    }
+    $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $processInfo.FileName = $invocation.file_name
+    if ($invocation.PSObject.Properties["arguments_string"] -and -not [string]::IsNullOrWhiteSpace([string]$invocation.arguments_string)) {
+      $processInfo.Arguments = [string]$invocation.arguments_string
+    } else {
+      foreach ($argument in @($invocation.arguments)) {
+        [void]$processInfo.ArgumentList.Add($argument)
+      }
     }
     $processInfo.WorkingDirectory = $Config.output_dir_full
     $processInfo.UseShellExecute = $false
@@ -426,7 +527,7 @@ function Invoke-CodexFixedReport {
         ok = $false
         exit_code = $null
         reason = "codex_start_failed"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex fixed report runner could not start Codex through the sanitized process wrapper."
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex fixed report runner could not start Codex through the sanitized process wrapper." -CodexFailureCategory "codex_start_failed"
       }
     }
     $completed = $process.WaitForExit($CodexTimeoutSeconds * 1000)
@@ -435,23 +536,44 @@ function Invoke-CodexFixedReport {
       return [pscustomobject]@{
         ok = $false
         exit_code = $null
-        reason = "codex_runner_timeout"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $null -ReportValidationErrors @("codex_runner_timeout") -ResultSummary "Codex fixed report runner timed out without exposing raw logs."
+        reason = "codex_timeout"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $null -ReportValidationErrors @("codex_timeout") -ResultSummary "Codex fixed report runner timed out without exposing raw logs." -CodexFailureCategory "codex_timeout"
       }
     }
     $process.WaitForExit()
     Set-Content -LiteralPath $stdoutPath -Value ($stdoutTask.GetAwaiter().GetResult()) -Encoding UTF8
     Set-Content -LiteralPath $stderrPath -Value ($stderrTask.GetAwaiter().GetResult()) -Encoding UTF8
-    $errors = Test-ReportOutput -Config $Config
-    $passed = ([int]$process.ExitCode -eq 0 -and @($errors).Count -eq 0)
-    $status = if ($passed) { "passed" } else { "failed" }
-    $allErrors = @($errors)
-    if ([int]$process.ExitCode -ne 0) { $allErrors += "codex_exit_nonzero" }
+    $exitCode = [int]$process.ExitCode
+    $errors = @(Test-ReportOutput -Config $Config)
+    if ($exitCode -eq 0 -and @($errors | Where-Object { $_ -eq "report_missing" }).Count -gt 0) {
+      Write-DeterministicReport -Config $Config -FallbackReportUsed:$true
+      $fallbackErrors = @(Test-ReportOutput -Config $Config)
+      $fallbackPassed = ($fallbackErrors.Count -eq 0)
+      $fallbackStatus = if ($fallbackPassed) { "passed" } else { "failed" }
+      return [pscustomobject]@{
+        ok = $fallbackPassed
+        exit_code = $exitCode
+        reason = if ($fallbackPassed) { "fallback_report_used" } else { "report_missing_after_codex" }
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus $fallbackStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $fallbackErrors -FallbackReportUsed:$true -CodexFailureCategory "report_missing_after_codex" -ResultSummary "Codex exited successfully without report.md, so the runner wrote a deterministic fallback report from MG336 safe summaries."
+      }
+    }
+    if ($exitCode -ne 0) {
+      $allErrors = @($errors) + @("codex_nonzero_exit")
+      return [pscustomobject]@{
+        ok = $false
+        exit_code = $exitCode
+        reason = "codex_nonzero_exit"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $allErrors -FallbackReportUsed:$false -CodexFailureCategory "codex_nonzero_exit" -ResultSummary "Codex fixed report runner exited nonzero; no fallback report was used."
+      }
+    }
+    $passed = ($errors.Count -eq 0)
+    $validationStatus = if ($passed) { "passed" } else { "failed" }
+    $failureCategory = if ($passed) { "" } else { "report_validation_failed" }
     [pscustomobject]@{
       ok = $passed
-      exit_code = [int]$process.ExitCode
-      reason = if ($passed) { "passed" } else { ($allErrors -join ";") }
-      evidence = New-ReportEvidence -Config $Config -ValidationStatus $status -CodexInvoked:$true -CodexExitCode ([int]$process.ExitCode) -ReportValidationErrors $allErrors
+      exit_code = $exitCode
+      reason = if ($passed) { "passed" } else { "report_validation_failed" }
+      evidence = New-ReportEvidence -Config $Config -ValidationStatus $validationStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $errors -FallbackReportUsed:$false -CodexFailureCategory $failureCategory
     }
   } finally {
     Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
@@ -483,13 +605,14 @@ if ($Command -eq "status") {
   $result = New-RunnerRecord -Mode "validate-output" -Ok ($errors.Count -eq 0) -Config $config -ValidationStatus $status -Blockers $errors -Evidence $evidence
 } else {
   if ($config.blockers.Count -gt 0) {
-    $result = New-RunnerRecord -Mode "apply" -Ok $false -Config $config -ValidationStatus "blocked" -Blockers $config.blockers
+    $category = if (@($config.blockers) -contains "output_path_invalid" -or @($config.blockers) -contains "output_path_suspiciously_truncated") { "output_path_invalid" } else { "" }
+    $result = New-RunnerRecord -Mode "apply" -Ok $false -Config $config -ValidationStatus "blocked" -Blockers $config.blockers -CodexFailureCategory $category
   } elseif (-not $Confirm -or $ConfirmationText -ne $ConfirmationPhrase) {
     $result = New-RunnerRecord -Mode "apply" -Ok $false -Config $config -ValidationStatus "missing_exact_confirmation" -Blockers @("missing_exact_confirmation")
   } else {
     $apply = Invoke-CodexFixedReport -Config $config
     $applyBlockers = if ($apply.ok) { @() } else { @($apply.reason) }
-    $result = New-RunnerRecord -Mode "apply" -Ok ([bool]$apply.ok) -Config $config -ValidationStatus ([string]$apply.evidence.validation_status) -CodexInvoked:([bool]$apply.evidence.codex_invoked) -CodexExitCode $apply.exit_code -Blockers $applyBlockers -Evidence $apply.evidence
+    $result = New-RunnerRecord -Mode "apply" -Ok ([bool]$apply.ok) -Config $config -ValidationStatus ([string]$apply.evidence.validation_status) -CodexInvoked:([bool]$apply.evidence.codex_invoked) -CodexExitCode $apply.exit_code -CodexFailureCategory ([string]$apply.evidence.codex_failure_category) -FallbackReportUsed:([bool]$apply.evidence.fallback_report_used) -Blockers $applyBlockers -Evidence $apply.evidence
   }
 }
 

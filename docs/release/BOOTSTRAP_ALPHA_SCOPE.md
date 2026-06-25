@@ -144,6 +144,19 @@ prompts, MATLAB execution, arbitrary shell, source edits, PR creation,
 auto-merge, worker loops, old task requeue, project-control unpause, raw Codex
 log exposure, or production infrastructure mutation.
 
+MG338 covers Codex Artifact Persistence Recovery only. It may create, claim,
+start, and complete or fail exactly one new task,
+`live-codex-analysis-report-task-338-001`, after the MG336 manifest, summary,
+and metrics inputs exist and only if no old residue or active lease is present.
+It must not reuse or requeue `live-codex-analysis-report-task-337-001`. The
+runner must persist
+`.agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md`
+or fail closed, validate report size and location, list only existing changed
+files, and exclude raw Codex logs, raw prompts, stdout, stderr, tokens,
+credentials, process environment details, MATLAB execution, worker loops, PR creation,
+old task requeue, project-control unpause, arbitrary shell, and production
+infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

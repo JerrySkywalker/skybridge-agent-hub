@@ -269,4 +269,31 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   include exactly one live MG337 report apply if Codex, worker, API, token,
   task id, input-file, and output-path preconditions hold.
 
+## MG338 Codex Artifact Persistence Recovery
+
+- Objective: repair the MG337 Codex report artifact contract so the live
+  recovery task produces a validated `report.md` or fails closed with accurate
+  evidence.
+- Implementation note: MG338 adds
+  [Codex Artifact Persistence Recovery](../product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md),
+  `skybridge-live-codex-analysis-report-recovery.ps1`, deterministic output
+  path validation in `skybridge-codex-analysis-report-runner.ps1`, a fallback
+  report writer, evidence fields for report size/fallback/category, Desktop
+  recovery visibility, and CI-safe recovery smokes.
+- Acceptance criteria: only `live-codex-analysis-report-task-338-001` may be
+  created and claimed; `report.md` must be under
+  `.agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/`,
+  non-empty, validated, and listed only when it exists; evidence must keep raw
+  Codex logs, raw prompts, stdout, stderr, MATLAB execution, PR creation, worker
+  loops, project-control unpause, and token printing disabled.
+- Forbidden scope: requeue or reclaim of
+  `live-codex-analysis-report-task-337-001`, arbitrary prompts, MATLAB
+  execution, arbitrary shell, PR creation, auto-merge, worker loops,
+  project-control unpause, old task requeue, generic Codex queue execution,
+  notification send, and production infrastructure mutation.
+- Live deployment expected: no new deploy path; post-deploy checks may include
+  exactly one live MG338 report recovery apply if Codex, worker, API, token,
+  exact task id, input-file, no-lease, no-residue, and output-path preconditions
+  hold.
+
 token_printed=false

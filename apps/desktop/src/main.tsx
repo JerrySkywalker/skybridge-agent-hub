@@ -69,6 +69,9 @@ import {
   fixtureCodexAnalysisReportRunnerPreview,
   fixtureCodexAnalysisReportEvidence,
   fixtureCodexAnalysisReportPreview,
+  fixtureCodexArtifactRecoveryRunnerPreview,
+  fixtureCodexArtifactRecoveryEvidence,
+  fixtureCodexArtifactRecoveryPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
@@ -85,6 +88,8 @@ import {
   CODEX_ANALYSIS_REPORT_CREATE_CONFIRMATION_TEXT,
   CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT,
   CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT,
+  CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT,
+  CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -1854,6 +1859,9 @@ function App() {
         codexReportPreview={fixtureCodexAnalysisReportPreview}
         codexReportRunnerPreview={fixtureCodexAnalysisReportRunnerPreview}
         codexReportEvidence={fixtureCodexAnalysisReportEvidence}
+        codexArtifactRecoveryPreview={fixtureCodexArtifactRecoveryPreview}
+        codexArtifactRecoveryRunnerPreview={fixtureCodexArtifactRecoveryRunnerPreview}
+        codexArtifactRecoveryEvidence={fixtureCodexArtifactRecoveryEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2679,6 +2687,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   codexReportPreview,
   codexReportRunnerPreview,
   codexReportEvidence,
+  codexArtifactRecoveryPreview,
+  codexArtifactRecoveryRunnerPreview,
+  codexArtifactRecoveryEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
@@ -2699,6 +2710,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   codexReportPreview: WorkerTemplateRunnerPreview;
   codexReportRunnerPreview: CodexAnalysisReportRunner;
   codexReportEvidence: CodexAnalysisReportEvidence;
+  codexArtifactRecoveryPreview: WorkerTemplateRunnerPreview;
+  codexArtifactRecoveryRunnerPreview: CodexAnalysisReportRunner;
+  codexArtifactRecoveryEvidence: CodexAnalysisReportEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2715,6 +2729,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>MG334 MATLAB recovery is PowerShell-only for task live-matlab-golden-task-334-001</span>
         <span>MG336 MATLAB golden success is PowerShell-only for task live-matlab-golden-task-336-001</span>
         <span>MG337 Codex analysis report is PowerShell-only for task live-codex-analysis-report-task-337-001</span>
+        <span>MG338 Codex artifact recovery is PowerShell-only for task live-codex-analysis-report-task-338-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2887,6 +2902,31 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG337 create confirmation" value={CODEX_ANALYSIS_REPORT_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG337 run confirmation" value={CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT} />
         <StatusValue label="MG337 fixed runner confirmation" value={CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT} />
+        <StatusValue label="MG338 Codex Artifact Recovery status" value={codexArtifactRecoveryPreview.ok ? "exact_recovery_task_preview_available" : "no_codex_artifact_recovery_task"} />
+        <StatusValue label="MG338 recovery task id" value={codexArtifactRecoveryPreview.expected_task_id ?? codexArtifactRecoveryPreview.task_id ?? "none"} />
+        <StatusValue label="MG338 worker id" value={codexArtifactRecoveryPreview.worker_id} />
+        <StatusValue label="MG338 final task state" value={codexArtifactRecoveryPreview.final_task_state ?? "queued"} />
+        <StatusValue label="MG338 template id" value={codexArtifactRecoveryPreview.template_id ?? "none"} />
+        <StatusValue label="MG338 runner id" value={codexArtifactRecoveryPreview.runner_id ?? "none"} />
+        <StatusValue label="MG338 Codex executable status" value={codexArtifactRecoveryRunnerPreview.codex_available ? "available" : "missing"} />
+        <StatusValue label="MG338 input manifest exists" value={String(codexArtifactRecoveryRunnerPreview.input_manifest_exists ?? codexArtifactRecoveryRunnerPreview.input_manifest_path.length > 0)} />
+        <StatusValue label="MG338 input summary exists" value={String(codexArtifactRecoveryRunnerPreview.input_summary_exists ?? codexArtifactRecoveryRunnerPreview.input_summary_path.length > 0)} />
+        <StatusValue label="MG338 input metrics exists" value={String(codexArtifactRecoveryRunnerPreview.input_metrics_exists ?? codexArtifactRecoveryRunnerPreview.input_metrics_path.length > 0)} />
+        <StatusValue label="MG338 output report path" value={codexArtifactRecoveryEvidence.output_report_path} />
+        <StatusValue label="MG338 report exists" value={String(codexArtifactRecoveryEvidence.report_exists)} />
+        <StatusValue label="MG338 report_size_bytes" value={String(codexArtifactRecoveryEvidence.report_size_bytes ?? 0)} />
+        <StatusValue label="MG338 fallback_report_used" value={String(codexArtifactRecoveryEvidence.fallback_report_used ?? false)} />
+        <StatusValue label="MG338 validation_status" value={codexArtifactRecoveryEvidence.validation_status} />
+        <StatusValue label="MG338 evidence summary" value={codexArtifactRecoveryEvidence.result_summary} />
+        <StatusValue label="MG338 evidence changed_files" value={codexArtifactRecoveryEvidence.changed_files.join("; ") || "none"} />
+        <StatusValue label="MG338 codex_failure_category" value={codexArtifactRecoveryEvidence.codex_failure_category || "none"} />
+        <StatusValue label="MG338 raw_codex_log_included" value={String(codexArtifactRecoveryEvidence.raw_codex_log_included)} />
+        <StatusValue label="MG338 raw_prompt_included" value={String(codexArtifactRecoveryEvidence.raw_prompt_included)} />
+        <StatusValue label="MG338 raw_stdout_included" value={String(codexArtifactRecoveryEvidence.raw_stdout_included)} />
+        <StatusValue label="MG338 raw_stderr_included" value={String(codexArtifactRecoveryEvidence.raw_stderr_included)} />
+        <StatusValue label="MG338 matlab_run_called" value={String(codexArtifactRecoveryEvidence.matlab_run_called)} />
+        <StatusValue label="MG338 create confirmation" value={CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG338 run confirmation" value={CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -2951,6 +2991,15 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true">
           PR creation disabled for MG337
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-codex-analysis-report-recovery.ps1 -Command preview-run">
+          MG338 Codex recovery preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG338 confirmation">
+          MG338 Codex recovery apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          PR creation disabled for MG338
         </button>
       </div>
     </section>

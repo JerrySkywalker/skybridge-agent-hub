@@ -86,6 +86,28 @@ Server evidence uses `skybridge.codex_analysis_report_evidence.v1` and records:
 The report is validated for Markdown shape, the synthetic-runner statement, and
 obvious secret/token markers before task completion.
 
+## MG338 Artifact Persistence Recovery
+
+The MG337 live run failed closed after the required MG336 input files existed,
+but the report artifact path was malformed as `.agent/tmp/c` and no `report.md`
+was persisted. MG338 keeps the same template and runner ids, but uses the new
+task id `live-codex-analysis-report-task-338-001` to prove the artifact contract
+without reusing or requeueing the MG337 task.
+
+MG338 requires the runner to compute the output directory as
+`.agent/tmp/codex-analysis-report/<task_id>/`, compute the report path as
+`.agent/tmp/codex-analysis-report/<task_id>/report.md`, reject truncated or
+outside paths, create the directory before Codex starts, and return
+`report_exists`, `report_size_bytes`, `fallback_report_used`, and
+`validation_status` from actual filesystem state.
+
+If Codex exits successfully but does not write `report.md`, the runner writes a
+deterministic fallback report from the already-safe MG336 manifest, summary, and
+metrics files. Fallback evidence is explicit with `fallback_report_used=true`.
+If Codex fails, the runner does not fake success and reports any partial report
+accurately. Server evidence must not include raw Codex logs, raw prompts,
+stdout, stderr, tokens, credentials, or process environment details.
+
 ## Still Disabled
 
 MG337 does not enable arbitrary prompts, MATLAB execution, arbitrary shell,

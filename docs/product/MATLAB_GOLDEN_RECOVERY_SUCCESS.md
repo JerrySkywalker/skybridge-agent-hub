@@ -82,11 +82,20 @@ MG337 consumes the completed MG336 `manifest.json`, `summary.json`, and
 these safe summary artifacts and writes its Markdown output under
 `.agent/tmp/codex-analysis-report/**`.
 
+MG338 is the recovery consumer after the MG337 live report artifact did not
+persist. It uses a new task id,
+`live-codex-analysis-report-task-338-001`, with the same fixed
+`codex-analysis-report.v1` template and `codex-analysis-report-runner.v1`
+runner. It reads the same MG336 files as read-only inputs, must write or
+fallback-write
+`.agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md`,
+and still does not invoke MATLAB.
+
 ## Still Disabled
 
 MG336 does not enable arbitrary MATLAB command text, arbitrary Codex prompts,
 arbitrary shell, PR creation, worker loops, project-control unpause, old task
-requeue, or generic MATLAB queue execution. MG337 adds one bounded Codex report
-consumer without changing those MATLAB runner bounds.
+requeue, or generic MATLAB queue execution. MG337 and MG338 add bounded Codex
+report consumers without changing those MATLAB runner bounds.
 
 token_printed=false

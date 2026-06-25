@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-06-25 Mega Goal 338 Codex Artifact Persistence Recovery
+
+- Hardened `skybridge-codex-analysis-report-runner.ps1` so the report output is
+  deterministically `.agent/tmp/codex-analysis-report/<task-id>/report.md`,
+  with outside-path and truncated-path rejection before Codex starts.
+- Added deterministic fallback report writing for the case where Codex exits
+  successfully without `report.md`; failed Codex runs still fail closed and do
+  not fake success.
+- Added `skybridge-live-codex-analysis-report-recovery.ps1` for the exact
+  recovery task `live-codex-analysis-report-task-338-001`, with create/run exact
+  confirmations and no reuse of the MG337 task.
+- Updated shared evidence schema, client fixtures, Desktop Bootstrap Alpha
+  recovery fields, Bootstrap Alpha acceptance, README, and product/release docs.
+- Added artifact path, fallback writer, evidence validation, recovery preview,
+  recovery fixture, unsafe rejection, and Desktop artifact recovery smokes.
+- Kept arbitrary prompt text, arbitrary shell, MATLAB execution, worker loops,
+  PR creation, project-control unpause, old task requeue, raw Codex logs,
+  stdout/stderr/prompt exposure, and token printing disabled.
+
 ## 2026-06-24 Mega Goal 336 MATLAB Golden Recovery Live Success
 
 - Added `skybridge-live-matlab-golden-success.ps1` for the exact

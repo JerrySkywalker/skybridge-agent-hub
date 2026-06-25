@@ -789,10 +789,16 @@ const CodexAnalysisReportCommonSchema = CodexAnalysisReportPathsSchema.merge(
   worker_id: z.string().min(1),
   template_id: z.literal("codex-analysis-report.v1"),
   runner_id: z.literal("codex-analysis-report-runner.v1"),
+  input_manifest_exists: z.boolean().optional(),
+  input_summary_exists: z.boolean().optional(),
+  input_metrics_exists: z.boolean().optional(),
   report_exists: z.boolean(),
+  report_size_bytes: z.number().int().min(0).optional(),
+  fallback_report_used: z.boolean().optional(),
   validation_status: z.string().min(1),
   codex_invoked: z.boolean(),
   codex_exit_code: z.number().int().nullable(),
+  codex_failure_category: z.string().optional(),
 });
 export const CodexAnalysisReportRunnerSchema =
   CodexAnalysisReportCommonSchema.extend({
