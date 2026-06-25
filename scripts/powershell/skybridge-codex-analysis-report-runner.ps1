@@ -545,7 +545,13 @@ function Invoke-CodexFixedReport {
     Set-Content -LiteralPath $stderrPath -Value ($stderrTask.GetAwaiter().GetResult()) -Encoding UTF8
     $exitCode = [int]$process.ExitCode
     $errors = @(Test-ReportOutput -Config $Config)
-    if ($exitCode -eq 0 -and @($errors | Where-Object { $_ -eq "report_missing" }).Count -gt 0) {
+    if ($exitCode -eq 0 -and $errors.Count -gt 0) {
+      $fallbackCategory = if (@($errors | Where-Object { $_ -eq "report_missing" }).Count -gt 0) { "report_missing_after_codex" } else { "report_validation_failed_after_codex" }
+      $fallbackSummary = if ($fallbackCategory -eq "report_missing_after_codex") {
+        "Codex exited successfully without report.md, so the runner wrote a deterministic fallback report from MG336 safe summaries."
+      } else {
+        "Codex exited successfully but report.md failed validation, so the runner wrote a deterministic fallback report from MG336 safe summaries."
+      }
       Write-DeterministicReport -Config $Config -FallbackReportUsed:$true
       $fallbackErrors = @(Test-ReportOutput -Config $Config)
       $fallbackPassed = ($fallbackErrors.Count -eq 0)
@@ -553,8 +559,8 @@ function Invoke-CodexFixedReport {
       return [pscustomobject]@{
         ok = $fallbackPassed
         exit_code = $exitCode
-        reason = if ($fallbackPassed) { "fallback_report_used" } else { "report_missing_after_codex" }
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus $fallbackStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $fallbackErrors -FallbackReportUsed:$true -CodexFailureCategory "report_missing_after_codex" -ResultSummary "Codex exited successfully without report.md, so the runner wrote a deterministic fallback report from MG336 safe summaries."
+        reason = if ($fallbackPassed) { "fallback_report_used" } else { $fallbackCategory }
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus $fallbackStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $fallbackErrors -FallbackReportUsed:$true -CodexFailureCategory $fallbackCategory -ResultSummary $fallbackSummary
       }
     }
     if ($exitCode -ne 0) {

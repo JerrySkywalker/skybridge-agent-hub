@@ -8,6 +8,8 @@
 - Added deterministic fallback report writing for the case where Codex exits
   successfully without `report.md`; failed Codex runs still fail closed and do
   not fake success.
+- Hardened sanitizer-failed Codex output to use the same deterministic fallback
+  report with `codex_failure_category=report_validation_failed_after_codex`.
 - Added `skybridge-live-codex-analysis-report-recovery.ps1` for the exact
   recovery task `live-codex-analysis-report-task-338-001`, with create/run exact
   confirmations and no reuse of the MG337 task.

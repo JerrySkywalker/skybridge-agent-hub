@@ -104,6 +104,9 @@ outside paths, create the directory before Codex starts, and return
 If Codex exits successfully but does not write `report.md`, the runner writes a
 deterministic fallback report from the already-safe MG336 manifest, summary, and
 metrics files. Fallback evidence is explicit with `fallback_report_used=true`.
+If Codex exits successfully but writes a report that fails sanitizer validation,
+MG338 replaces it with the same deterministic fallback report and records
+`codex_failure_category=report_validation_failed_after_codex`.
 If Codex fails, the runner does not fake success and reports any partial report
 accurately. Server evidence must not include raw Codex logs, raw prompts,
 stdout, stderr, tokens, credentials, or process environment details.
