@@ -15,6 +15,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$BootstrapAlphaBaselineCommit = "8499ccba39894fdfccb7b29ddfe72db142ddb711"
+$BootstrapAlphaBaselineImageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-8499ccba39894fdfccb7b29ddfe72db142ddb711"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
 
@@ -195,10 +197,10 @@ function Get-LocalChecks {
   )
 
   $requiredDocBlocks = @(
-    [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md"; markers = @("Bootstrap Alpha RC", $ExpectedCommit, $ExpectedImageRef, "live-codex-analysis-report-task-339-001", "token_printed=false") },
+    [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md"; markers = @("Bootstrap Alpha RC", $BootstrapAlphaBaselineCommit, $BootstrapAlphaBaselineImageRef, "live-codex-analysis-report-task-339-001", "token_printed=false") },
     [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md"; markers = @("cloud deploy verification", "worker identity", "Codex native report", "forbidden actions") },
     [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md"; markers = @("general remote shell", "unbounded run", "Codex arbitrary prompt", "background autonomous queue processing") },
-    [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md"; markers = @($TagNamePreview, $ExpectedCommit, "tag_created=false", "operator authorization") }
+    [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md"; markers = @($TagNamePreview, $BootstrapAlphaBaselineCommit, $BootstrapAlphaBaselineImageRef, "tag_created=false", "operator authorization") }
   )
   if ($FixtureMissingRequiredDocBlock) {
     $requiredDocBlocks += [pscustomobject]@{ path = "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md"; markers = @("__missing_bootstrap_alpha_rc_block_fixture__") }
