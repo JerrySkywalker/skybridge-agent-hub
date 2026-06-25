@@ -1410,7 +1410,7 @@ describe("server api", () => {
           runner_id: "codex-analysis-report-runner.v1",
           pr_url: "https://example.invalid/pull/1",
           commit_sha: "abc123",
-          changed_files: ["docs/example.md"],
+          changed_files: [".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md"],
           existing_outputs: [".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md"],
           expected_outputs_missing: [],
           report_validation_errors: [],
@@ -1458,6 +1458,7 @@ describe("server api", () => {
             codex_invoked?: boolean;
             codex_exit_code?: number;
             changed_files?: string[];
+            existing_outputs?: string[];
             raw_codex_log_included?: boolean;
             raw_prompt_included?: boolean;
             raw_stdout_included?: boolean;
@@ -1488,7 +1489,8 @@ describe("server api", () => {
       pr_created: false,
       token_printed: false,
     });
-    expect(completedEvidence.changed_files).toEqual(["docs/example.md"]);
+    expect(completedEvidence.changed_files).toEqual([".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md"]);
+    expect(completedEvidence.existing_outputs).toEqual([".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md"]);
 
     const detail = await server.inject({
       method: "GET",

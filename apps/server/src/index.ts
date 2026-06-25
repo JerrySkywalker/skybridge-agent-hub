@@ -6175,6 +6175,16 @@ function safePathArray(input: unknown): string[] | undefined {
     .slice(0, 50);
 }
 
+function safeEvidencePathArray(input: unknown): string[] | undefined {
+  if (!Array.isArray(input) || !input.every((item) => typeof item === "string" && item.length <= 240)) {
+    return undefined;
+  }
+  return input
+    .filter((value) => !/[<>:"|?]/.test(value))
+    .map((value) => value.replace(/\\/g, "/"))
+    .slice(0, 50);
+}
+
 function safePlannerMetadata(input: unknown) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const record = redactUnsafePayload(input) as Record<string, unknown>;
@@ -6239,9 +6249,9 @@ function safeEvidenceSummary(input: unknown, fallback?: EvidenceSummary): Eviden
     runner_id: safeString(record.runner_id),
     pr_url: safeString(record.pr_url),
     commit_sha: safeString(record.commit_sha),
-    changed_files: safePathArray(record.changed_files) ?? [],
-    existing_outputs: safePathArray(source.existing_outputs) ?? [],
-    expected_outputs_missing: safePathArray(source.expected_outputs_missing) ?? [],
+    changed_files: safeEvidencePathArray(record.changed_files) ?? [],
+    existing_outputs: safeEvidencePathArray(source.existing_outputs) ?? [],
+    expected_outputs_missing: safeEvidencePathArray(source.expected_outputs_missing) ?? [],
     report_validation_errors: safeStringArray(record.report_validation_errors) ?? [],
     validation_status: safeString(record.validation_status),
     ci_status: safeString(record.ci_status),
