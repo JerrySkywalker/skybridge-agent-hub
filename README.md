@@ -134,6 +134,11 @@ contract, see
 [docs/product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md](docs/product/CODEX_ARTIFACT_PERSISTENCE_RECOVERY.md).
 For the native Codex report validation success path, see
 [docs/product/CODEX_NATIVE_REPORT_VALIDATION_SUCCESS.md](docs/product/CODEX_NATIVE_REPORT_VALIDATION_SUCCESS.md).
+For the Bootstrap Alpha RC gate and audit package, see
+[docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md](docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md),
+[docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md](docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md),
+[docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md](docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md),
+and [docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md](docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see

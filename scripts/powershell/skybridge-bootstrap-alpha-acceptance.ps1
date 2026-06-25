@@ -23,7 +23,11 @@ $requiredDocs = @(
   "docs/product/CODEX_NATIVE_REPORT_VALIDATION_SUCCESS.md",
   "docs/release/BOOTSTRAP_ALPHA_SCOPE.md",
   "docs/release/BOOTSTRAP_ALPHA_ROADMAP.md",
-  "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md"
+  "docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md",
+  "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md",
+  "docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md",
+  "docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md",
+  "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md"
 )
 
 $requiredScripts = @{
@@ -54,6 +58,9 @@ $requiredScripts = @{
   live_codex_analysis_report_trial = "scripts/powershell/skybridge-live-codex-analysis-report-trial.ps1"
   live_codex_analysis_report_recovery = "scripts/powershell/skybridge-live-codex-analysis-report-recovery.ps1"
   live_codex_native_report = "scripts/powershell/skybridge-live-codex-analysis-report-native-success.ps1"
+  bootstrap_alpha_rc_gate = "scripts/powershell/skybridge-bootstrap-alpha-rc-gate.ps1"
+  bootstrap_alpha_rc_report_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc-report.ps1"
+  bootstrap_alpha_tag_preview_smoke = "scripts/powershell/smoke-bootstrap-alpha-tag-preview.ps1"
 }
 
 $componentPaths = @{
@@ -193,7 +200,12 @@ $requiredPackageScripts = @(
   "smoke:codex-native-report-reject-unsafe",
   "smoke:codex-native-report-orchestrator-preview",
   "smoke:desktop-codex-native-report",
-  "smoke:desktop-matlab-recovery"
+  "smoke:desktop-matlab-recovery",
+  "smoke:bootstrap-alpha-rc-gate",
+  "smoke:bootstrap-alpha-rc-gate-local",
+  "smoke:bootstrap-alpha-rc-report",
+  "smoke:bootstrap-alpha-disabled-features",
+  "smoke:bootstrap-alpha-tag-preview"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -993,6 +1005,13 @@ $report = [pscustomobject]@{
   components = $componentResults
   worker_support_present = $workerSupportPresent
   worker_support_candidates = $workerResults
+  bootstrap_alpha_rc_gate_present = (Test-RelativePath -RelativePath "scripts/powershell/skybridge-bootstrap-alpha-rc-gate.ps1" -Leaf)
+  bootstrap_alpha_rc_release_notes_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_RC_RELEASE_NOTES.md" -Leaf)
+  bootstrap_alpha_rc_runbook_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_RC_RUNBOOK.md" -Leaf)
+  bootstrap_alpha_disabled_features_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md" -Leaf)
+  bootstrap_alpha_tag_plan_present = (Test-RelativePath -RelativePath "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md" -Leaf)
+  bootstrap_alpha_rc_report_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-bootstrap-alpha-rc-report.ps1" -Leaf)
+  bootstrap_alpha_tag_preview_smoke_present = (Test-RelativePath -RelativePath "scripts/powershell/smoke-bootstrap-alpha-tag-preview.ps1" -Leaf)
   desktop_worker_service_manager_present = $desktopWorkerServiceManagerPresent
   desktop_chat_to_task_panel_present = $desktopChatToTaskPanelPresent
   desktop_task_template_registry_panel_present = $desktopTaskTemplateRegistryPanelPresent
