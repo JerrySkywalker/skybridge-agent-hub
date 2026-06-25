@@ -296,4 +296,29 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   exact task id, input-file, no-lease, no-residue, and output-path preconditions
   hold.
 
+## MG339 Codex Native Report Validation Success
+
+- Objective: make the fixed Codex report runner complete with a valid
+  Codex-native Markdown report instead of the deterministic fallback writer.
+- Implementation note: MG339 adds
+  [Codex Native Report Validation Success](../product/CODEX_NATIVE_REPORT_VALIDATION_SUCCESS.md),
+  `skybridge-live-codex-analysis-report-native-success.ps1`, stricter native
+  report validation fields, native stdout persistence when safe, Desktop native
+  report visibility, and CI-safe native validation smokes.
+- Acceptance criteria: only `live-codex-analysis-report-task-339-001` may be
+  created and claimed; Codex exits 0 through
+  `codex-analysis-report-runner.v1`; `report.md` exists, is non-empty, and
+  validates with `final_report_source=codex_native`,
+  `fallback_report_used=false`, `native_report_valid=true`,
+  `validation_status=passed`, and `codex_failure_category=none`.
+- Forbidden scope: requeue or reclaim of MG337/MG338 tasks, arbitrary prompts,
+  MATLAB execution, arbitrary shell, PR creation, auto-merge, worker loops,
+  project-control unpause, old task requeue, generic Codex queue execution,
+  notification send, raw Codex logs, raw prompts, process streams, credentials,
+  tokens, runtime environment details, and production infrastructure mutation.
+- Live deployment expected: no new deploy path; post-deploy checks may include
+  exactly one live MG339 native report apply if Codex, worker, API, token,
+  exact task id, input-file, no-lease, no-residue, and output-path preconditions
+  hold.
+
 token_printed=false

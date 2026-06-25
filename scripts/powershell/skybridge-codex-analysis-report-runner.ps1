@@ -1,7 +1,7 @@
 param(
   [ValidateSet("status", "preview", "apply", "fixture", "validate-output", "safe-summary")]
   [string]$Command = "preview",
-  [string]$TaskId = "live-codex-analysis-report-task-338-001",
+  [string]$TaskId = "live-codex-analysis-report-task-339-001",
   [string]$WorkerId = "jerry-win-local-01",
   [string]$InputManifest = ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
   [string]$InputSummary = ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
@@ -21,6 +21,53 @@ $ConfirmationPhrase = "I_UNDERSTAND_RUN_ONE_FIXED_CODEX_ANALYSIS_REPORT_ONLY"
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 $PromptTemplatePath = Join-Path $RepoRoot "docs\product\prompts\CODEX_ANALYSIS_REPORT_PROMPT_V1.md"
 $CodexTimeoutSeconds = 300
+
+if ($args.Count -gt 0) {
+  $unsupportedResult = [pscustomobject]@{
+    schema = "skybridge.codex_analysis_report_runner.v1"
+    ok = $false
+    mode = "blocked"
+    task_id = $TaskId
+    worker_id = $WorkerId
+    template_id = $TemplateId
+    runner_id = $RunnerId
+    input_manifest_path = $InputManifest
+    input_summary_path = $InputSummary
+    input_metrics_path = $InputMetrics
+    input_manifest_exists = $false
+    input_summary_exists = $false
+    input_metrics_exists = $false
+    output_report_path = ".agent/tmp/codex-analysis-report/$TaskId/report.md"
+    report_exists = $false
+    report_size_bytes = 0
+    fallback_report_used = $false
+    native_report_valid = $false
+    final_report_source = "none"
+    validation_status = "blocked"
+    codex_available = $false
+    would_invoke_codex = $false
+    codex_invoked = $false
+    codex_exit_code = $null
+    codex_failure_category = "unsupported_runner_arguments"
+    blockers = @("unsupported_runner_arguments")
+    warnings = @()
+    raw_codex_log_included = $false
+    raw_prompt_included = $false
+    raw_stdout_included = $false
+    raw_stderr_included = $false
+    matlab_run_called = $false
+    arbitrary_shell_enabled = $false
+    worker_loop_started = $false
+    pr_created = $false
+    token_printed = $false
+  }
+  if ($Json) {
+    $unsupportedResult | ConvertTo-Json -Depth 8
+  } else {
+    $unsupportedResult | Format-List
+  }
+  exit 0
+}
 
 function ConvertTo-SafeJson {
   param($Value)
@@ -232,14 +279,72 @@ function Test-ReportOutput {
   $size = Get-FileSizeBytes $Config.output_report_full
   if ($size -le 0) { $errors.Add("report_empty") | Out-Null }
   $text = Get-Content -Raw -LiteralPath $Config.output_report_full
+  if ($text -notmatch "(?m)^#\s+\S") {
+    $errors.Add("report_missing_markdown_heading") | Out-Null
+  }
   if (Test-SecretPattern $text) { $errors.Add("report_secret_pattern_detected") | Out-Null }
   if ($text -notmatch "(?i)synthetic" -or $text -notmatch "(?i)(MATLAB golden trial|MATLAB.*runner validation|runner validation)") {
     $errors.Add("report_missing_synthetic_matlab_runner_validation_statement") | Out-Null
   }
-  if ($text -match "(?i)raw stdout|raw stderr|stdout:|stderr:|codex log|authorization|bearer token|environment dump") {
+  if ($text -notmatch "(?i)(completed_count\s*[:=]\s*2|completed combinations\s*[:=]?\s*2|completed\s+count\s*[:=]?\s*2|completed[^0-9]{0,40}\b2\b)") {
+    $errors.Add("report_missing_completed_count_metric") | Out-Null
+  }
+  if ($text -notmatch "(?i)(failed_count\s*[:=]\s*0|failed combinations\s*[:=]?\s*0|failed\s+count\s*[:=]?\s*0|failed[^0-9]{0,40}\b0\b)") {
+    $errors.Add("report_missing_failed_count_metric") | Out-Null
+  }
+  if ($text -notmatch "(?i)(expected_combination_count\s*[:=]\s*2|expected combinations\s*[:=]?\s*2|combination count\s*[:=]?\s*2|combination_count\s*[:=]\s*2)") {
+    $errors.Add("report_missing_expected_combination_count_metric") | Out-Null
+  }
+  if ($text -match "(?i)raw stdout|raw stderr|raw_stdout|raw_stderr|stdout:|stderr:|codex log|codex transcript|authorization|bearer token|environment dump") {
     $errors.Add("report_contains_forbidden_raw_or_secret_text") | Out-Null
   }
   @($errors.ToArray())
+}
+
+function Get-NativeReportValidationFailureCategory {
+  param([string[]]$Errors)
+  if ($Errors.Count -eq 0) { return "none" }
+  $priority = @(
+    @{ error = "report_missing"; category = "native_report_missing" },
+    @{ error = "report_empty"; category = "native_report_empty" },
+    @{ error = "report_path_not_exact"; category = "native_report_path_not_exact" },
+    @{ error = "report_outside_expected_output_dir"; category = "native_report_outside_expected_output_dir" },
+    @{ error = "report_missing_markdown_heading"; category = "native_report_missing_markdown_heading" },
+    @{ error = "report_missing_synthetic_matlab_runner_validation_statement"; category = "native_report_missing_synthetic_runner_validation_statement" },
+    @{ error = "report_missing_completed_count_metric"; category = "native_report_missing_completed_count_metric" },
+    @{ error = "report_missing_failed_count_metric"; category = "native_report_missing_failed_count_metric" },
+    @{ error = "report_missing_expected_combination_count_metric"; category = "native_report_missing_expected_combination_count_metric" },
+    @{ error = "report_contains_forbidden_raw_or_secret_text"; category = "native_report_contains_forbidden_raw_or_secret_text" },
+    @{ error = "report_secret_pattern_detected"; category = "native_report_secret_pattern_detected" }
+  )
+  foreach ($item in $priority) {
+    if ($Errors -contains $item.error) { return $item.category }
+  }
+  "native_report_validation_failed"
+}
+
+function Format-CheckBool {
+  param([bool]$Value)
+  if ($Value) { "true" } else { "false" }
+}
+
+function Get-ReportValidationChecks {
+  param($Config, [string[]]$Errors)
+  $failed = @($Errors)
+  @(
+    "report_exists=$(Format-CheckBool (-not ($failed -contains 'report_missing')))",
+    "report_size_bytes_positive=$(Format-CheckBool (-not ($failed -contains 'report_empty')))",
+    "report_path_exact=$(Format-CheckBool (-not ($failed -contains 'report_path_not_exact')))",
+    "report_under_expected_output_dir=$(Format-CheckBool (-not ($failed -contains 'report_outside_expected_output_dir')))",
+    "markdown_heading_present=$(Format-CheckBool (-not ($failed -contains 'report_missing_markdown_heading')))",
+    "synthetic_runner_validation_stated=$(Format-CheckBool (-not ($failed -contains 'report_missing_synthetic_matlab_runner_validation_statement')))",
+    "completed_count_metric_present=$(Format-CheckBool (-not ($failed -contains 'report_missing_completed_count_metric')))",
+    "failed_count_metric_present=$(Format-CheckBool (-not ($failed -contains 'report_missing_failed_count_metric')))",
+    "expected_combination_count_metric_present=$(Format-CheckBool (-not ($failed -contains 'report_missing_expected_combination_count_metric')))",
+    "forbidden_process_markers_absent=$(Format-CheckBool (-not ($failed -contains 'report_contains_forbidden_raw_or_secret_text')))",
+    "secret_patterns_absent=$(Format-CheckBool (-not ($failed -contains 'report_secret_pattern_detected')))",
+    "changed_files_actual=$(Format-CheckBool (Test-Path -LiteralPath $Config.output_report_full -PathType Leaf))"
+  )
 }
 
 function New-ReportEvidence {
@@ -251,11 +356,40 @@ function New-ReportEvidence {
     [string[]]$ReportValidationErrors = @(),
     [string]$ResultSummary = "",
     [bool]$FallbackReportUsed = $false,
-    [string]$CodexFailureCategory = ""
+    [string]$CodexFailureCategory = "none",
+    [bool]$NativeReportAttempted = $false,
+    [Nullable[bool]]$NativeReportValid = $null,
+    [string]$NativeReportValidationFailureCategory = "none",
+    [string]$NativeReportValidationFailureSummary = "",
+    [string[]]$NativeReportValidationChecks = @(),
+    [string]$FinalReportSource = ""
   )
+  $ReportValidationErrors = @($ReportValidationErrors | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
   $existing = @(Get-ExistingOutputs -Config $Config)
   $missing = @(Get-MissingOutputs -Config $Config)
   $reportSizeBytes = Get-FileSizeBytes $Config.output_report_full
+  if ([string]::IsNullOrWhiteSpace($CodexFailureCategory)) { $CodexFailureCategory = "none" }
+  if ($null -eq $NativeReportValid) {
+    $NativeReportValid = ($ValidationStatus -eq "passed" -and -not $FallbackReportUsed)
+  }
+  if ([string]::IsNullOrWhiteSpace($NativeReportValidationFailureCategory) -or (-not $NativeReportValid -and $NativeReportValidationFailureCategory -eq "none")) {
+    $NativeReportValidationFailureCategory = if ($NativeReportValid) { "none" } else { Get-NativeReportValidationFailureCategory -Errors $ReportValidationErrors }
+  }
+  if ([string]::IsNullOrWhiteSpace($NativeReportValidationFailureSummary)) {
+    $NativeReportValidationFailureSummary = if ($NativeReportValid) { "none" } else { (@($ReportValidationErrors) -join ";") }
+  }
+  if (@($NativeReportValidationChecks).Count -eq 0) {
+    $NativeReportValidationChecks = @(Get-ReportValidationChecks -Config $Config -Errors $ReportValidationErrors)
+  }
+  if ([string]::IsNullOrWhiteSpace($FinalReportSource)) {
+    $FinalReportSource = if ($FallbackReportUsed) {
+      "deterministic_fallback"
+    } elseif ($ValidationStatus -eq "passed") {
+      "codex_native"
+    } else {
+      "none"
+    }
+  }
   if ([string]::IsNullOrWhiteSpace($ResultSummary)) {
     $ResultSummary = if ($ValidationStatus -eq "passed") {
       "Codex analysis report runner produced one sanitized Markdown report from MG336 manifest, summary, and metrics."
@@ -280,10 +414,16 @@ function New-ReportEvidence {
     report_exists = ($existing -contains $Config.output_report_path)
     report_size_bytes = $reportSizeBytes
     fallback_report_used = $FallbackReportUsed
+    native_report_attempted = $NativeReportAttempted
+    native_report_valid = [bool]$NativeReportValid
+    native_report_validation_failure_category = $NativeReportValidationFailureCategory
+    native_report_validation_failure_summary = $NativeReportValidationFailureSummary
+    native_report_validation_checks = @($NativeReportValidationChecks)
+    final_report_source = $FinalReportSource
     validation_status = $ValidationStatus
     codex_invoked = $CodexInvoked
     codex_exit_code = $CodexExitCode
-    codex_failure_category = $CodexFailureCategory
+    codex_failure_category = if ([string]::IsNullOrWhiteSpace($CodexFailureCategory)) { "none" } else { $CodexFailureCategory }
     allowed_paths_checked = $true
     blocked_paths_checked = $true
     changed_files = @($existing)
@@ -314,6 +454,8 @@ function New-RunnerRecord {
     [Nullable[int]]$CodexExitCode = $null,
     [string]$CodexFailureCategory = "",
     [bool]$FallbackReportUsed = $false,
+    [bool]$NativeReportValid = $false,
+    [string]$FinalReportSource = "",
     [string[]]$Blockers = @(),
     [string[]]$Warnings = @(),
     [bool]$WouldInvokeCodex = $false,
@@ -337,12 +479,14 @@ function New-RunnerRecord {
     report_exists = (Test-Path -LiteralPath $Config.output_report_full -PathType Leaf)
     report_size_bytes = Get-FileSizeBytes $Config.output_report_full
     fallback_report_used = $FallbackReportUsed
+    native_report_valid = $NativeReportValid
+    final_report_source = if ([string]::IsNullOrWhiteSpace($FinalReportSource)) { if ($FallbackReportUsed) { "deterministic_fallback" } else { "none" } } else { $FinalReportSource }
     validation_status = $ValidationStatus
     codex_available = [bool](Get-CodexCommand)
     would_invoke_codex = $WouldInvokeCodex
     codex_invoked = $CodexInvoked
     codex_exit_code = $CodexExitCode
-    codex_failure_category = $CodexFailureCategory
+    codex_failure_category = if ([string]::IsNullOrWhiteSpace($CodexFailureCategory)) { "none" } else { $CodexFailureCategory }
     blockers = @($Blockers | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     warnings = @($Warnings | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
     raw_codex_log_included = $false
@@ -387,7 +531,7 @@ function Write-DeterministicReport {
   $failed = Get-SummaryValue $summaryObject "failed_count" "not_reported"
   $metricLines = @($bundle.metrics -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 4)
   $report = @(
-    "# Codex Analysis Report Recovery",
+    "# Codex Analysis Report",
     "",
     "This report summarizes a synthetic runner validation for a synthetic MATLAB golden trial, not a scientific conclusion.",
     "",
@@ -399,9 +543,9 @@ function Write-DeterministicReport {
     "",
     "## Parameter Grid And Metrics",
     "",
-    "- Combination count: $combinationCount",
-    "- Completed combinations: $completed",
-    "- Failed combinations: $failed",
+    "- expected_combination_count: $combinationCount",
+    "- completed_count: $completed",
+    "- failed_count: $failed",
     "- Metrics preview: $($metricLines -join ' | ')",
     "",
     "## Result Summary",
@@ -414,7 +558,7 @@ function Write-DeterministicReport {
     "",
     "- The report was generated only from the allowed MG336 manifest, summary, and metrics files.",
     "- MATLAB was not invoked for this report.",
-    "- Codex transcripts and process streams are not included.",
+    "- Process streams omitted.",
     "- No PR was created.",
     "- token_printed=false"
   ) -join "`r`n"
@@ -424,9 +568,9 @@ function Write-DeterministicReport {
 function Write-FixtureReport {
   param($Config)
   Write-DeterministicReport -Config $Config -FallbackReportUsed:$false
-  $errors = Test-ReportOutput -Config $Config
+  $errors = @(Test-ReportOutput -Config $Config)
   $status = if ($errors.Count -eq 0) { "passed" } else { "failed" }
-  New-ReportEvidence -Config $Config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode 0 -ReportValidationErrors $errors -FallbackReportUsed:$false
+  New-ReportEvidence -Config $Config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode 0 -ReportValidationErrors $errors -FallbackReportUsed:$false -NativeReportAttempted:$false -NativeReportValid:($status -eq "passed") -FinalReportSource "codex_native"
 }
 
 function New-FixedPrompt {
@@ -453,8 +597,36 @@ Input metrics path: $($Config.input_metrics_path)
 $($bundle.metrics)
 ```
 
+Output report path: $($Config.output_report_path)
+
 Return the Markdown report only.
 "@
+}
+
+function Get-NativeMarkdownCandidate {
+  param([string]$Text)
+  if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+  $trimmed = $Text.Trim()
+  $fenced = [regex]::Match($trimmed, '(?is)```(?:markdown|md)?\s*(#\s+.+?)```')
+  if ($fenced.Success) { return $fenced.Groups[1].Value.Trim() }
+  $heading = [regex]::Match($trimmed, '(?ms)^#\s+\S.*')
+  if ($heading.Success) { return $heading.Value.Trim() }
+  ""
+}
+
+function Try-PersistNativeReportFromCapturedText {
+  param($Config, [string]$StdoutPath)
+  if (-not (Test-Path -LiteralPath $StdoutPath -PathType Leaf)) { return $false }
+  $stdout = Get-Content -Raw -LiteralPath $StdoutPath
+  $candidate = Get-NativeMarkdownCandidate -Text $stdout
+  if ([string]::IsNullOrWhiteSpace($candidate)) { return $false }
+  if (Test-SecretPattern $candidate) { return $false }
+  if ($candidate -match "(?i)raw stdout|raw stderr|raw_stdout|raw_stderr|stdout:|stderr:|codex log|codex transcript|authorization|bearer token|environment dump") { return $false }
+  Set-Content -LiteralPath $Config.output_report_full -Value $candidate -Encoding UTF8
+  $candidateErrors = @(Test-ReportOutput -Config $Config)
+  if ($candidateErrors.Count -eq 0) { return $true }
+  Remove-Item -LiteralPath $Config.output_report_full -Force -ErrorAction SilentlyContinue
+  $false
 }
 
 function Invoke-CodexFixedReport {
@@ -465,7 +637,7 @@ function Invoke-CodexFixedReport {
       ok = $false
       exit_code = $null
       reason = "codex_not_found"
-      evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_not_found") -ResultSummary "Codex CLI was not found; fixed report runner did not invoke Codex." -CodexFailureCategory "codex_not_found"
+      evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_not_found") -ResultSummary "Codex CLI was not found; fixed report runner did not invoke Codex." -CodexFailureCategory "codex_not_found" -NativeReportAttempted:$false -NativeReportValid:$false -FinalReportSource "none"
     }
   }
   New-Item -ItemType Directory -Force -Path $Config.output_dir_full | Out-Null
@@ -491,7 +663,7 @@ function Invoke-CodexFixedReport {
         ok = $false
         exit_code = $null
         reason = "codex_start_failed"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex command could not be resolved into a safe process invocation." -CodexFailureCategory "codex_start_failed"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex command could not be resolved into a safe process invocation." -CodexFailureCategory "codex_start_failed" -NativeReportAttempted:$false -NativeReportValid:$false -FinalReportSource "none"
       }
     }
     $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -527,7 +699,7 @@ function Invoke-CodexFixedReport {
         ok = $false
         exit_code = $null
         reason = "codex_start_failed"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex fixed report runner could not start Codex through the sanitized process wrapper." -CodexFailureCategory "codex_start_failed"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors @("codex_start_failed") -ResultSummary "Codex fixed report runner could not start Codex through the sanitized process wrapper." -CodexFailureCategory "codex_start_failed" -NativeReportAttempted:$false -NativeReportValid:$false -FinalReportSource "none"
       }
     }
     $completed = $process.WaitForExit($CodexTimeoutSeconds * 1000)
@@ -537,16 +709,20 @@ function Invoke-CodexFixedReport {
         ok = $false
         exit_code = $null
         reason = "codex_timeout"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $null -ReportValidationErrors @("codex_timeout") -ResultSummary "Codex fixed report runner timed out without exposing raw logs." -CodexFailureCategory "codex_timeout"
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $null -ReportValidationErrors @("codex_timeout") -ResultSummary "Codex fixed report runner timed out without exposing raw logs." -CodexFailureCategory "codex_timeout" -NativeReportAttempted:$true -NativeReportValid:$false -FinalReportSource "none"
       }
     }
     $process.WaitForExit()
     Set-Content -LiteralPath $stdoutPath -Value ($stdoutTask.GetAwaiter().GetResult()) -Encoding UTF8
     Set-Content -LiteralPath $stderrPath -Value ($stderrTask.GetAwaiter().GetResult()) -Encoding UTF8
     $exitCode = [int]$process.ExitCode
+    Try-PersistNativeReportFromCapturedText -Config $Config -StdoutPath $stdoutPath | Out-Null
     $errors = @(Test-ReportOutput -Config $Config)
     if ($exitCode -eq 0 -and $errors.Count -gt 0) {
       $fallbackCategory = if (@($errors | Where-Object { $_ -eq "report_missing" }).Count -gt 0) { "report_missing_after_codex" } else { "report_validation_failed_after_codex" }
+      $nativeFailureCategory = Get-NativeReportValidationFailureCategory -Errors $errors
+      $nativeFailureSummary = @($errors) -join ";"
+      $nativeChecks = @(Get-ReportValidationChecks -Config $Config -Errors $errors)
       $fallbackSummary = if ($fallbackCategory -eq "report_missing_after_codex") {
         "Codex exited successfully without report.md, so the runner wrote a deterministic fallback report from MG336 safe summaries."
       } else {
@@ -560,7 +736,7 @@ function Invoke-CodexFixedReport {
         ok = $fallbackPassed
         exit_code = $exitCode
         reason = if ($fallbackPassed) { "fallback_report_used" } else { $fallbackCategory }
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus $fallbackStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $fallbackErrors -FallbackReportUsed:$true -CodexFailureCategory $fallbackCategory -ResultSummary $fallbackSummary
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus $fallbackStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $fallbackErrors -FallbackReportUsed:$true -CodexFailureCategory $fallbackCategory -ResultSummary $fallbackSummary -NativeReportAttempted:$true -NativeReportValid:$false -NativeReportValidationFailureCategory $nativeFailureCategory -NativeReportValidationFailureSummary $nativeFailureSummary -NativeReportValidationChecks $nativeChecks -FinalReportSource "deterministic_fallback"
       }
     }
     if ($exitCode -ne 0) {
@@ -569,17 +745,18 @@ function Invoke-CodexFixedReport {
         ok = $false
         exit_code = $exitCode
         reason = "codex_nonzero_exit"
-        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $allErrors -FallbackReportUsed:$false -CodexFailureCategory "codex_nonzero_exit" -ResultSummary "Codex fixed report runner exited nonzero; no fallback report was used."
+        evidence = New-ReportEvidence -Config $Config -ValidationStatus "failed" -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $allErrors -FallbackReportUsed:$false -CodexFailureCategory "codex_nonzero_exit" -ResultSummary "Codex fixed report runner exited nonzero; no fallback report was used." -NativeReportAttempted:$true -NativeReportValid:$false -NativeReportValidationFailureCategory "codex_nonzero_exit" -NativeReportValidationFailureSummary "Codex exited nonzero before a valid native report could be accepted." -NativeReportValidationChecks @(Get-ReportValidationChecks -Config $Config -Errors $errors) -FinalReportSource "none"
       }
     }
     $passed = ($errors.Count -eq 0)
     $validationStatus = if ($passed) { "passed" } else { "failed" }
-    $failureCategory = if ($passed) { "" } else { "report_validation_failed" }
+    $failureCategory = if ($passed) { "none" } else { "report_validation_failed" }
+    $nativeFailureCategory = if ($passed) { "none" } else { Get-NativeReportValidationFailureCategory -Errors $errors }
     [pscustomobject]@{
       ok = $passed
       exit_code = $exitCode
       reason = if ($passed) { "passed" } else { "report_validation_failed" }
-      evidence = New-ReportEvidence -Config $Config -ValidationStatus $validationStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $errors -FallbackReportUsed:$false -CodexFailureCategory $failureCategory
+      evidence = New-ReportEvidence -Config $Config -ValidationStatus $validationStatus -CodexInvoked:$true -CodexExitCode $exitCode -ReportValidationErrors $errors -FallbackReportUsed:$false -CodexFailureCategory $failureCategory -NativeReportAttempted:$true -NativeReportValid:$passed -NativeReportValidationFailureCategory $nativeFailureCategory -NativeReportValidationFailureSummary $(if ($passed) { "none" } else { @($errors) -join ";" }) -NativeReportValidationChecks @(Get-ReportValidationChecks -Config $Config -Errors $errors) -FinalReportSource $(if ($passed) { "codex_native" } else { "none" })
     }
   } finally {
     Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
@@ -602,13 +779,13 @@ if ($Command -eq "status") {
     $result = New-RunnerRecord -Mode "fixture" -Ok $false -Config $config -ValidationStatus "blocked" -Blockers $config.blockers
   } else {
     $evidence = Write-FixtureReport -Config $config
-    $result = New-RunnerRecord -Mode "fixture" -Ok ([bool]$evidence.ok) -Config $config -ValidationStatus ([string]$evidence.validation_status) -Warnings @("fixture_mode_no_codex_invocation") -Evidence $evidence
+    $result = New-RunnerRecord -Mode "fixture" -Ok ([bool]$evidence.ok) -Config $config -ValidationStatus ([string]$evidence.validation_status) -NativeReportValid:([bool]$evidence.native_report_valid) -FinalReportSource ([string]$evidence.final_report_source) -Warnings @("fixture_mode_no_codex_invocation") -Evidence $evidence
   }
 } elseif ($Command -eq "validate-output") {
-  $errors = Test-ReportOutput -Config $config
+  $errors = @(Test-ReportOutput -Config $config)
   $status = if ($errors.Count -eq 0) { "passed" } else { "failed" }
-  $evidence = New-ReportEvidence -Config $config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors $errors
-  $result = New-RunnerRecord -Mode "validate-output" -Ok ($errors.Count -eq 0) -Config $config -ValidationStatus $status -Blockers $errors -Evidence $evidence
+  $evidence = New-ReportEvidence -Config $config -ValidationStatus $status -CodexInvoked:$false -CodexExitCode $null -ReportValidationErrors $errors -NativeReportAttempted:$false -NativeReportValid:($status -eq "passed") -FinalReportSource $(if ($status -eq "passed") { "codex_native" } else { "none" })
+  $result = New-RunnerRecord -Mode "validate-output" -Ok ($errors.Count -eq 0) -Config $config -ValidationStatus $status -NativeReportValid:([bool]$evidence.native_report_valid) -FinalReportSource ([string]$evidence.final_report_source) -Blockers $errors -Evidence $evidence
 } else {
   if ($config.blockers.Count -gt 0) {
     $category = if (@($config.blockers) -contains "output_path_invalid" -or @($config.blockers) -contains "output_path_suspiciously_truncated") { "output_path_invalid" } else { "" }
@@ -618,7 +795,7 @@ if ($Command -eq "status") {
   } else {
     $apply = Invoke-CodexFixedReport -Config $config
     $applyBlockers = if ($apply.ok) { @() } else { @($apply.reason) }
-    $result = New-RunnerRecord -Mode "apply" -Ok ([bool]$apply.ok) -Config $config -ValidationStatus ([string]$apply.evidence.validation_status) -CodexInvoked:([bool]$apply.evidence.codex_invoked) -CodexExitCode $apply.exit_code -CodexFailureCategory ([string]$apply.evidence.codex_failure_category) -FallbackReportUsed:([bool]$apply.evidence.fallback_report_used) -Blockers $applyBlockers -Evidence $apply.evidence
+    $result = New-RunnerRecord -Mode "apply" -Ok ([bool]$apply.ok) -Config $config -ValidationStatus ([string]$apply.evidence.validation_status) -CodexInvoked:([bool]$apply.evidence.codex_invoked) -CodexExitCode $apply.exit_code -CodexFailureCategory ([string]$apply.evidence.codex_failure_category) -FallbackReportUsed:([bool]$apply.evidence.fallback_report_used) -NativeReportValid:([bool]$apply.evidence.native_report_valid) -FinalReportSource ([string]$apply.evidence.final_report_source) -Blockers $applyBlockers -Evidence $apply.evidence
   }
 }
 

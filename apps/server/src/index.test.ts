@@ -1427,6 +1427,12 @@ describe("server api", () => {
           report_exists: true,
           report_size_bytes: 1413,
           fallback_report_used: false,
+          native_report_attempted: true,
+          native_report_valid: true,
+          native_report_validation_failure_category: "none",
+          native_report_validation_failure_summary: "none",
+          native_report_validation_checks: ["report_exists=true", "completed_count_metric_present=true"],
+          final_report_source: "codex_native",
           codex_invoked: true,
           codex_exit_code: 0,
           codex_failure_category: "",
@@ -1455,6 +1461,12 @@ describe("server api", () => {
             report_exists?: boolean;
             report_size_bytes?: number;
             fallback_report_used?: boolean;
+            native_report_attempted?: boolean;
+            native_report_valid?: boolean;
+            native_report_validation_failure_category?: string;
+            native_report_validation_failure_summary?: string;
+            native_report_validation_checks?: string[];
+            final_report_source?: string;
             codex_invoked?: boolean;
             codex_exit_code?: number;
             changed_files?: string[];
@@ -1478,6 +1490,12 @@ describe("server api", () => {
       report_exists: true,
       report_size_bytes: 1413,
       fallback_report_used: false,
+      native_report_attempted: true,
+      native_report_valid: true,
+      native_report_validation_failure_category: "none",
+      native_report_validation_failure_summary: "none",
+      native_report_validation_checks: ["report_exists=true", "completed_count_metric_present=true"],
+      final_report_source: "codex_native",
       codex_invoked: true,
       codex_exit_code: 0,
       raw_codex_log_included: false,

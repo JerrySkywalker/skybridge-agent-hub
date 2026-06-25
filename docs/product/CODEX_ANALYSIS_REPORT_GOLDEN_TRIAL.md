@@ -111,9 +111,28 @@ If Codex fails, the runner does not fake success and reports any partial report
 accurately. Server evidence must not include raw Codex logs, raw prompts,
 stdout, stderr, tokens, credentials, or process environment details.
 
+## MG339 Native Report Validation
+
+MG339 follows MG338 with the exact task id
+`live-codex-analysis-report-task-339-001`. It keeps the fixed prompt and
+artifact path contract, but tightens the native report path so a successful
+Codex run must produce a valid Markdown report without fallback:
+
+- `final_report_source=codex_native`;
+- `fallback_report_used=false`;
+- `native_report_valid=true`;
+- `validation_status=passed`;
+- `codex_failure_category=none`.
+
+The prompt now requires a top-level Markdown heading, a clear synthetic MATLAB
+golden-trial runner-validation statement, input file references, parameter and
+metric counts, limitations, and safety notes. The runner may persist usable
+native Markdown captured from Codex output, but it still excludes raw process
+logs and rejects process stream markers or secret-like text.
+
 ## Still Disabled
 
-MG337 does not enable arbitrary prompts, MATLAB execution, arbitrary shell,
+MG337 through MG339 do not enable arbitrary prompts, MATLAB execution, arbitrary shell,
 repo-wide inspection, source edits, PR creation, auto-merge, worker loops,
 run-until-hold, project-control unpause, old task requeue, or multiple live
 task execution.

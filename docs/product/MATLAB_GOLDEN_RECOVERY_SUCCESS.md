@@ -91,11 +91,17 @@ fallback-write
 `.agent/tmp/codex-analysis-report/live-codex-analysis-report-task-338-001/report.md`,
 and still does not invoke MATLAB.
 
+MG339 is the native Codex report validation consumer. It uses
+`live-codex-analysis-report-task-339-001` and the same three MG336 files, but
+the success target is `final_report_source=codex_native` with
+`fallback_report_used=false` and `native_report_valid=true`. It still does not
+invoke MATLAB.
+
 ## Still Disabled
 
 MG336 does not enable arbitrary MATLAB command text, arbitrary Codex prompts,
 arbitrary shell, PR creation, worker loops, project-control unpause, old task
-requeue, or generic MATLAB queue execution. MG337 and MG338 add bounded Codex
+requeue, or generic MATLAB queue execution. MG337 through MG339 add bounded Codex
 report consumers without changing those MATLAB runner bounds.
 
 token_printed=false

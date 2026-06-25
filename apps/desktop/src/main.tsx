@@ -72,6 +72,9 @@ import {
   fixtureCodexArtifactRecoveryRunnerPreview,
   fixtureCodexArtifactRecoveryEvidence,
   fixtureCodexArtifactRecoveryPreview,
+  fixtureCodexNativeReportRunnerPreview,
+  fixtureCodexNativeReportEvidence,
+  fixtureCodexNativeReportPreview,
   DRAFT_SUBMIT_CONFIRMATION_TEXT,
   WORKER_TEMPLATE_RUNNER_CONFIRMATION_TEXT,
   LIVE_SAFE_TASK_PILOT_CREATE_CONFIRMATION_TEXT,
@@ -90,6 +93,8 @@ import {
   CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT,
   CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT,
   CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT,
+  CODEX_NATIVE_REPORT_CREATE_CONFIRMATION_TEXT,
+  CODEX_NATIVE_REPORT_RUN_CONFIRMATION_TEXT,
   fixtureLocalWorkerSupervisorState,
   fixtureMultiWorkerReadiness,
   fixtureProposedGoalReviewSummary,
@@ -1862,6 +1867,9 @@ function App() {
         codexArtifactRecoveryPreview={fixtureCodexArtifactRecoveryPreview}
         codexArtifactRecoveryRunnerPreview={fixtureCodexArtifactRecoveryRunnerPreview}
         codexArtifactRecoveryEvidence={fixtureCodexArtifactRecoveryEvidence}
+        codexNativeReportPreview={fixtureCodexNativeReportPreview}
+        codexNativeReportRunnerPreview={fixtureCodexNativeReportRunnerPreview}
+        codexNativeReportEvidence={fixtureCodexNativeReportEvidence}
       />
       <BootstrapAlphaChatToTaskPanel
         inputText={chatToTaskInput}
@@ -2690,6 +2698,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   codexArtifactRecoveryPreview,
   codexArtifactRecoveryRunnerPreview,
   codexArtifactRecoveryEvidence,
+  codexNativeReportPreview,
+  codexNativeReportRunnerPreview,
+  codexNativeReportEvidence,
 }: {
   preview: WorkerTemplateRunnerPreview;
   lastResult: WorkerTemplateRunnerResult;
@@ -2713,6 +2724,9 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
   codexArtifactRecoveryPreview: WorkerTemplateRunnerPreview;
   codexArtifactRecoveryRunnerPreview: CodexAnalysisReportRunner;
   codexArtifactRecoveryEvidence: CodexAnalysisReportEvidence;
+  codexNativeReportPreview: WorkerTemplateRunnerPreview;
+  codexNativeReportRunnerPreview: CodexAnalysisReportRunner;
+  codexNativeReportEvidence: CodexAnalysisReportEvidence;
 }) {
   const rejectedTasks = "rejected_tasks" in preview && Array.isArray(preview.rejected_tasks)
     ? preview.rejected_tasks as Array<{ task_id?: string; template_id?: string; runner_id?: string; rejected_reason?: string }>
@@ -2730,6 +2744,7 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <span>MG336 MATLAB golden success is PowerShell-only for task live-matlab-golden-task-336-001</span>
         <span>MG337 Codex analysis report is PowerShell-only for task live-codex-analysis-report-task-337-001</span>
         <span>MG338 Codex artifact recovery is PowerShell-only for task live-codex-analysis-report-task-338-001</span>
+        <span>MG339 Codex native report is PowerShell-only for task live-codex-analysis-report-task-339-001</span>
         <span>codex_run_called=false; matlab_run_called=false; arbitrary_shell_enabled=false; worker_loop_started=false; token_printed=false</span>
       </div>
       <dl>
@@ -2927,6 +2942,35 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         <StatusValue label="MG338 matlab_run_called" value={String(codexArtifactRecoveryEvidence.matlab_run_called)} />
         <StatusValue label="MG338 create confirmation" value={CODEX_ARTIFACT_RECOVERY_CREATE_CONFIRMATION_TEXT} />
         <StatusValue label="MG338 run confirmation" value={CODEX_ARTIFACT_RECOVERY_RUN_CONFIRMATION_TEXT} />
+        <StatusValue label="MG339 Codex Native Report status" value={codexNativeReportPreview.ok ? "exact_native_task_preview_available" : "no_codex_native_report_task"} />
+        <StatusValue label="MG339 native task id" value={codexNativeReportPreview.expected_task_id ?? codexNativeReportPreview.task_id ?? "none"} />
+        <StatusValue label="MG339 worker id" value={codexNativeReportPreview.worker_id} />
+        <StatusValue label="MG339 final task state" value={codexNativeReportPreview.final_task_state ?? "queued"} />
+        <StatusValue label="MG339 template id" value={codexNativeReportPreview.template_id ?? "none"} />
+        <StatusValue label="MG339 runner id" value={codexNativeReportPreview.runner_id ?? "none"} />
+        <StatusValue label="MG339 Codex executable status" value={codexNativeReportRunnerPreview.codex_available ? "available" : "missing"} />
+        <StatusValue label="MG339 input manifest exists" value={String(codexNativeReportRunnerPreview.input_manifest_exists ?? codexNativeReportRunnerPreview.input_manifest_path.length > 0)} />
+        <StatusValue label="MG339 input summary exists" value={String(codexNativeReportRunnerPreview.input_summary_exists ?? codexNativeReportRunnerPreview.input_summary_path.length > 0)} />
+        <StatusValue label="MG339 input metrics exists" value={String(codexNativeReportRunnerPreview.input_metrics_exists ?? codexNativeReportRunnerPreview.input_metrics_path.length > 0)} />
+        <StatusValue label="MG339 report path" value={codexNativeReportEvidence.output_report_path} />
+        <StatusValue label="MG339 report exists" value={String(codexNativeReportEvidence.report_exists)} />
+        <StatusValue label="MG339 report_size_bytes" value={String(codexNativeReportEvidence.report_size_bytes ?? 0)} />
+        <StatusValue label="MG339 final_report_source" value={codexNativeReportEvidence.final_report_source ?? "none"} />
+        <StatusValue label="MG339 fallback_report_used" value={String(codexNativeReportEvidence.fallback_report_used ?? false)} />
+        <StatusValue label="MG339 native_report_valid" value={String(codexNativeReportEvidence.native_report_valid ?? false)} />
+        <StatusValue label="MG339 native validation failure category" value={codexNativeReportEvidence.native_report_validation_failure_category ?? "none"} />
+        <StatusValue label="MG339 validation_status" value={codexNativeReportEvidence.validation_status} />
+        <StatusValue label="MG339 evidence summary" value={codexNativeReportEvidence.result_summary} />
+        <StatusValue label="MG339 evidence changed_files" value={codexNativeReportEvidence.changed_files.join("; ") || "none"} />
+        <StatusValue label="MG339 native validation checks" value={(codexNativeReportEvidence.native_report_validation_checks ?? []).join("; ") || "none"} />
+        <StatusValue label="MG339 codex_failure_category" value={codexNativeReportEvidence.codex_failure_category || "none"} />
+        <StatusValue label="MG339 raw_codex_log_included" value={String(codexNativeReportEvidence.raw_codex_log_included)} />
+        <StatusValue label="MG339 raw_prompt_included" value={String(codexNativeReportEvidence.raw_prompt_included)} />
+        <StatusValue label="MG339 raw_stdout_included" value={String(codexNativeReportEvidence.raw_stdout_included)} />
+        <StatusValue label="MG339 raw_stderr_included" value={String(codexNativeReportEvidence.raw_stderr_included)} />
+        <StatusValue label="MG339 matlab_run_called" value={String(codexNativeReportEvidence.matlab_run_called)} />
+        <StatusValue label="MG339 create confirmation" value={CODEX_NATIVE_REPORT_CREATE_CONFIRMATION_TEXT} />
+        <StatusValue label="MG339 run confirmation" value={CODEX_NATIVE_REPORT_RUN_CONFIRMATION_TEXT} />
       </dl>
       <div className="queue-action-grid">
         <button type="button" disabled aria-disabled="true" title="Run scripts/powershell/skybridge-worker-template-runner.ps1 -Command preview">
@@ -3000,6 +3044,15 @@ function BootstrapAlphaWorkerTemplateRunnerPanel({
         </button>
         <button type="button" disabled aria-disabled="true">
           PR creation disabled for MG338
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: skybridge-live-codex-analysis-report-native-success.ps1 -Command preview-run">
+          MG339 Codex native preview
+        </button>
+        <button type="button" disabled aria-disabled="true" title="PowerShell only: apply-run requires exact MG339 confirmation">
+          MG339 Codex native apply unavailable in Desktop
+        </button>
+        <button type="button" disabled aria-disabled="true">
+          PR creation disabled for MG339
         </button>
       </div>
     </section>
