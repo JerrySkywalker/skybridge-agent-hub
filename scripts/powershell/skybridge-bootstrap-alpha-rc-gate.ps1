@@ -6,6 +6,7 @@ param(
   [string]$TokenFile = "",
   [string]$ExpectedCommit = "8499ccba39894fdfccb7b29ddfe72db142ddb711",
   [string]$ExpectedImageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-8499ccba39894fdfccb7b29ddfe72db142ddb711",
+  [string]$ExpectedTagTargetCommit = "",
   [switch]$WriteReport,
   [string]$ReportDir = ".agent/tmp/bootstrap-alpha-rc",
   [switch]$Json,
@@ -22,6 +23,7 @@ Set-Location $RepoRoot
 
 $Schema = "skybridge.bootstrap_alpha_rc_gate.v1"
 $TagNamePreview = "v0.1.0-bootstrap-alpha-rc1"
+$ResolvedExpectedTagTargetCommit = if ([string]::IsNullOrWhiteSpace($ExpectedTagTargetCommit)) { $ExpectedCommit } else { $ExpectedTagTargetCommit }
 $WorkerId = "jerry-win-local-01"
 $ApiBaseParameterWasBound = $PSBoundParameters.ContainsKey("ApiBase")
 $TokenFileParameterWasBound = $PSBoundParameters.ContainsKey("TokenFile")
@@ -534,18 +536,18 @@ function Get-TagPreview {
     try { $tagCommit = ((git rev-list -n 1 $TagNamePreview 2>$null | Out-String).Trim()) } catch {}
   }
   [pscustomobject]@{
-    ok = (-not $tagExists -or $tagCommit -eq $ExpectedCommit)
-    status = if (-not $tagExists) { "pass" } elseif ($tagCommit -eq $ExpectedCommit) { "warning" } else { "blocked" }
+    ok = (-not $tagExists -or $tagCommit -eq $ResolvedExpectedTagTargetCommit)
+    status = if (-not $tagExists) { "pass" } elseif ($tagCommit -eq $ResolvedExpectedTagTargetCommit) { "warning" } else { "blocked" }
     tag_name_preview = $TagNamePreview
-    target_commit = $ExpectedCommit
+    target_commit = $ResolvedExpectedTagTargetCommit
     image_ref = $ExpectedImageRef
     tag_exists = $tagExists
     tag_commit = $tagCommit
     tag_recommended = (-not $tagExists)
     tag_created = $false
-    command_preview = "git tag -a $TagNamePreview $ExpectedCommit -m `"Bootstrap Alpha RC`""
-    blockers = @(if ($tagExists -and $tagCommit -ne $ExpectedCommit) { "tag_exists_on_different_commit" })
-    warnings = @(if ($tagExists -and $tagCommit -eq $ExpectedCommit) { "tag_already_exists_on_target_commit" })
+    command_preview = "git tag -a $TagNamePreview $ResolvedExpectedTagTargetCommit -m `"Bootstrap Alpha RC`""
+    blockers = @(if ($tagExists -and $tagCommit -ne $ResolvedExpectedTagTargetCommit) { "tag_exists_on_different_commit" })
+    warnings = @(if ($tagExists -and $tagCommit -eq $ResolvedExpectedTagTargetCommit) { "tag_already_exists_on_target_commit" })
     token_printed = $false
   }
 }
@@ -660,6 +662,7 @@ function New-RcGateReport {
     generated_at = (Get-Date).ToUniversalTime().ToString("o")
     expected_commit = $ExpectedCommit
     expected_image_ref = $ExpectedImageRef
+    expected_tag_target_commit = $ResolvedExpectedTagTargetCommit
     api_base_configured = (Test-ApiConfigured -Value $resolvedApiBase)
     token_file_present = (-not [string]::IsNullOrWhiteSpace($resolvedTokenFile) -and (Test-Path -LiteralPath $resolvedTokenFile -PathType Leaf))
     worker_id = $WorkerId
@@ -708,6 +711,7 @@ if ($Command -eq "safe-summary") {
     ok = $true
     expected_commit = $ExpectedCommit
     expected_image_ref = $ExpectedImageRef
+    expected_tag_target_commit = $ResolvedExpectedTagTargetCommit
     tag_name_preview = $TagNamePreview
     tag_created = $false
     deploy_mutation_performed = $false

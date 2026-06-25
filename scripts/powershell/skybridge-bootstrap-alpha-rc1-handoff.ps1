@@ -5,6 +5,8 @@ param(
   [string]$ExpectedTag = "v0.1.0-bootstrap-alpha-rc1",
   [string]$ExpectedCommit = "4473257548bd0fc26e05002d968f8525b37bac8b",
   [string]$ExpectedImageRef = "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b",
+  [string]$ExpectedCloudCommit = "",
+  [string]$ExpectedCloudImageRef = "",
   [string]$ApiBase = "",
   [switch]$Json,
   [switch]$WriteReport,
@@ -17,6 +19,8 @@ $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
 
 $Schema = "skybridge.bootstrap_alpha_rc1_handoff.v1"
+$ResolvedExpectedCloudCommit = if ([string]::IsNullOrWhiteSpace($ExpectedCloudCommit)) { $ExpectedCommit } else { $ExpectedCloudCommit }
+$ResolvedExpectedCloudImageRef = if ([string]::IsNullOrWhiteSpace($ExpectedCloudImageRef)) { $ExpectedImageRef } else { $ExpectedCloudImageRef }
 $PostTagAuditMarkdown = ".agent/tmp/bootstrap-alpha-rc/bootstrap-alpha-rc1-post-tag-audit.md"
 $PostTagAuditJson = ".agent/tmp/bootstrap-alpha-rc/bootstrap-alpha-rc1-post-tag-audit.json"
 
@@ -275,8 +279,8 @@ function Get-CloudChecks {
     $blockers += "cloud_version_unreachable"
   }
   $versionReachable = ($null -ne $version)
-  $commitOk = ($versionReachable -and [string](Get-Prop -Object $version -Name "commit_sha") -eq $ExpectedCommit)
-  $imageOk = ($versionReachable -and [string](Get-Prop -Object $version -Name "image_ref") -eq $ExpectedImageRef)
+  $commitOk = ($versionReachable -and [string](Get-Prop -Object $version -Name "commit_sha") -eq $ResolvedExpectedCloudCommit)
+  $imageOk = ($versionReachable -and [string](Get-Prop -Object $version -Name "image_ref") -eq $ResolvedExpectedCloudImageRef)
   if ($versionReachable -and -not $commitOk) { $blockers += "cloud_commit_mismatch" }
   if ($versionReachable -and -not $imageOk) { $blockers += "cloud_image_ref_mismatch" }
 
@@ -288,8 +292,9 @@ function Get-CloudChecks {
     "-File", (Join-Path $PSScriptRoot "skybridge-bootstrap-alpha-rc-gate.ps1"),
     "-Command", "audit",
     "-ApiBase", $ApiBase,
-    "-ExpectedCommit", $ExpectedCommit,
-    "-ExpectedImageRef", $ExpectedImageRef,
+    "-ExpectedCommit", $ResolvedExpectedCloudCommit,
+    "-ExpectedImageRef", $ResolvedExpectedCloudImageRef,
+    "-ExpectedTagTargetCommit", $ExpectedCommit,
     "-Json"
   ) -AllowNonZero
   $rcGateOk = [bool](Get-Bool -Object $rcGate -Name "ok")
@@ -485,6 +490,8 @@ function New-HandoffReport {
     tag_name = $ExpectedTag
     expected_commit = $ExpectedCommit
     expected_image_ref = $ExpectedImageRef
+    expected_cloud_commit = $ResolvedExpectedCloudCommit
+    expected_cloud_image_ref = $ResolvedExpectedCloudImageRef
     tag_target_commit = if ($tag) { [string](Get-Prop -Object $tag -Name "tag_target_commit" -Default "") } else { $ExpectedCommit }
     tag_verified_local = if ($tag) { [bool](Get-Bool -Object $tag -Name "tag_verified_local") } else { $false }
     tag_verified_origin_if_available = if ($tag) { [bool](Get-Bool -Object $tag -Name "tag_verified_origin_if_available") } else { $false }
@@ -530,6 +537,8 @@ if ($Command -eq "safe-summary") {
     tag_name = $ExpectedTag
     expected_commit = $ExpectedCommit
     expected_image_ref = $ExpectedImageRef
+    expected_cloud_commit = $ResolvedExpectedCloudCommit
+    expected_cloud_image_ref = $ResolvedExpectedCloudImageRef
     github_release_created = $false
     task_created = $false
     task_claimed = $false

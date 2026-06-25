@@ -110,6 +110,14 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-boo
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-cloud-parity-check.ps1 -ApiBase https://skybridge.jerryskywalker.space -Json
 ```
 
+If a later docs/scripts PR has deployed after the RC1 tag, keep
+`-ExpectedCommit` as the immutable RC1 tag target and pass the live cloud
+deployment separately:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-bootstrap-alpha-rc1-handoff.ps1 -Command audit -ApiBase https://skybridge.jerryskywalker.space -ExpectedCommit 4473257548bd0fc26e05002d968f8525b37bac8b -ExpectedCloudCommit <deployed-commit> -ExpectedCloudImageRef <deployed-image-ref> -Json
+```
+
 Expected cloud facts:
 
 - `/v1/version` commit matches
