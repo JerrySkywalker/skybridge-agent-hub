@@ -16,6 +16,10 @@ The cloud check reads `/v1/version`, route parity, operator report, review
 gate, and self-bootstrap convergence summaries. It does not deploy, change
 server configuration, create tasks, claim tasks, or execute work.
 
+For a post-MG340 deploy audit, pass the deployed MG340 merge SHA and image ref
+to `-ExpectedCommit` and `-ExpectedImageRef`; the release notes and tag plan
+still record the MG339 runtime baseline that the RC gate packages.
+
 ## Local Desktop Start And Check
 
 For browser-only Desktop rendering:
