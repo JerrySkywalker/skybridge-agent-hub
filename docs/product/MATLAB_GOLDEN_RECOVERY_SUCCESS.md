@@ -74,10 +74,19 @@ Server evidence uses `skybridge.matlab_sweep_evidence.v1` and records:
 Failure evidence also lists only actual files and reports missing expected
 outputs separately.
 
+## MG337 Consumer
+
+MG337 consumes the completed MG336 `manifest.json`, `summary.json`, and
+`metrics.csv` as read-only inputs for
+`live-codex-analysis-report-task-337-001`. That Codex report runner is fixed to
+these safe summary artifacts and writes its Markdown output under
+`.agent/tmp/codex-analysis-report/**`.
+
 ## Still Disabled
 
-MG336 does not enable arbitrary MATLAB command text, Codex execution, arbitrary
-shell, PR creation, worker loops, project-control unpause, old task requeue, or
-generic MATLAB queue execution.
+MG336 does not enable arbitrary MATLAB command text, arbitrary Codex prompts,
+arbitrary shell, PR creation, worker loops, project-control unpause, old task
+requeue, or generic MATLAB queue execution. MG337 adds one bounded Codex report
+consumer without changing those MATLAB runner bounds.
 
 token_printed=false

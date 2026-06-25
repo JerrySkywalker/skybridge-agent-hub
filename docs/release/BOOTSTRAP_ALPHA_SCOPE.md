@@ -134,6 +134,16 @@ Codex execution, worker loops, arbitrary shell, PR creation, old task requeue,
 project-control unpause, generic MATLAB queue execution, or production
 infrastructure mutation.
 
+MG337 covers Codex Analysis Report Golden Trial only. It may create, claim,
+start, and complete or fail exactly one new task,
+`live-codex-analysis-report-task-337-001`, after the MG336 manifest, summary,
+and metrics inputs exist. Codex invocation is allowed only through
+`codex-analysis-report-runner.v1` with the fixed prompt template and output
+under `.agent/tmp/codex-analysis-report/**`. MG337 does not allow arbitrary
+prompts, MATLAB execution, arbitrary shell, source edits, PR creation,
+auto-merge, worker loops, old task requeue, project-control unpause, raw Codex
+log exposure, or production infrastructure mutation.
+
 ## Release Principle
 
 Bootstrap Alpha is complete only when the golden path is understandable,

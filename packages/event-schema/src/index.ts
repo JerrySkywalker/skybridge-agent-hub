@@ -765,6 +765,88 @@ export type MatlabSweepSummary = z.infer<typeof MatlabSweepSummarySchema>;
 export type MatlabSweepEvidence = z.infer<typeof MatlabSweepEvidenceSchema>;
 export type MatlabDoctor = z.infer<typeof MatlabDoctorSchema>;
 
+const CodexAnalysisReportPathsSchema = z.object({
+  input_manifest_path: z.string().min(1),
+  input_summary_path: z.string().min(1),
+  input_metrics_path: z.string().min(1),
+  output_report_path: z.string().min(1),
+});
+const CodexAnalysisReportSafetySchema = z.object({
+  raw_codex_log_included: z.literal(false),
+  raw_prompt_included: z.literal(false),
+  raw_stdout_included: z.literal(false),
+  raw_stderr_included: z.literal(false),
+  matlab_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  pr_created: z.literal(false),
+  token_printed: z.literal(false),
+});
+const CodexAnalysisReportCommonSchema = CodexAnalysisReportPathsSchema.merge(
+  CodexAnalysisReportSafetySchema,
+).extend({
+  task_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  template_id: z.literal("codex-analysis-report.v1"),
+  runner_id: z.literal("codex-analysis-report-runner.v1"),
+  report_exists: z.boolean(),
+  validation_status: z.string().min(1),
+  codex_invoked: z.boolean(),
+  codex_exit_code: z.number().int().nullable(),
+});
+export const CodexAnalysisReportRunnerSchema =
+  CodexAnalysisReportCommonSchema.extend({
+    schema: z.literal("skybridge.codex_analysis_report_runner.v1"),
+    ok: z.boolean(),
+    mode: z.enum([
+      "status",
+      "preview",
+      "apply",
+      "fixture",
+      "validate-output",
+      "safe-summary",
+    ]),
+    codex_available: z.boolean().optional(),
+    would_invoke_codex: z.boolean().optional(),
+    blockers: z.array(z.string()).default([]),
+    warnings: z.array(z.string()).default([]),
+  });
+export const CodexAnalysisReportSummarySchema =
+  CodexAnalysisReportSafetySchema.extend({
+    schema: z.literal("skybridge.codex_analysis_report_summary.v1"),
+    task_id: z.string().min(1),
+    worker_id: z.string().min(1),
+    template_id: z.literal("codex-analysis-report.v1"),
+    runner_id: z.literal("codex-analysis-report-runner.v1"),
+    input_count: z.number().int().min(0),
+    output_report_path: z.string().min(1),
+    report_exists: z.boolean(),
+    synthetic_runner_validation_stated: z.boolean(),
+    validation_status: z.string().min(1),
+  });
+export const CodexAnalysisReportEvidenceSchema =
+  CodexAnalysisReportCommonSchema.extend({
+    schema: z.literal("skybridge.codex_analysis_report_evidence.v1"),
+    ok: z.boolean(),
+    allowed_paths_checked: z.literal(true),
+    blocked_paths_checked: z.literal(true),
+    changed_files: z.array(z.string()),
+    existing_outputs: z.array(z.string()).default([]),
+    expected_outputs_missing: z.array(z.string()).default([]),
+    report_validation_errors: z.array(z.string()).default([]),
+    result_summary: z.string().min(1),
+    project_control_unpaused: z.literal(false),
+  });
+export type CodexAnalysisReportRunner = z.infer<
+  typeof CodexAnalysisReportRunnerSchema
+>;
+export type CodexAnalysisReportSummary = z.infer<
+  typeof CodexAnalysisReportSummarySchema
+>;
+export type CodexAnalysisReportEvidence = z.infer<
+  typeof CodexAnalysisReportEvidenceSchema
+>;
+
 export const TaskTemplateDraftTypeSchema = z.enum(["task", "campaign"]);
 export const TaskTemplateRiskClassSchema = z.enum(["low", "medium", "high"]);
 export const TaskTemplateValidationSchema = z.object({

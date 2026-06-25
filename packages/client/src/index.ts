@@ -60,6 +60,9 @@ import type {
   MatlabSweepManifest as MatlabSweepManifestContract,
   MatlabSweepSummary as MatlabSweepSummaryContract,
   MatlabDoctor as MatlabDoctorContract,
+  CodexAnalysisReportRunner as CodexAnalysisReportRunnerContract,
+  CodexAnalysisReportSummary as CodexAnalysisReportSummaryContract,
+  CodexAnalysisReportEvidence as CodexAnalysisReportEvidenceContract,
 } from "@skybridge-agent-hub/event-schema";
 
 import {
@@ -1985,6 +1988,9 @@ export type MatlabSweepEvidence = MatlabSweepEvidenceContract;
 export type MatlabSweepManifest = MatlabSweepManifestContract;
 export type MatlabSweepSummary = MatlabSweepSummaryContract;
 export type MatlabDoctor = MatlabDoctorContract;
+export type CodexAnalysisReportRunner = CodexAnalysisReportRunnerContract;
+export type CodexAnalysisReportSummary = CodexAnalysisReportSummaryContract;
+export type CodexAnalysisReportEvidence = CodexAnalysisReportEvidenceContract;
 export type TaskTemplate = TaskTemplateContract;
 export type TaskTemplateRegistry = TaskTemplateRegistryContract;
 
@@ -4752,6 +4758,17 @@ export const MATLAB_GOLDEN_SUCCESS_CREATE_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CREATE_ONE_LIVE_MATLAB_SUCCESS_TASK_ONLY";
 export const MATLAB_GOLDEN_SUCCESS_RUN_CONFIRMATION_TEXT =
   "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_MATLAB_SUCCESS_TASK_ONLY";
+export const CODEX_ANALYSIS_REPORT_TASK_ID =
+  "live-codex-analysis-report-task-337-001";
+export const CODEX_ANALYSIS_REPORT_TEMPLATE_ID = "codex-analysis-report.v1";
+export const CODEX_ANALYSIS_REPORT_RUNNER_ID =
+  "codex-analysis-report-runner.v1";
+export const CODEX_ANALYSIS_REPORT_CREATE_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CREATE_ONE_LIVE_CODEX_ANALYSIS_REPORT_TASK_ONLY";
+export const CODEX_ANALYSIS_REPORT_RUN_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_CLAIM_AND_RUN_ONE_LIVE_CODEX_ANALYSIS_REPORT_TASK_ONLY";
+export const CODEX_ANALYSIS_REPORT_RUNNER_CONFIRMATION_TEXT =
+  "I_UNDERSTAND_RUN_ONE_FIXED_CODEX_ANALYSIS_REPORT_ONLY";
 
 export const fixtureTemplateRunnerEvidence: TemplateRunnerEvidence = {
   schema: "skybridge.template_runner_evidence.v1",
@@ -5176,6 +5193,94 @@ export const fixtureMatlabGoldenSuccessPreview: WorkerTemplateRunnerPreview = {
   task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
   expected_task_id: MATLAB_GOLDEN_SUCCESS_TASK_ID,
   result_summary: "MG336 success fixture: one exact MATLAB success task is eligible only after doctor precondition passes.",
+};
+
+export const fixtureCodexAnalysisReportRunnerPreview: CodexAnalysisReportRunner = {
+  schema: "skybridge.codex_analysis_report_runner.v1",
+  ok: true,
+  mode: "preview",
+  task_id: CODEX_ANALYSIS_REPORT_TASK_ID,
+  worker_id: "jerry-win-local-01",
+  template_id: CODEX_ANALYSIS_REPORT_TEMPLATE_ID,
+  runner_id: CODEX_ANALYSIS_REPORT_RUNNER_ID,
+  input_manifest_path:
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/manifest.json",
+  input_summary_path:
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/summary.json",
+  input_metrics_path:
+    ".agent/tmp/matlab-golden-trial/live-matlab-golden-task-336-001/metrics.csv",
+  output_report_path:
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-337-001/report.md",
+  report_exists: false,
+  validation_status: "preview_only",
+  codex_available: true,
+  would_invoke_codex: true,
+  codex_invoked: false,
+  codex_exit_code: null,
+  blockers: [],
+  warnings: ["PowerShell-only exact confirmation required before fixed Codex report runner apply."],
+  raw_codex_log_included: false,
+  raw_prompt_included: false,
+  raw_stdout_included: false,
+  raw_stderr_included: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureCodexAnalysisReportEvidence: CodexAnalysisReportEvidence = {
+  schema: "skybridge.codex_analysis_report_evidence.v1",
+  ok: true,
+  task_id: CODEX_ANALYSIS_REPORT_TASK_ID,
+  worker_id: "jerry-win-local-01",
+  template_id: CODEX_ANALYSIS_REPORT_TEMPLATE_ID,
+  runner_id: CODEX_ANALYSIS_REPORT_RUNNER_ID,
+  input_manifest_path: fixtureCodexAnalysisReportRunnerPreview.input_manifest_path,
+  input_summary_path: fixtureCodexAnalysisReportRunnerPreview.input_summary_path,
+  input_metrics_path: fixtureCodexAnalysisReportRunnerPreview.input_metrics_path,
+  output_report_path: fixtureCodexAnalysisReportRunnerPreview.output_report_path,
+  report_exists: true,
+  validation_status: "passed",
+  codex_invoked: true,
+  codex_exit_code: 0,
+  allowed_paths_checked: true,
+  blocked_paths_checked: true,
+  changed_files: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-337-001/report.md",
+  ],
+  existing_outputs: [
+    ".agent/tmp/codex-analysis-report/live-codex-analysis-report-task-337-001/report.md",
+  ],
+  expected_outputs_missing: [],
+  report_validation_errors: [],
+  result_summary:
+    "MG337 fixture: fixed Codex report runner produced one sanitized Markdown report from MG336 manifest, summary, and metrics only.",
+  project_control_unpaused: false,
+  raw_codex_log_included: false,
+  raw_prompt_included: false,
+  raw_stdout_included: false,
+  raw_stderr_included: false,
+  matlab_run_called: false,
+  arbitrary_shell_enabled: false,
+  worker_loop_started: false,
+  pr_created: false,
+  token_printed: false,
+};
+
+export const fixtureCodexAnalysisReportPreview: WorkerTemplateRunnerPreview = {
+  ...fixtureMatlabGoldenTrialPreview,
+  task_id: CODEX_ANALYSIS_REPORT_TASK_ID,
+  expected_task_id: CODEX_ANALYSIS_REPORT_TASK_ID,
+  template_id: CODEX_ANALYSIS_REPORT_TEMPLATE_ID,
+  runner_id: CODEX_ANALYSIS_REPORT_RUNNER_ID,
+  evidence_schema: "skybridge.codex_analysis_report_evidence.v1",
+  result_summary:
+    "MG337 fixture: one exact Codex analysis report task is eligible for PowerShell-only fixed-runner apply after MG336 output files are present.",
+  final_task_state: "queued",
+  codex_run_called: false,
+  matlab_run_called: false,
 };
 
 export const fixtureDesktopResidentState: DesktopResidentState = {

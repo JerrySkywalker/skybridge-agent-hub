@@ -246,4 +246,27 @@ focused on the Bootstrap Alpha product flow and avoid new policy-layer drift.
   include exactly one live MG336 success apply if the doctor, worker, API, token,
   task id, and output-path preconditions hold.
 
+## MG337 Codex Analysis Report Golden Trial
+
+- Objective: prove the first controlled Codex execution path by generating one
+  bounded Markdown report from the MG336 MATLAB manifest, summary, and metrics.
+- Implementation note: MG337 adds
+  [Codex Analysis Report Golden Trial](../product/CODEX_ANALYSIS_REPORT_GOLDEN_TRIAL.md),
+  `skybridge-codex-analysis-report-runner.ps1`,
+  `skybridge-live-codex-analysis-report-trial.ps1`, a fixed prompt template,
+  Codex report schemas, Desktop preview fields, and preview/fixture/rejection
+  evidence smokes.
+- Acceptance criteria: only `live-codex-analysis-report-task-337-001` may be
+  created and claimed; Codex is invoked only by the fixed runner; report
+  evidence lists the actual Markdown output and excludes raw Codex logs,
+  prompt text, stdout, stderr, MATLAB execution, PR creation, and token
+  printing.
+- Forbidden scope: arbitrary prompts, MATLAB execution, arbitrary shell,
+  source edits, PR creation, auto-merge, worker loops, project-control unpause,
+  old task requeue, generic Codex queue execution, and production
+  infrastructure mutation.
+- Live deployment expected: no server runtime change; post-deploy checks may
+  include exactly one live MG337 report apply if Codex, worker, API, token,
+  task id, input-file, and output-path preconditions hold.
+
 token_printed=false
