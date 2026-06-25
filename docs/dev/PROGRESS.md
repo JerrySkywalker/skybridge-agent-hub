@@ -1,5 +1,17 @@
 # Progress Log
 
+## 2026-06-26 Mega Goal 341 Bootstrap Alpha RC Tag Authorization
+
+- Updated the Bootstrap Alpha tag plan for MG341 operator authorization to
+  create the real annotated `v0.1.0-bootstrap-alpha-rc1` tag.
+- Recorded that the final tag target must be the final merged MG341
+  documentation commit after PR CI, Deploy Cloud, `/v1/version`, cloud parity,
+  and RC gate audit pass.
+- Kept GitHub Release creation, release asset creation, task creation, task
+  claim, task execution, Codex execution, MATLAB execution, worker loops,
+  project-control unpause, deployment infrastructure changes, raw
+  logs/prompts/process streams, credentials, and token printing disabled.
+
 ## 2026-06-26 Mega Goal 340 Bootstrap Alpha RC Release Gate
 
 - Added Bootstrap Alpha RC release notes, runbook, disabled-features inventory,
