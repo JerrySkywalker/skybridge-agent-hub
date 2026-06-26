@@ -7,7 +7,10 @@ This is the future release plan for a Desktop installer release candidate. MG344
 - Proposed future tag: `v0.1.0-bootstrap-alpha-desktop-rc1`
 - Base relationship: post-`v0.1.0-bootstrap-alpha-rc1` Desktop packaging track
 - Release type: pre-release
-- GitHub Release assets: only after a separate installer-release goal authorizes them
+- GitHub Release assets: published by MG346 after a separate installer-release
+  authorization.
+- Post-release install smoke: MG347, documented in
+  [DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md).
 
 ## Why Not Attach To Existing RC1
 
@@ -26,7 +29,9 @@ A future Desktop installer RC may include:
 
 No installer or binary artifact is uploaded in MG344 or MG345. MG345 may stage
 fresh local artifacts under `.agent/tmp/desktop-installer-staging/` for operator
-inspection only.
+inspection only. MG346 publishes the Desktop RC1 release assets; MG347 verifies
+download, checksum, manual install, first launch, and optional uninstall
+checklists without creating or updating releases.
 
 ## Windows Unsigned Installer Warning
 

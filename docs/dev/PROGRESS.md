@@ -1130,3 +1130,16 @@
   tag creation, tag movement, installer upload, binary upload, task creation or
   claim, Codex or MATLAB execution, worker loop, project-control unpause, or
   token printing.
+
+## 2026-06-27 Mega Goal 347 Desktop Installer Post-Release Install Smoke
+
+- Added the Desktop installer post-release smoke document for the published
+  `v0.1.0-bootstrap-alpha-desktop-rc1` release assets.
+- Added a read-only-by-default post-release smoke script that can download
+  release assets, verify SHA256 checksums, write sanitized reports, and gate
+  unsigned installer/app launch behind exact operator confirmations.
+- Added CI-safe smokes for schema/status, checksum fixtures, checklist output,
+  report safety, no silent install surface, and mutation-safety fields.
+- Kept release updates, tag movement, asset upload, silent install, Windows
+  security bypass, task creation or claim, Codex/MATLAB execution, worker loop,
+  project-control unpause, and token printing disabled.
