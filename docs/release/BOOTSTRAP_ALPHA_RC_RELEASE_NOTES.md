@@ -88,6 +88,18 @@ that was proven through MG324-MG339.
 - One live Codex-native report proof over the MATLAB outputs.
 - Sanitized evidence summaries and read-only RC gate reports.
 
+## Post-RC1 Desktop Packaging Track
+
+MG344 starts Desktop packaging readiness after the Bootstrap Alpha RC1 GitHub
+Release. It documents the Tauri package inventory, unsigned Windows packaging
+status, CI-safe preview smokes, and future installer RC plan without publishing
+or attaching installer assets. See
+[../desktop/DESKTOP_PACKAGING_READINESS.md](../desktop/DESKTOP_PACKAGING_READINESS.md)
+and
+[../desktop/DESKTOP_INSTALLER_RC_PLAN.md](../desktop/DESKTOP_INSTALLER_RC_PLAN.md).
+
+The existing RC1 tag and GitHub Release remain unchanged.
+
 ## Still Disabled
 
 - General remote shell.

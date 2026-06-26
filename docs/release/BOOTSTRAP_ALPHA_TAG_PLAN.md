@@ -25,7 +25,11 @@ MG340 release candidate ready: `true`
 
 Tag creation authorization: `granted in MG341`
 
-GitHub Release: `not created`
+GitHub Release after MG341 tag creation: `not created`
+
+MG343 later created the GitHub Release for
+`v0.1.0-bootstrap-alpha-rc1` as a pre-release with no assets. The RC1 tag was
+not moved, deleted, or recreated.
 
 Because this documentation update is created before tag creation, the final tag
 target must be retargeted to the final merged MG341 documentation commit only

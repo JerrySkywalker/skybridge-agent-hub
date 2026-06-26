@@ -11,7 +11,9 @@ native report, evidence, disabled-features, RC gate, and tag audit chain.
   `4473257548bd0fc26e05002d968f8525b37bac8b`
 - Image:
   `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-4473257548bd0fc26e05002d968f8525b37bac8b`
-- GitHub Release: not created
+- GitHub Release:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/releases/tag/v0.1.0-bootstrap-alpha-rc1`
+  created as a pre-release with no assets
 - RC gate: passed before tag creation
 - Post-tag audit: passed with the expected
   `tag_already_exists_on_target_commit` warning after the tag existed
@@ -63,10 +65,22 @@ Bootstrap Alpha RC1 still disables:
 The full disabled list is in
 [BOOTSTRAP_ALPHA_DISABLED_FEATURES.md](BOOTSTRAP_ALPHA_DISABLED_FEATURES.md).
 
+## Desktop Packaging Readiness
+
+Desktop packaging readiness is post-RC1 work on `main`, not part of the
+immutable RC1 tag source tree. See
+[../desktop/DESKTOP_PACKAGING_READINESS.md](../desktop/DESKTOP_PACKAGING_READINESS.md)
+and
+[../desktop/DESKTOP_INSTALLER_RC_PLAN.md](../desktop/DESKTOP_INSTALLER_RC_PLAN.md).
+
+A future installer release should use a later dedicated tag, for example
+`v0.1.0-bootstrap-alpha-desktop-rc1`. No Desktop installer is attached to the
+existing Bootstrap Alpha RC1 GitHub Release by the readiness track.
+
 ## Known Limitations
 
-- No GitHub Release or release assets have been created.
-- Desktop packaging remains future work.
+- No GitHub Release assets or installer binaries are attached to RC1.
+- Desktop installer publication remains future work.
 - Real research workflow expansion remains future work.
 - Multi-user permissions, mobile/watch client, notification center
   productization, and multi-project production support remain disabled.

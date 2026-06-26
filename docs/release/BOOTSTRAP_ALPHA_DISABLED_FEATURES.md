@@ -48,3 +48,14 @@ MG342 preserves this disabled surface for the tagged RC1 handoff. The handoff
 checker must continue to report no GitHub Release creation, no task claim, no
 task execution, no Codex run, no MATLAB run, no worker loop, no project-control
 unpause, and `token_printed=false`.
+
+## Desktop Packaging Track
+
+MG344 keeps the packaged Desktop surface bounded. Packaging readiness must not
+enable arbitrary shell, arbitrary prompt execution, queue runner controls,
+worker loop controls, live apply without exact-confirmation-only PowerShell
+path, MATLAB arbitrary command, Codex arbitrary prompt, worker-created PRs,
+auto-merge, or background autonomous execution.
+
+Installer publication, binary upload, tag creation, tag movement, and GitHub
+Release updates remain disabled until a later dedicated installer release goal.
