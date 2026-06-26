@@ -31,6 +31,7 @@ $requiredDocs = @(
   "docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md",
   "docs/desktop/DESKTOP_PACKAGING_READINESS.md",
   "docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md",
+  "docs/desktop/DESKTOP_INSTALLER_STAGING.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -73,6 +74,10 @@ $requiredScripts = @{
   desktop_packaging_readiness_smoke = "scripts/powershell/smoke-desktop-packaging-readiness.ps1"
   desktop_packaging_safety_smoke = "scripts/powershell/smoke-desktop-packaging-safety.ps1"
   desktop_installer_rc_plan_smoke = "scripts/powershell/smoke-desktop-installer-rc-plan.ps1"
+  desktop_installer_staging = "scripts/powershell/skybridge-desktop-installer-staging.ps1"
+  desktop_installer_staging_preview_smoke = "scripts/powershell/smoke-desktop-installer-staging-preview.ps1"
+  desktop_installer_staging_checksum_smoke = "scripts/powershell/smoke-desktop-installer-staging-checksum.ps1"
+  desktop_installer_staging_no_upload_smoke = "scripts/powershell/smoke-desktop-installer-staging-no-upload.ps1"
 }
 
 $componentPaths = @{
@@ -228,7 +233,13 @@ $requiredPackageScripts = @(
   "smoke:desktop-packaging-build-preview",
   "smoke:desktop-packaging-report",
   "smoke:desktop-packaging-safety",
-  "smoke:desktop-installer-rc-plan"
+  "smoke:desktop-installer-rc-plan",
+  "smoke:desktop-installer-staging-preview",
+  "smoke:desktop-installer-staging-artifact-check",
+  "smoke:desktop-installer-staging-checksum",
+  "smoke:desktop-installer-staging-report",
+  "smoke:desktop-installer-staging-safety",
+  "smoke:desktop-installer-staging-no-upload"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

@@ -24,7 +24,9 @@ A future Desktop installer RC may include:
 - checksum file
 - packaging audit report
 
-No installer or binary artifact is uploaded in MG344.
+No installer or binary artifact is uploaded in MG344 or MG345. MG345 may stage
+fresh local artifacts under `.agent/tmp/desktop-installer-staging/` for operator
+inspection only.
 
 ## Windows Unsigned Installer Warning
 
@@ -61,6 +63,7 @@ Rollback should use the prior Desktop package artifact or uninstall the Desktop 
 Before a future installer release:
 
 - packaging readiness checker passes
+- fresh installer staging manifest exists for the target commit
 - full local Desktop package build succeeds on the target Windows host
 - artifact list is audited
 - checksum is generated
