@@ -29,6 +29,8 @@ $requiredDocs = @(
   "docs/release/BOOTSTRAP_ALPHA_DISABLED_FEATURES.md",
   "docs/release/BOOTSTRAP_ALPHA_TAG_PLAN.md",
   "docs/release/BOOTSTRAP_ALPHA_RC1_HANDOFF.md",
+  "docs/desktop/DESKTOP_PACKAGING_READINESS.md",
+  "docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -67,6 +69,10 @@ $requiredScripts = @{
   bootstrap_alpha_rc1_handoff_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc1-handoff.ps1"
   codex_stop_hook_hygiene_smoke = "scripts/powershell/smoke-codex-stop-hook-hygiene.ps1"
   bootstrap_alpha_rc1_tag_check_smoke = "scripts/powershell/smoke-bootstrap-alpha-rc1-tag-check.ps1"
+  desktop_packaging_readiness = "scripts/powershell/skybridge-desktop-packaging-readiness.ps1"
+  desktop_packaging_readiness_smoke = "scripts/powershell/smoke-desktop-packaging-readiness.ps1"
+  desktop_packaging_safety_smoke = "scripts/powershell/smoke-desktop-packaging-safety.ps1"
+  desktop_installer_rc_plan_smoke = "scripts/powershell/smoke-desktop-installer-rc-plan.ps1"
 }
 
 $componentPaths = @{
@@ -216,7 +222,13 @@ $requiredPackageScripts = @(
   "smoke:bootstrap-alpha-rc1-handoff-local",
   "smoke:bootstrap-alpha-rc1-handoff-report",
   "smoke:codex-stop-hook-hygiene",
-  "smoke:bootstrap-alpha-rc1-tag-check"
+  "smoke:bootstrap-alpha-rc1-tag-check",
+  "smoke:desktop-packaging-readiness",
+  "smoke:desktop-packaging-inventory",
+  "smoke:desktop-packaging-build-preview",
+  "smoke:desktop-packaging-report",
+  "smoke:desktop-packaging-safety",
+  "smoke:desktop-installer-rc-plan"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

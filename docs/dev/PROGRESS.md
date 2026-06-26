@@ -1100,3 +1100,20 @@
 - Preserved the RC1 safety boundary: no tag movement, GitHub Release creation,
   task creation or claim, Codex or MATLAB execution, worker loop,
   project-control unpause, or token printing.
+
+## 2026-06-27 Mega Goal 344 Desktop Packaging Readiness
+
+- Added the Desktop packaging readiness inventory for `apps/desktop`, covering
+  the Tauri v2 React/Vite structure, app metadata, icon config, unsigned Windows
+  packaging state, build/package commands, and expected output directories.
+- Added the future Desktop installer RC plan for
+  `v0.1.0-bootstrap-alpha-desktop-rc1` without attaching installers to the
+  existing Bootstrap Alpha RC1 GitHub Release.
+- Added `skybridge-desktop-packaging-readiness.ps1` with preview, inventory,
+  optional local build, artifact check, audit, and safe-summary commands.
+- Added CI-safe smokes for readiness, inventory, build preview, report safety,
+  Desktop safety, and installer RC plan coverage.
+- Preserved the packaging safety boundary: no release or tag mutation, no
+  installer or binary upload, no task creation or claim, no Codex or MATLAB
+  execution, no worker loop, no project-control unpause, and
+  `token_printed=false`.
