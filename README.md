@@ -147,6 +147,8 @@ For post-RC1 Desktop packaging readiness and the future installer RC plan, see
 and [docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md](docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md).
 For local-only fresh installer staging with checksums, see
 [docs/desktop/DESKTOP_INSTALLER_STAGING.md](docs/desktop/DESKTOP_INSTALLER_STAGING.md).
+For the Desktop installer RC1 post-release manual install smoke, see
+[docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see

@@ -11,8 +11,10 @@ MG345 follows MG344 Desktop packaging readiness:
 - MG344 documented the Tauri package inventory and packaging readiness.
 - MG345 performs a fresh local build/package attempt and stages local artifacts
   under `.agent/tmp`.
-- A later installer release goal, likely MG346, should use a dedicated tag such
-  as `v0.1.0-bootstrap-alpha-desktop-rc1`.
+- MG346 used a dedicated tag,
+  `v0.1.0-bootstrap-alpha-desktop-rc1`, for the Desktop installer RC release.
+- MG347 verifies the published release assets with a post-release download,
+  checksum, manual install, and first-launch smoke.
 
 MG345 does not create or update a GitHub Release, create or move a tag, upload
 installer assets, upload binaries, configure signing, or attach anything to the
@@ -88,5 +90,6 @@ Get-ChildItem .\.agent\tmp\desktop-installer-staging\artifacts
 ```
 
 Do not execute the installer as part of MG345. Do not attach these files to
-`v0.1.0-bootstrap-alpha-rc1`. The future Desktop installer RC should get its own
-reviewed tag, release body, checksum file, and upload authorization.
+`v0.1.0-bootstrap-alpha-rc1`. Use
+[DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md)
+for the MG347 manual-assisted install smoke of the published Desktop RC1 assets.
