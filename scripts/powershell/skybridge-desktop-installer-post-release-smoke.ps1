@@ -344,7 +344,7 @@ function New-SmokeResult {
     Invoke-Download ([ref]$blockers) ([ref]$warnings)
   }
 
-  $verifyRequested = $Command -in @("download", "verify-checksum", "preinstall-audit")
+  $verifyRequested = $Command -in @("download", "verify-checksum", "preinstall-audit", "postinstall-audit")
   $assets = @(Get-DownloadedAssetRecords ([ref]$blockers) ([ref]$warnings) $verifyRequested)
   if ($verifyRequested) {
     Test-ManifestAgreement ([ref]$blockers) ([ref]$warnings)
