@@ -145,6 +145,8 @@ and [docs/dev/CODEX_STOP_HOOK_HYGIENE.md](docs/dev/CODEX_STOP_HOOK_HYGIENE.md).
 For post-RC1 Desktop packaging readiness and the future installer RC plan, see
 [docs/desktop/DESKTOP_PACKAGING_READINESS.md](docs/desktop/DESKTOP_PACKAGING_READINESS.md)
 and [docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md](docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md).
+For local-only fresh installer staging with checksums, see
+[docs/desktop/DESKTOP_INSTALLER_STAGING.md](docs/desktop/DESKTOP_INSTALLER_STAGING.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see
@@ -328,6 +330,7 @@ SkyBridge Desktop is the local standby client for the pre-Goal-190 operator gate
 
 Desktop development uses `corepack pnpm -C apps/desktop dev` for Vite-only browser rendering and `corepack pnpm -C apps/desktop tauri:dev` for the full Tauri app.
 Desktop packaging readiness uses `corepack pnpm smoke:desktop-packaging-build-preview` for CI-safe preview and `corepack pnpm -C apps/desktop tauri:build` only for an explicit local package attempt.
+Installer staging uses `skybridge-desktop-installer-staging.ps1 -Command build -CleanBeforeBuild` for a local-only fresh build, checksum, and `.agent/tmp` staging run.
 
 For one-shot operator work, use `skybridge-guide.ps1` for the guided status -> submit-preview -> submit-apply -> run-once-preview -> run-once-apply -> inspect-task flow. The guide wraps `skybridge-submit.ps1` and `skybridge-run-once.ps1`, keeps preview as the default, uses `-PollOnce` only and leaves long-running remote loops deferred.
 

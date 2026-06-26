@@ -72,6 +72,8 @@ immutable RC1 tag source tree. See
 [../desktop/DESKTOP_PACKAGING_READINESS.md](../desktop/DESKTOP_PACKAGING_READINESS.md)
 and
 [../desktop/DESKTOP_INSTALLER_RC_PLAN.md](../desktop/DESKTOP_INSTALLER_RC_PLAN.md).
+MG345 adds local-only fresh installer staging with checksums; see
+[../desktop/DESKTOP_INSTALLER_STAGING.md](../desktop/DESKTOP_INSTALLER_STAGING.md).
 
 A future installer release should use a later dedicated tag, for example
 `v0.1.0-bootstrap-alpha-desktop-rc1`. No Desktop installer is attached to the

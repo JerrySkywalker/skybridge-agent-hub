@@ -1117,3 +1117,16 @@
   installer or binary upload, no task creation or claim, no Codex or MATLAB
   execution, no worker loop, no project-control unpause, and
   `token_printed=false`.
+
+## 2026-06-27 Mega Goal 345 Desktop Fresh Build And Installer Staging
+
+- Added local-only Desktop installer staging documentation and a staging script
+  that can run the explicit Desktop build/package commands, copy only installer
+  artifacts under `.agent/tmp/desktop-installer-staging/`, and generate
+  SHA256 checksums plus manifest/report metadata.
+- Added CI-safe smokes for staging preview, artifact-check, checksum fixture,
+  report safety, Desktop safety, and no-upload guarantees.
+- Kept installer publication separate from staging: no GitHub Release update,
+  tag creation, tag movement, installer upload, binary upload, task creation or
+  claim, Codex or MATLAB execution, worker loop, project-control unpause, or
+  token printing.

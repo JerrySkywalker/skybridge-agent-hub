@@ -30,11 +30,19 @@ The readiness checker can inspect existing local artifacts without uploading the
 
 Existing local artifacts are for inspection only. MG344 does not publish installers, upload binaries, attach assets to a GitHub Release, or create a Desktop release tag.
 
+MG345 adds the fresh-build staging layer. See
+[DESKTOP_INSTALLER_STAGING.md](DESKTOP_INSTALLER_STAGING.md) for the command
+that runs a clean local Desktop build/package attempt, stages only installer
+artifacts under `.agent/tmp/desktop-installer-staging/`, and writes checksums
+and a manifest without uploading anything.
+
 ## Known Warnings
 
 - `signing_not_configured`: Windows code signing is not configured.
 - `unsigned_installer_expected`: Windows users should expect unsigned installer warnings until a separate signing goal authorizes and configures signing.
-- `desktop_safety_static_scan_only`: the checker verifies the Desktop source statically; it does not prove every rendered control state.
+- `desktop_safety_static_scan_only`: the checker verifies the Desktop source
+  statically; it does not prove every rendered control state. MG345 reuses this
+  static Desktop safety check while staging artifacts.
 - `local_build_not_attempted`: CI-safe smokes use preview/report mode and do not require a full Tauri build.
 
 ## Known Blockers
