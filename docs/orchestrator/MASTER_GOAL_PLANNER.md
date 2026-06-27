@@ -49,6 +49,11 @@ The campaign advance gate is deterministic first. It refuses to advance when act
 
 MG351 adds a separate read-only tool provider inventory for deciding whether a future goal step can be proposed for execution. The planner may require tools such as Codex, MATLAB, Git, pnpm or Hermes, but it must treat the inventory as evidence only. SkyBridge owns campaign state, goal budget, task creation policy, dependency gates, retry/hold/abort and audit. The Windows local side reports direct runner availability and returns sanitized evidence; it does not own the state machine. Hermes remains an optional planner/gate/provider, and MCP remains future/disabled until explicitly enabled by a later goal.
 
+MG352 consumes that inventory for the first single-step loop. A planner may
+prepare a one-step `safe-local-smoke.v1` campaign, but the controller still
+requires exact ids, exact confirmation, one candidate task and sanitized
+evidence before completion. Multi-step campaign execution remains MG353 work.
+
 Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
 
 - deterministic gate passes;

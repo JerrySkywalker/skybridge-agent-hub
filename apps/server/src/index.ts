@@ -1456,6 +1456,10 @@ export async function createServer(
     return updateCampaignState(request.params.campaignId, "running", request.body, store, addStoredEvent, reply);
   });
 
+  app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/complete", { preHandler: requireWorkerAuth }, async (request, reply) => {
+    return updateCampaignState(request.params.campaignId, "completed", request.body, store, addStoredEvent, reply);
+  });
+
   app.post<{ Params: { campaignId: string }; Body: Record<string, unknown> }>("/v1/campaigns/:campaignId/advance-preview", async (request, reply) => {
     const campaign = store.getCampaign(decodeURIComponent(request.params.campaignId));
     if (!campaign) return reply.code(404).send({ ok: false, error: "campaign_not_found" });

@@ -35,6 +35,7 @@ $requiredDocs = @(
   "docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md",
   "docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md",
   "docs/orchestrator/TOOL_PROVIDER_CONTRACT.md",
+  "docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -100,6 +101,16 @@ $requiredScripts = @{
   tool_provider_report_smoke = "scripts/powershell/smoke-tool-provider-report.ps1"
   tool_provider_no_execution_smoke = "scripts/powershell/smoke-tool-provider-no-execution.ps1"
   manual_tool_provider_check_smoke = "scripts/powershell/smoke-manual-tool-provider-check-fixture.ps1"
+  single_goal_loop = "scripts/powershell/skybridge-goal-loop.ps1"
+  manual_single_goal_loop_test = "scripts/powershell/manual-single-goal-loop-test.ps1"
+  single_goal_loop_status_smoke = "scripts/powershell/smoke-single-goal-loop-status.ps1"
+  single_goal_loop_preview_smoke = "scripts/powershell/smoke-single-goal-loop-preview.ps1"
+  single_goal_loop_fixture_smoke = "scripts/powershell/smoke-single-goal-loop-fixture.ps1"
+  single_goal_loop_reject_no_confirm_smoke = "scripts/powershell/smoke-single-goal-loop-reject-no-confirm.ps1"
+  single_goal_loop_reject_unsafe_smoke = "scripts/powershell/smoke-single-goal-loop-reject-unsafe.ps1"
+  single_goal_loop_evidence_smoke = "scripts/powershell/smoke-single-goal-loop-evidence.ps1"
+  single_goal_loop_no_worker_loop_smoke = "scripts/powershell/smoke-single-goal-loop-no-worker-loop.ps1"
+  manual_single_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-single-goal-loop-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -281,7 +292,15 @@ $requiredPackageScripts = @(
   "smoke:tool-provider-mcp-disabled",
   "smoke:tool-provider-report",
   "smoke:tool-provider-no-execution",
-  "smoke:manual-tool-provider-check-fixture"
+  "smoke:manual-tool-provider-check-fixture",
+  "smoke:single-goal-loop-status",
+  "smoke:single-goal-loop-preview",
+  "smoke:single-goal-loop-fixture",
+  "smoke:single-goal-loop-reject-no-confirm",
+  "smoke:single-goal-loop-reject-unsafe",
+  "smoke:single-goal-loop-evidence",
+  "smoke:single-goal-loop-no-worker-loop",
+  "smoke:manual-single-goal-loop-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

@@ -51,6 +51,7 @@ import {
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
+  SingleGoalLoopSchema,
   ToolProviderInventorySchema,
   WorkerTemplateRunnerPreviewSchema,
   WorkerTemplateRunnerResultSchema,
@@ -996,6 +997,77 @@ describe("event schema", () => {
     expect(inventory.hermes_run_called).toBe(false);
     expect(inventory.mcp_run_called).toBe(false);
     expect(inventory.token_printed).toBe(false);
+  });
+
+  it("models single-goal loop completion with sanitized evidence", () => {
+    const safety = {
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    };
+    const evidence = {
+      schema: "skybridge.single_goal_loop_evidence.v1",
+      campaign_id: "local-cloud-single-goal-fixture",
+      step_id: "safe-local-smoke-step",
+      task_id: "single-goal-safe-local-smoke-fixture-task",
+      worker_id: "mg352-fixture-worker",
+      template_id: "safe-local-smoke.v1",
+      runner_id: "safe-local-smoke-runner.v1",
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      task_claimed_count: 1,
+      execution_started: true,
+      execution_completed: true,
+      execution_failed: false,
+      changed_files: [],
+      ...safety,
+    };
+    const loop = SingleGoalLoopSchema.parse({
+      schema: "skybridge.single_goal_loop.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "local-cloud-single-goal-fixture",
+      step_id: "safe-local-smoke-step",
+      task_id: "single-goal-safe-local-smoke-fixture-task",
+      worker_id: "mg352-fixture-worker",
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      template_id: "safe-local-smoke.v1",
+      runner_id: "safe-local-smoke-runner.v1",
+      preview_only: false,
+      apply_confirmed: true,
+      task_created: true,
+      task_claimed: true,
+      execution_started: true,
+      execution_completed: true,
+      execution_failed: false,
+      evidence_attached: true,
+      step_completed: true,
+      campaign_completed: true,
+      blockers: [],
+      warnings: ["fixture_mode"],
+      safety_flags: safety,
+      task_created_count: 1,
+      task_claimed_count: 1,
+      execution_completed_count: 1,
+      evidence,
+      ...safety,
+    });
+
+    expect(loop.schema).toBe("skybridge.single_goal_loop.v1");
+    expect(loop.evidence?.schema).toBe("skybridge.single_goal_loop_evidence.v1");
+    expect(loop.task_claimed_count).toBe(1);
+    expect(loop.codex_run_called).toBe(false);
+    expect(loop.matlab_run_called).toBe(false);
+    expect(loop.hermes_run_called).toBe(false);
+    expect(loop.mcp_run_called).toBe(false);
+    expect(loop.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {
