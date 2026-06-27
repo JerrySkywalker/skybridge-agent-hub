@@ -2,6 +2,13 @@
 
 Hermes is an optional SkyBridge planner adapter. SkyBridge Core stores neutral planner metadata on tasks, but it does not require Hermes to create, claim or complete tasks.
 
+MG351 keeps Hermes optional in the tool provider contract. Hermes can be reported
+as a planner, gate or provider when configured, but it is not the mandatory
+router for local tools and it must not take over the SkyBridge campaign state
+machine. Direct Windows-local runners remain the current default for already
+proven Codex and MATLAB paths. MCP is future/disabled until a later explicit
+enablement goal.
+
 ## Contract
 
 Planner decisions use strict JSON:

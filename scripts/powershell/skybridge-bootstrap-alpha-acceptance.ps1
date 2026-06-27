@@ -34,6 +34,7 @@ $requiredDocs = @(
   "docs/desktop/DESKTOP_INSTALLER_STAGING.md",
   "docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md",
   "docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md",
+  "docs/orchestrator/TOOL_PROVIDER_CONTRACT.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -89,6 +90,16 @@ $requiredScripts = @{
   desktop_launch_no_console_smoke = "scripts/powershell/smoke-desktop-launch-no-console-fixture.ps1"
   desktop_launch_no_fatal_missing_config_smoke = "scripts/powershell/smoke-desktop-launch-no-fatal-missing-config.ps1"
   desktop_launch_safety_smoke = "scripts/powershell/smoke-desktop-launch-safety.ps1"
+  tool_provider = "scripts/powershell/skybridge-tool-provider.ps1"
+  manual_tool_provider_check = "scripts/powershell/manual-tool-provider-check.ps1"
+  tool_provider_status_smoke = "scripts/powershell/smoke-tool-provider-status.ps1"
+  tool_provider_inventory_smoke = "scripts/powershell/smoke-tool-provider-inventory-fixture.ps1"
+  tool_provider_direct_smoke = "scripts/powershell/smoke-tool-provider-direct-fixture.ps1"
+  tool_provider_hermes_smoke = "scripts/powershell/smoke-tool-provider-hermes-detect-fixture.ps1"
+  tool_provider_mcp_disabled_smoke = "scripts/powershell/smoke-tool-provider-mcp-disabled.ps1"
+  tool_provider_report_smoke = "scripts/powershell/smoke-tool-provider-report.ps1"
+  tool_provider_no_execution_smoke = "scripts/powershell/smoke-tool-provider-no-execution.ps1"
+  manual_tool_provider_check_smoke = "scripts/powershell/smoke-manual-tool-provider-check-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -262,7 +273,15 @@ $requiredPackageScripts = @(
   "smoke:desktop-launch-no-console-fixture",
   "smoke:desktop-launch-no-fatal-missing-config",
   "smoke:desktop-launch-safety",
-  "smoke:desktop-launch-report"
+  "smoke:desktop-launch-report",
+  "smoke:tool-provider-status",
+  "smoke:tool-provider-inventory-fixture",
+  "smoke:tool-provider-direct-fixture",
+  "smoke:tool-provider-hermes-detect-fixture",
+  "smoke:tool-provider-mcp-disabled",
+  "smoke:tool-provider-report",
+  "smoke:tool-provider-no-execution",
+  "smoke:manual-tool-provider-check-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
