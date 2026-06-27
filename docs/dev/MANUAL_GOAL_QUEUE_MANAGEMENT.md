@@ -122,6 +122,12 @@ for planning, gating or provider status. MCP is future/disabled. A future queue
 controller must still require a fixed template, an allowlist, an execution gate,
 exact confirmation and sanitized evidence before creating or claiming work.
 
+MG352 adds the first one-step controller that uses this evidence. It is not a
+queue start command: it previews one campaign step and can apply exactly one
+`safe-local-smoke.v1` task with exact confirmation. It must stop after evidence
+attachment and step completion, and it must not continue into a second queue
+item or campaign step.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

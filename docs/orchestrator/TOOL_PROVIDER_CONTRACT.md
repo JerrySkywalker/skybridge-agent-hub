@@ -192,8 +192,14 @@ Reports are written to:
 
 ## Future Use
 
-MG352-MG359 should consume this inventory before deciding whether a campaign
-step can progress toward execution. The expected sequence is:
+MG352 is the first consumer of this inventory. It proves one exact-confirmed
+`safe-local-smoke.v1` task can bridge a server campaign step to Windows-local
+execution evidence without enabling a generic execution provider. The inventory
+still reports `execution_allowed=false`; the MG352 apply gate grants only the
+single fixed runner selected by the controller.
+
+MG353-MG359 should continue consuming this inventory before deciding whether a
+campaign step can progress toward execution. The expected sequence is:
 
 1. SkyBridge reads campaign state and step dependencies.
 2. SkyBridge checks the provider inventory for required tools.

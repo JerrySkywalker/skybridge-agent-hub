@@ -1174,3 +1174,18 @@
 - Kept Desktop/Web provider status UI as future work for a read-only panel only;
   no run controls, arbitrary shell, prompt box, MATLAB command box, MCP
   execution, worker loop or task claim surface was added.
+
+## 2026-06-28 Mega Goal 352 Local+Cloud Single Goal Loop Controller
+
+- Added the `skybridge.single_goal_loop.v1` and
+  `skybridge.single_goal_loop_evidence.v1` schemas for one safe-local-smoke
+  campaign step controlled by SkyBridge and executed by the Windows local side.
+- Added the read-only-by-default `skybridge-goal-loop.ps1` controller with
+  fixture preview/apply/report paths and exact confirmation for a single
+  allowlisted `safe-local-smoke.v1` task only.
+- Added the M2 manual fixture script and CI-safe smokes covering preview
+  immutability, confirmation rejection, unsafe template rejection, sanitized
+  evidence, no worker loop, and `token_printed=false`.
+- Documented MG352 as a single-goal bridge built on the MG351 provider contract:
+  not a queue runner, not a multi-step campaign loop, and not a Codex, MATLAB,
+  Hermes, or MCP execution surface.
