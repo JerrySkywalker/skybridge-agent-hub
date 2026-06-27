@@ -112,6 +112,11 @@ if uninstall is tested.
 - The installer smoke does not create tasks or execute worker jobs.
 - Post-install file and shortcut discovery may be warning-only when the install
   path is not discoverable.
+- MG347 recorded a launch warning: a brief unexpected cmd window appeared, the
+  app window was not clearly observed, and no SkyBridge Desktop process
+  remained running after 5 seconds. MG348 documents and repairs that launch
+  defect in
+  [DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md](DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md).
 
 ## Report Hygiene
 
