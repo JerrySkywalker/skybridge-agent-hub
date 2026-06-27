@@ -33,6 +33,7 @@ $requiredDocs = @(
   "docs/desktop/DESKTOP_INSTALLER_RC_PLAN.md",
   "docs/desktop/DESKTOP_INSTALLER_STAGING.md",
   "docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md",
+  "docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -83,6 +84,11 @@ $requiredScripts = @{
   desktop_installer_post_release_checksum_smoke = "scripts/powershell/smoke-desktop-installer-post-release-checksum-fixture.ps1"
   desktop_installer_post_release_no_silent_smoke = "scripts/powershell/smoke-desktop-installer-post-release-no-silent-install.ps1"
   desktop_installer_post_release_safety_smoke = "scripts/powershell/smoke-desktop-installer-post-release-safety.ps1"
+  desktop_launch_diagnostics = "scripts/powershell/skybridge-desktop-launch-diagnostics.ps1"
+  desktop_launch_diagnostics_smoke = "scripts/powershell/smoke-desktop-launch-diagnostics-status.ps1"
+  desktop_launch_no_console_smoke = "scripts/powershell/smoke-desktop-launch-no-console-fixture.ps1"
+  desktop_launch_no_fatal_missing_config_smoke = "scripts/powershell/smoke-desktop-launch-no-fatal-missing-config.ps1"
+  desktop_launch_safety_smoke = "scripts/powershell/smoke-desktop-launch-safety.ps1"
 }
 
 $componentPaths = @{
@@ -250,7 +256,13 @@ $requiredPackageScripts = @(
   "smoke:desktop-installer-post-release-checklist",
   "smoke:desktop-installer-post-release-report",
   "smoke:desktop-installer-post-release-no-silent-install",
-  "smoke:desktop-installer-post-release-safety"
+  "smoke:desktop-installer-post-release-safety",
+  "smoke:desktop-launch-diagnostics-status",
+  "smoke:desktop-launch-diagnostics-inspect",
+  "smoke:desktop-launch-no-console-fixture",
+  "smoke:desktop-launch-no-fatal-missing-config",
+  "smoke:desktop-launch-safety",
+  "smoke:desktop-launch-report"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

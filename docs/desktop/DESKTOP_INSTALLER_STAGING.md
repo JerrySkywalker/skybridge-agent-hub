@@ -15,6 +15,9 @@ MG345 follows MG344 Desktop packaging readiness:
   `v0.1.0-bootstrap-alpha-desktop-rc1`, for the Desktop installer RC release.
 - MG347 verifies the published release assets with a post-release download,
   checksum, manual install, and first-launch smoke.
+- MG348 repairs the post-release launch console/early-exit defect and may stage
+  repaired artifacts locally under `.agent/tmp/desktop-launch-fix-staging/`,
+  without publishing them.
 
 MG345 does not create or update a GitHub Release, create or move a tag, upload
 installer assets, upload binaries, configure signing, or attach anything to the
@@ -93,3 +96,5 @@ Do not execute the installer as part of MG345. Do not attach these files to
 `v0.1.0-bootstrap-alpha-rc1`. Use
 [DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md)
 for the MG347 manual-assisted install smoke of the published Desktop RC1 assets.
+Use [DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md](DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md)
+for the MG348 repaired-package launch smoke and local staging report.

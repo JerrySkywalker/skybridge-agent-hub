@@ -149,6 +149,8 @@ For local-only fresh installer staging with checksums, see
 [docs/desktop/DESKTOP_INSTALLER_STAGING.md](docs/desktop/DESKTOP_INSTALLER_STAGING.md).
 For the Desktop installer RC1 post-release manual install smoke, see
 [docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](docs/desktop/DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md).
+For the Desktop launch console and early-exit repair, see
+[docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md](docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md).
 For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see

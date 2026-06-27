@@ -11,6 +11,8 @@ This is the future release plan for a Desktop installer release candidate. MG344
   authorization.
 - Post-release install smoke: MG347, documented in
   [DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md](DESKTOP_INSTALLER_POST_RELEASE_SMOKE.md).
+- Launch console/early-exit repair: MG348, documented in
+  [DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md](DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md).
 
 ## Why Not Attach To Existing RC1
 
@@ -32,6 +34,8 @@ fresh local artifacts under `.agent/tmp/desktop-installer-staging/` for operator
 inspection only. MG346 publishes the Desktop RC1 release assets; MG347 verifies
 download, checksum, manual install, first launch, and optional uninstall
 checklists without creating or updating releases.
+MG348 repairs the launch console/early-exit defect locally and does not publish
+an RC2 installer.
 
 ## Windows Unsigned Installer Warning
 

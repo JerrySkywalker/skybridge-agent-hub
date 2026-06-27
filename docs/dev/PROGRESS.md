@@ -1143,3 +1143,17 @@
 - Kept release updates, tag movement, asset upload, silent install, Windows
   security bypass, task creation or claim, Codex/MATLAB execution, worker loop,
   project-control unpause, and token printing disabled.
+
+## 2026-06-27 Mega Goal 348 Desktop Launch Console And Early Exit Fix
+
+- Diagnosed the MG347 warning-class launch defect as a native packaged-app
+  launch issue: the Windows GUI subsystem attribute was missing from the Tauri
+  binary crate root, and passive `pwsh` status bridge invocations were not
+  hidden on Windows.
+- Added `skybridge-desktop-launch-diagnostics.ps1` for read-only-by-default
+  launch inspection and bounded local package launch checks.
+- Added CI-safe smokes for launch diagnostics, no-console source fixtures,
+  nonfatal missing-config behavior, report safety, and mutation-safety fields.
+- Preserved the MG348 repair boundary: no tag or GitHub Release changes, no
+  asset upload, no task creation or claim, no Codex or MATLAB execution, no
+  worker loop, no project-control unpause, and `token_printed=false`.

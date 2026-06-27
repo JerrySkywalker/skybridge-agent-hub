@@ -4,8 +4,10 @@ $bridge = Get-Content -Raw -LiteralPath (Join-Path $repoRoot "apps\desktop\src-t
 $ui = Get-Content -Raw -LiteralPath (Join-Path $repoRoot "apps\desktop\src\main.tsx")
 
 foreach ($required in @(
-  'worker: worker.unwrap_or_else(|| Err("worker status bridge did not return before desktop refresh deadline".into()))',
-  'report: report.unwrap_or_else(|| Err("campaign report bridge did not return before desktop refresh deadline".into()))',
+  'worker: worker.unwrap_or_else',
+  'worker status bridge did not return before desktop refresh deadline',
+  'report: report.unwrap_or_else',
+  'campaign report bridge did not return before desktop refresh deadline',
   'let warning = format!("{name}: {}"',
   'warnings.push(warning.clone())',
   'ok: !token_printed && !campaign_report.is_null()',
