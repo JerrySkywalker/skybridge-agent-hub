@@ -128,6 +128,13 @@ queue start command: it previews one campaign step and can apply exactly one
 attachment and step completion, and it must not continue into a second queue
 item or campaign step.
 
+MG353 adds the M3 static multi-step manual controller. It still is not a queue
+start command: it operates on one fixed three-step campaign, selects only the
+first dependency-ready static step and requires an exact confirmation for each
+`apply-next`. Fixture mode can prove safe-local-smoke, fixed MATLAB and fixed
+Codex report steps in order without live tool calls. It does not generate,
+append, import or execute arbitrary queue goals.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

@@ -9,6 +9,11 @@ machine. Direct Windows-local runners remain the current default for already
 proven Codex and MATLAB paths. MCP is future/disabled until a later explicit
 enablement goal.
 
+MG353 keeps Hermes out of the static multi-step loop. The M3 controller may use
+direct provider inventory to select safe-local-smoke, fixed MATLAB and fixed
+Codex report steps, but it does not call Hermes for planning, prompt generation,
+notifications or tool routing.
+
 ## Contract
 
 Planner decisions use strict JSON:

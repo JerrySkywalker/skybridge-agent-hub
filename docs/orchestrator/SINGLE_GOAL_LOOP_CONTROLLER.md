@@ -211,5 +211,8 @@ When `-WriteReport` is used:
 
 ## Next Milestone
 
-MG353 will extend this single-step proof into a multi-step static campaign loop.
-MG352 deliberately does not implement multi-step execution.
+MG353 extends this single-step proof into a static three-step campaign loop:
+safe-local-smoke, fixed MATLAB parameter sweep and fixed Codex analysis report.
+It preserves the same one-step-at-a-time apply gate and remains separate from
+goal generation, goal append/import and worker-loop execution. See
+[MULTI_STEP_STATIC_GOAL_LOOP.md](MULTI_STEP_STATIC_GOAL_LOOP.md).

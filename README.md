@@ -159,6 +159,8 @@ For the current read-only local tool provider contract and inventory, see
 [docs/orchestrator/TOOL_PROVIDER_CONTRACT.md](docs/orchestrator/TOOL_PROVIDER_CONTRACT.md).
 For the first Local+Cloud one-step safe goal loop controller, see
 [docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md](docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md).
+For the static three-step campaign loop controller, see
+[docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md](docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md).
 For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For local worker identity activation and live heartbeat-only pairing, use the
