@@ -155,6 +155,8 @@ For reviewed queued-record submit, see
 [docs/product/DRAFT_REVIEW_AND_SUBMIT.md](docs/product/DRAFT_REVIEW_AND_SUBMIT.md).
 For the first exact-confirmed worker template runner, see
 [docs/product/WORKER_TEMPLATE_RUNNER_V1.md](docs/product/WORKER_TEMPLATE_RUNNER_V1.md).
+For the current read-only local tool provider contract and inventory, see
+[docs/orchestrator/TOOL_PROVIDER_CONTRACT.md](docs/orchestrator/TOOL_PROVIDER_CONTRACT.md).
 For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For local worker identity activation and live heartbeat-only pairing, use the

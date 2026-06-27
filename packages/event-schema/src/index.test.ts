@@ -51,6 +51,7 @@ import {
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
+  ToolProviderInventorySchema,
   WorkerTemplateRunnerPreviewSchema,
   WorkerTemplateRunnerResultSchema,
   getTaskTemplate,
@@ -878,6 +879,123 @@ describe("event schema", () => {
       output_executed: false,
       token_printed: false,
     });
+  });
+
+  it("models local tool provider inventory without execution", () => {
+    const inventory = ToolProviderInventorySchema.parse({
+      schema: "skybridge.tool_provider.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      host_os: "Windows",
+      host_name_safe: "host-fixture",
+      project_id: "skybridge-agent-hub",
+      provider_inventory: "fixture",
+      providers: [
+        {
+          provider_id: "direct-local",
+          provider_type: "direct",
+          display_name: "Direct Local Provider",
+          status: "available",
+          tools: ["powershell", "git", "pnpm", "codex", "matlab"],
+          default_for_tools: ["codex", "matlab"],
+          execution_enabled: false,
+          notes: ["Default provider for fixed local runner paths."],
+          warnings: [],
+          blockers: [],
+        },
+        {
+          provider_id: "hermes-optional",
+          provider_type: "hermes",
+          display_name: "Hermes Optional Provider",
+          status: "unavailable",
+          tools: ["hermes"],
+          default_for_tools: [],
+          execution_enabled: false,
+          notes: ["Planner/gate/provider only when configured."],
+          warnings: ["fixture_not_configured"],
+          blockers: [],
+        },
+        {
+          provider_id: "mcp-disabled",
+          provider_type: "mcp",
+          display_name: "MCP Provider",
+          status: "future",
+          tools: ["mcp"],
+          default_for_tools: [],
+          execution_enabled: false,
+          notes: ["Future/disabled until explicitly enabled."],
+          warnings: [],
+          blockers: [],
+        },
+      ],
+      tools: [
+        {
+          tool_id: "codex",
+          display_name: "Codex CLI",
+          provider_id: "direct-local",
+          detection_method: "fixture",
+          executable_path_safe: "%PATH%/codex.cmd",
+          version_summary_safe: "fixture-detected",
+          status: "detected",
+          can_preview: true,
+          can_execute_now: false,
+          requires_exact_confirmation: true,
+          requires_template: true,
+          requires_allowlist: true,
+          warnings: [],
+          blockers: [],
+        },
+        {
+          tool_id: "matlab",
+          display_name: "MATLAB",
+          provider_id: "direct-local",
+          detection_method: "fixture",
+          executable_path_safe: "",
+          version_summary_safe: "fixture-missing",
+          status: "missing",
+          can_preview: true,
+          can_execute_now: false,
+          requires_exact_confirmation: true,
+          requires_template: true,
+          requires_allowlist: true,
+          warnings: [],
+          blockers: ["tool_missing"],
+        },
+      ],
+      defaults: {
+        codex: "direct-local",
+        matlab: "direct-local",
+        hermes: "hermes-optional",
+        mcp: "mcp-disabled",
+      },
+      disabled_capabilities: [
+        "general_shell_provider",
+        "arbitrary_prompt_provider",
+        "arbitrary_matlab_provider",
+        "mcp_execution",
+      ],
+      warnings: ["fixture_inventory"],
+      blockers: [],
+      execution_allowed: false,
+      task_created: false,
+      task_claimed: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    });
+
+    expect(inventory.schema).toBe("skybridge.tool_provider.v1");
+    expect(inventory.defaults.codex).toBe("direct-local");
+    expect(inventory.execution_allowed).toBe(false);
+    expect(inventory.codex_run_called).toBe(false);
+    expect(inventory.matlab_run_called).toBe(false);
+    expect(inventory.hermes_run_called).toBe(false);
+    expect(inventory.mcp_run_called).toBe(false);
+    expect(inventory.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

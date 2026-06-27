@@ -1157,3 +1157,20 @@
 - Preserved the MG348 repair boundary: no tag or GitHub Release changes, no
   asset upload, no task creation or claim, no Codex or MATLAB execution, no
   worker loop, no project-control unpause, and `token_printed=false`.
+
+## 2026-06-28 Mega Goal 351 Tool Provider Contract And Local Inventory
+
+- Added the read-only `skybridge.tool_provider.v1` provider contract for
+  Windows-local tool inventory.
+- Defined SkyBridge as the long-running campaign control plane and Windows local
+  workers as the execution plane that only inspect tools, run future fixed
+  allowlisted templates and return sanitized evidence.
+- Documented direct providers as the current default for proven Codex and MATLAB
+  paths, Hermes as optional planner/gate/provider status, and MCP as
+  future/disabled.
+- Added fixture-backed PowerShell inventory and manual M1 check scripts with
+  safety fields for task creation, task claim, Codex, MATLAB, Hermes, MCP,
+  worker loop, project-control unpause and token printing all false.
+- Kept Desktop/Web provider status UI as future work for a read-only panel only;
+  no run controls, arbitrary shell, prompt box, MATLAB command box, MCP
+  execution, worker loop or task claim surface was added.

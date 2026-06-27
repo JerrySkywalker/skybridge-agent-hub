@@ -111,6 +111,17 @@ The surfaces expose no Start One, Start Queue, Resume Apply, task claim, task ex
 
 Goal 195 prepares queue authoring and review. It does not run `start-one`, `start-all`, `resume -Apply`, worker loops, Codex worker execution, task claim, campaign-step task creation, live campaign update or real queue start. All helper commands are dry-run/read/offline by default unless they write local manifest or ignored archive fixture metadata with explicit `-Apply`.
 
+## Tool Provider Inventory Boundary
+
+MG351 adds `skybridge.tool_provider.v1` as read-only local evidence for later
+queue and campaign controllers. The inventory answers which Windows-local tools
+are detected, which provider owns them today and which capabilities remain
+disabled, but it does not authorize a queue step to run. Direct local runners
+are the current default for proven Codex and MATLAB paths. Hermes is optional
+for planning, gating or provider status. MCP is future/disabled. A future queue
+controller must still require a fixed template, an allowlist, an execution gate,
+exact confirmation and sanitized evidence before creating or claiming work.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

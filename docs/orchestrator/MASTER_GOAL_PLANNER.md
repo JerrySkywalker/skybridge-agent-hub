@@ -47,6 +47,8 @@ pending -> ready -> running -> completed
 
 The campaign advance gate is deterministic first. It refuses to advance when active tasks or stale leases exist, dependencies are incomplete, project control is running, required human approval is missing, or required evidence is missing. Super 186 adds Hermes advisory evaluation after deterministic state collection, but deterministic hard blockers remain final.
 
+MG351 adds a separate read-only tool provider inventory for deciding whether a future goal step can be proposed for execution. The planner may require tools such as Codex, MATLAB, Git, pnpm or Hermes, but it must treat the inventory as evidence only. SkyBridge owns campaign state, goal budget, task creation policy, dependency gates, retry/hold/abort and audit. The Windows local side reports direct runner availability and returns sanitized evidence; it does not own the state machine. Hermes remains an optional planner/gate/provider, and MCP remains future/disabled until explicitly enabled by a later goal.
+
 Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
 
 - deterministic gate passes;

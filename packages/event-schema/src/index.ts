@@ -364,6 +364,83 @@ export const ManualTaskProviderReportSchema = z.object({
   arbitrary_command_enabled: z.literal(false),
   token_printed: z.literal(false),
 });
+
+export const ToolProviderTypeSchema = z.enum([
+  "direct",
+  "hermes",
+  "mcp",
+  "disabled",
+  "future",
+]);
+export const ToolProviderStatusSchema = z.enum([
+  "available",
+  "unavailable",
+  "disabled",
+  "future",
+  "warning",
+  "blocked",
+]);
+export const ToolProviderToolStatusSchema = z.enum([
+  "detected",
+  "missing",
+  "disabled",
+  "future",
+  "warning",
+  "blocked",
+]);
+export const ToolProviderSchema = z.object({
+  provider_id: z.string().min(1),
+  provider_type: ToolProviderTypeSchema,
+  display_name: z.string().min(1),
+  status: ToolProviderStatusSchema,
+  tools: z.array(z.string().min(1)),
+  default_for_tools: z.array(z.string().min(1)),
+  execution_enabled: z.literal(false),
+  notes: z.array(z.string()),
+  warnings: z.array(z.string()),
+  blockers: z.array(z.string()),
+});
+export const ToolProviderToolSchema = z.object({
+  tool_id: z.string().min(1),
+  display_name: z.string().min(1),
+  provider_id: z.string().min(1),
+  detection_method: z.string().min(1),
+  executable_path_safe: z.string(),
+  version_summary_safe: z.string(),
+  status: ToolProviderToolStatusSchema,
+  can_preview: z.boolean(),
+  can_execute_now: z.literal(false),
+  requires_exact_confirmation: z.literal(true),
+  requires_template: z.literal(true),
+  requires_allowlist: z.literal(true),
+  warnings: z.array(z.string()),
+  blockers: z.array(z.string()),
+});
+export const ToolProviderInventorySchema = z.object({
+  schema: z.literal("skybridge.tool_provider.v1"),
+  generated_at: z.string().datetime(),
+  host_os: z.string().min(1),
+  host_name_safe: z.string().min(1),
+  project_id: z.string().min(1),
+  provider_inventory: z.string().min(1),
+  providers: z.array(ToolProviderSchema),
+  tools: z.array(ToolProviderToolSchema),
+  defaults: z.record(z.string()),
+  disabled_capabilities: z.array(z.string()),
+  warnings: z.array(z.string()),
+  blockers: z.array(z.string()),
+  execution_allowed: z.literal(false),
+  task_created: z.literal(false),
+  task_claimed: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  token_printed: z.literal(false),
+});
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -381,6 +458,12 @@ export type ManualTaskResult = z.infer<typeof ManualTaskResultSchema>;
 export type ManualTaskQueue = z.infer<typeof ManualTaskQueueSchema>;
 export type ManualTaskProviderList = z.infer<typeof ManualTaskProviderListSchema>;
 export type ManualTaskProviderReport = z.infer<typeof ManualTaskProviderReportSchema>;
+export type ToolProviderType = z.infer<typeof ToolProviderTypeSchema>;
+export type ToolProviderStatus = z.infer<typeof ToolProviderStatusSchema>;
+export type ToolProviderToolStatus = z.infer<typeof ToolProviderToolStatusSchema>;
+export type ToolProvider = z.infer<typeof ToolProviderSchema>;
+export type ToolProviderTool = z.infer<typeof ToolProviderToolSchema>;
+export type ToolProviderInventory = z.infer<typeof ToolProviderInventorySchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([
