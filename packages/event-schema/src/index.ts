@@ -502,6 +502,90 @@ export const SingleGoalLoopSchema = SingleGoalLoopSafetyFlagsSchema.extend({
   report_json_path: z.string().optional(),
   report_markdown_path: z.string().optional(),
 });
+
+export const MultiGoalLoopModeSchema = z.enum(["fixture", "live"]);
+export const MultiGoalLoopStepStateSchema = z.enum(["pending", "ready", "running", "completed", "failed", "held", "blocked"]);
+export const MultiGoalLoopSafetyFlagsSchema = z.object({
+  codex_run_called: z.boolean(),
+  matlab_run_called: z.boolean(),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const MultiGoalLoopStepSchema = z.object({
+  step_id: z.string().min(1),
+  order: z.number().int().min(1),
+  state: MultiGoalLoopStepStateSchema,
+  template_id: z.string().min(1),
+  runner_id: z.string().min(1),
+  task_id: z.string().min(1),
+  dependencies: z.array(z.string()),
+  dependency_status: z.enum(["ready", "blocked", "complete"]),
+  provider_required: z.string().min(1),
+  provider_available: z.boolean(),
+  can_preview: z.boolean(),
+  can_apply_next: z.boolean(),
+  evidence_attached: z.boolean(),
+  completed: z.boolean(),
+  failed: z.boolean(),
+  held: z.boolean(),
+  blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
+});
+export const MultiGoalLoopEvidenceSchema = MultiGoalLoopSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.multi_goal_loop_evidence.v1"),
+  campaign_id: z.string().min(1),
+  step_id: z.string().min(1),
+  task_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  template_id: z.string().min(1),
+  runner_id: z.string().min(1),
+  provider_inventory_checked: z.literal(true),
+  direct_provider_available: z.literal(true),
+  task_claimed_count: z.literal(1),
+  execution_started: z.literal(true),
+  execution_completed: z.boolean(),
+  execution_failed: z.boolean(),
+  changed_files: z.array(z.string()),
+  produced_artifacts_safe: z.array(z.string()),
+  validation_summary_safe: z.string().min(1),
+});
+export const MultiGoalLoopSchema = MultiGoalLoopSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.multi_goal_loop.v1"),
+  generated_at: z.string().datetime(),
+  mode: MultiGoalLoopModeSchema,
+  project_id: z.string().min(1),
+  campaign_id: z.string().min(1),
+  worker_id: z.string().min(1),
+  current_step_id: z.string(),
+  next_step_id: z.string(),
+  steps: z.array(MultiGoalLoopStepSchema).length(3),
+  provider_inventory_checked: z.boolean(),
+  direct_provider_available: z.boolean(),
+  preview_only: z.boolean(),
+  apply_confirmed: z.boolean(),
+  max_steps: z.literal(1),
+  selected_step_count: z.number().int().min(0).max(1),
+  selected_task_count: z.number().int().min(0).max(1),
+  task_created_count: z.number().int().min(0).max(1),
+  task_claimed_count: z.number().int().min(0).max(1),
+  execution_started_count: z.number().int().min(0).max(1),
+  execution_completed_count: z.number().int().min(0).max(1),
+  execution_failed_count: z.number().int().min(0).max(1),
+  evidence_attached_count: z.number().int().min(0).max(1),
+  step_completed_count: z.number().int().min(0).max(1),
+  campaign_completed: z.boolean(),
+  campaign_held: z.boolean(),
+  blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
+  safety_flags: MultiGoalLoopSafetyFlagsSchema,
+  evidence: MultiGoalLoopEvidenceSchema.optional(),
+  report_json_path: z.string().optional(),
+  report_markdown_path: z.string().optional(),
+});
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -529,6 +613,12 @@ export type SingleGoalLoopMode = z.infer<typeof SingleGoalLoopModeSchema>;
 export type SingleGoalLoopSafetyFlags = z.infer<typeof SingleGoalLoopSafetyFlagsSchema>;
 export type SingleGoalLoopEvidence = z.infer<typeof SingleGoalLoopEvidenceSchema>;
 export type SingleGoalLoop = z.infer<typeof SingleGoalLoopSchema>;
+export type MultiGoalLoopMode = z.infer<typeof MultiGoalLoopModeSchema>;
+export type MultiGoalLoopStepState = z.infer<typeof MultiGoalLoopStepStateSchema>;
+export type MultiGoalLoopSafetyFlags = z.infer<typeof MultiGoalLoopSafetyFlagsSchema>;
+export type MultiGoalLoopStep = z.infer<typeof MultiGoalLoopStepSchema>;
+export type MultiGoalLoopEvidence = z.infer<typeof MultiGoalLoopEvidenceSchema>;
+export type MultiGoalLoop = z.infer<typeof MultiGoalLoopSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

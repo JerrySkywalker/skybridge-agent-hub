@@ -198,7 +198,15 @@ execution evidence without enabling a generic execution provider. The inventory
 still reports `execution_allowed=false`; the MG352 apply gate grants only the
 single fixed runner selected by the controller.
 
-MG353-MG359 should continue consuming this inventory before deciding whether a
+MG353 extends the same model to a static three-step campaign. The controller
+checks provider inventory before selecting each ordered step:
+`safe-local-smoke.v1`, `matlab-parameter-sweep.v1` and
+`codex-analysis-report.v1`. Fixture mode simulates the MATLAB and Codex steps
+without invoking those tools; live mode may only consider those steps when the
+direct provider and required tool are detected. Hermes is still optional and MCP
+is still future/disabled.
+
+MG354-MG359 should continue consuming this inventory before deciding whether a
 campaign step can progress toward execution. The expected sequence is:
 
 1. SkyBridge reads campaign state and step dependencies.

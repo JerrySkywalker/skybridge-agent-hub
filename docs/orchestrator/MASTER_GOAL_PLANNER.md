@@ -52,7 +52,13 @@ MG351 adds a separate read-only tool provider inventory for deciding whether a f
 MG352 consumes that inventory for the first single-step loop. A planner may
 prepare a one-step `safe-local-smoke.v1` campaign, but the controller still
 requires exact ids, exact confirmation, one candidate task and sanitized
-evidence before completion. Multi-step campaign execution remains MG353 work.
+evidence before completion.
+
+MG353 adds the first static multi-step loop for one ordered three-step campaign:
+safe-local-smoke, fixed MATLAB parameter sweep and fixed Codex analysis report.
+The planner still does not dynamically create those steps during apply. The
+controller consumes static ids, checks dependencies and provider inventory, then
+applies at most one selected step per invocation.
 
 Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
 

@@ -36,6 +36,7 @@ $requiredDocs = @(
   "docs/desktop/DESKTOP_LAUNCH_CONSOLE_EXIT_FIX.md",
   "docs/orchestrator/TOOL_PROVIDER_CONTRACT.md",
   "docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md",
+  "docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -111,6 +112,18 @@ $requiredScripts = @{
   single_goal_loop_evidence_smoke = "scripts/powershell/smoke-single-goal-loop-evidence.ps1"
   single_goal_loop_no_worker_loop_smoke = "scripts/powershell/smoke-single-goal-loop-no-worker-loop.ps1"
   manual_single_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-single-goal-loop-fixture.ps1"
+  multi_goal_loop = "scripts/powershell/skybridge-multi-goal-loop.ps1"
+  manual_multi_goal_loop_test = "scripts/powershell/manual-multi-goal-loop-test.ps1"
+  multi_goal_loop_status_smoke = "scripts/powershell/smoke-multi-goal-loop-status.ps1"
+  multi_goal_loop_preview_smoke = "scripts/powershell/smoke-multi-goal-loop-preview.ps1"
+  multi_goal_loop_fixture_step1_smoke = "scripts/powershell/smoke-multi-goal-loop-fixture-step1.ps1"
+  multi_goal_loop_fixture_all_smoke = "scripts/powershell/smoke-multi-goal-loop-fixture-all.ps1"
+  multi_goal_loop_reject_no_confirm_smoke = "scripts/powershell/smoke-multi-goal-loop-reject-no-confirm.ps1"
+  multi_goal_loop_dependency_block_smoke = "scripts/powershell/smoke-multi-goal-loop-dependency-block.ps1"
+  multi_goal_loop_reject_unsafe_smoke = "scripts/powershell/smoke-multi-goal-loop-reject-unsafe.ps1"
+  multi_goal_loop_evidence_smoke = "scripts/powershell/smoke-multi-goal-loop-evidence.ps1"
+  multi_goal_loop_no_worker_loop_smoke = "scripts/powershell/smoke-multi-goal-loop-no-worker-loop.ps1"
+  manual_multi_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-multi-goal-loop-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -300,7 +313,17 @@ $requiredPackageScripts = @(
   "smoke:single-goal-loop-reject-unsafe",
   "smoke:single-goal-loop-evidence",
   "smoke:single-goal-loop-no-worker-loop",
-  "smoke:manual-single-goal-loop-fixture"
+  "smoke:manual-single-goal-loop-fixture",
+  "smoke:multi-goal-loop-status",
+  "smoke:multi-goal-loop-preview",
+  "smoke:multi-goal-loop-fixture-step1",
+  "smoke:multi-goal-loop-fixture-all",
+  "smoke:multi-goal-loop-reject-no-confirm",
+  "smoke:multi-goal-loop-dependency-block",
+  "smoke:multi-goal-loop-reject-unsafe",
+  "smoke:multi-goal-loop-evidence",
+  "smoke:multi-goal-loop-no-worker-loop",
+  "smoke:manual-multi-goal-loop-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

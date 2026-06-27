@@ -1189,3 +1189,20 @@
 - Documented MG352 as a single-goal bridge built on the MG351 provider contract:
   not a queue runner, not a multi-step campaign loop, and not a Codex, MATLAB,
   Hermes, or MCP execution surface.
+
+## 2026-06-28 Mega Goal 353 Multi-Step Static Campaign Loop
+
+- Added the `skybridge.multi_goal_loop.v1` and
+  `skybridge.multi_goal_loop_evidence.v1` schemas for one ordered static
+  campaign with safe-local-smoke, fixed MATLAB parameter sweep and fixed Codex
+  analysis report steps.
+- Added `skybridge-multi-goal-loop.ps1` with fixture preview/apply/report paths,
+  dependency gating, one selected step/task per `apply-next`, exact
+  confirmation and sanitized per-step evidence.
+- Added the M3 manual fixture wrapper and CI-safe smokes covering preview
+  immutability, confirmation rejection, dependency blockers, unsafe template
+  rejection, all-step fixture completion, sanitized evidence, no worker loop and
+  `token_printed=false`.
+- Documented MG353 as a static multi-step loop built on MG351 and MG352: not a
+  queue runner, not goal generation or append/import, and not a Hermes/MCP or
+  arbitrary shell/Codex/MATLAB execution surface.

@@ -48,6 +48,7 @@ import {
   MatlabSweepEvidenceSchema,
   MatlabSweepManifestSchema,
   MatlabSweepSummarySchema,
+  MultiGoalLoopSchema,
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
   TaskTemplateRegistrySchema,
@@ -1067,6 +1068,144 @@ describe("event schema", () => {
     expect(loop.matlab_run_called).toBe(false);
     expect(loop.hermes_run_called).toBe(false);
     expect(loop.mcp_run_called).toBe(false);
+    expect(loop.token_printed).toBe(false);
+  });
+
+  it("models multi-goal loop one-step completion with sanitized evidence", () => {
+    const safety = {
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    };
+    const evidence = {
+      schema: "skybridge.multi_goal_loop_evidence.v1",
+      campaign_id: "local-cloud-static-multi-goal-fixture",
+      step_id: "safe-local-smoke-step-353-001",
+      task_id: "static-multi-goal-safe-task-fixture-353-001",
+      worker_id: "mg353-fixture-worker",
+      template_id: "safe-local-smoke.v1",
+      runner_id: "safe-local-smoke-runner.v1",
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      task_claimed_count: 1,
+      execution_started: true,
+      execution_completed: true,
+      execution_failed: false,
+      changed_files: [],
+      produced_artifacts_safe: [],
+      validation_summary_safe: "fixture safe-local-smoke completed",
+      ...safety,
+    };
+    const loop = MultiGoalLoopSchema.parse({
+      schema: "skybridge.multi_goal_loop.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "local-cloud-static-multi-goal-fixture",
+      worker_id: "mg353-fixture-worker",
+      current_step_id: "safe-local-smoke-step-353-001",
+      next_step_id: "matlab-golden-step-353-002",
+      steps: [
+        {
+          step_id: "safe-local-smoke-step-353-001",
+          order: 1,
+          state: "completed",
+          template_id: "safe-local-smoke.v1",
+          runner_id: "safe-local-smoke-runner.v1",
+          task_id: "static-multi-goal-safe-task-fixture-353-001",
+          dependencies: [],
+          dependency_status: "complete",
+          provider_required: "direct",
+          provider_available: true,
+          can_preview: true,
+          can_apply_next: false,
+          evidence_attached: true,
+          completed: true,
+          failed: false,
+          held: false,
+          blockers: [],
+          warnings: [],
+        },
+        {
+          step_id: "matlab-golden-step-353-002",
+          order: 2,
+          state: "ready",
+          template_id: "matlab-parameter-sweep.v1",
+          runner_id: "matlab-parameter-sweep-runner.v1",
+          task_id: "static-multi-goal-matlab-task-fixture-353-002",
+          dependencies: ["safe-local-smoke-step-353-001"],
+          dependency_status: "ready",
+          provider_required: "matlab",
+          provider_available: true,
+          can_preview: true,
+          can_apply_next: true,
+          evidence_attached: false,
+          completed: false,
+          failed: false,
+          held: false,
+          blockers: [],
+          warnings: ["fixture_mode_no_matlab_invocation"],
+        },
+        {
+          step_id: "codex-report-step-353-003",
+          order: 3,
+          state: "pending",
+          template_id: "codex-analysis-report.v1",
+          runner_id: "codex-analysis-report-runner.v1",
+          task_id: "static-multi-goal-codex-task-fixture-353-003",
+          dependencies: ["matlab-golden-step-353-002"],
+          dependency_status: "blocked",
+          provider_required: "codex",
+          provider_available: true,
+          can_preview: true,
+          can_apply_next: false,
+          evidence_attached: false,
+          completed: false,
+          failed: false,
+          held: false,
+          blockers: ["dependency_not_complete:matlab-golden-step-353-002"],
+          warnings: ["fixture_mode_no_codex_invocation"],
+        },
+      ],
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      preview_only: false,
+      apply_confirmed: true,
+      max_steps: 1,
+      selected_step_count: 1,
+      selected_task_count: 1,
+      task_created_count: 1,
+      task_claimed_count: 1,
+      execution_started_count: 1,
+      execution_completed_count: 1,
+      execution_failed_count: 0,
+      evidence_attached_count: 1,
+      step_completed_count: 1,
+      campaign_completed: false,
+      campaign_held: false,
+      blockers: [],
+      warnings: ["fixture_mode"],
+      safety_flags: safety,
+      evidence,
+      ...safety,
+    });
+
+    expect(loop.schema).toBe("skybridge.multi_goal_loop.v1");
+    expect(loop.steps.map((step) => step.template_id)).toEqual([
+      "safe-local-smoke.v1",
+      "matlab-parameter-sweep.v1",
+      "codex-analysis-report.v1",
+    ]);
+    expect(loop.evidence?.schema).toBe("skybridge.multi_goal_loop_evidence.v1");
+    expect(loop.selected_step_count).toBe(1);
+    expect(loop.hermes_run_called).toBe(false);
+    expect(loop.mcp_run_called).toBe(false);
+    expect(loop.worker_loop_started).toBe(false);
     expect(loop.token_printed).toBe(false);
   });
 

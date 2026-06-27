@@ -94,6 +94,8 @@ MG351 adds the read-only tool provider contract that later loop controllers must
 
 MG352 adds the first single-goal loop controller on top of that boundary. It can preview one campaign step and, after exact confirmation, run exactly one `safe-local-smoke.v1` task through `safe-local-smoke-runner.v1`, attach sanitized evidence, complete the step and complete or hold the one-step campaign. It is still not a worker loop and it does not run Codex, MATLAB, Hermes or MCP. See [SINGLE_GOAL_LOOP_CONTROLLER.md](SINGLE_GOAL_LOOP_CONTROLLER.md).
 
+MG353 adds a static multi-step loop controller for one ordered campaign with three fixed templates: `safe-local-smoke.v1`, `matlab-parameter-sweep.v1` and `codex-analysis-report.v1`. It previews the next ready dependency-satisfied step and, with exact confirmation, applies only that one step and exits. Fixture mode simulates the full sequence without live Codex, MATLAB, Hermes or MCP calls; live mode remains exact-id and provider-gated. See [MULTI_STEP_STATIC_GOAL_LOOP.md](MULTI_STEP_STATIC_GOAL_LOOP.md).
+
 Super 187 proved this flow for `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`: the executor created `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053`, the worker acquired lease `lease_chdDfMPI1SEIgonHR-hzv`, child PR #92 passed checks and merged, recovered evidence was attached, and `advance-with-gate -Apply` moved the campaign metadata to Super 184B ready without executing Super 184B.
 
 Step retry, skip and hold are distinct supervisor inputs:
