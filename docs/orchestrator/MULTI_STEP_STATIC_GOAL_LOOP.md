@@ -297,4 +297,8 @@ MG356 adds the bounded action selector. It may reuse this controller boundary
 when selecting `execute_ready_step`, but it still applies at most one step and
 then stops.
 
+MG357 keeps managed development separate from static campaign execution. It can
+create a branch and draft PR for one reviewed docs/smoke change, but it does not
+run the static MATLAB or Codex campaign steps and does not start a worker loop.
+
 `token_printed=false`

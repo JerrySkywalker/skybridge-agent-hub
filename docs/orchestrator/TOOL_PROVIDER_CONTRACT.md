@@ -233,4 +233,9 @@ MG356 uses provider inventory before bounded action selection. Detected tools do
 not authorize broad execution; they only satisfy the selected one-action gate
 after the matching exact confirmation.
 
+MG357 does not expand tool-provider execution. The managed development pilot
+uses fixed Git/GitHub operations for a branch, allowed docs/smoke change, draft
+PR and CI observation, while Codex, MATLAB, Hermes, MCP, worker loops and
+arbitrary shell surfaces remain disabled.
+
 `token_printed=false`

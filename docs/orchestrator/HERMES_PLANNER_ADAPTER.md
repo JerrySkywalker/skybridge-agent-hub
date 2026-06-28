@@ -100,3 +100,7 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-hermes-evaluat
 ## Required Reports
 
 Hermes reports should state the endpoint used, model name, runtime mode, planner mode, session continuity status and tool-execution status. For the current local tunnel path this is typically `/v1/responses`, the configured Hermes model alias, private loopback runtime, real/dry-run/fixture planner mode, no persistent session continuity unless explicitly added, and tool execution avoided in planner calls.
+
+MG357 intentionally defers Hermes planner/provider work. The managed development
+PR pilot uses fixed repository and GitHub gates and does not ask Hermes to plan,
+approve, create a PR, merge, deploy or execute tools.

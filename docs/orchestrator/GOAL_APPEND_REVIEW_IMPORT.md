@@ -238,3 +238,7 @@ confirmation, sanitized evidence and `token_printed=false`.
 In MG356 the append bridge is only one possible bounded action. When selected,
 it appends one already-reviewed candidate as metadata, consumes one budget unit,
 leaves the new step pending, and stops without task creation or execution.
+
+MG357 moves from metadata append to a managed development PR pilot. A reviewed
+development intent may reach a branch and draft PR, but the appended or managed
+work still holds for human review and is not auto-merged or released.

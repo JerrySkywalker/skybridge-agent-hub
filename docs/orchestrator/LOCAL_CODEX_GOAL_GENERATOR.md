@@ -196,4 +196,8 @@ MG356 uses this generator only as a bounded action option. A generated candidate
 remains proposed markdown for later review; the bounded loop does not approve,
 append or execute it in the same invocation.
 
+MG357 consumes only reviewed development intent. It does not ask Codex to
+generate new goals or prompts; it limits repository mutation to one allowed
+docs/smoke change and a draft PR human review hold.
+
 `token_printed=false`

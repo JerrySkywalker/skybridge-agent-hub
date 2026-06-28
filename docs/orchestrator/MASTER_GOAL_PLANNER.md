@@ -272,3 +272,8 @@ MG356 keeps action selection deterministic rather than planner-driven. The
 bounded goal budget loop chooses ready-step execution, reviewed metadata append,
 proposed-goal generation or hold by fixed policy, never by an LLM plan, and it
 never chains multiple actions in one run.
+
+MG357 keeps managed development PR creation outside the planner. A reviewed
+development intent can be carried to a guarded branch and draft PR, but the
+planner does not create arbitrary prompts, auto-approve work, auto-merge PRs or
+mutate deployment infrastructure.
