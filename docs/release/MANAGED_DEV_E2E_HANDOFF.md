@@ -40,6 +40,12 @@ not remediate either warning class, does not change build configuration, does
 not change GitHub workflows, and does not alter CI thresholds. Remediation
 requires a future explicit goal.
 
+MG366B is the first warning remediation goal after that inventory. It updates
+only Docker GitHub Action major versions to Node.js 24 runtime candidates and
+does not change workflow topology, permissions, triggers, secrets, deploy
+targets, Docker build semantics, warning suppression or CI thresholds. See
+`docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md`.
+
 ## PR Evidence
 
 - PR #267: Tool Provider Contract and Local Direct Provider Inventory
@@ -97,13 +103,11 @@ tasks, worker state, or provider state.
 
 1. MG366A Vite Chunk Warning Analysis: analyze chunk output and strategy
    without silently suppressing warnings.
-2. MG366B GitHub Actions Node Runtime Hygiene: inventory Docker action runtime
-   upgrades before changing workflows.
-3. Hermes Planner Provider Pilot: add optional planner/provider integration
+2. Hermes Planner Provider Pilot: add optional planner/provider integration
    without taking over SkyBridge state.
-4. MCP Tool Provider Stub: define disabled/future MCP provider shape without
+3. MCP Tool Provider Stub: define disabled/future MCP provider shape without
    connecting to live MCP servers.
-5. Worker Service Install/Daemonization: recover the Windows worker service
+4. Worker Service Install/Daemonization: recover the Windows worker service
    install/daemon path while keeping worker-loop start separately gated.
 
 `token_printed=false`

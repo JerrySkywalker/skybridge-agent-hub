@@ -46,6 +46,7 @@ $requiredDocs = @(
   "docs/release/MANAGED_DEV_E2E_HANDOFF.md",
   "docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md",
   "docs/dev/WARNING_INVENTORY.md",
+  "docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -197,6 +198,12 @@ $requiredScripts = @{
   warning_inventory_audit_smoke = "scripts/powershell/smoke-warning-inventory-audit.ps1"
   warning_inventory_no_mutation_smoke = "scripts/powershell/smoke-warning-inventory-no-mutation.ps1"
   warning_inventory_doc_present_smoke = "scripts/powershell/smoke-warning-inventory-doc-present.ps1"
+  actions_node_runtime_hygiene = "scripts/powershell/skybridge-actions-node-runtime-hygiene.ps1"
+  actions_node_runtime_hygiene_status_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-status.ps1"
+  actions_node_runtime_hygiene_audit_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-audit.ps1"
+  actions_node_runtime_hygiene_no_suppression_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-no-suppression.ps1"
+  actions_node_runtime_hygiene_no_permission_expansion_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-no-permission-expansion.ps1"
+  actions_node_runtime_hygiene_doc_present_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-doc-present.ps1"
 }
 
 $componentPaths = @{
@@ -452,7 +459,12 @@ $requiredPackageScripts = @(
   "smoke:warning-inventory-status",
   "smoke:warning-inventory-audit",
   "smoke:warning-inventory-no-mutation",
-  "smoke:warning-inventory-doc-present"
+  "smoke:warning-inventory-doc-present",
+  "smoke:actions-node-runtime-hygiene-status",
+  "smoke:actions-node-runtime-hygiene-audit",
+  "smoke:actions-node-runtime-hygiene-no-suppression",
+  "smoke:actions-node-runtime-hygiene-no-permission-expansion",
+  "smoke:actions-node-runtime-hygiene-doc-present"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
