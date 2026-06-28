@@ -234,3 +234,7 @@ The controller blocks instead of mutating when:
 MG356 adds the bounded goal budget loop. It may consume reviewed/appended
 metadata, but it must still preserve one-step-at-a-time gates, explicit
 confirmation, sanitized evidence and `token_printed=false`.
+
+In MG356 the append bridge is only one possible bounded action. When selected,
+it appends one already-reviewed candidate as metadata, consumes one budget unit,
+leaves the new step pending, and stops without task creation or execution.

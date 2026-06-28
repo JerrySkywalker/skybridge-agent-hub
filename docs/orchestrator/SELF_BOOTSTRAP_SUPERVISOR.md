@@ -228,3 +228,10 @@ Goal 188C adds the operator surface for launch day:
 - `skybridge-dev-queue-control.ps1` wraps preflight, watch, start-one, start-all, safe-pause, emergency-stop, resume, report and stale runner lock unlock.
 
 Recommended operation is two windows: keep the watch running in one window and run control commands in another. Start with `preflight`, then use `start-one` to validate Goal 189 before `start-all`. Use `safe-pause` for planned holds, `emergency-stop` for urgent interruption and `report` before deciding how to resume.
+
+## MG356 Bounded Goal Budget Loop
+
+MG356 adds a one-action selector across ready steps, reviewed metadata appends,
+proposed goal generation and hold states. It does not replace the older
+supervisor controls or start a queue runner. Each invocation selects at most one
+action, records sanitized evidence and stops with `token_printed=false`.

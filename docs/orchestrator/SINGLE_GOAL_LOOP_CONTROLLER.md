@@ -226,3 +226,6 @@ MG355 adds review/import/append metadata handling for one generated candidate.
 It does not extend this single-goal loop: appended generated steps remain
 pending for a later explicit controller and no task is created or claimed during
 append. See [GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
+
+MG356 keeps this exact-one-step execution rule as one branch of the bounded
+loop: if a ready step exists, apply at most one step and stop.

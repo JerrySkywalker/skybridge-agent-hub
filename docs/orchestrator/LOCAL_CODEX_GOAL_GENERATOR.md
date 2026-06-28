@@ -192,4 +192,8 @@ append exactly one non-executed metadata step. MG354 never self-approves,
 self-imports, self-appends or self-executes a generated goal. See
 [GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
 
+MG356 uses this generator only as a bounded action option. A generated candidate
+remains proposed markdown for later review; the bounded loop does not approve,
+append or execute it in the same invocation.
+
 `token_printed=false`

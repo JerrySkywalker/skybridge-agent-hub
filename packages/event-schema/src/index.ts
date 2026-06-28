@@ -739,6 +739,109 @@ export const GoalAppendReviewSchema = GoalAppendSafetyFlagsSchema.extend({
   report_json_path: z.string().optional(),
   report_markdown_path: z.string().optional(),
 });
+export const BoundedGoalLoopModeSchema = z.enum(["fixture", "local", "live"]);
+export const BoundedGoalLoopActionSchema = z.enum([
+  "none",
+  "execute_ready_step",
+  "append_reviewed_goal",
+  "generate_proposed_goal",
+  "hold",
+  "complete",
+]);
+export const BoundedGoalLoopSafetyFlagsSchema = z.object({
+  codex_generation_called: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  appended_step_executed: z.literal(false),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  raw_stdout_persisted: z.literal(false),
+  raw_stderr_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const BoundedGoalLoopEvidenceSchema =
+  BoundedGoalLoopSafetyFlagsSchema.extend({
+    schema: z.literal("skybridge.bounded_goal_loop_evidence.v1"),
+    generated_at: z.string().datetime(),
+    campaign_id: z.string().min(1),
+    selected_action: BoundedGoalLoopActionSchema,
+    selected_action_reason: z.string().min(1),
+    goal_budget_remaining_before: z.number().int().min(0),
+    goal_budget_remaining_after: z.number().int().min(0),
+    selected_step_id: z.string(),
+    selected_task_id: z.string(),
+    generated_goal_id: z.string(),
+    generated_goal_hash: z.string(),
+    appended_step_id: z.string(),
+    task_created: z.boolean(),
+    task_claimed: z.boolean(),
+    execution_started: z.boolean(),
+    execution_completed: z.boolean(),
+    goal_generated: z.boolean(),
+    goal_appended: z.boolean(),
+  });
+export const BoundedGoalLoopSchema =
+  BoundedGoalLoopSafetyFlagsSchema.extend({
+    schema: z.literal("skybridge.bounded_goal_loop.v1"),
+    generated_at: z.string().datetime(),
+    mode: BoundedGoalLoopModeSchema,
+    project_id: z.string().min(1),
+    campaign_id: z.string().min(1),
+    worker_id: z.string().min(1),
+    goal_budget_limit: z.number().int().min(0),
+    goal_budget_remaining_before: z.number().int().min(0),
+    goal_budget_remaining_after: z.number().int().min(0),
+    max_actions_per_run: z.number().int().min(1),
+    max_steps_per_run: z.number().int().min(1),
+    max_generated_goals_per_run: z.number().int().min(1),
+    selected_action: BoundedGoalLoopActionSchema,
+    selected_action_reason: z.string().min(1),
+    preview_only: z.boolean(),
+    apply_confirmed: z.boolean(),
+    provider_inventory_checked: z.boolean(),
+    direct_provider_available: z.boolean(),
+    ready_step_detected: z.boolean(),
+    reviewed_candidate_detected: z.boolean(),
+    generated_candidate_detected: z.boolean(),
+    selected_step_id: z.string(),
+    selected_task_id: z.string(),
+    selected_candidate_path_safe: z.string(),
+    selected_candidate_hash: z.string(),
+    generated_goal_id: z.string(),
+    generated_goal_path_safe: z.string(),
+    appended_step_id: z.string(),
+    appended_step_state: z.string(),
+    action_performed: z.boolean(),
+    action_count: z.number().int().min(0).max(1),
+    task_created: z.boolean(),
+    task_claimed: z.boolean(),
+    execution_started: z.boolean(),
+    execution_completed: z.boolean(),
+    evidence_attached: z.boolean(),
+    step_completed: z.boolean(),
+    goal_generated: z.boolean(),
+    goal_reviewed: z.boolean(),
+    goal_appended: z.boolean(),
+    campaign_completed: z.boolean(),
+    campaign_held: z.boolean(),
+    task_created_count: z.number().int().min(0).max(1),
+    task_claimed_count: z.number().int().min(0).max(1),
+    execution_started_count: z.number().int().min(0).max(1),
+    execution_completed_count: z.number().int().min(0).max(1),
+    goal_generated_count: z.number().int().min(0).max(1),
+    goal_appended_count: z.number().int().min(0).max(1),
+    blockers: z.array(z.string()),
+    warnings: z.array(z.string()),
+    safety_flags: BoundedGoalLoopSafetyFlagsSchema,
+    evidence: BoundedGoalLoopEvidenceSchema,
+    report_json_path: z.string().optional(),
+    report_markdown_path: z.string().optional(),
+  });
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -782,6 +885,11 @@ export type GoalAppendReviewState = z.infer<typeof GoalAppendReviewStateSchema>;
 export type GoalAppendSafetyFlags = z.infer<typeof GoalAppendSafetyFlagsSchema>;
 export type GoalAppendEvidence = z.infer<typeof GoalAppendEvidenceSchema>;
 export type GoalAppendReview = z.infer<typeof GoalAppendReviewSchema>;
+export type BoundedGoalLoopMode = z.infer<typeof BoundedGoalLoopModeSchema>;
+export type BoundedGoalLoopAction = z.infer<typeof BoundedGoalLoopActionSchema>;
+export type BoundedGoalLoopSafetyFlags = z.infer<typeof BoundedGoalLoopSafetyFlagsSchema>;
+export type BoundedGoalLoopEvidence = z.infer<typeof BoundedGoalLoopEvidenceSchema>;
+export type BoundedGoalLoop = z.infer<typeof BoundedGoalLoopSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([
