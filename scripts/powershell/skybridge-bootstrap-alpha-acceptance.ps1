@@ -39,6 +39,7 @@ $requiredDocs = @(
   "docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md",
   "docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md",
   "docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md",
+  "docs/orchestrator/BOUNDED_GOAL_BUDGET_LOOP.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -146,6 +147,14 @@ $requiredScripts = @{
   goal_append_append_apply_fixture_smoke = "scripts/powershell/smoke-goal-append-append-apply-fixture.ps1"
   goal_append_no_execution_smoke = "scripts/powershell/smoke-goal-append-no-execution.ps1"
   manual_goal_append_fixture_smoke = "scripts/powershell/smoke-manual-goal-append-fixture.ps1"
+  bounded_goal_loop = "scripts/powershell/skybridge-bounded-goal-loop.ps1"
+  manual_bounded_goal_loop_test = "scripts/powershell/manual-bounded-goal-loop-test.ps1"
+  bounded_goal_loop_preview_smoke = "scripts/powershell/smoke-bounded-goal-loop-preview.ps1"
+  bounded_goal_loop_ready_step_fixture_smoke = "scripts/powershell/smoke-bounded-goal-loop-ready-step-fixture.ps1"
+  bounded_goal_loop_reviewed_candidate_fixture_smoke = "scripts/powershell/smoke-bounded-goal-loop-reviewed-candidate-fixture.ps1"
+  bounded_goal_loop_generate_fixture_smoke = "scripts/powershell/smoke-bounded-goal-loop-generate-fixture.ps1"
+  bounded_goal_loop_no_unbounded_run_smoke = "scripts/powershell/smoke-bounded-goal-loop-no-unbounded-run.ps1"
+  manual_bounded_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-bounded-goal-loop-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -365,7 +374,19 @@ $requiredPackageScripts = @(
   "smoke:goal-append-budget-block",
   "smoke:goal-append-reject-unsafe",
   "smoke:goal-append-no-execution",
-  "smoke:manual-goal-append-fixture"
+  "smoke:manual-goal-append-fixture",
+  "smoke:bounded-goal-loop-status",
+  "smoke:bounded-goal-loop-preview",
+  "smoke:bounded-goal-loop-ready-step-fixture",
+  "smoke:bounded-goal-loop-reviewed-candidate-fixture",
+  "smoke:bounded-goal-loop-generate-fixture",
+  "smoke:bounded-goal-loop-budget-exhausted",
+  "smoke:bounded-goal-loop-reject-no-confirm",
+  "smoke:bounded-goal-loop-reject-max-actions",
+  "smoke:bounded-goal-loop-action-priority",
+  "smoke:bounded-goal-loop-no-unbounded-run",
+  "smoke:bounded-goal-loop-no-execution-after-append",
+  "smoke:manual-bounded-goal-loop-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

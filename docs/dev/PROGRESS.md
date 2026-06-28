@@ -1242,3 +1242,18 @@
   metadata only. Appended steps remain pending; no task creation, task claim,
   step execution, Codex, MATLAB, Hermes, MCP, worker loop or project-control
   unpause occurs.
+
+## 2026-06-28 Mega Goal 356 Bounded Goal Budget Loop
+
+- Added the `skybridge.bounded_goal_loop.v1` and
+  `skybridge.bounded_goal_loop_evidence.v1` schemas for one safe bounded action
+  per invocation.
+- Added `skybridge-bounded-goal-loop.ps1` with fixture preview/apply/report
+  paths, deterministic action priority, budget semantics and exact confirmation.
+- Added the M6 manual wrapper and CI-safe smokes covering ready-step execution,
+  reviewed-candidate append, proposed-goal generation, budget-exhausted hold,
+  confirmation rejection, max-action rejection, action priority, no unbounded run
+  and no execution after append.
+- Documented MG356 as a bounded selector across MG352-MG355 gates. Generation
+  does not approve or append, append does not execute, and `token_printed=false`
+  remains required.

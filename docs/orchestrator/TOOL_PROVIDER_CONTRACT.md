@@ -229,4 +229,8 @@ campaign step can progress toward import or execution. The expected sequence is:
 If inventory is missing or a required provider is disabled, the campaign should
 hold with evidence instead of inventing a fallback execution path.
 
+MG356 uses provider inventory before bounded action selection. Detected tools do
+not authorize broad execution; they only satisfy the selected one-action gate
+after the matching exact confirmation.
+
 `token_printed=false`

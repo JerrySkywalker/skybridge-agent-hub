@@ -48,6 +48,7 @@ import {
   MatlabSweepEvidenceSchema,
   MatlabSweepManifestSchema,
   MatlabSweepSummarySchema,
+  BoundedGoalLoopSchema,
   GeneratedGoalMetadataSchema,
   GoalAppendReviewSchema,
   LocalGoalGeneratorSchema,
@@ -1383,6 +1384,108 @@ describe("event schema", () => {
     expect(review.execution_started).toBe(false);
     expect(review.worker_loop_started).toBe(false);
     expect(review.token_printed).toBe(false);
+  });
+
+  it("models bounded goal loop one-action policy", () => {
+    const safety = {
+      codex_generation_called: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      arbitrary_shell_enabled: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      appended_step_executed: false,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      raw_stdout_persisted: false,
+      raw_stderr_persisted: false,
+      token_printed: false,
+    };
+    const loop = BoundedGoalLoopSchema.parse({
+      schema: "skybridge.bounded_goal_loop.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "bounded-loop-fixture-ready-step-356",
+      worker_id: "fixture-worker-356",
+      goal_budget_limit: 1,
+      goal_budget_remaining_before: 1,
+      goal_budget_remaining_after: 1,
+      max_actions_per_run: 1,
+      max_steps_per_run: 1,
+      max_generated_goals_per_run: 1,
+      selected_action: "execute_ready_step",
+      selected_action_reason: "ready_step_has_priority",
+      preview_only: false,
+      apply_confirmed: true,
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      ready_step_detected: true,
+      reviewed_candidate_detected: false,
+      generated_candidate_detected: false,
+      selected_step_id: "bounded-loop-safe-step-356-001",
+      selected_task_id: "bounded-loop-safe-task-356-001",
+      selected_candidate_path_safe: "",
+      selected_candidate_hash: "",
+      generated_goal_id: "",
+      generated_goal_path_safe: "",
+      appended_step_id: "",
+      appended_step_state: "",
+      action_performed: true,
+      action_count: 1,
+      task_created: true,
+      task_claimed: true,
+      execution_started: true,
+      execution_completed: true,
+      evidence_attached: true,
+      step_completed: true,
+      goal_generated: false,
+      goal_reviewed: false,
+      goal_appended: false,
+      campaign_completed: false,
+      campaign_held: false,
+      task_created_count: 1,
+      task_claimed_count: 1,
+      execution_started_count: 1,
+      execution_completed_count: 1,
+      goal_generated_count: 0,
+      goal_appended_count: 0,
+      blockers: [],
+      warnings: [],
+      safety_flags: safety,
+      evidence: {
+        schema: "skybridge.bounded_goal_loop_evidence.v1",
+        generated_at: "2026-06-28T00:00:00.000Z",
+        campaign_id: "bounded-loop-fixture-ready-step-356",
+        selected_action: "execute_ready_step",
+        selected_action_reason: "ready_step_has_priority",
+        goal_budget_remaining_before: 1,
+        goal_budget_remaining_after: 1,
+        selected_step_id: "bounded-loop-safe-step-356-001",
+        selected_task_id: "bounded-loop-safe-task-356-001",
+        generated_goal_id: "",
+        generated_goal_hash: "",
+        appended_step_id: "",
+        task_created: true,
+        task_claimed: true,
+        execution_started: true,
+        execution_completed: true,
+        goal_generated: false,
+        goal_appended: false,
+        ...safety,
+      },
+      ...safety,
+    });
+
+    expect(loop.schema).toBe("skybridge.bounded_goal_loop.v1");
+    expect(loop.selected_action).toBe("execute_ready_step");
+    expect(loop.action_count).toBe(1);
+    expect(loop.goal_generated).toBe(false);
+    expect(loop.goal_appended).toBe(false);
+    expect(loop.worker_loop_started).toBe(false);
+    expect(loop.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

@@ -154,6 +154,12 @@ It can validate a candidate, record approval or rejection state, preview append
 and append one pending metadata step while keeping task creation, task claim,
 execution, worker loops and queue starts disabled.
 
+MG356 adds the M6 bounded goal budget loop. It chooses one safe action per
+invocation: run one ready step, append one already-reviewed goal as metadata,
+generate one proposed goal candidate, or hold. Generated candidates are not
+auto-approved or auto-appended, and appended steps are not executed in the same
+invocation.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

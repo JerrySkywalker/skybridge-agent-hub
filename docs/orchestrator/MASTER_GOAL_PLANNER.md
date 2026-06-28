@@ -267,3 +267,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-supervise.ps1 
 ```
 
 Apply mode requires explicit `-Apply`, selects at most one low-risk proposal per round, and restores project control to paused before exiting. See `docs/orchestrator/SELF_BOOTSTRAP_SUPERVISOR.md` for the stop reasons and decision policy.
+
+MG356 keeps action selection deterministic rather than planner-driven. The
+bounded goal budget loop chooses ready-step execution, reviewed metadata append,
+proposed-goal generation or hold by fixed policy, never by an LLM plan, and it
+never chains multiple actions in one run.

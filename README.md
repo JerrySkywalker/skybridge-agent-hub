@@ -560,6 +560,9 @@ Recent orchestrator milestones split long-running goal control into explicit
 gates: provider inventory, single-step loop, static multi-step loop, local goal
 markdown generation and goal append review/import. MG355 appends reviewed goal
 metadata only; it does not create tasks, claim tasks or execute appended steps.
+MG356 adds a bounded goal budget loop that selects exactly one safe next action
+per invocation: execute one ready step, append one reviewed metadata step,
+generate one proposed goal, or hold.
 
 ## Roadmap
 

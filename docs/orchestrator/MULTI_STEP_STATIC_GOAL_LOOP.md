@@ -293,4 +293,8 @@ pending campaign step, but the multi-step controller remains the execution
 surface for fixed templates only. See
 [GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
 
+MG356 adds the bounded action selector. It may reuse this controller boundary
+when selecting `execute_ready_step`, but it still applies at most one step and
+then stops.
+
 `token_printed=false`
