@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 368A Ratatui Operator Console Skeleton
+
+- Added the standalone Rust `apps/operator-tui` Ratatui app for the first
+  terminal-native SkyBridge Operator Console skeleton.
+- Added deterministic fixture state and snapshot/report artifacts for
+  `skybridge.operator_tui_state.v1` and
+  `skybridge.operator_tui_report.v1` under `.agent/tmp/operator-tui/`.
+- Rendered the five MG368A panels: Header / Global Status, Pipeline Timeline,
+  Current Object, Action Menu and Safety Footer.
+- Kept MG368A fixture/read-only only: mutation-capable actions are visible but
+  disabled, no candidate approval, no append, no task creation, no task claim,
+  no execution, no branch/PR/merge/deploy by the TUI, no worker loop, no queue
+  runner, no Hermes live call, no MCP run and `token_printed=false`.
+- Added operator TUI docs, package smoke entries, PowerShell smoke wrappers and
+  Bootstrap Alpha acceptance wiring. The recommended next milestone is MG368B
+  Ratatui Read-only Local/Cloud Monitor.
+
 ## 2026-06-29 Mega Goal 367 Stage S1.1 Close and Roadmap Freeze
 
 - Closed Stage S1.1 as the Managed Dev E2E + Hygiene + Hermes Planner

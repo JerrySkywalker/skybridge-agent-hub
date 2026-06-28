@@ -50,6 +50,7 @@ $requiredDocs = @(
   "docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md",
   "docs/orchestrator/HERMES_PLANNER_PROVIDER.md",
   "docs/release/STAGE_S1_1_CLOSE.md",
+  "docs/operator/RATATUI_OPERATOR_CONSOLE.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -227,11 +228,16 @@ $requiredScripts = @{
   stage_s1_1_close_audit_smoke = "scripts/powershell/smoke-stage-s1-1-close-audit.ps1"
   stage_s1_1_close_doc_present_smoke = "scripts/powershell/smoke-stage-s1-1-close-doc-present.ps1"
   stage_s1_1_close_no_mutation_smoke = "scripts/powershell/smoke-stage-s1-1-close-no-mutation.ps1"
+  operator_tui_fixture_smoke = "scripts/powershell/smoke-operator-tui-fixture.ps1"
+  operator_tui_snapshot_smoke = "scripts/powershell/smoke-operator-tui-snapshot.ps1"
+  operator_tui_no_mutation_smoke = "scripts/powershell/smoke-operator-tui-no-mutation.ps1"
+  operator_tui_doc_present_smoke = "scripts/powershell/smoke-operator-tui-doc-present.ps1"
 }
 
 $componentPaths = @{
   desktop_app = "apps/desktop"
   server_app = "apps/server"
+  operator_tui_app = "apps/operator-tui"
 }
 
 $workerPathCandidates = @(
@@ -504,7 +510,11 @@ $requiredPackageScripts = @(
   "smoke:stage-s1-1-close-status",
   "smoke:stage-s1-1-close-audit",
   "smoke:stage-s1-1-close-doc-present",
-  "smoke:stage-s1-1-close-no-mutation"
+  "smoke:stage-s1-1-close-no-mutation",
+  "smoke:operator-tui-fixture",
+  "smoke:operator-tui-snapshot",
+  "smoke:operator-tui-no-mutation",
+  "smoke:operator-tui-doc-present"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
@@ -533,6 +543,7 @@ $missingDocs = @($docResults | Where-Object { -not $_.exists } | ForEach-Object 
 $missingScripts = @($scriptResults | Where-Object { -not $_.exists } | ForEach-Object { $_.name })
 $missingComponents = @($componentResults | Where-Object { -not $_.exists } | ForEach-Object { $_.name })
 $missingPackageScripts = @($packageScriptResults | Where-Object { -not $_.exists } | ForEach-Object { $_.name })
+$operatorTuiCargoTomlPresent = Test-RelativePath -RelativePath "apps/operator-tui/Cargo.toml" -Leaf
 $workerSupportPresent = [bool](@($workerResults | Where-Object { $_.exists }).Count -gt 0)
 
 $desktopWorkerServiceManagerPresent = $false
@@ -1257,6 +1268,7 @@ $ok = (
   $missingScripts.Count -eq 0 -and
   $missingComponents.Count -eq 0 -and
   $missingPackageScripts.Count -eq 0 -and
+  $operatorTuiCargoTomlPresent -and
   $workerSupportPresent -and
   $docSecretFindings.Count -eq 0 -and
   $desktopWorkerServiceManagerPresent -and
@@ -1707,6 +1719,7 @@ $report = [pscustomobject]@{
   missing_scripts = $missingScripts
   missing_components = $missingComponents
   missing_package_scripts = $missingPackageScripts
+  operator_tui_cargo_toml_present = $operatorTuiCargoTomlPresent
   raw_secret_markers_in_new_docs = ($docSecretFindings.Count -gt 0)
   token_printed = $false
 }

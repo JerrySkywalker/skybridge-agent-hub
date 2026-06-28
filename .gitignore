@@ -34,6 +34,7 @@ build/
 coverage/
 apps/*/src-tauri/target/
 apps/*/src-tauri/gen/
+apps/operator-tui/target/
 
 # logs
 *.log

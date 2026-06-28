@@ -5,9 +5,9 @@ through Stage S1.1, closing MG351-MG366C.
 
 ## Current State
 
-- Current main commit: `2652d8fd34c82ece95cf61217a6fadc07c67e754`
+- Current main commit: `c2bd551370f68950c2cd759de6a4f30b5e0396d8`
 - Current cloud image:
-  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2652d8fd34c82ece95cf61217a6fadc07c67e754`
+  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-c2bd551370f68950c2cd759de6a4f30b5e0396d8`
 - Cloud health: `/v1/health` ok
 - Cloud version: `/v1/version` matches the current main commit
 - Cloud parity: ok
@@ -58,6 +58,11 @@ Hermes cannot approve, append, create tasks, execute, create branches or PRs,
 merge, deploy, run worker loops or mutate `project_control`. Direct providers
 remain the execution path. See
 `docs/orchestrator/HERMES_PLANNER_PROVIDER.md`.
+
+MG368A starts the Ratatui Operator Console as the next-stage manual simulation
+surface. It is fixture/read-only only, shows the pipeline layout and safety
+state, and keeps candidate append, goal start, task claim, worker loops, Hermes
+live calls and MCP runs disabled until later reviewed gates.
 
 ## Stage S1.1 Close
 
@@ -112,7 +117,7 @@ and adds only read-only audit and smoke wiring. See
 Run a read-only local handoff audit:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-dev-e2e-handoff.ps1 -Command audit -ExpectedCommit 2652d8fd34c82ece95cf61217a6fadc07c67e754 -ExpectedCloudImage ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2652d8fd34c82ece95cf61217a6fadc07c67e754 -Json -WriteReport
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-dev-e2e-handoff.ps1 -Command audit -ExpectedCommit c2bd551370f68950c2cd759de6a4f30b5e0396d8 -ExpectedCloudImage ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-c2bd551370f68950c2cd759de6a4f30b5e0396d8 -Json -WriteReport
 ```
 
 The audit is read-only. It must not mutate Git, GitHub PR state, deployment,
@@ -129,13 +134,13 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-1. MG367A Vite Chunk Remediation: split or defer the current web/desktop entry
-   chunks only with explicit runtime-risk acceptance.
-2. MG367C Hermes Candidate Review/Append Gate: review one Hermes-generated
-   candidate through the existing human approval gate without execution.
-3. MCP Tool Provider Stub: define disabled/future MCP provider shape without
-   connecting to live MCP servers.
-4. Worker Service Install/Daemonization: recover the Windows worker service
-   install/daemon path while keeping worker-loop start separately gated.
+1. MG368B Ratatui Read-only Local/Cloud Monitor: connect the TUI to read-only
+   local/cloud status without enabling apply.
+2. MG368C Candidate Review/Append Console: review and append one candidate only
+   behind a later explicit gate.
+3. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
+   path without unbounded queue execution.
+4. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
+   single-step hosted-dev experiment through the TUI after the gates above.
 
 `token_printed=false`
