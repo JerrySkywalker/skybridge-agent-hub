@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-06-28 Mega Goal 357 Managed Development PR Pilot
+
+- Added the managed development PR pilot controller for fixture and guarded
+  local modes.
+- Added M7 manual wrapper and CI-safe smokes for status, preview, fixture
+  apply, no-confirm rejection, allowed/forbidden path enforcement, no real PR in
+  fixture mode and no auto-merge.
+- Added `skybridge.managed_dev_pilot.v1` and evidence schema coverage.
+- Documented that managed development may create a dedicated branch and draft PR
+  only through exact confirmations, then must hold for human review.
+- Kept auto-merge, release creation, tag creation, asset upload, worker loops,
+  Codex generation/execution, MATLAB, Hermes, MCP, task creation, task claim,
+  project-control unpause, deployment infrastructure changes and token printing
+  disabled.
+
 ## 2026-06-26 Mega Goal 341 Bootstrap Alpha RC Tag Authorization
 
 - Updated the Bootstrap Alpha tag plan for MG341 operator authorization to

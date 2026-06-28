@@ -40,6 +40,7 @@ $requiredDocs = @(
   "docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md",
   "docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md",
   "docs/orchestrator/BOUNDED_GOAL_BUDGET_LOOP.md",
+  "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -155,6 +156,13 @@ $requiredScripts = @{
   bounded_goal_loop_generate_fixture_smoke = "scripts/powershell/smoke-bounded-goal-loop-generate-fixture.ps1"
   bounded_goal_loop_no_unbounded_run_smoke = "scripts/powershell/smoke-bounded-goal-loop-no-unbounded-run.ps1"
   manual_bounded_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-bounded-goal-loop-fixture.ps1"
+  managed_dev_pilot = "scripts/powershell/skybridge-managed-dev-pilot.ps1"
+  manual_managed_dev_pr_pilot = "scripts/powershell/manual-managed-dev-pr-pilot.ps1"
+  managed_dev_pilot_status_smoke = "scripts/powershell/smoke-managed-dev-pilot-status.ps1"
+  managed_dev_pilot_fixture_smoke = "scripts/powershell/smoke-managed-dev-pilot-fixture.ps1"
+  managed_dev_pilot_forbidden_paths_smoke = "scripts/powershell/smoke-managed-dev-pilot-forbidden-paths.ps1"
+  managed_dev_pilot_no_auto_merge_smoke = "scripts/powershell/smoke-managed-dev-pilot-no-auto-merge.ps1"
+  manual_managed_dev_pilot_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-pilot-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -386,7 +394,16 @@ $requiredPackageScripts = @(
   "smoke:bounded-goal-loop-action-priority",
   "smoke:bounded-goal-loop-no-unbounded-run",
   "smoke:bounded-goal-loop-no-execution-after-append",
-  "smoke:manual-bounded-goal-loop-fixture"
+  "smoke:manual-bounded-goal-loop-fixture",
+  "smoke:managed-dev-pilot-status",
+  "smoke:managed-dev-pilot-preview",
+  "smoke:managed-dev-pilot-fixture",
+  "smoke:managed-dev-pilot-reject-no-confirm",
+  "smoke:managed-dev-pilot-allowed-paths",
+  "smoke:managed-dev-pilot-forbidden-paths",
+  "smoke:managed-dev-pilot-no-real-pr-fixture",
+  "smoke:managed-dev-pilot-no-auto-merge",
+  "smoke:manual-managed-dev-pilot-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

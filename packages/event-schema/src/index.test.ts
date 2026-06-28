@@ -52,6 +52,7 @@ import {
   GeneratedGoalMetadataSchema,
   GoalAppendReviewSchema,
   LocalGoalGeneratorSchema,
+  ManagedDevPilotSchema,
   MultiGoalLoopSchema,
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
@@ -1486,6 +1487,100 @@ describe("event schema", () => {
     expect(loop.goal_appended).toBe(false);
     expect(loop.worker_loop_started).toBe(false);
     expect(loop.token_printed).toBe(false);
+  });
+
+  it("models managed development pilot human-review hold without merge", () => {
+    const safety = {
+      auto_merge_enabled: false,
+      merge_performed: false,
+      release_created: false,
+      tag_created: false,
+      asset_uploaded: false,
+      deploy_mutation_requested: false,
+      task_created: false,
+      task_claimed: false,
+      worker_loop_started: false,
+      codex_generation_called: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      arbitrary_shell_enabled: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    };
+    const pilot = ManagedDevPilotSchema.parse({
+      ...safety,
+      schema: "skybridge.managed_dev_pilot.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "managed-dev-fixture-campaign-357",
+      goal_id: "managed-dev-docs-smoke-goal-357-fixture",
+      branch_name: "codex/mega-357-managed-dev-pr-pilot-fixture",
+      base_branch: "main",
+      selected_change_kind: "docs-note-and-smoke-fixture",
+      allowed_paths: [
+        "docs/orchestrator/",
+        "docs/dev/",
+        "scripts/powershell/smoke-managed-dev-",
+      ],
+      max_changed_files: 5,
+      preview_only: false,
+      apply_confirmed: true,
+      branch_created: true,
+      files_changed: 2,
+      changed_files: [
+        "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md",
+        "scripts/powershell/smoke-managed-dev-pilot-fixture.ps1",
+      ],
+      local_validations_run: true,
+      local_validations_passed: true,
+      draft_pr_requested: false,
+      draft_pr_created: false,
+      pr_number: 0,
+      pr_url_safe: "",
+      pr_ci_observed: false,
+      pr_ci_status: "simulated_skipped",
+      held_for_human_review: true,
+      blockers: [],
+      warnings: ["fixture_mode_no_real_branch_or_pr"],
+      safety_flags: safety,
+      evidence: {
+        schema: "skybridge.managed_dev_pilot_evidence.v1",
+        generated_at: "2026-06-28T00:00:00.000Z",
+        branch_name: "codex/mega-357-managed-dev-pr-pilot-fixture",
+        base_branch: "main",
+        changed_files: [
+          "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md",
+          "scripts/powershell/smoke-managed-dev-pilot-fixture.ps1",
+        ],
+        validation_summary_safe: "fixture validations simulated",
+        draft_pr_created: false,
+        pr_number: 0,
+        pr_url_safe: "",
+        ci_status: "simulated_skipped",
+        held_for_human_review: true,
+        auto_merge_enabled: false,
+        merge_performed: false,
+        release_created: false,
+        tag_created: false,
+        asset_uploaded: false,
+        raw_logs_persisted: false,
+        raw_stdout_persisted: false,
+        raw_stderr_persisted: false,
+        secrets_persisted: false,
+        token_printed: false,
+      },
+    });
+
+    expect(pilot.schema).toBe("skybridge.managed_dev_pilot.v1");
+    expect(pilot.draft_pr_created).toBe(false);
+    expect(pilot.held_for_human_review).toBe(true);
+    expect(pilot.auto_merge_enabled).toBe(false);
+    expect(pilot.merge_performed).toBe(false);
+    expect(pilot.release_created).toBe(false);
+    expect(pilot.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

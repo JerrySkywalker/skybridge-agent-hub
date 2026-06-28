@@ -160,6 +160,12 @@ generate one proposed goal candidate, or hold. Generated candidates are not
 auto-approved or auto-appended, and appended steps are not executed in the same
 invocation.
 
+MG357 adds the M7 managed development PR pilot. It can take reviewed
+development intent to a guarded branch, one allowed docs/smoke change, local
+validation, draft PR and CI observation, then hold for human review. It does
+not auto-merge, create releases, create tasks, claim tasks, execute worker
+loops or mutate deployment infrastructure.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

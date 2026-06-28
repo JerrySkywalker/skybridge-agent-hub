@@ -235,3 +235,11 @@ MG356 adds a one-action selector across ready steps, reviewed metadata appends,
 proposed goal generation and hold states. It does not replace the older
 supervisor controls or start a queue runner. Each invocation selects at most one
 action, records sanitized evidence and stops with `token_printed=false`.
+
+## MG357 Managed Development PR Pilot
+
+MG357 adds a managed development PR pilot on top of the bounded review lineage.
+It is still not a supervisor loop: the controller previews, applies at most one
+allowed docs/smoke repository change after exact confirmation, creates only a
+draft PR after separate exact confirmation and holds for human review. It does
+not auto-merge, create releases, upload assets or unpause project control.

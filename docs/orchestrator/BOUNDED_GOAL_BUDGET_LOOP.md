@@ -169,6 +169,9 @@ loop, no Hermes or MCP call, and `token_printed=false`.
 
 ## Next Milestone
 
-MG357 can pilot Hermes as an optional planner provider. MG359 can pilot managed
-development PR flow if the operator prioritizes repository mutation controls
-before planner work.
+MG357 pivots to the first managed development PR pilot. It uses the bounded
+one-action discipline to take a reviewed development intent to a dedicated
+branch, one allowed docs/smoke change, local validation, draft PR, CI
+observation and a human review hold.
+
+See [MANAGED_DEVELOPMENT_PR_PILOT.md](MANAGED_DEVELOPMENT_PR_PILOT.md).

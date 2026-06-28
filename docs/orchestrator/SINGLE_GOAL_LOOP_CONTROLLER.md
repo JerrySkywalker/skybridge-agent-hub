@@ -229,3 +229,8 @@ append. See [GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
 
 MG356 keeps this exact-one-step execution rule as one branch of the bounded
 loop: if a ready step exists, apply at most one step and stop.
+
+MG357 applies the same one-shot discipline to managed development PRs. It
+previews first, permits at most one allowed repository change after exact
+confirmation, creates only a draft PR when separately confirmed, and holds for
+human review.

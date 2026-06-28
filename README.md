@@ -165,6 +165,8 @@ For the local Codex goal markdown generator, see
 [docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md](docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md).
 For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
+For the first managed development branch, draft PR and human review hold pilot,
+see [docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md](docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md).
 For local worker identity activation and live heartbeat-only pairing, use the
 same Windows worker install runbook.
 For the first one-task live safe worker pilot, see
@@ -563,6 +565,9 @@ metadata only; it does not create tasks, claim tasks or execute appended steps.
 MG356 adds a bounded goal budget loop that selects exactly one safe next action
 per invocation: execute one ready step, append one reviewed metadata step,
 generate one proposed goal, or hold.
+MG357 adds a managed development PR pilot that previews, applies at most one
+allowed docs/smoke repository change, creates only a draft PR when separately
+confirmed, observes CI and holds for human review.
 
 ## Roadmap
 
