@@ -12,7 +12,7 @@ param(
   [string]$BaseBranch = "main",
   [string]$PrTitle = "MG357 Managed Development PR Pilot",
   [string]$PrBodyPath = "",
-  [ValidateSet("docs-note-and-smoke-fixture", "docs-note-local", "mg360-controller-native-doc", "forbidden-path-fixture", "too-many-files-fixture")]
+  [ValidateSet("docs-note-and-smoke-fixture", "docs-note-local", "mg360-controller-native-doc", "mg362-campaign-driven-doc", "forbidden-path-fixture", "too-many-files-fixture")]
   [string]$ChangeKind = "docs-note-and-smoke-fixture",
   [switch]$Fixture,
   [switch]$Local,
@@ -67,6 +67,15 @@ if ($BranchName -eq "codex/mg360-controller-native-managed-dev-pilot-pr") {
   }
   if ($PrTitle -eq "MG357 Managed Development PR Pilot") {
     $PrTitle = "MG360 Controller-Native Managed Dev Pilot PR"
+  }
+}
+
+if ($BranchName -eq "codex/mg362-campaign-driven-managed-dev-pilot-pr") {
+  if ($ChangeKind -eq "docs-note-local") {
+    $ChangeKind = "mg362-campaign-driven-doc"
+  }
+  if ($PrTitle -eq "MG357 Managed Development PR Pilot") {
+    $PrTitle = "MG362 Campaign-Driven Managed Dev Pilot PR"
   }
 }
 
@@ -194,6 +203,9 @@ function Get-PlannedChangedFiles {
     }
     "mg360-controller-native-doc" {
       return @("docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md")
+    }
+    "mg362-campaign-driven-doc" {
+      return @("docs/orchestrator/CAMPAIGN_DRIVEN_MANAGED_DEV_MG362.md")
     }
     default {
       return @(
@@ -338,6 +350,29 @@ function Write-LocalPilotArtifact {
     return
   }
 
+  if ($ChangeKind -eq "mg362-campaign-driven-doc") {
+    @(
+      "# MG362 Campaign-Driven Managed Development Pilot",
+      "",
+      "This file was updated by the campaign-driven managed development controller-native path.",
+      "",
+      "MG362 proves the integrated path from a reviewed development goal to an appended campaign step, one bounded managed-dev action, a controller-native branch and draft PR, CI observation, and human review hold.",
+      "",
+      "The draft PR remains a human-review checkpoint. It is not marked ready, merged, auto-merged, released, tagged, or deployed by the campaign controller.",
+      "",
+      "Safety remains unchanged:",
+      "",
+      "- no auto-merge",
+      "- no release, tag, or asset creation",
+      "- no deployment or production infrastructure mutation",
+      "- no worker loop or queue runner",
+      "- no Codex, MATLAB, Hermes, or MCP execution",
+      "- manual_fallback_used=false",
+      "- token_printed=false"
+    ) | Set-Content -LiteralPath $target -Encoding UTF8
+    return
+  }
+
   @(
     "# Managed Development Pilot Local Note",
     "",
@@ -351,6 +386,9 @@ function Write-LocalPilotArtifact {
 function Get-CommitMessage {
   if ($ChangeKind -eq "mg360-controller-native-doc") {
     return "Add MG360 controller-native managed dev pilot note"
+  }
+  if ($ChangeKind -eq "mg362-campaign-driven-doc") {
+    return "Add MG362 campaign-driven managed dev pilot note"
   }
   "Add managed dev pilot local note"
 }

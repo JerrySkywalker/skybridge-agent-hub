@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-06-28 Mega Goal 362 Campaign-Driven Managed Dev E2E
+
+- Added the campaign-driven managed-dev controller and M8 manual wrapper.
+- Added `skybridge.managed_dev_campaign.v1` and evidence schema coverage.
+- Added fixture smokes for status, preview, E2E, no-confirm rejection,
+  one-action enforcement, no real PR in fixture, no auto-merge, forbidden path
+  checks and the manual M8 wrapper.
+- Wired Bootstrap Alpha acceptance to require the MG362 controller, docs and
+  fixture smokes.
+- Kept auto-merge, release creation, tag creation, asset upload, production
+  infrastructure mutation, worker loops, queue runners, Codex generation or
+  execution, MATLAB, Hermes, MCP, task claim, project-control unpause and token
+  printing disabled.
+
 ## 2026-06-28 Mega Goal 360 Managed Dev Git/GH Provider Repair
 
 - Repaired the managed-dev controller-native Git/GH path after MG359A exposed

@@ -962,6 +962,97 @@ export const ManagedDevPilotSchema = ManagedDevPilotSafetyFlagsSchema.extend({
   report_json_path: z.string().optional(),
   report_markdown_path: z.string().optional(),
 });
+export const ManagedDevCampaignModeSchema = z.enum(["fixture", "local"]);
+export const ManagedDevCampaignActionSchema = z.enum([
+  "managed_dev_draft_pr",
+  "hold",
+]);
+export const ManagedDevCampaignSafetyFlagsSchema = z.object({
+  manual_fallback_used: z.literal(false),
+  auto_merge_enabled: z.literal(false),
+  merge_performed: z.literal(false),
+  release_created: z.literal(false),
+  tag_created: z.literal(false),
+  asset_uploaded: z.literal(false),
+  production_infra_mutated: z.literal(false),
+  worker_loop_started: z.literal(false),
+  queue_runner_started: z.literal(false),
+  codex_generation_called: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  arbitrary_shell_enabled: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  raw_logs_persisted: z.literal(false).optional(),
+  raw_stdout_persisted: z.literal(false).optional(),
+  raw_stderr_persisted: z.literal(false).optional(),
+  secrets_persisted: z.literal(false).optional(),
+  token_printed: z.literal(false),
+});
+export const ManagedDevCampaignEvidenceSchema =
+  ManagedDevCampaignSafetyFlagsSchema.pick({
+    manual_fallback_used: true,
+    auto_merge_enabled: true,
+    merge_performed: true,
+    release_created: true,
+    tag_created: true,
+    asset_uploaded: true,
+    raw_logs_persisted: true,
+    raw_stdout_persisted: true,
+    raw_stderr_persisted: true,
+    secrets_persisted: true,
+    token_printed: true,
+  }).extend({
+    schema: z.literal("skybridge.managed_dev_campaign_evidence.v1"),
+    generated_at: z.string().datetime(),
+    campaign_id: z.string().min(1),
+    goal_id: z.string().min(1),
+    selected_action: ManagedDevCampaignActionSchema,
+    appended_step_id: z.string(),
+    branch_name: z.string().min(1),
+    changed_files: z.array(z.string()),
+    draft_pr_created: z.boolean(),
+    draft_pr_number: z.number().int().min(0),
+    draft_pr_ci_status: ManagedDevPilotCiStatusSchema,
+    held_for_human_review: z.boolean(),
+  });
+export const ManagedDevCampaignSchema =
+  ManagedDevCampaignSafetyFlagsSchema.extend({
+    schema: z.literal("skybridge.managed_dev_campaign.v1"),
+    generated_at: z.string().datetime(),
+    mode: ManagedDevCampaignModeSchema,
+    project_id: z.string().min(1),
+    campaign_id: z.string().min(1),
+    goal_id: z.string().min(1),
+    candidate_path_safe: z.string(),
+    candidate_hash: z.string(),
+    reviewed_goal_valid: z.boolean(),
+    review_approved: z.boolean(),
+    appended_step_id: z.string(),
+    appended_step_state: z.string(),
+    bounded_loop_selected_action: ManagedDevCampaignActionSchema,
+    bounded_loop_action_performed: z.boolean(),
+    managed_dev_branch: z.string().min(1),
+    changed_files: z.array(z.string()),
+    max_changed_files_check: z.enum(["passed", "failed"]),
+    forbidden_path_check: z.enum(["passed", "failed"]),
+    controller_native_git_used: z.boolean(),
+    controller_native_gh_used: z.boolean(),
+    draft_pr_created: z.boolean(),
+    draft_pr_number: z.number().int().min(0),
+    draft_pr_url_safe: z.string(),
+    draft_pr_ci_status: ManagedDevPilotCiStatusSchema,
+    held_for_human_review: z.boolean(),
+    preview_only: z.boolean(),
+    apply_confirmed: z.boolean(),
+    blockers: z.array(z.string()),
+    warnings: z.array(z.string()),
+    safety_flags: ManagedDevCampaignSafetyFlagsSchema,
+    evidence: ManagedDevCampaignEvidenceSchema,
+    report_json_path: z.string().optional(),
+    report_markdown_path: z.string().optional(),
+  });
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -1015,6 +1106,11 @@ export type ManagedDevPilotCiStatus = z.infer<typeof ManagedDevPilotCiStatusSche
 export type ManagedDevPilotSafetyFlags = z.infer<typeof ManagedDevPilotSafetyFlagsSchema>;
 export type ManagedDevPilotEvidence = z.infer<typeof ManagedDevPilotEvidenceSchema>;
 export type ManagedDevPilot = z.infer<typeof ManagedDevPilotSchema>;
+export type ManagedDevCampaignMode = z.infer<typeof ManagedDevCampaignModeSchema>;
+export type ManagedDevCampaignAction = z.infer<typeof ManagedDevCampaignActionSchema>;
+export type ManagedDevCampaignSafetyFlags = z.infer<typeof ManagedDevCampaignSafetyFlagsSchema>;
+export type ManagedDevCampaignEvidence = z.infer<typeof ManagedDevCampaignEvidenceSchema>;
+export type ManagedDevCampaign = z.infer<typeof ManagedDevCampaignSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

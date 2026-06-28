@@ -28,6 +28,10 @@ goal.
 MG352 and MG353 prove exact-confirmed execution loops for fixed templates. MG354
 does not extend those loops. It produces markdown only and stops before review.
 
+MG362 intentionally does not call Codex generation. It consumes a reviewed
+managed-dev goal fixture or an already reviewed candidate and then routes one
+bounded managed-dev action to the controller-native Git/GH path.
+
 This boundary keeps authoring separate from:
 
 - task creation;

@@ -23,6 +23,11 @@ MG357 uses those gates for a managed development branch and PR workflow. It does
 
 MG359A proved the real draft PR path with a bounded manual Git/GH fallback after the controller reported `git_unavailable`. MG360 repairs the controller-native Git/GH provider path so the managed-dev controller itself can create the branch, commit the allowlisted docs change, push, create the draft PR, and observe CI.
 
+MG362 composes that repaired controller-native path with reviewed goal append
+metadata and the bounded loop contract. The managed-dev controller remains the
+only local Git/GH execution surface for the campaign-driven draft PR step, and
+the resulting PR still holds for human review with no auto-merge.
+
 ## Controller
 
 Script:

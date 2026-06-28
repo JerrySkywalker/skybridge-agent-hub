@@ -31,6 +31,11 @@ claim a task, start a queue runner or start a worker loop.
 
 Execution remains the responsibility of later exact-confirmed loop controllers.
 
+MG362 uses this boundary for managed development: a reviewed dev goal is
+represented as campaign metadata first, then a separate bounded managed-dev
+action may create one draft PR. Append review still does not create tasks, claim
+tasks, execute workers or approve merging.
+
 ## Controller
 
 Main script:

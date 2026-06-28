@@ -19,6 +19,11 @@ MG356 decides between those paths in a deterministic order. It does not ask an
 LLM to plan the action, does not approve generated goals, and does not execute an
 appended goal in the same invocation.
 
+MG362 adds a managed-dev campaign wrapper that treats a reviewed development
+goal as one bounded action: create a controller-native draft PR and hold for
+human review. The wrapper preserves the one-action limit and does not turn the
+bounded loop into a queue runner.
+
 ## Controller
 
 Script:
