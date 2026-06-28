@@ -1,21 +1,17 @@
-# MG360 Managed Dev Git/GH Provider Repair
+# MG360 Controller-Native Managed Development Pilot
 
-MG359A proved real managed-development PR creation with a bounded manual Git/GH fallback after the managed-dev controller reported `git_unavailable` before mutation.
+This file was updated by the managed development controller-native local apply path.
 
-MG360 repairs the controller-native Git/GH provider path so `manual-managed-dev-pr-pilot.ps1` can drive preview, local apply, draft PR creation, and CI observation through `skybridge-managed-dev-pilot.ps1` itself.
+MG359A proved real managed-development PR creation using a bounded manual Git/GH fallback after the controller reported git_unavailable.
+MG360 proves that the controller itself can create the branch, commit the docs-only change, open a draft PR, observe CI, and hold for human review.
 
-The controller-native path is required before broader managed development because branch creation, allowed-path enforcement, draft PR creation, and CI observation must be reported by one audited controller rather than by an external fallback sequence.
+The pilot PR remains draft. Merge is a separate human decision.
 
-The MG360 pilot PR remains draft. Human review decides whether it is merged.
-
-Safety boundaries remain unchanged:
+Safety remains unchanged:
 
 - no auto-merge
 - no release, tag, or asset creation
 - no deployment or production infrastructure mutation
 - no worker loop or queue runner
-- no task creation or task claim
-- no Codex generation or execution
-- no MATLAB, Hermes, or MCP execution
+- no Codex, MATLAB, Hermes, or MCP execution
 - token_printed=false
-
