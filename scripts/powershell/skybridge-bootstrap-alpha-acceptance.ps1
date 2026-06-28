@@ -49,6 +49,7 @@ $requiredDocs = @(
   "docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md",
   "docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md",
   "docs/orchestrator/HERMES_PLANNER_PROVIDER.md",
+  "docs/release/STAGE_S1_1_CLOSE.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -221,6 +222,11 @@ $requiredScripts = @{
   hermes_planner_provider_no_append_smoke = "scripts/powershell/smoke-hermes-planner-provider-no-append.ps1"
   hermes_planner_provider_no_execution_smoke = "scripts/powershell/smoke-hermes-planner-provider-no-execution.ps1"
   manual_hermes_planner_provider_fixture_smoke = "scripts/powershell/smoke-manual-hermes-planner-provider-fixture.ps1"
+  stage_s1_1_close = "scripts/powershell/skybridge-stage-s1-1-close.ps1"
+  stage_s1_1_close_status_smoke = "scripts/powershell/smoke-stage-s1-1-close-status.ps1"
+  stage_s1_1_close_audit_smoke = "scripts/powershell/smoke-stage-s1-1-close-audit.ps1"
+  stage_s1_1_close_doc_present_smoke = "scripts/powershell/smoke-stage-s1-1-close-doc-present.ps1"
+  stage_s1_1_close_no_mutation_smoke = "scripts/powershell/smoke-stage-s1-1-close-no-mutation.ps1"
 }
 
 $componentPaths = @{
@@ -494,7 +500,11 @@ $requiredPackageScripts = @(
   "smoke:hermes-planner-provider-reject-live-no-confirm",
   "smoke:hermes-planner-provider-no-append",
   "smoke:hermes-planner-provider-no-execution",
-  "smoke:manual-hermes-planner-provider-fixture"
+  "smoke:manual-hermes-planner-provider-fixture",
+  "smoke:stage-s1-1-close-status",
+  "smoke:stage-s1-1-close-audit",
+  "smoke:stage-s1-1-close-doc-present",
+  "smoke:stage-s1-1-close-no-mutation"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

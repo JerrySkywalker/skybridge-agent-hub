@@ -80,10 +80,30 @@ MG366C Hermes Planner Provider Pilot:
 - [ ] Candidate approval, append, task creation, execution, branch creation,
   PR creation, merge and deploy remain disabled.
 
+Stage S1.1 close:
+
+- [ ] Stage close doc exists:
+  `docs/release/STAGE_S1_1_CLOSE.md`
+- [ ] Stage close audit script exists:
+  `scripts/powershell/skybridge-stage-s1-1-close.ps1`
+- [ ] Stage close status smoke exists:
+  `smoke:stage-s1-1-close-status`
+- [ ] Stage close audit smoke exists:
+  `smoke:stage-s1-1-close-audit`
+- [ ] Stage close doc-present smoke exists:
+  `smoke:stage-s1-1-close-doc-present`
+- [ ] Stage close no-mutation smoke exists:
+  `smoke:stage-s1-1-close-no-mutation`
+- [ ] Final main commit and cloud version match.
+- [ ] Cloud parity is ok.
+- [ ] No open implementation PRs remain from MG351-MG366C.
+- [ ] `token_printed=false`
+
 Read-only verification:
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-dev-e2e-handoff.ps1 -Command audit -Json -WriteReport
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-stage-s1-1-close.ps1 -Command audit -Json -WriteReport
 ```
 
 Freeze boundary:
