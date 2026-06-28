@@ -43,6 +43,8 @@ $requiredDocs = @(
   "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md",
   "docs/orchestrator/MANAGED_DEV_CAMPAIGN_E2E.md",
   "docs/orchestrator/CAMPAIGN_DRIVEN_MANAGED_DEV_MG362.md",
+  "docs/release/MANAGED_DEV_E2E_HANDOFF.md",
+  "docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -182,6 +184,13 @@ $requiredScripts = @{
   managed_dev_campaign_no_auto_merge_smoke = "scripts/powershell/smoke-managed-dev-campaign-no-auto-merge.ps1"
   managed_dev_campaign_no_real_pr_smoke = "scripts/powershell/smoke-managed-dev-campaign-no-real-pr-fixture.ps1"
   manual_managed_dev_campaign_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-campaign-fixture.ps1"
+  managed_dev_e2e_handoff = "scripts/powershell/skybridge-managed-dev-e2e-handoff.ps1"
+  managed_dev_e2e_handoff_status_smoke = "scripts/powershell/smoke-managed-dev-e2e-handoff-status.ps1"
+  managed_dev_e2e_handoff_audit_smoke = "scripts/powershell/smoke-managed-dev-e2e-handoff-audit.ps1"
+  managed_dev_e2e_freeze_checklist_smoke = "scripts/powershell/smoke-managed-dev-e2e-freeze-checklist.ps1"
+  managed_dev_e2e_required_artifacts_smoke = "scripts/powershell/smoke-managed-dev-e2e-required-artifacts.ps1"
+  managed_dev_e2e_no_mutation_smoke = "scripts/powershell/smoke-managed-dev-e2e-no-mutation.ps1"
+  manual_managed_dev_e2e_handoff_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-e2e-handoff-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -427,7 +436,13 @@ $requiredPackageScripts = @(
   "smoke:managed-dev-campaign-preview",
   "smoke:managed-dev-campaign-fixture-e2e",
   "smoke:managed-dev-campaign-no-auto-merge",
-  "smoke:manual-managed-dev-campaign-fixture"
+  "smoke:manual-managed-dev-campaign-fixture",
+  "smoke:managed-dev-e2e-handoff-status",
+  "smoke:managed-dev-e2e-handoff-audit",
+  "smoke:managed-dev-e2e-freeze-checklist",
+  "smoke:managed-dev-e2e-required-artifacts",
+  "smoke:managed-dev-e2e-no-mutation",
+  "smoke:manual-managed-dev-e2e-handoff-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

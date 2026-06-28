@@ -52,6 +52,7 @@ import {
   GeneratedGoalMetadataSchema,
   GoalAppendReviewSchema,
   LocalGoalGeneratorSchema,
+  ManagedDevE2EHandoffSchema,
   ManagedDevPilotSchema,
   MultiGoalLoopSchema,
   TemplateRunnerEvidenceSchema,
@@ -1614,6 +1615,61 @@ describe("event schema", () => {
     expect(pilot.gh_available).toBe(true);
     expect(pilot.manual_fallback_used).toBe(false);
     expect(pilot.token_printed).toBe(false);
+  });
+
+  it("models managed dev E2E handoff freeze reports", () => {
+    const safety = {
+      release_created: false,
+      tag_created: false,
+      asset_uploaded: false,
+      auto_merge_enabled: false,
+      worker_loop_started: false,
+      queue_runner_started: false,
+      task_created: false,
+      task_claimed: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      project_control_unpaused: false,
+      token_printed: false,
+    };
+    const handoff = ManagedDevE2EHandoffSchema.parse({
+      ...safety,
+      schema: "skybridge.managed_dev_e2e_handoff.v1",
+      generated_at: "2026-06-29T00:00:00.000Z",
+      expected_commit: "961b492fabdcc7a737043e83d906d6c8d3f4bf38",
+      expected_cloud_image:
+        "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-961b492fabdcc7a737043e83d906d6c8d3f4bf38",
+      current_branch: "main",
+      git_clean: true,
+      git_aligned: true,
+      cloud_health: "ok",
+      cloud_version: "961b492fabdcc7a737043e83d906d6c8d3f4bf38",
+      cloud_parity: "ok",
+      capability_matrix: [
+        {
+          milestone: "M8",
+          name: "Campaign-Driven Managed Dev E2E",
+          status: "complete",
+          manual_script: "scripts/powershell/manual-managed-dev-campaign-test.ps1",
+          evidence_summary: "PR #279 merged after the human review gate.",
+        },
+      ],
+      required_docs_present: true,
+      required_scripts_present: true,
+      required_smokes_present: true,
+      open_pr_summary: [],
+      safety_flags: safety,
+      blockers: [],
+      warnings: [],
+    });
+
+    expect(handoff.schema).toBe("skybridge.managed_dev_e2e_handoff.v1");
+    expect(handoff.git_clean).toBe(true);
+    expect(handoff.capability_matrix).toHaveLength(1);
+    expect(handoff.auto_merge_enabled).toBe(false);
+    expect(handoff.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {
