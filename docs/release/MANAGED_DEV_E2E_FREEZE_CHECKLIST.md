@@ -27,6 +27,21 @@ service daemonization work.
 - [ ] Cloud parity is ok (`cloud parity ok`).
 - [ ] `token_printed=false`
 
+Post-freeze MG365 warning inventory:
+
+- [ ] Warning inventory doc exists:
+  `docs/dev/WARNING_INVENTORY.md`
+- [ ] Warning inventory audit script exists:
+  `scripts/powershell/skybridge-warning-inventory.ps1`
+- [ ] Warning inventory status smoke exists:
+  `smoke:warning-inventory-status`
+- [ ] Warning inventory no-mutation smoke exists:
+  `smoke:warning-inventory-no-mutation`
+- [ ] Vite chunk-size warnings are tracked, non-failing, and not suppressed.
+- [ ] GitHub Actions Node.js 20 deprecation annotations are tracked,
+  non-failing, and not suppressed.
+- [ ] Warning remediation is deferred to explicit future goals.
+
 Read-only verification:
 
 ```powershell
@@ -42,6 +57,9 @@ Freeze boundary:
 - [ ] No production infrastructure mutation.
 - [ ] No Codex, MATLAB, Hermes, or MCP execution.
 - [ ] No task creation or claim.
+- [ ] No warning suppression.
+- [ ] No CI threshold change.
+- [ ] No build or workflow behavior change for warning remediation.
 - [ ] No raw prompt/log/stdout/stderr/env/token dump.
 
 `token_printed=false`
