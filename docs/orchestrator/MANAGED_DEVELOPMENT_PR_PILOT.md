@@ -21,6 +21,8 @@ MG351 defines provider ownership and keeps direct local runners separate from op
 
 MG357 uses those gates for a managed development branch and PR workflow. It does not execute unreviewed generated goals, does not start a worker loop, and does not change deployment infrastructure.
 
+MG359A proved the real draft PR path with a bounded manual Git/GH fallback after the controller reported `git_unavailable`. MG360 repairs the controller-native Git/GH provider path so the managed-dev controller itself can create the branch, commit the allowlisted docs change, push, create the draft PR, and observe CI.
+
 ## Controller
 
 Script:
@@ -83,6 +85,20 @@ Local mode is optional and guarded. Before local apply, the controller checks:
 
 Before draft PR creation, the controller checks the draft PR confirmation and creates a draft PR only. It does not mark the PR ready, merge it, create tags, upload assets, or request deployment mutation.
 
+MG360 adds explicit Git/GH provider reporting:
+
+- `git_available`
+- `gh_available`
+- `git_detection_method`
+- `gh_detection_method`
+- `git_blocker`
+- `gh_blocker`
+- `controller_native_git_used`
+- `controller_native_gh_used`
+- `manual_fallback_used=false`
+
+Provider detection uses bounded PowerShell command resolution and reports only sanitized status fields. It does not dump `PATH`, environment variables, credentials, raw process output, or auth headers. The controller distinguishes Git/GH availability from repository blockers such as dirty working tree, wrong branch, unavailable remote, existing pilot branch, failed push, and PR creation failure.
+
 ## Allowed Paths
 
 Default allowed paths:
@@ -111,6 +127,19 @@ corepack pnpm smoke:managed-dev-pilot-forbidden-paths
 corepack pnpm smoke:managed-dev-pilot-no-real-pr-fixture
 corepack pnpm smoke:managed-dev-pilot-no-auto-merge
 corepack pnpm smoke:manual-managed-dev-pilot-fixture
+```
+
+MG360 repair smokes:
+
+```powershell
+corepack pnpm smoke:managed-dev-git-provider-detect
+corepack pnpm smoke:managed-dev-gh-provider-detect
+corepack pnpm smoke:managed-dev-controller-native-preview
+corepack pnpm smoke:managed-dev-controller-native-apply-fixture
+corepack pnpm smoke:managed-dev-controller-native-pr-fixture
+corepack pnpm smoke:managed-dev-controller-native-no-fallback
+corepack pnpm smoke:managed-dev-controller-native-blocker-classification
+corepack pnpm smoke:manual-managed-dev-controller-native-fixture
 ```
 
 The full local gate still runs Bootstrap Alpha acceptance, RC handoff/gate smokes, operator report, review gate, self-bootstrap convergence, PowerShell validation, `corepack pnpm check`, and `just check`.

@@ -167,6 +167,8 @@ For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For the first managed development branch, draft PR and human review hold pilot,
 see [docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md](docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md).
+For the controller-native Git/GH repair note, see
+[docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md](docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md).
 For local worker identity activation and live heartbeat-only pairing, use the
 same Windows worker install runbook.
 For the first one-task live safe worker pilot, see
@@ -568,6 +570,9 @@ generate one proposed goal, or hold.
 MG357 adds a managed development PR pilot that previews, applies at most one
 allowed docs/smoke repository change, creates only a draft PR when separately
 confirmed, observes CI and holds for human review.
+MG360 repairs the controller-native Git/GH provider path so the managed-dev
+controller reports Git/GH availability, applies the allowlisted docs change,
+creates a draft PR and observes CI without manual fallback.
 
 ## Roadmap
 

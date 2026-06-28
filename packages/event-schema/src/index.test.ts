@@ -1543,6 +1543,23 @@ describe("event schema", () => {
       pr_ci_observed: false,
       pr_ci_status: "simulated_skipped",
       held_for_human_review: true,
+      git_available: true,
+      gh_available: true,
+      git_detection_method: "fixture",
+      gh_detection_method: "fixture",
+      git_path_safe: "git",
+      gh_path_safe: "gh",
+      git_blocker: "",
+      gh_blocker: "",
+      provider_inventory_checked: false,
+      controller_native_git_used: true,
+      controller_native_gh_used: false,
+      manual_fallback_used: false,
+      pilot_branch_pushed: false,
+      draft_pr_created_by_controller: false,
+      draft_pr_number: 0,
+      draft_pr_url_safe: "",
+      ci_observed_by_controller: false,
       blockers: [],
       warnings: ["fixture_mode_no_real_branch_or_pr"],
       safety_flags: safety,
@@ -1561,6 +1578,19 @@ describe("event schema", () => {
         pr_url_safe: "",
         ci_status: "simulated_skipped",
         held_for_human_review: true,
+        git_available: true,
+        gh_available: true,
+        git_detection_method: "fixture",
+        gh_detection_method: "fixture",
+        git_blocker: "",
+        gh_blocker: "",
+        provider_inventory_checked: false,
+        controller_native_git_used: true,
+        controller_native_gh_used: false,
+        manual_fallback_used: false,
+        pilot_branch_pushed: false,
+        draft_pr_created_by_controller: false,
+        ci_observed_by_controller: false,
         auto_merge_enabled: false,
         merge_performed: false,
         release_created: false,
@@ -1580,6 +1610,9 @@ describe("event schema", () => {
     expect(pilot.auto_merge_enabled).toBe(false);
     expect(pilot.merge_performed).toBe(false);
     expect(pilot.release_created).toBe(false);
+    expect(pilot.git_available).toBe(true);
+    expect(pilot.gh_available).toBe(true);
+    expect(pilot.manual_fallback_used).toBe(false);
     expect(pilot.token_printed).toBe(false);
   });
 

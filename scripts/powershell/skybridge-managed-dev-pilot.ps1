@@ -12,13 +12,17 @@ param(
   [string]$BaseBranch = "main",
   [string]$PrTitle = "MG357 Managed Development PR Pilot",
   [string]$PrBodyPath = "",
-  [ValidateSet("docs-note-and-smoke-fixture", "docs-note-local", "forbidden-path-fixture", "too-many-files-fixture")]
+  [ValidateSet("docs-note-and-smoke-fixture", "docs-note-local", "mg360-controller-native-doc", "forbidden-path-fixture", "too-many-files-fixture")]
   [string]$ChangeKind = "docs-note-and-smoke-fixture",
   [switch]$Fixture,
   [switch]$Local,
   [string]$Confirm = "",
   [switch]$NoPR,
   [switch]$ObserveCI,
+  [switch]$FixtureGitMissing,
+  [switch]$FixtureGhMissing,
+  [switch]$FixtureRepoNotClean,
+  [switch]$FixtureBranchExists,
   [int]$MaxChangedFiles = 5,
   [string[]]$AllowedPaths = @(
     "docs/orchestrator/",
@@ -57,6 +61,15 @@ if ($Local) {
   $Mode = "fixture"
 }
 
+if ($BranchName -eq "codex/mg360-controller-native-managed-dev-pilot-pr") {
+  if ($ChangeKind -eq "docs-note-local") {
+    $ChangeKind = "mg360-controller-native-doc"
+  }
+  if ($PrTitle -eq "MG357 Managed Development PR Pilot") {
+    $PrTitle = "MG360 Controller-Native Managed Dev Pilot PR"
+  }
+}
+
 function Add-Finding([ref]$List, [string]$Value) {
   if ([string]::IsNullOrWhiteSpace($Value)) { return }
   if (-not ($List.Value -contains $Value)) {
@@ -86,6 +99,13 @@ function Convert-ToSafePath([string]$Path) {
   $value
 }
 
+function Convert-CommandPathSafe([string]$Path) {
+  if ([string]::IsNullOrWhiteSpace($Path)) { return "" }
+  $leaf = Split-Path -Leaf $Path
+  if ([string]::IsNullOrWhiteSpace($leaf)) { return "%PATH%/tool" }
+  "%PATH%/$leaf"
+}
+
 function Resolve-OutputRoot {
   $fullTarget = Resolve-RepoPath $OutputDir
   $agentRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/managed-dev-pilot"))
@@ -97,7 +117,8 @@ function Resolve-OutputRoot {
 
 function Test-ConfirmContains([string]$Text, [string]$Needle) {
   if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-  $Text -split "[;|,\s]+" | Where-Object { $_ -eq $Needle } | Select-Object -First 1 | ForEach-Object { $true }
+  $match = $Text -split "[;|,\s]+" | Where-Object { $_ -eq $Needle } | Select-Object -First 1
+  return ($null -ne $match)
 }
 
 function New-SafetyFlags {
@@ -122,6 +143,37 @@ function New-SafetyFlags {
   }
 }
 
+function Get-ToolStatus([string]$Name, [switch]$ForceMissing) {
+  if ($ForceMissing) {
+    return [pscustomobject]@{
+      available = $false
+      detection_method = "fixture_missing"
+      path_safe = ""
+      version_summary_safe = ""
+      blocker = "${Name}_unavailable"
+    }
+  }
+
+  $command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($null -eq $command) {
+    return [pscustomobject]@{
+      available = $false
+      detection_method = "Get-Command"
+      path_safe = ""
+      version_summary_safe = ""
+      blocker = "${Name}_unavailable"
+    }
+  }
+
+  [pscustomobject]@{
+    available = $true
+    detection_method = "Get-Command"
+    path_safe = Convert-CommandPathSafe ([string]$command.Source)
+    version_summary_safe = "detected"
+    blocker = ""
+  }
+}
+
 function Get-PlannedChangedFiles {
   switch ($ChangeKind) {
     "forbidden-path-fixture" {
@@ -139,6 +191,9 @@ function Get-PlannedChangedFiles {
     }
     "docs-note-local" {
       return @("docs/dev/MANAGED_DEV_PILOT_LOCAL_NOTE.md")
+    }
+    "mg360-controller-native-doc" {
+      return @("docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md")
     }
     default {
       return @(
@@ -177,8 +232,26 @@ function Test-ForbiddenChangedFile([string]$Path) {
   return $false
 }
 
-function Invoke-GitSafe([string[]]$Args) {
-  $output = & git @Args 2>&1
+function Invoke-GitSafe {
+  param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$GitArgs
+  )
+
+  $output = & git @GitArgs 2>&1
+  [pscustomobject]@{
+    exit_code = $LASTEXITCODE
+    text = (($output | Out-String).Trim())
+  }
+}
+
+function Invoke-GhSafe {
+  param(
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$GhArgs
+  )
+
+  $output = & gh @GhArgs 2>&1
   [pscustomobject]@{
     exit_code = $LASTEXITCODE
     text = (($output | Out-String).Trim())
@@ -201,6 +274,85 @@ function Get-GitStatusSafe {
       branch = ""
     }
   }
+}
+
+function Test-BranchExistsSafe([string]$Name) {
+  if ($FixtureBranchExists) {
+    return [pscustomobject]@{ exists = $true; local_exists = $true; remote_exists = $false }
+  }
+  $local = Invoke-GitSafe @("rev-parse", "--verify", "refs/heads/$Name")
+  $remote = Invoke-GitSafe @("ls-remote", "--heads", "origin", $Name)
+  [pscustomobject]@{
+    exists = ($local.exit_code -eq 0 -or -not [string]::IsNullOrWhiteSpace($remote.text))
+    local_exists = ($local.exit_code -eq 0)
+    remote_exists = (-not [string]::IsNullOrWhiteSpace($remote.text))
+  }
+}
+
+function Test-MainAlignedSafe([string]$Base) {
+  $head = Invoke-GitSafe @("rev-parse", "HEAD")
+  $remote = Invoke-GitSafe @("rev-parse", "origin/$Base")
+  if ($head.exit_code -ne 0 -or $remote.exit_code -ne 0) {
+    return [pscustomobject]@{ ok = $false; blocker = "remote_unavailable" }
+  }
+  [pscustomobject]@{
+    ok = ($head.text -eq $remote.text)
+    blocker = if ($head.text -eq $remote.text) { "" } else { "main_not_aligned_with_origin_main" }
+  }
+}
+
+function Get-CommittedChangedFilesSafe([string]$Base) {
+  $diff = Invoke-GitSafe @("diff", "--name-only", "$Base...HEAD")
+  if ($diff.exit_code -ne 0) { return @() }
+  @($diff.text -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+
+function Test-GhAuthSafe {
+  $auth = Invoke-GhSafe @("auth", "status")
+  [pscustomobject]@{ ok = ($auth.exit_code -eq 0); blocker = if ($auth.exit_code -eq 0) { "" } else { "auth_unavailable" } }
+}
+
+function Write-LocalPilotArtifact {
+  $target = Resolve-RepoPath $plannedFiles[0]
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+  if ($ChangeKind -eq "mg360-controller-native-doc") {
+    @(
+      "# MG360 Controller-Native Managed Development Pilot",
+      "",
+      "This file was updated by the managed development controller-native local apply path.",
+      "",
+      "MG359A proved real managed-development PR creation using a bounded manual Git/GH fallback after the controller reported git_unavailable.",
+      "MG360 proves that the controller itself can create the branch, commit the docs-only change, open a draft PR, observe CI, and hold for human review.",
+      "",
+      "The pilot PR remains draft. Merge is a separate human decision.",
+      "",
+      "Safety remains unchanged:",
+      "",
+      "- no auto-merge",
+      "- no release, tag, or asset creation",
+      "- no deployment or production infrastructure mutation",
+      "- no worker loop or queue runner",
+      "- no Codex, MATLAB, Hermes, or MCP execution",
+      "- token_printed=false"
+    ) | Set-Content -LiteralPath $target -Encoding UTF8
+    return
+  }
+
+  @(
+    "# Managed Development Pilot Local Note",
+    "",
+    "This repository-local note was created by the managed development pilot local lane.",
+    "It is a docs-only change for human review and must not enable auto-merge, release creation, task execution, or worker loops.",
+    "",
+    "token_printed=false"
+  ) | Set-Content -LiteralPath $target -Encoding UTF8
+}
+
+function Get-CommitMessage {
+  if ($ChangeKind -eq "mg360-controller-native-doc") {
+    return "Add MG360 controller-native managed dev pilot note"
+  }
+  "Add managed dev pilot local note"
 }
 
 function Write-Reports($Result) {
@@ -239,6 +391,8 @@ function Write-Reports($Result) {
 $warnings = @()
 $blockers = @()
 $safety = New-SafetyFlags
+$gitProvider = Get-ToolStatus "git" -ForceMissing:$FixtureGitMissing
+$ghProvider = Get-ToolStatus "gh" -ForceMissing:$FixtureGhMissing
 $plannedFiles = @(Get-PlannedChangedFiles)
 $previewOnly = ($Command -in @("status", "preview", "create-pr-preview", "ci-status", "report", "safe-summary"))
 $applyConfirmed = (Test-ConfirmContains $Confirm $ApplyConfirm)
@@ -290,6 +444,8 @@ if ($Command -eq "apply-fixture") {
     $filesChanged = $changedFiles.Count
     $localValidationsRun = $true
     $localValidationsPassed = $true
+    $gitProvider = [pscustomobject]@{ available = $true; detection_method = "fixture"; path_safe = "%PATH%/git"; version_summary_safe = "fixture"; blocker = "" }
+    $ghProvider = [pscustomobject]@{ available = $true; detection_method = "fixture"; path_safe = "%PATH%/gh"; version_summary_safe = "fixture"; blocker = "" }
     Add-Finding ([ref]$warnings) "fixture_mode_no_real_branch_or_pr"
   }
 }
@@ -298,20 +454,38 @@ if ($Command -eq "apply-local") {
   if (-not $applyConfirmed) {
     Add-Finding ([ref]$blockers) "missing_apply_confirmation"
   }
-  $git = Get-GitStatusSafe
-  if (-not $git.available) {
+  if (-not $gitProvider.available) {
     Add-Finding ([ref]$blockers) "git_unavailable"
   } else {
+    $git = Get-GitStatusSafe
+    if ($FixtureRepoNotClean) {
+      $git = [pscustomobject]@{ available = $true; status_short = @("M docs/dev/fixture.md"); branch = $BaseBranch }
+    }
+    if (-not $git.available) {
+      Add-Finding ([ref]$blockers) "git_status_unavailable"
+    } else {
     if ($git.branch -ne $BaseBranch) {
-      Add-Finding ([ref]$blockers) "local_apply_requires_base_branch"
+        Add-Finding ([ref]$blockers) "not_on_main"
     }
     if (@($git.status_short).Count -gt 0) {
-      Add-Finding ([ref]$blockers) "working_tree_not_clean"
+        Add-Finding ([ref]$blockers) "repo_not_clean"
+      }
+    }
+    if ($blockers.Count -eq 0) {
+      $aligned = Test-MainAlignedSafe $BaseBranch
+      if (-not $aligned.ok) {
+        Add-Finding ([ref]$blockers) $aligned.blocker
+      }
     }
   }
-  $existing = Invoke-GitSafe @("rev-parse", "--verify", $BranchName)
-  if ($existing.exit_code -eq 0) {
-    Add-Finding ([ref]$blockers) "branch_already_exists"
+  if ($FixtureBranchExists) {
+    Add-Finding ([ref]$blockers) "branch_exists"
+  }
+  if ($blockers.Count -eq 0) {
+    $existing = Test-BranchExistsSafe $BranchName
+    if ($existing.exists) {
+      Add-Finding ([ref]$blockers) "branch_exists"
+    }
   }
   if ($blockers.Count -eq 0) {
     $checkout = Invoke-GitSafe @("checkout", "-b", $BranchName, $BaseBranch)
@@ -319,15 +493,7 @@ if ($Command -eq "apply-local") {
       Add-Finding ([ref]$blockers) "branch_create_failed"
     } else {
       $branchCreated = $true
-      $localNote = Join-Path $RepoRoot "docs/dev/MANAGED_DEV_PILOT_LOCAL_NOTE.md"
-      @(
-        "# Managed Development Pilot Local Note",
-        "",
-        "This repository-local note was created by the MG357 managed development pilot local lane.",
-        "It is a docs-only change for human review and must not enable auto-merge, release creation, task execution, or worker loops.",
-        "",
-        "token_printed=false"
-      ) | Set-Content -LiteralPath $localNote -Encoding UTF8
+      Write-LocalPilotArtifact
       $changedFiles = $plannedFiles
       $filesChanged = $changedFiles.Count
       $localValidationsRun = $true
@@ -337,6 +503,20 @@ if ($Command -eq "apply-local") {
       } else {
         $localValidationsPassed = $false
         Add-Finding ([ref]$blockers) "local_validation_failed"
+      }
+      if ($blockers.Count -eq 0) {
+        $add = Invoke-GitSafe @("add", "--", $plannedFiles)
+        if ($add.exit_code -ne 0) {
+          Add-Finding ([ref]$blockers) "git_add_failed"
+        } else {
+          $commit = Invoke-GitSafe @("commit", "-m", (Get-CommitMessage))
+          if ($commit.exit_code -ne 0) {
+            Add-Finding ([ref]$blockers) "git_commit_failed"
+          } else {
+            $changedFiles = @(Get-CommittedChangedFilesSafe $BaseBranch)
+            $filesChanged = $changedFiles.Count
+          }
+        }
       }
     }
   }
@@ -359,11 +539,42 @@ if ($Command -eq "create-draft-pr") {
     Add-Finding ([ref]$blockers) "no_pr_requested"
   }
   if ($blockers.Count -eq 0) {
+    if (-not $gitProvider.available) {
+      Add-Finding ([ref]$blockers) "git_unavailable"
+    }
+    if (-not $ghProvider.available) {
+      Add-Finding ([ref]$blockers) "gh_unavailable"
+    }
+  }
+  if ($blockers.Count -eq 0) {
+    $auth = Test-GhAuthSafe
+    if (-not $auth.ok) {
+      Add-Finding ([ref]$blockers) $auth.blocker
+    }
+  }
+  if ($blockers.Count -eq 0) {
     $git = Get-GitStatusSafe
     if (-not $git.available) {
-      Add-Finding ([ref]$blockers) "git_unavailable"
+      Add-Finding ([ref]$blockers) "git_status_unavailable"
     } elseif ($git.branch -ne $BranchName) {
       Add-Finding ([ref]$blockers) "draft_pr_requires_pilot_branch"
+    }
+    if (@($git.status_short).Count -gt 0) {
+      Add-Finding ([ref]$blockers) "repo_not_clean"
+    }
+  }
+  if ($blockers.Count -eq 0) {
+    $changedFiles = @(Get-CommittedChangedFilesSafe $BaseBranch)
+    $filesChanged = $changedFiles.Count
+    if ($filesChanged -lt 1) {
+      Add-Finding ([ref]$blockers) "no_committed_changed_files"
+    }
+    if ($filesChanged -gt $MaxChangedFiles) {
+      Add-Finding ([ref]$blockers) "committed_changed_files_exceed_max"
+    }
+    foreach ($file in $changedFiles) {
+      if (Test-ForbiddenChangedFile $file) { Add-Finding ([ref]$blockers) "forbidden_changed_file_path" }
+      if (-not (Test-AllowedChangedFile $file $AllowedPaths)) { Add-Finding ([ref]$blockers) "changed_file_outside_allowed_paths" }
     }
   }
   if ($blockers.Count -eq 0) {
@@ -379,7 +590,8 @@ if ($Command -eq "create-draft-pr") {
       New-Item -ItemType Directory -Force -Path (Split-Path -Parent $bodyPath) | Out-Null
       @(
         "## Summary",
-        "- MG357 managed development pilot docs-only change.",
+        "- Managed development pilot docs-only change.",
+        "- Controller-native Git/GH path used for branch, push, and draft PR creation.",
         "",
         "## Validations",
         "- local validation must pass before review.",
@@ -411,6 +623,10 @@ if ($Command -eq "create-draft-pr") {
 }
 
 if ($Command -eq "ci-status" -and -not $Fixture) {
+  if (-not $ghProvider.available) {
+    Add-Finding ([ref]$warnings) "gh_unavailable"
+    $ciStatus = "unknown"
+  } else {
   $viewRaw = & gh pr view $BranchName --json number,url,statusCheckRollup 2>$null
   if ($LASTEXITCODE -eq 0) {
     $view = (($viewRaw | Out-String).Trim() | ConvertFrom-Json)
@@ -429,6 +645,7 @@ if ($Command -eq "ci-status" -and -not $Fixture) {
   } else {
     $ciStatus = "unknown"
     Add-Finding ([ref]$warnings) "pr_not_found_for_ci_status"
+  }
   }
 }
 
@@ -462,6 +679,19 @@ $evidence = [pscustomobject]@{
   pr_url_safe = $prUrl
   ci_status = $ciStatus
   held_for_human_review = $heldForHumanReview
+  git_available = [bool]$gitProvider.available
+  gh_available = [bool]$ghProvider.available
+  git_detection_method = [string]$gitProvider.detection_method
+  gh_detection_method = [string]$ghProvider.detection_method
+  git_blocker = [string]$gitProvider.blocker
+  gh_blocker = [string]$ghProvider.blocker
+  provider_inventory_checked = $false
+  controller_native_git_used = ($Command -in @("apply-local", "create-draft-pr"))
+  controller_native_gh_used = ($Command -in @("create-draft-pr", "ci-status"))
+  manual_fallback_used = $false
+  pilot_branch_pushed = ($Command -eq "create-draft-pr" -and $blockers.Count -eq 0)
+  draft_pr_created_by_controller = $draftPrCreated
+  ci_observed_by_controller = $ciObserved
   auto_merge_enabled = $false
   merge_performed = $false
   release_created = $false
@@ -486,6 +716,23 @@ $result = [pscustomobject]@{
   selected_change_kind = $ChangeKind
   allowed_paths = @($AllowedPaths)
   max_changed_files = $MaxChangedFiles
+  git_available = [bool]$gitProvider.available
+  gh_available = [bool]$ghProvider.available
+  git_detection_method = [string]$gitProvider.detection_method
+  gh_detection_method = [string]$ghProvider.detection_method
+  git_path_safe = [string]$gitProvider.path_safe
+  gh_path_safe = [string]$ghProvider.path_safe
+  git_blocker = [string]$gitProvider.blocker
+  gh_blocker = [string]$ghProvider.blocker
+  provider_inventory_checked = $false
+  controller_native_git_used = ($Command -in @("apply-local", "create-draft-pr"))
+  controller_native_gh_used = ($Command -in @("create-draft-pr", "ci-status"))
+  manual_fallback_used = $false
+  pilot_branch_pushed = ($Command -eq "create-draft-pr" -and $blockers.Count -eq 0)
+  draft_pr_created_by_controller = $draftPrCreated
+  draft_pr_number = $prNumber
+  draft_pr_url_safe = $prUrl
+  ci_observed_by_controller = $ciObserved
   preview_only = $previewOnly
   apply_confirmed = $applyConfirmed
   branch_created = $branchCreated
