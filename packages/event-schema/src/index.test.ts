@@ -48,6 +48,8 @@ import {
   MatlabSweepEvidenceSchema,
   MatlabSweepManifestSchema,
   MatlabSweepSummarySchema,
+  GeneratedGoalMetadataSchema,
+  LocalGoalGeneratorSchema,
   MultiGoalLoopSchema,
   TemplateRunnerEvidenceSchema,
   TaskDraftPreviewSchema,
@@ -1207,6 +1209,99 @@ describe("event schema", () => {
     expect(loop.mcp_run_called).toBe(false);
     expect(loop.worker_loop_started).toBe(false);
     expect(loop.token_printed).toBe(false);
+  });
+
+  it("models local goal generator metadata and sanitized evidence", () => {
+    const safety = {
+      import_performed: false,
+      approval_performed: false,
+      append_performed: false,
+      task_created: false,
+      task_claimed: false,
+      execution_started: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      raw_stdout_persisted: false,
+      raw_stderr_persisted: false,
+      token_printed: false,
+    };
+    const metadata = GeneratedGoalMetadataSchema.parse({
+      schema: "skybridge.generated_goal_metadata.v1",
+      goal_id: "generated-docs-validation-goal-354-fixture",
+      title: "Generated Docs Validation Goal 354 Fixture",
+      order: 1,
+      risk: "low",
+      task_type: "docs-validation",
+      allowed_task_types: ["docs-validation", "local-smoke"],
+      blocked_task_types: ["task-execution", "worker-loop"],
+      requires: ["human review"],
+      expected_outputs: ["one markdown goal proposal"],
+      advance_gate: {
+        human_review_required: true,
+        import_allowed: false,
+        execution_allowed: false,
+      },
+      generated_by: "skybridge-local-goal-generator",
+      generation_provider: "fixture",
+      source_campaign_id: "local-goal-generator-fixture-354",
+      source_project_id: "skybridge-agent-hub",
+      goal_budget_remaining: 1,
+      human_review_required: true,
+      import_allowed: false,
+      execution_allowed: false,
+      token_printed: false,
+    });
+    const generator = LocalGoalGeneratorSchema.parse({
+      schema: "skybridge.local_goal_generator.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "local-goal-generator-fixture-354",
+      goal_budget_remaining: 1,
+      provider_inventory_checked: true,
+      direct_provider_available: true,
+      codex_detected: false,
+      codex_generation_requested: false,
+      codex_generation_called: false,
+      codex_generation_succeeded: false,
+      generated_goal_id: metadata.goal_id,
+      generated_goal_title: metadata.title,
+      generated_goal_path_safe: ".agent/tmp/generated-goals/fixture/generated-goal-354-fixture.md",
+      generated_goal_hash: "0".repeat(64),
+      generated_goal_schema_valid: true,
+      generated_goal_safety_valid: true,
+      proposed_goal_written: true,
+      blockers: [],
+      warnings: ["fixture_mode_no_codex_invocation"],
+      safety_flags: safety,
+      evidence: {
+        schema: "skybridge.local_goal_generator_evidence.v1",
+        generated_at: "2026-06-28T00:00:00.000Z",
+        provider_inventory_checked: true,
+        direct_provider_available: true,
+        codex_detected: false,
+        codex_generation_called: false,
+        generated_goal_path_safe: ".agent/tmp/generated-goals/fixture/generated-goal-354-fixture.md",
+        generated_goal_hash: "0".repeat(64),
+        generated_goal_valid: true,
+        ...safety,
+      },
+      ...safety,
+    });
+
+    expect(metadata.human_review_required).toBe(true);
+    expect(metadata.import_allowed).toBe(false);
+    expect(metadata.execution_allowed).toBe(false);
+    expect(generator.schema).toBe("skybridge.local_goal_generator.v1");
+    expect(generator.evidence.raw_prompt_persisted).toBe(false);
+    expect(generator.task_created).toBe(false);
+    expect(generator.worker_loop_started).toBe(false);
+    expect(generator.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

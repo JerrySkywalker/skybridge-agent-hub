@@ -216,3 +216,8 @@ safe-local-smoke, fixed MATLAB parameter sweep and fixed Codex analysis report.
 It preserves the same one-step-at-a-time apply gate and remains separate from
 goal generation, goal append/import and worker-loop execution. See
 [MULTI_STEP_STATIC_GOAL_LOOP.md](MULTI_STEP_STATIC_GOAL_LOOP.md).
+
+MG354 keeps goal generation on the other side of that boundary. The local Codex
+goal generator can draft one markdown candidate for human review, but it cannot
+import, append, approve or execute that candidate. See
+[LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
