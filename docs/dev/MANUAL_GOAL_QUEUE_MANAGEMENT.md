@@ -18,6 +18,11 @@ It does not write to `goals/proposed`, import, approve, append, create tasks,
 claim tasks or execute generated content. Direct `goals/proposed` staging is
 left to the MG355 review/import milestone.
 
+MG362 adds the M8 campaign-driven managed-dev manual check. The manual script
+proves one reviewed development goal can become one campaign step, one bounded
+managed-dev action and one draft PR hold. It does not auto-merge, start a
+worker loop, create releases, or run Codex, MATLAB, Hermes or MCP.
+
 ## Author A Goal Pack
 
 A goal pack is a directory with `campaign.skybridge.json` and one markdown file per goal. Use the templates in `goals/templates/`:

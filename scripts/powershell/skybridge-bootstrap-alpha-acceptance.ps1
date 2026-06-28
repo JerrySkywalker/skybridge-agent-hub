@@ -41,6 +41,8 @@ $requiredDocs = @(
   "docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md",
   "docs/orchestrator/BOUNDED_GOAL_BUDGET_LOOP.md",
   "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md",
+  "docs/orchestrator/MANAGED_DEV_CAMPAIGN_E2E.md",
+  "docs/orchestrator/CAMPAIGN_DRIVEN_MANAGED_DEV_MG362.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -172,6 +174,14 @@ $requiredScripts = @{
   managed_dev_controller_native_blocker_classification_smoke = "scripts/powershell/smoke-managed-dev-controller-native-blocker-classification.ps1"
   manual_managed_dev_controller_native_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-controller-native-fixture.ps1"
   managed_dev_controller_native_mg360_doc = "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md"
+  managed_dev_campaign = "scripts/powershell/skybridge-managed-dev-campaign.ps1"
+  manual_managed_dev_campaign_test = "scripts/powershell/manual-managed-dev-campaign-test.ps1"
+  managed_dev_campaign_status_smoke = "scripts/powershell/smoke-managed-dev-campaign-status.ps1"
+  managed_dev_campaign_preview_smoke = "scripts/powershell/smoke-managed-dev-campaign-preview.ps1"
+  managed_dev_campaign_fixture_smoke = "scripts/powershell/smoke-managed-dev-campaign-fixture-e2e.ps1"
+  managed_dev_campaign_no_auto_merge_smoke = "scripts/powershell/smoke-managed-dev-campaign-no-auto-merge.ps1"
+  managed_dev_campaign_no_real_pr_smoke = "scripts/powershell/smoke-managed-dev-campaign-no-real-pr-fixture.ps1"
+  manual_managed_dev_campaign_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-campaign-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -412,7 +422,12 @@ $requiredPackageScripts = @(
   "smoke:managed-dev-pilot-forbidden-paths",
   "smoke:managed-dev-pilot-no-real-pr-fixture",
   "smoke:managed-dev-pilot-no-auto-merge",
-  "smoke:manual-managed-dev-pilot-fixture"
+  "smoke:manual-managed-dev-pilot-fixture",
+  "smoke:managed-dev-campaign-status",
+  "smoke:managed-dev-campaign-preview",
+  "smoke:managed-dev-campaign-fixture-e2e",
+  "smoke:managed-dev-campaign-no-auto-merge",
+  "smoke:manual-managed-dev-campaign-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

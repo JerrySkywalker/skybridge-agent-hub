@@ -573,6 +573,9 @@ confirmed, observes CI and holds for human review.
 MG360 repairs the controller-native Git/GH provider path so the managed-dev
 controller reports Git/GH availability, applies the allowlisted docs change,
 creates a draft PR and observes CI without manual fallback.
+MG362 composes reviewed goal append, the bounded loop and the repaired
+managed-dev controller into the first campaign-driven managed development E2E
+flow. It creates at most one draft PR and holds for human review.
 
 ## Roadmap
 
