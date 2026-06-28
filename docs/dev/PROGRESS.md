@@ -1,5 +1,21 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 365 Managed Dev v2 Real Low-Risk Task Pilot
+
+- Added a read-only warning inventory for known non-failing warning classes:
+  Vite chunk-size warnings and GitHub Actions Node.js 20 deprecation
+  annotations for Docker actions.
+- Added `docs/dev/WARNING_INVENTORY.md` and
+  `scripts/powershell/skybridge-warning-inventory.ps1`.
+- Added warning inventory smokes for status, audit, doc presence and
+  no-mutation behavior, and wired Bootstrap Alpha acceptance to require them.
+- Kept this task inventory-only: no warning suppression, no CI threshold
+  changes, no workflow changes, no build configuration changes, no deploy
+  configuration changes and no remediation until a future explicit goal.
+- Kept auto-merge, release creation, tag creation, asset upload, production
+  infrastructure mutation, worker loops, queue runners, task creation, task
+  claim, Codex/MATLAB/Hermes/MCP calls and token printing disabled.
+
 ## 2026-06-29 Mega Goal 364 Managed Dev E2E Handoff and Capability Freeze
 
 - Added the canonical Managed Dev E2E handoff and freeze checklist under

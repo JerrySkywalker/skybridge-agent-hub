@@ -26,6 +26,20 @@ the close of MG363.
 | M7 | Managed Development PR Pilot | Complete. Controller-native Git/GH path repaired; draft PR creation, CI observation, and human-review gate proven. | `scripts/powershell/manual-managed-dev-pr-pilot.ps1` |
 | M8 | Campaign-Driven Managed Dev E2E | Complete. Reviewed goal to campaign step to bounded action to draft PR to CI to human review and merge gate passed. | `scripts/powershell/manual-managed-dev-campaign-test.ps1` |
 
+## Post-Freeze Real Task
+
+MG365 is the first managed-dev v2 real low-risk task after the M1-M8 freeze.
+It inventories warning hygiene only:
+
+- `docs/dev/WARNING_INVENTORY.md`
+- `scripts/powershell/skybridge-warning-inventory.ps1`
+
+The inventory tracks Vite chunk-size warnings and GitHub Actions Node.js 20
+deprecation annotations as non-failing, tracked, and not suppressed. It does
+not remediate either warning class, does not change build configuration, does
+not change GitHub workflows, and does not alter CI thresholds. Remediation
+requires a future explicit goal.
+
 ## PR Evidence
 
 - PR #267: Tool Provider Contract and Local Direct Provider Inventory
@@ -72,21 +86,24 @@ tasks, worker state, or provider state.
 
 ## Known Warnings
 
-- Existing Vite chunk-size warnings remain non-failing.
+- Existing Vite chunk-size warnings remain non-failing and tracked in
+  `docs/dev/WARNING_INVENTORY.md`.
 - GitHub Actions may emit non-blocking Node.js 20 deprecation annotations for
-  Docker actions.
+  Docker actions; these are tracked in `docs/dev/WARNING_INVENTORY.md`.
 - Cloud deploy workflow run selection hygiene may need a future cleanup if older
   failed workflow runs are still selected by legacy verification helpers.
 
 ## Recommended Next Milestones
 
-1. Hermes Planner Provider Pilot: add optional planner/provider integration
+1. MG366A Vite Chunk Warning Analysis: analyze chunk output and strategy
+   without silently suppressing warnings.
+2. MG366B GitHub Actions Node Runtime Hygiene: inventory Docker action runtime
+   upgrades before changing workflows.
+3. Hermes Planner Provider Pilot: add optional planner/provider integration
    without taking over SkyBridge state.
-2. MCP Tool Provider Stub: define disabled/future MCP provider shape without
+4. MCP Tool Provider Stub: define disabled/future MCP provider shape without
    connecting to live MCP servers.
-3. Managed Dev v2 Real Low-Risk Development Task: run a real but small
-   controller-managed development task through the reviewed PR gate.
-4. Worker Service Install/Daemonization: recover the Windows worker service
+5. Worker Service Install/Daemonization: recover the Windows worker service
    install/daemon path while keeping worker-loop start separately gated.
 
 `token_printed=false`

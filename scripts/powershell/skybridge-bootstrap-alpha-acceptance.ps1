@@ -45,6 +45,7 @@ $requiredDocs = @(
   "docs/orchestrator/CAMPAIGN_DRIVEN_MANAGED_DEV_MG362.md",
   "docs/release/MANAGED_DEV_E2E_HANDOFF.md",
   "docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md",
+  "docs/dev/WARNING_INVENTORY.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -191,6 +192,11 @@ $requiredScripts = @{
   managed_dev_e2e_required_artifacts_smoke = "scripts/powershell/smoke-managed-dev-e2e-required-artifacts.ps1"
   managed_dev_e2e_no_mutation_smoke = "scripts/powershell/smoke-managed-dev-e2e-no-mutation.ps1"
   manual_managed_dev_e2e_handoff_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-e2e-handoff-fixture.ps1"
+  warning_inventory = "scripts/powershell/skybridge-warning-inventory.ps1"
+  warning_inventory_status_smoke = "scripts/powershell/smoke-warning-inventory-status.ps1"
+  warning_inventory_audit_smoke = "scripts/powershell/smoke-warning-inventory-audit.ps1"
+  warning_inventory_no_mutation_smoke = "scripts/powershell/smoke-warning-inventory-no-mutation.ps1"
+  warning_inventory_doc_present_smoke = "scripts/powershell/smoke-warning-inventory-doc-present.ps1"
 }
 
 $componentPaths = @{
@@ -442,7 +448,11 @@ $requiredPackageScripts = @(
   "smoke:managed-dev-e2e-freeze-checklist",
   "smoke:managed-dev-e2e-required-artifacts",
   "smoke:managed-dev-e2e-no-mutation",
-  "smoke:manual-managed-dev-e2e-handoff-fixture"
+  "smoke:manual-managed-dev-e2e-handoff-fixture",
+  "smoke:warning-inventory-status",
+  "smoke:warning-inventory-audit",
+  "smoke:warning-inventory-no-mutation",
+  "smoke:warning-inventory-doc-present"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
