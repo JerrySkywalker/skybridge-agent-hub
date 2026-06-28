@@ -77,6 +77,10 @@ Hermes is optional. It may advise, plan, gate, notify or act as a future
 provider, but it is not the mandatory owner of all local tool execution and does
 not replace the SkyBridge state machine.
 
+MG366C narrows the first Hermes provider pilot to planner/advisory output only.
+Hermes candidates remain unapproved and unappended until a human review gate
+accepts them; they cannot create tasks or execute in the same invocation.
+
 MCP is future/disabled unless a later goal explicitly adds repo-local
 configuration and a separate execution gate.
 

@@ -1099,6 +1099,72 @@ export const ManagedDevE2EHandoffSchema =
     report_json_path: z.string().optional(),
     report_markdown_path: z.string().optional(),
   });
+export const HermesPlannerProviderModeSchema = z.enum([
+  "fixture",
+  "preview",
+  "live_status",
+  "live_plan",
+]);
+export const HermesPlannerProviderSafetyFlagsSchema = z.object({
+  candidate_approved: z.literal(false),
+  candidate_appended: z.literal(false),
+  task_created: z.literal(false),
+  task_claimed: z.literal(false),
+  execution_started: z.literal(false),
+  branch_created: z.literal(false),
+  pr_created: z.literal(false),
+  merge_performed: z.literal(false),
+  deploy_triggered: z.literal(false),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  raw_stdout_persisted: z.literal(false),
+  raw_stderr_persisted: z.literal(false),
+  secrets_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const HermesPlannerEvidenceSchema =
+  HermesPlannerProviderSafetyFlagsSchema.pick({
+    candidate_approved: true,
+    candidate_appended: true,
+    task_created: true,
+    execution_started: true,
+    token_printed: true,
+  }).extend({
+    schema: z.literal("skybridge.hermes_planner_evidence.v1"),
+    generated_at: z.string().datetime(),
+    objective_summary: z.string(),
+    candidate_goal_hash: z.string(),
+    candidate_goal_path_safe: z.string(),
+    provider_mode: HermesPlannerProviderModeSchema,
+    fixture_response_used: z.boolean(),
+    live_call_attempted: z.boolean(),
+    raw_logs_persisted: z.literal(false),
+  });
+export const HermesPlannerProviderSchema =
+  HermesPlannerProviderSafetyFlagsSchema.extend({
+    schema: z.literal("skybridge.hermes_planner_provider.v1"),
+    generated_at: z.string().datetime(),
+    mode: HermesPlannerProviderModeSchema,
+    provider_name: z.literal("hermes"),
+    provider_role: z.literal("planner"),
+    provider_available: z.boolean(),
+    provider_endpoint_configured: z.boolean(),
+    provider_auth_configured: z.boolean(),
+    objective_safe: z.boolean(),
+    request_preview_generated: z.boolean(),
+    live_call_attempted: z.boolean(),
+    live_call_succeeded: z.boolean(),
+    fixture_response_used: z.boolean(),
+    candidate_goal_generated: z.boolean(),
+    candidate_goal_path_safe: z.string(),
+    candidate_goal_hash: z.string(),
+    candidate_validated: z.boolean(),
+    evidence: HermesPlannerEvidenceSchema.optional(),
+    blockers: z.array(z.string()),
+    warnings: z.array(z.string()),
+    report_json_path: z.string().optional(),
+    report_markdown_path: z.string().optional(),
+  });
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -1160,6 +1226,10 @@ export type ManagedDevCampaign = z.infer<typeof ManagedDevCampaignSchema>;
 export type ManagedDevE2EHandoffCapability = z.infer<typeof ManagedDevE2EHandoffCapabilitySchema>;
 export type ManagedDevE2EHandoffSafetyFlags = z.infer<typeof ManagedDevE2EHandoffSafetyFlagsSchema>;
 export type ManagedDevE2EHandoff = z.infer<typeof ManagedDevE2EHandoffSchema>;
+export type HermesPlannerProviderMode = z.infer<typeof HermesPlannerProviderModeSchema>;
+export type HermesPlannerProviderSafetyFlags = z.infer<typeof HermesPlannerProviderSafetyFlagsSchema>;
+export type HermesPlannerEvidence = z.infer<typeof HermesPlannerEvidenceSchema>;
+export type HermesPlannerProvider = z.infer<typeof HermesPlannerProviderSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

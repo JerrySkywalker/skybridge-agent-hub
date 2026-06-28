@@ -48,6 +48,7 @@ $requiredDocs = @(
   "docs/dev/WARNING_INVENTORY.md",
   "docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md",
   "docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md",
+  "docs/orchestrator/HERMES_PLANNER_PROVIDER.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -211,6 +212,15 @@ $requiredScripts = @{
   vite_chunk_warning_analysis_no_suppression_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-no-suppression.ps1"
   vite_chunk_warning_analysis_no_threshold_change_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-no-threshold-change.ps1"
   vite_chunk_warning_analysis_doc_present_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-doc-present.ps1"
+  hermes_planner_provider = "scripts/powershell/skybridge-hermes-planner-provider.ps1"
+  manual_hermes_planner_provider_test = "scripts/powershell/manual-hermes-planner-provider-test.ps1"
+  hermes_planner_provider_status_smoke = "scripts/powershell/smoke-hermes-planner-provider-status.ps1"
+  hermes_planner_provider_preview_smoke = "scripts/powershell/smoke-hermes-planner-provider-preview.ps1"
+  hermes_planner_provider_fixture_smoke = "scripts/powershell/smoke-hermes-planner-provider-fixture-plan.ps1"
+  hermes_planner_provider_reject_live_no_confirm_smoke = "scripts/powershell/smoke-hermes-planner-provider-reject-live-no-confirm.ps1"
+  hermes_planner_provider_no_append_smoke = "scripts/powershell/smoke-hermes-planner-provider-no-append.ps1"
+  hermes_planner_provider_no_execution_smoke = "scripts/powershell/smoke-hermes-planner-provider-no-execution.ps1"
+  manual_hermes_planner_provider_fixture_smoke = "scripts/powershell/smoke-manual-hermes-planner-provider-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -476,7 +486,15 @@ $requiredPackageScripts = @(
   "smoke:vite-chunk-warning-analysis-report",
   "smoke:vite-chunk-warning-analysis-no-suppression",
   "smoke:vite-chunk-warning-analysis-no-threshold-change",
-  "smoke:vite-chunk-warning-analysis-doc-present"
+  "smoke:vite-chunk-warning-analysis-doc-present",
+  "smoke:hermes-planner-provider-status",
+  "smoke:hermes-planner-provider-preview",
+  "smoke:hermes-planner-provider-fixture-plan",
+  "smoke:hermes-planner-provider-validate-candidate",
+  "smoke:hermes-planner-provider-reject-live-no-confirm",
+  "smoke:hermes-planner-provider-no-append",
+  "smoke:hermes-planner-provider-no-execution",
+  "smoke:manual-hermes-planner-provider-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

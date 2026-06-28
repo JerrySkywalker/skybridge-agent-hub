@@ -104,3 +104,9 @@ Hermes reports should state the endpoint used, model name, runtime mode, planner
 MG357 intentionally defers Hermes planner/provider work. The managed development
 PR pilot uses fixed repository and GitHub gates and does not ask Hermes to plan,
 approve, create a PR, merge, deploy or execute tools.
+
+MG366C adds a separate Hermes Planner Provider Pilot. That provider surface is
+advisory-only: it can preview or fixture-generate an unapproved candidate goal
+markdown file, but it cannot approve, append, create tasks, claim tasks,
+execute, create branches or PRs, merge, deploy, run a worker loop or mutate
+`project_control`. See `docs/orchestrator/HERMES_PLANNER_PROVIDER.md`.
