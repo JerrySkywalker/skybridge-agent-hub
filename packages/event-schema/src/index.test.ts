@@ -51,6 +51,7 @@ import {
   BoundedGoalLoopSchema,
   GeneratedGoalMetadataSchema,
   GoalAppendReviewSchema,
+  HermesPlannerProviderSchema,
   LocalGoalGeneratorSchema,
   ManagedDevE2EHandoffSchema,
   ManagedDevPilotSchema,
@@ -1670,6 +1671,78 @@ describe("event schema", () => {
     expect(handoff.capability_matrix).toHaveLength(1);
     expect(handoff.auto_merge_enabled).toBe(false);
     expect(handoff.token_printed).toBe(false);
+  });
+
+  it("models Hermes planner provider reports as advisory and non-executing", () => {
+    const safety = {
+      candidate_approved: false,
+      candidate_appended: false,
+      task_created: false,
+      task_claimed: false,
+      execution_started: false,
+      branch_created: false,
+      pr_created: false,
+      merge_performed: false,
+      deploy_triggered: false,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      raw_stdout_persisted: false,
+      raw_stderr_persisted: false,
+      secrets_persisted: false,
+      token_printed: false,
+    };
+    const report = HermesPlannerProviderSchema.parse({
+      ...safety,
+      schema: "skybridge.hermes_planner_provider.v1",
+      generated_at: "2026-06-29T00:00:00.000Z",
+      mode: "fixture",
+      provider_name: "hermes",
+      provider_role: "planner",
+      provider_available: true,
+      provider_endpoint_configured: false,
+      provider_auth_configured: false,
+      objective_safe: true,
+      request_preview_generated: true,
+      live_call_attempted: false,
+      live_call_succeeded: false,
+      fixture_response_used: true,
+      candidate_goal_generated: true,
+      candidate_goal_path_safe:
+        ".agent/tmp/hermes-planner-provider/candidates/hermes-fixture-goal-366c.md",
+      candidate_goal_hash:
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      candidate_validated: true,
+      evidence: {
+        schema: "skybridge.hermes_planner_evidence.v1",
+        generated_at: "2026-06-29T00:00:00.000Z",
+        objective_summary: "Draft one unapproved MG367A candidate.",
+        candidate_goal_hash:
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        candidate_goal_path_safe:
+          ".agent/tmp/hermes-planner-provider/candidates/hermes-fixture-goal-366c.md",
+        provider_mode: "fixture",
+        fixture_response_used: true,
+        live_call_attempted: false,
+        candidate_approved: false,
+        candidate_appended: false,
+        task_created: false,
+        execution_started: false,
+        raw_logs_persisted: false,
+        token_printed: false,
+      },
+      blockers: [],
+      warnings: [],
+    });
+
+    expect(report.provider_name).toBe("hermes");
+    expect(report.provider_role).toBe("planner");
+    expect(report.candidate_approved).toBe(false);
+    expect(report.candidate_appended).toBe(false);
+    expect(report.task_created).toBe(false);
+    expect(report.execution_started).toBe(false);
+    expect(report.raw_prompt_persisted).toBe(false);
+    expect(report.raw_response_persisted).toBe(false);
+    expect(report.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {

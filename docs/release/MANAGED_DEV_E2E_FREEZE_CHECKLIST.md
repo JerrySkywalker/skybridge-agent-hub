@@ -66,6 +66,20 @@ MG366A Vite chunk warning analysis:
 - [ ] `chunkSizeWarningLimit` remains unchanged.
 - [ ] Runtime chunk-splitting remediation is deferred to a future explicit goal.
 
+MG366C Hermes Planner Provider Pilot:
+
+- [ ] Hermes planner provider doc exists:
+  `docs/orchestrator/HERMES_PLANNER_PROVIDER.md`
+- [ ] Hermes planner provider script exists:
+  `scripts/powershell/skybridge-hermes-planner-provider.ps1`
+- [ ] Hermes planner manual milestone script exists:
+  `scripts/powershell/manual-hermes-planner-provider-test.ps1`
+- [ ] Fixture Hermes planner candidate generation smoke exists:
+  `smoke:hermes-planner-provider-fixture-plan`
+- [ ] Live Hermes calls reject without exact confirmation.
+- [ ] Candidate approval, append, task creation, execution, branch creation,
+  PR creation, merge and deploy remain disabled.
+
 Read-only verification:
 
 ```powershell
@@ -80,6 +94,8 @@ Freeze boundary:
 - [ ] No release, tag, or asset mutation.
 - [ ] No production infrastructure mutation.
 - [ ] No Codex, MATLAB, Hermes, or MCP execution.
+- [ ] Hermes planner candidates remain unapproved and unappended until human
+  review.
 - [ ] No task creation or claim.
 - [ ] No warning suppression.
 - [ ] No CI threshold change.

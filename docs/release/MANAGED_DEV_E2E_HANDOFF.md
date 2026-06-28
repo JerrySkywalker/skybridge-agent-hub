@@ -52,6 +52,13 @@ single-entry bundle causes, and remediation options. It does not suppress the
 warning, raise Vite thresholds, change CI, change dependencies or perform
 runtime chunk splitting. See `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md`.
 
+MG366C adds the Hermes Planner Provider Pilot as an advisory-only provider
+surface. Fixture mode can generate one unapproved candidate markdown file, but
+Hermes cannot approve, append, create tasks, execute, create branches or PRs,
+merge, deploy, run worker loops or mutate `project_control`. Direct providers
+remain the execution path. See
+`docs/orchestrator/HERMES_PLANNER_PROVIDER.md`.
+
 ## PR Evidence
 
 - PR #267: Tool Provider Contract and Local Direct Provider Inventory
@@ -79,6 +86,8 @@ runtime chunk splitting. See `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md`.
 - No arbitrary shell surface.
 - No Codex generation or execution unless a future exact goal authorizes it.
 - No MATLAB, Hermes, or MCP execution.
+- Hermes planner/provider output requires human review before append and cannot
+  execute in the same invocation.
 - No task creation or claim outside explicitly scoped safe/manual goals.
 - No unsanitized prompts, logs, process streams, sensitive browser/session
   material, provider auth material, proxy profiles, or environment snapshots in
@@ -109,8 +118,8 @@ tasks, worker state, or provider state.
 
 1. MG367A Vite Chunk Remediation: split or defer the current web/desktop entry
    chunks only with explicit runtime-risk acceptance.
-2. Hermes Planner Provider Pilot: add optional planner/provider integration
-   without taking over SkyBridge state.
+2. MG367C Hermes Candidate Review/Append Gate: review one Hermes-generated
+   candidate through the existing human approval gate without execution.
 3. MCP Tool Provider Stub: define disabled/future MCP provider shape without
    connecting to live MCP servers.
 4. Worker Service Install/Daemonization: recover the Windows worker service

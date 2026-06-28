@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 366C Hermes Planner Provider Pilot
+
+- Added `docs/orchestrator/HERMES_PLANNER_PROVIDER.md` and the read-only
+  `scripts/powershell/skybridge-hermes-planner-provider.ps1` provider pilot.
+- Added fixture planning that writes one deterministic unapproved candidate
+  goal under `.agent/tmp/hermes-planner-provider/candidates/`.
+- Kept Hermes advisory only: no candidate approval, no append, no task
+  creation, no task claim, no execution, no branch or PR creation, no merge, no
+  deploy, no worker loop and no project-control unpause.
+- Live Hermes status and planning commands remain exact-confirmation gated and
+  are not required for CI.
+- Kept raw prompt persistence, raw response persistence, secret persistence,
+  Codex/MATLAB/MCP calls and token printing disabled.
+
 ## 2026-06-29 Mega Goal 366A Vite Chunk Warning Analysis
 
 - Added `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md` and the read-only
