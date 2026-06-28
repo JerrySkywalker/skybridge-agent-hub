@@ -19,10 +19,13 @@ It is a managed-dev v2 low-risk task artifact, not a warning fix.
 ### GitHub Actions Node.js 20 Deprecation Annotation
 
 - Category: GitHub Actions Node.js 20 deprecation annotation for Docker actions.
-- Status: non-failing, tracked, not suppressed.
+- Status: non-failing, tracked, not suppressed; MG366B applies action runtime
+  hygiene by updating Docker action major versions to Node.js 24 runtime
+  candidates.
 - Current impact: does not block the MG351-MG364 managed-dev baseline.
 - Deploy impact: does not block Deploy Cloud.
-- Policy: do not change workflow behavior without a future explicit goal.
+- Policy: do not suppress warnings, do not weaken CI, and do not change
+  workflow behavior beyond the MG366B action version hygiene scope.
 
 ## Remediation Policy
 

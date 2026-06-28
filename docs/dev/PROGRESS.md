@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 366B GitHub Actions Node Runtime Hygiene
+
+- Added `docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md` and the read-only
+  `scripts/powershell/skybridge-actions-node-runtime-hygiene.ps1` audit.
+- Identified Docker Actions Node.js 20 runtime sources from the Docker Images
+  workflow annotation and local workflow inspection.
+- Updated only Docker action major versions in `.github/workflows/build-image.yml`
+  and `.github/workflows/release.yml`:
+  `docker/metadata-action@v6`, `docker/login-action@v4`,
+  `docker/setup-buildx-action@v4` and `docker/build-push-action@v7`.
+- Kept workflow topology, triggers, permissions, secrets, deploy targets,
+  Dockerfiles, Docker build context/tag/push semantics, warning suppression and
+  CI thresholds unchanged.
+- Kept auto-merge, release creation, tag creation, asset upload, production
+  infrastructure mutation, worker loops, queue runners, task creation, task
+  claim, Codex/MATLAB/Hermes/MCP calls and token printing disabled.
+
 ## 2026-06-29 Mega Goal 365 Managed Dev v2 Real Low-Risk Task Pilot
 
 - Added a read-only warning inventory for known non-failing warning classes:

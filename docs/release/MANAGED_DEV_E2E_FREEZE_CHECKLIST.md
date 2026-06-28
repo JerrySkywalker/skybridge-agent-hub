@@ -42,6 +42,19 @@ Post-freeze MG365 warning inventory:
   non-failing, and not suppressed.
 - [ ] Warning remediation is deferred to explicit future goals.
 
+MG366B GitHub Actions Node runtime hygiene:
+
+- [ ] Actions Node runtime hygiene doc exists:
+  `docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md`
+- [ ] Actions Node runtime hygiene audit script exists:
+  `scripts/powershell/skybridge-actions-node-runtime-hygiene.ps1`
+- [ ] Docker action version updates are limited to Node.js 24 runtime
+  candidates.
+- [ ] Workflow triggers remain unchanged.
+- [ ] Workflow permissions remain unchanged.
+- [ ] Secrets and deploy targets remain unchanged.
+- [ ] Warning suppression remains disabled.
+
 Read-only verification:
 
 ```powershell
