@@ -1053,6 +1053,52 @@ export const ManagedDevCampaignSchema =
     report_json_path: z.string().optional(),
     report_markdown_path: z.string().optional(),
   });
+export const ManagedDevE2EHandoffCapabilitySchema = z.object({
+  milestone: z.string().min(1),
+  name: z.string().min(1),
+  status: z.string().min(1),
+  manual_script: z.string().min(1),
+  evidence_summary: z.string().min(1),
+});
+export const ManagedDevE2EHandoffSafetyFlagsSchema = z.object({
+  release_created: z.literal(false),
+  tag_created: z.literal(false),
+  asset_uploaded: z.literal(false),
+  auto_merge_enabled: z.literal(false),
+  worker_loop_started: z.literal(false),
+  queue_runner_started: z.literal(false),
+  task_created: z.literal(false),
+  task_claimed: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const ManagedDevE2EHandoffSchema =
+  ManagedDevE2EHandoffSafetyFlagsSchema.extend({
+    schema: z.literal("skybridge.managed_dev_e2e_handoff.v1"),
+    generated_at: z.string().datetime(),
+    expected_commit: z.string(),
+    expected_cloud_image: z.string(),
+    current_branch: z.string(),
+    git_clean: z.boolean(),
+    git_aligned: z.boolean(),
+    cloud_health: z.string(),
+    cloud_version: z.string(),
+    cloud_parity: z.string(),
+    capability_matrix: z.array(ManagedDevE2EHandoffCapabilitySchema),
+    required_docs_present: z.boolean(),
+    required_scripts_present: z.boolean(),
+    required_smokes_present: z.boolean(),
+    open_pr_summary: z.array(z.string()),
+    safety_flags: ManagedDevE2EHandoffSafetyFlagsSchema,
+    blockers: z.array(z.string()),
+    warnings: z.array(z.string()),
+    report_json_path: z.string().optional(),
+    report_markdown_path: z.string().optional(),
+  });
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -1111,6 +1157,9 @@ export type ManagedDevCampaignAction = z.infer<typeof ManagedDevCampaignActionSc
 export type ManagedDevCampaignSafetyFlags = z.infer<typeof ManagedDevCampaignSafetyFlagsSchema>;
 export type ManagedDevCampaignEvidence = z.infer<typeof ManagedDevCampaignEvidenceSchema>;
 export type ManagedDevCampaign = z.infer<typeof ManagedDevCampaignSchema>;
+export type ManagedDevE2EHandoffCapability = z.infer<typeof ManagedDevE2EHandoffCapabilitySchema>;
+export type ManagedDevE2EHandoffSafetyFlags = z.infer<typeof ManagedDevE2EHandoffSafetyFlagsSchema>;
+export type ManagedDevE2EHandoff = z.infer<typeof ManagedDevE2EHandoffSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

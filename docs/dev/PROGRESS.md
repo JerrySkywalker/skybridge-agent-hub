@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 364 Managed Dev E2E Handoff and Capability Freeze
+
+- Added the canonical Managed Dev E2E handoff and freeze checklist under
+  `docs/release/`.
+- Added the read-only managed-dev E2E handoff audit script with M1-M8 artifact,
+  Git, optional cloud, optional PR and safety-flag reporting.
+- Added fixture smokes for handoff status, audit, checklist coverage, required
+  artifacts, no mutation and the manual milestone entrypoints.
+- Wired Bootstrap Alpha acceptance to require the MG364 release docs, audit
+  script and smokes.
+- Kept new feature behavior, new pilot PRs, auto-merge, release creation, tag
+  creation, asset upload, production infrastructure mutation, worker loops,
+  queue runners, task creation, task claim, Codex/MATLAB/Hermes/MCP calls,
+  project-control unpause and token printing disabled.
+
 ## 2026-06-28 Mega Goal 362 Campaign-Driven Managed Dev E2E
 
 - Added the campaign-driven managed-dev controller and M8 manual wrapper.

@@ -163,12 +163,19 @@ For the static three-step campaign loop controller, see
 [docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md](docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md).
 For the local Codex goal markdown generator, see
 [docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md](docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md).
+For reviewed goal append/import and the bounded one-action loop, see
+[docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md](docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md)
+and [docs/orchestrator/BOUNDED_GOAL_BUDGET_LOOP.md](docs/orchestrator/BOUNDED_GOAL_BUDGET_LOOP.md).
 For local worker install/repair apply and heartbeat pairing, see
 [docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md](docs/release/WINDOWS_WORKER_INSTALL_BOOTSTRAP_ALPHA.md).
 For the first managed development branch, draft PR and human review hold pilot,
 see [docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md](docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT.md).
 For the controller-native Git/GH repair note, see
 [docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md](docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md).
+For the campaign-driven managed-development E2E path and current freeze
+handoff, see [docs/orchestrator/MANAGED_DEV_CAMPAIGN_E2E.md](docs/orchestrator/MANAGED_DEV_CAMPAIGN_E2E.md),
+[docs/release/MANAGED_DEV_E2E_HANDOFF.md](docs/release/MANAGED_DEV_E2E_HANDOFF.md),
+and [docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md](docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md).
 For local worker identity activation and live heartbeat-only pairing, use the
 same Windows worker install runbook.
 For the first one-task live safe worker pilot, see
