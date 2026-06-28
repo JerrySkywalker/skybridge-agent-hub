@@ -6,11 +6,11 @@ Provider Contract baseline.
 ## Final State
 
 - Final Stage S1.1 main commit:
-  `2652d8fd34c82ece95cf61217a6fadc07c67e754`
+  `c2bd551370f68950c2cd759de6a4f30b5e0396d8`
 - Final cloud image:
-  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2652d8fd34c82ece95cf61217a6fadc07c67e754`
+  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-c2bd551370f68950c2cd759de6a4f30b5e0396d8`
 - Cloud version: `/v1/version` reports
-  `2652d8fd34c82ece95cf61217a6fadc07c67e754`
+  `c2bd551370f68950c2cd759de6a4f30b5e0396d8`
 - Cloud health: `/v1/health` ok
 - Cloud parity: ok
 - Open MG351-MG366C implementation PRs: none observed at close
@@ -67,13 +67,18 @@ Resolved warning:
 
 ## Next-Stage Options
 
+The next-stage manual simulation surface is the Ratatui Operator Console. MG368A
+adds only the fixture/read-only skeleton before any manual hosted-dev
+simulation. It does not enable candidate append, queue execution, worker loops
+or apply behavior.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG367C Hermes Candidate Review/Append Gate
-2. MG366D Worker Service Install/Daemonization
-3. MG367A Vite Chunk Remediation
-4. MCP Tool Provider Stub
+1. MG368B Ratatui Read-only Local/Cloud Monitor
+2. MG368C Candidate Review/Append Console
+3. MG368D Single-step Goal Control Gate
+4. MG369 Manual Single-step Hosted-dev Experiment
 
 ## Read-Only Audit
 
