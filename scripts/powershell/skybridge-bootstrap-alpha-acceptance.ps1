@@ -47,6 +47,7 @@ $requiredDocs = @(
   "docs/release/MANAGED_DEV_E2E_FREEZE_CHECKLIST.md",
   "docs/dev/WARNING_INVENTORY.md",
   "docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md",
+  "docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -204,6 +205,12 @@ $requiredScripts = @{
   actions_node_runtime_hygiene_no_suppression_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-no-suppression.ps1"
   actions_node_runtime_hygiene_no_permission_expansion_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-no-permission-expansion.ps1"
   actions_node_runtime_hygiene_doc_present_smoke = "scripts/powershell/smoke-actions-node-runtime-hygiene-doc-present.ps1"
+  vite_chunk_warning_analysis = "scripts/powershell/skybridge-vite-chunk-warning-analysis.ps1"
+  vite_chunk_warning_analysis_status_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-status.ps1"
+  vite_chunk_warning_analysis_report_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-report.ps1"
+  vite_chunk_warning_analysis_no_suppression_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-no-suppression.ps1"
+  vite_chunk_warning_analysis_no_threshold_change_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-no-threshold-change.ps1"
+  vite_chunk_warning_analysis_doc_present_smoke = "scripts/powershell/smoke-vite-chunk-warning-analysis-doc-present.ps1"
 }
 
 $componentPaths = @{
@@ -464,7 +471,12 @@ $requiredPackageScripts = @(
   "smoke:actions-node-runtime-hygiene-audit",
   "smoke:actions-node-runtime-hygiene-no-suppression",
   "smoke:actions-node-runtime-hygiene-no-permission-expansion",
-  "smoke:actions-node-runtime-hygiene-doc-present"
+  "smoke:actions-node-runtime-hygiene-doc-present",
+  "smoke:vite-chunk-warning-analysis-status",
+  "smoke:vite-chunk-warning-analysis-report",
+  "smoke:vite-chunk-warning-analysis-no-suppression",
+  "smoke:vite-chunk-warning-analysis-no-threshold-change",
+  "smoke:vite-chunk-warning-analysis-doc-present"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

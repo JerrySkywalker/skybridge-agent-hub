@@ -10,11 +10,14 @@ It is a managed-dev v2 low-risk task artifact, not a warning fix.
 ### Vite Chunk-Size Warning
 
 - Category: Vite chunk-size warning.
-- Status: non-failing, tracked, not suppressed.
+- Status: non-failing, tracked, not suppressed; MG366A adds read-only analysis
+  and defers runtime chunk-splitting remediation.
 - Current impact: does not block the MG351-MG364 managed-dev baseline.
 - Deploy impact: does not block Deploy Cloud.
 - Policy: do not suppress silently and do not change chunk thresholds without a
   future explicit goal.
+- Current analysis summary: web and desktop each emit one oversized
+  single-entry JavaScript chunk above the default 500 kB warning threshold.
 
 ### GitHub Actions Node.js 20 Deprecation Annotation
 
@@ -38,7 +41,8 @@ It is a managed-dev v2 low-risk task artifact, not a warning fix.
 
 ## Follow-Up Backlog
 
-- MG366A: Vite Chunk Warning Analysis.
+- MG367A: Vite Chunk Remediation if a future goal accepts runtime chunking
+  changes.
 - MG366B: GitHub Actions Node Runtime Hygiene.
 - MG366C: Hermes Planner Provider Pilot.
 

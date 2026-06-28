@@ -46,6 +46,12 @@ does not change workflow topology, permissions, triggers, secrets, deploy
 targets, Docker build semantics, warning suppression or CI thresholds. See
 `docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md`.
 
+MG366A analyzes the remaining Vite chunk-size warning without changing build
+behavior. It records the current oversized web and desktop entry chunks, likely
+single-entry bundle causes, and remediation options. It does not suppress the
+warning, raise Vite thresholds, change CI, change dependencies or perform
+runtime chunk splitting. See `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md`.
+
 ## PR Evidence
 
 - PR #267: Tool Provider Contract and Local Direct Provider Inventory
@@ -92,17 +98,17 @@ tasks, worker state, or provider state.
 
 ## Known Warnings
 
-- Existing Vite chunk-size warnings remain non-failing and tracked in
-  `docs/dev/WARNING_INVENTORY.md`.
-- GitHub Actions may emit non-blocking Node.js 20 deprecation annotations for
-  Docker actions; these are tracked in `docs/dev/WARNING_INVENTORY.md`.
+- Existing Vite chunk-size warnings remain non-failing, tracked and analyzed in
+  `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md`.
+- GitHub Actions Node.js 20 deprecation annotations for Docker actions were
+  remediated by MG366B action-version hygiene.
 - Cloud deploy workflow run selection hygiene may need a future cleanup if older
   failed workflow runs are still selected by legacy verification helpers.
 
 ## Recommended Next Milestones
 
-1. MG366A Vite Chunk Warning Analysis: analyze chunk output and strategy
-   without silently suppressing warnings.
+1. MG367A Vite Chunk Remediation: split or defer the current web/desktop entry
+   chunks only with explicit runtime-risk acceptance.
 2. Hermes Planner Provider Pilot: add optional planner/provider integration
    without taking over SkyBridge state.
 3. MCP Tool Provider Stub: define disabled/future MCP provider shape without

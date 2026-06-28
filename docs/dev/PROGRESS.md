@@ -1,5 +1,21 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 366A Vite Chunk Warning Analysis
+
+- Added `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md` and the read-only
+  `scripts/powershell/skybridge-vite-chunk-warning-analysis.ps1` analyzer.
+- Identified the current oversized Vite chunks as the web and desktop
+  single-entry JavaScript bundles, both above the default 500 kB warning
+  threshold.
+- Classified likely causes as single-entry app bundles with React/React DOM,
+  large local client/dashboard source contributors, no app-level dynamic
+  imports and no `manualChunks` strategy.
+- Deferred runtime chunk-splitting remediation to a future explicit goal.
+- Kept warning suppression, Vite chunk-size threshold changes, CI threshold
+  changes, dependency changes, lockfile changes, workflow changes, deploy
+  changes, release/tag/asset creation, worker loops, queue runners,
+  Codex/MATLAB/Hermes/MCP calls and token printing disabled.
+
 ## 2026-06-29 Mega Goal 366B GitHub Actions Node Runtime Hygiene
 
 - Added `docs/dev/ACTIONS_NODE_RUNTIME_HYGIENE.md` and the read-only
