@@ -211,7 +211,13 @@ check direct provider and Codex availability before drafting one markdown
 candidate, but it does not import, approve, append, create tasks or execute the
 candidate. See [LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
 
-MG355-MG359 should continue consuming this inventory before deciding whether a
+MG355 consumes generated-goal metadata, not tool execution. It validates and
+approves or rejects one candidate, previews append and can append one
+non-executed campaign step. It does not call Codex, MATLAB, Hermes or MCP, and
+it does not create or claim tasks. See
+[GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
+
+MG356-MG359 should continue consuming this inventory before deciding whether a
 campaign step can progress toward import or execution. The expected sequence is:
 
 1. SkyBridge reads campaign state and step dependencies.

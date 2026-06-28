@@ -287,4 +287,10 @@ surface. It can draft one reviewed markdown candidate, but it does not append,
 import or execute the generated goal. See
 [LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
 
+MG355 adds the metadata bridge for those generated candidates. It validates and
+approves or rejects one candidate, previews one append and can append one
+pending campaign step, but the multi-step controller remains the execution
+surface for fixed templates only. See
+[GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
+
 `token_printed=false`

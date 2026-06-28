@@ -38,6 +38,7 @@ $requiredDocs = @(
   "docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md",
   "docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md",
   "docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md",
+  "docs/orchestrator/GOAL_APPEND_REVIEW_IMPORT.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -136,6 +137,15 @@ $requiredScripts = @{
   local_goal_generator_no_import_smoke = "scripts/powershell/smoke-local-goal-generator-no-import.ps1"
   local_goal_generator_no_execution_smoke = "scripts/powershell/smoke-local-goal-generator-no-execution.ps1"
   manual_local_goal_generator_fixture_smoke = "scripts/powershell/smoke-manual-local-goal-generator-fixture.ps1"
+  goal_append = "scripts/powershell/skybridge-goal-append.ps1"
+  manual_goal_append_review_test = "scripts/powershell/manual-goal-append-review-test.ps1"
+  goal_append_status_smoke = "scripts/powershell/smoke-goal-append-status.ps1"
+  goal_append_review_preview_smoke = "scripts/powershell/smoke-goal-append-review-preview.ps1"
+  goal_append_approve_fixture_smoke = "scripts/powershell/smoke-goal-append-approve-fixture.ps1"
+  goal_append_append_preview_smoke = "scripts/powershell/smoke-goal-append-append-preview.ps1"
+  goal_append_append_apply_fixture_smoke = "scripts/powershell/smoke-goal-append-append-apply-fixture.ps1"
+  goal_append_no_execution_smoke = "scripts/powershell/smoke-goal-append-no-execution.ps1"
+  manual_goal_append_fixture_smoke = "scripts/powershell/smoke-manual-goal-append-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -344,7 +354,18 @@ $requiredPackageScripts = @(
   "smoke:local-goal-generator-reject-unsafe",
   "smoke:local-goal-generator-no-import",
   "smoke:local-goal-generator-no-execution",
-  "smoke:manual-local-goal-generator-fixture"
+  "smoke:manual-local-goal-generator-fixture",
+  "smoke:goal-append-status",
+  "smoke:goal-append-review-preview",
+  "smoke:goal-append-approve-fixture",
+  "smoke:goal-append-append-preview",
+  "smoke:goal-append-append-apply-fixture",
+  "smoke:goal-append-reject-no-confirm",
+  "smoke:goal-append-hash-mismatch",
+  "smoke:goal-append-budget-block",
+  "smoke:goal-append-reject-unsafe",
+  "smoke:goal-append-no-execution",
+  "smoke:manual-goal-append-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

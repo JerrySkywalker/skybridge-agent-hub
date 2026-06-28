@@ -1224,3 +1224,21 @@
   contract and separate from MG352/MG353 execution loops: no generated goal
   import, approval, append, task creation, task claim, MATLAB, Hermes, MCP,
   worker loop or campaign mutation.
+
+## 2026-06-28 Mega Goal 355 Goal Append Review And Import
+
+- Added the `skybridge.goal_append_review.v1` and
+  `skybridge.goal_append_evidence.v1` schemas for metadata-only generated goal
+  review/import and append evidence.
+- Added `skybridge-goal-append.ps1` with read-only preview, reason-gated
+  approve/reject, exact-confirmed append apply, fixture/local candidate
+  validation, hash checks, budget handling and sanitized reports under
+  `.agent/tmp/goal-append`.
+- Added the M5 manual wrapper and CI-safe smokes covering review-preview
+  immutability, confirmation rejection, hash mismatch, budget block, unsafe
+  candidate rejection, path traversal rejection, fixture append and no
+  execution.
+- Documented MG355 as the bridge from MG354 generated markdown to campaign
+  metadata only. Appended steps remain pending; no task creation, task claim,
+  step execution, Codex, MATLAB, Hermes, MCP, worker loop or project-control
+  unpause occurs.

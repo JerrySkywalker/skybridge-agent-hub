@@ -171,6 +171,12 @@ Use `skybridge-campaign.ps1 run-next` for a single-step execution, `run-until-ho
 
 Runner mutations remain dry-run by default. `runner-unlock` requires `-Apply` and a reason, and stale locks block automatic execution until inspected. The runner never overrides deterministic hard vetoes for active task residue, stale leases, unsafe paths, missing evidence, real CI failures, unapproved high-risk task types or uncertain Hermes gate output.
 
+MG351-MG355 split the newer long-running path into separate gates: provider
+inventory, single-step loop, static multi-step loop, local goal generation and
+goal append review/import. The append bridge may add one reviewed goal as
+campaign metadata, but it does not create tasks or execute the appended step.
+Budget-loop execution remains a later, explicitly gated milestone.
+
 ## Goal 188E Recovery Rules
 
 Campaign resume is idempotent across interrupted runner/finalizer sessions. A resumed runner inspects the current campaign step, linked task ids, linked PR urls and evidence before creating work. Existing active tasks are current blockers. Existing PRs route to finalizer/evidence repair. Merged PRs with missing evidence are repair-only. Completed or recovered steps are skipped by default.

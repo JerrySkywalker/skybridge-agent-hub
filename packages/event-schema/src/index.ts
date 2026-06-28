@@ -666,6 +666,79 @@ export const LocalGoalGeneratorSchema = LocalGoalGeneratorSafetyFlagsSchema.exte
   report_json_path: z.string().optional(),
   report_markdown_path: z.string().optional(),
 });
+
+export const GoalAppendReviewModeSchema = z.enum(["fixture", "local", "live"]);
+export const GoalAppendReviewStateSchema = z.enum(["unreviewed", "approved", "rejected", "appended", "blocked"]);
+export const GoalAppendSafetyFlagsSchema = z.object({
+  task_created: z.literal(false),
+  task_claimed: z.literal(false),
+  execution_started: z.literal(false),
+  codex_run_called: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  raw_stdout_persisted: z.literal(false),
+  raw_stderr_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const GoalAppendEvidenceSchema = GoalAppendSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.goal_append_evidence.v1"),
+  generated_at: z.string().datetime(),
+  campaign_id: z.string().min(1),
+  generated_goal_id: z.string().min(1),
+  candidate_hash: z.string(),
+  reviewed_hash: z.string(),
+  appended_step_id: z.string(),
+  appended_step_order: z.number().int().min(0),
+  goal_budget_remaining_before: z.number().int().min(0),
+  goal_budget_remaining_after: z.number().int().min(0),
+  validation_summary_safe: z.string().min(1),
+  import_performed: z.boolean(),
+  approval_performed: z.boolean(),
+  append_performed: z.boolean(),
+});
+export const GoalAppendReviewSchema = GoalAppendSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.goal_append_review.v1"),
+  generated_at: z.string().datetime(),
+  mode: GoalAppendReviewModeSchema,
+  project_id: z.string().min(1),
+  campaign_id: z.string().min(1),
+  candidate_path_safe: z.string(),
+  candidate_hash: z.string(),
+  expected_hash: z.string(),
+  hash_matches: z.boolean(),
+  generated_goal_id: z.string(),
+  generated_goal_title: z.string(),
+  metadata_valid: z.boolean(),
+  safety_valid: z.boolean(),
+  human_review_required: z.boolean(),
+  import_allowed: z.boolean(),
+  execution_allowed: z.boolean(),
+  review_state: GoalAppendReviewStateSchema,
+  approved: z.boolean(),
+  rejected: z.boolean(),
+  approval_reason_safe: z.string(),
+  reject_reason_safe: z.string(),
+  append_preview_valid: z.boolean(),
+  append_applied: z.boolean(),
+  appended_step_id: z.string(),
+  appended_step_order: z.number().int().min(0),
+  appended_step_state: z.string(),
+  goal_budget_remaining_before: z.number().int().min(0),
+  goal_budget_remaining_after: z.number().int().min(0),
+  import_performed: z.boolean(),
+  approval_performed: z.boolean(),
+  append_performed: z.boolean(),
+  blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
+  evidence: GoalAppendEvidenceSchema,
+  report_json_path: z.string().optional(),
+  report_markdown_path: z.string().optional(),
+});
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -704,6 +777,11 @@ export type GeneratedGoalMetadata = z.infer<typeof GeneratedGoalMetadataSchema>;
 export type LocalGoalGeneratorSafetyFlags = z.infer<typeof LocalGoalGeneratorSafetyFlagsSchema>;
 export type LocalGoalGeneratorEvidence = z.infer<typeof LocalGoalGeneratorEvidenceSchema>;
 export type LocalGoalGenerator = z.infer<typeof LocalGoalGeneratorSchema>;
+export type GoalAppendReviewMode = z.infer<typeof GoalAppendReviewModeSchema>;
+export type GoalAppendReviewState = z.infer<typeof GoalAppendReviewStateSchema>;
+export type GoalAppendSafetyFlags = z.infer<typeof GoalAppendSafetyFlagsSchema>;
+export type GoalAppendEvidence = z.infer<typeof GoalAppendEvidenceSchema>;
+export type GoalAppendReview = z.infer<typeof GoalAppendReviewSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

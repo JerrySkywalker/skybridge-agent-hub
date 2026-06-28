@@ -187,7 +187,9 @@ It does not retry Codex generation unboundedly.
 ## Next Milestone
 
 MG355 adds Goal Append Review and Import. That milestone may review generated
-markdown and decide whether to stage it for import. MG354 never self-approves,
-self-imports, self-appends or self-executes a generated goal.
+markdown, record reason-gated approval state, preview a campaign append and
+append exactly one non-executed metadata step. MG354 never self-approves,
+self-imports, self-appends or self-executes a generated goal. See
+[GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).
 
 `token_printed=false`

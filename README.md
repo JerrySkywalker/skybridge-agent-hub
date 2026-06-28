@@ -556,6 +556,11 @@ Current responsibility split:
 - bootstrap ntfy: sends concise fallback phone summaries without requiring the SkyBridge server;
 - human-only: production deployment, server root configuration, branch protection changes, secret rotation, public Hermes exposure and unattended real auto-merge enablement.
 
+Recent orchestrator milestones split long-running goal control into explicit
+gates: provider inventory, single-step loop, static multi-step loop, local goal
+markdown generation and goal append review/import. MG355 appends reviewed goal
+metadata only; it does not create tasks, claim tasks or execute appended steps.
+
 ## Roadmap
 
 - Complete the v0.9 release candidate in [ROADMAP.md](ROADMAP.md).
