@@ -149,6 +149,11 @@ Codex mode, validate required safety metadata and produce sanitized evidence.
 It keeps `import_allowed=false`, `execution_allowed=false` and
 `token_printed=false` in the generated metadata.
 
+MG355 adds the M5 review/import bridge for one generated candidate at a time.
+It can validate a candidate, record approval or rejection state, preview append
+and append one pending metadata step while keeping task creation, task claim,
+execution, worker loops and queue starts disabled.
+
 ## Goal 196 Follow-on
 
 Goal 196 builds multi-campaign locking on this foundation by treating the validated goal pack, hash drift summary, dependency order and proposed update action as review inputs. It adds explicit campaign lock ownership, repo-exclusive locks, stale recovery previews, reason-gated fixture recovery, cancel/abort/hold semantics and deterministic priority selection before any queue can start across multiple campaigns.

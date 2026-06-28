@@ -66,6 +66,11 @@ objective, validate `skybridge.generated_goal_metadata.v1`, and stop before
 import, append, approval, task creation or execution. MG355 remains responsible
 for any later review/import decision.
 
+MG355 adds that review/import decision as metadata-only state. It can validate a
+generated candidate, record an approval or rejection reason, preview one
+campaign append and append one non-executed step. The appended step is not a
+task and remains pending for a later explicit controller.
+
 Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
 
 - deterministic gate passes;

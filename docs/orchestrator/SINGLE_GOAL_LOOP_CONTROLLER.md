@@ -221,3 +221,8 @@ MG354 keeps goal generation on the other side of that boundary. The local Codex
 goal generator can draft one markdown candidate for human review, but it cannot
 import, append, approve or execute that candidate. See
 [LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
+
+MG355 adds review/import/append metadata handling for one generated candidate.
+It does not extend this single-goal loop: appended generated steps remain
+pending for a later explicit controller and no task is created or claimed during
+append. See [GOAL_APPEND_REVIEW_IMPORT.md](GOAL_APPEND_REVIEW_IMPORT.md).

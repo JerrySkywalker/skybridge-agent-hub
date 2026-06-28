@@ -49,6 +49,7 @@ import {
   MatlabSweepManifestSchema,
   MatlabSweepSummarySchema,
   GeneratedGoalMetadataSchema,
+  GoalAppendReviewSchema,
   LocalGoalGeneratorSchema,
   MultiGoalLoopSchema,
   TemplateRunnerEvidenceSchema,
@@ -1302,6 +1303,86 @@ describe("event schema", () => {
     expect(generator.task_created).toBe(false);
     expect(generator.worker_loop_started).toBe(false);
     expect(generator.token_printed).toBe(false);
+  });
+
+  it("models goal append review metadata without execution", () => {
+    const safety = {
+      task_created: false,
+      task_claimed: false,
+      execution_started: false,
+      codex_run_called: false,
+      matlab_run_called: false,
+      hermes_run_called: false,
+      mcp_run_called: false,
+      worker_loop_started: false,
+      project_control_unpaused: false,
+      raw_prompt_persisted: false,
+      raw_response_persisted: false,
+      raw_stdout_persisted: false,
+      raw_stderr_persisted: false,
+      token_printed: false,
+    };
+    const review = GoalAppendReviewSchema.parse({
+      schema: "skybridge.goal_append_review.v1",
+      generated_at: "2026-06-28T00:00:00.000Z",
+      mode: "fixture",
+      project_id: "skybridge-agent-hub",
+      campaign_id: "goal-append-fixture-campaign-355",
+      candidate_path_safe: ".agent/tmp/goal-append/fixture/generated-goal-355-fixture.md",
+      candidate_hash: "1".repeat(64),
+      expected_hash: "1".repeat(64),
+      hash_matches: true,
+      generated_goal_id: "generated-goal-355-fixture",
+      generated_goal_title: "Generated Goal 355 Fixture",
+      metadata_valid: true,
+      safety_valid: true,
+      human_review_required: true,
+      import_allowed: false,
+      execution_allowed: false,
+      review_state: "appended",
+      approved: true,
+      rejected: false,
+      approval_reason_safe: "fixture approval",
+      reject_reason_safe: "",
+      append_preview_valid: true,
+      append_applied: true,
+      appended_step_id: "appended-generated-goal-355-fixture-step",
+      appended_step_order: 1,
+      appended_step_state: "pending",
+      goal_budget_remaining_before: 1,
+      goal_budget_remaining_after: 0,
+      import_performed: true,
+      approval_performed: false,
+      append_performed: true,
+      blockers: [],
+      warnings: [],
+      evidence: {
+        schema: "skybridge.goal_append_evidence.v1",
+        generated_at: "2026-06-28T00:00:00.000Z",
+        campaign_id: "goal-append-fixture-campaign-355",
+        generated_goal_id: "generated-goal-355-fixture",
+        candidate_hash: "1".repeat(64),
+        reviewed_hash: "1".repeat(64),
+        appended_step_id: "appended-generated-goal-355-fixture-step",
+        appended_step_order: 1,
+        goal_budget_remaining_before: 1,
+        goal_budget_remaining_after: 0,
+        validation_summary_safe: "candidate approved and appended as non-executed metadata",
+        import_performed: true,
+        approval_performed: false,
+        append_performed: true,
+        ...safety,
+      },
+      ...safety,
+    });
+
+    expect(review.schema).toBe("skybridge.goal_append_review.v1");
+    expect(review.append_performed).toBe(true);
+    expect(review.task_created).toBe(false);
+    expect(review.task_claimed).toBe(false);
+    expect(review.execution_started).toBe(false);
+    expect(review.worker_loop_started).toBe(false);
+    expect(review.token_printed).toBe(false);
   });
 
   it("models Goal 218 worker control-plane contracts without execution", () => {
