@@ -55,6 +55,17 @@ MG366B GitHub Actions Node runtime hygiene:
 - [ ] Secrets and deploy targets remain unchanged.
 - [ ] Warning suppression remains disabled.
 
+MG366A Vite chunk warning analysis:
+
+- [ ] Vite chunk warning analysis doc exists:
+  `docs/dev/VITE_CHUNK_WARNING_ANALYSIS.md`
+- [ ] Vite chunk warning analysis script exists:
+  `scripts/powershell/skybridge-vite-chunk-warning-analysis.ps1`
+- [ ] Current oversized web and desktop chunks are inventoried.
+- [ ] Vite chunk-size warning remains non-failing and not suppressed.
+- [ ] `chunkSizeWarningLimit` remains unchanged.
+- [ ] Runtime chunk-splitting remediation is deferred to a future explicit goal.
+
 Read-only verification:
 
 ```powershell
