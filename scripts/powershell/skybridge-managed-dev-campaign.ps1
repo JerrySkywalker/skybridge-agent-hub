@@ -162,8 +162,9 @@ function New-FixtureCandidate {
   }
 }
 
-function Invoke-ManagedDevPilotJson([string[]]$Args) {
-  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-managed-dev-pilot.ps1") @Args -Json
+function Invoke-ManagedDevPilotJson {
+  param([string[]]$ManagedArgs)
+  $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "skybridge-managed-dev-pilot.ps1") @ManagedArgs -Json
   if ($LASTEXITCODE -ne 0) { throw "skybridge-managed-dev-pilot.ps1 failed." }
   (($raw | Out-String).Trim() | ConvertFrom-Json)
 }
@@ -366,7 +367,7 @@ if ($Command -eq "bounded-apply-one" -and $blockers.Count -eq 0) {
     $changedFiles = @($TargetDoc)
     Add-Finding ([ref]$warnings) "fixture_mode_no_real_branch_or_pr"
   } else {
-    $managed = Invoke-ManagedDevPilotJson @(
+    $managed = Invoke-ManagedDevPilotJson -ManagedArgs @(
       "-Command", "apply-local",
       "-Local",
       "-BranchName", $BranchName,
@@ -399,7 +400,7 @@ if ($Command -eq "create-draft-pr" -and $blockers.Count -eq 0) {
   if ($Fixture) {
     Add-Finding ([ref]$blockers) "fixture_mode_never_creates_real_pr"
   } else {
-    $managed = Invoke-ManagedDevPilotJson @(
+    $managed = Invoke-ManagedDevPilotJson -ManagedArgs @(
       "-Command", "create-draft-pr",
       "-Local",
       "-BranchName", $BranchName,
@@ -428,7 +429,7 @@ if ($Command -eq "observe-ci") {
     $draftPrCiStatus = "success"
     $controllerGhUsed = $true
   } else {
-    $managed = Invoke-ManagedDevPilotJson @(
+    $managed = Invoke-ManagedDevPilotJson -ManagedArgs @(
       "-Command", "ci-status",
       "-Local",
       "-BranchName", $BranchName,
