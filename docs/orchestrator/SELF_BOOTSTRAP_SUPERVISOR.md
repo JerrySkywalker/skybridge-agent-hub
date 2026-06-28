@@ -96,6 +96,8 @@ MG352 adds the first single-goal loop controller on top of that boundary. It can
 
 MG353 adds a static multi-step loop controller for one ordered campaign with three fixed templates: `safe-local-smoke.v1`, `matlab-parameter-sweep.v1` and `codex-analysis-report.v1`. It previews the next ready dependency-satisfied step and, with exact confirmation, applies only that one step and exits. Fixture mode simulates the full sequence without live Codex, MATLAB, Hermes or MCP calls; live mode remains exact-id and provider-gated. See [MULTI_STEP_STATIC_GOAL_LOOP.md](MULTI_STEP_STATIC_GOAL_LOOP.md).
 
+MG354 adds local Codex goal markdown generation as an authoring-only milestone. It checks provider inventory, can generate one fixture or exact-confirmed local Codex markdown candidate, validates metadata and safety sections, writes sanitized reports and stops before import, approval, append, task creation or execution. See [LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
+
 Super 187 proved this flow for `bootstrap-mvp:super-187-bootstrap-campaign-mvp-hardening`: the executor created `campaign-step-super-187-bootstrap-campaign-mvp-hardening-20260531100053`, the worker acquired lease `lease_chdDfMPI1SEIgonHR-hzv`, child PR #92 passed checks and merged, recovered evidence was attached, and `advance-with-gate -Apply` moved the campaign metadata to Super 184B ready without executing Super 184B.
 
 Step retry, skip and hold are distinct supervisor inputs:

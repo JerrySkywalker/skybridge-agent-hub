@@ -586,6 +586,86 @@ export const MultiGoalLoopSchema = MultiGoalLoopSafetyFlagsSchema.extend({
   report_json_path: z.string().optional(),
   report_markdown_path: z.string().optional(),
 });
+
+export const LocalGoalGeneratorModeSchema = z.enum(["fixture", "local_codex"]);
+export const GeneratedGoalMetadataSchema = z.object({
+  schema: z.literal("skybridge.generated_goal_metadata.v1"),
+  goal_id: z.string().min(1),
+  title: z.string().min(1),
+  order: z.number().int().min(1),
+  risk: z.string().min(1),
+  task_type: z.string().min(1),
+  allowed_task_types: z.array(z.string()),
+  blocked_task_types: z.array(z.string()),
+  requires: z.array(z.string()),
+  expected_outputs: z.array(z.string()),
+  advance_gate: z.record(z.string(), z.unknown()),
+  generated_by: z.string().min(1),
+  generation_provider: z.string().min(1),
+  source_campaign_id: z.string().min(1),
+  source_project_id: z.string().min(1),
+  goal_budget_remaining: z.number().int().min(0),
+  human_review_required: z.literal(true),
+  import_allowed: z.literal(false),
+  execution_allowed: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const LocalGoalGeneratorSafetyFlagsSchema = z.object({
+  import_performed: z.literal(false),
+  approval_performed: z.literal(false),
+  append_performed: z.literal(false),
+  task_created: z.literal(false),
+  task_claimed: z.literal(false),
+  execution_started: z.literal(false),
+  worker_loop_started: z.literal(false),
+  project_control_unpaused: z.literal(false),
+  matlab_run_called: z.literal(false),
+  hermes_run_called: z.literal(false),
+  mcp_run_called: z.literal(false),
+  raw_prompt_persisted: z.literal(false),
+  raw_response_persisted: z.literal(false),
+  raw_stdout_persisted: z.literal(false),
+  raw_stderr_persisted: z.literal(false),
+  token_printed: z.literal(false),
+});
+export const LocalGoalGeneratorEvidenceSchema = LocalGoalGeneratorSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.local_goal_generator_evidence.v1"),
+  generated_at: z.string().datetime(),
+  provider_inventory_checked: z.boolean(),
+  direct_provider_available: z.boolean(),
+  codex_detected: z.boolean(),
+  codex_generation_called: z.boolean(),
+  generated_goal_path_safe: z.string(),
+  generated_goal_hash: z.string(),
+  generated_goal_valid: z.boolean(),
+});
+export const LocalGoalGeneratorSchema = LocalGoalGeneratorSafetyFlagsSchema.extend({
+  schema: z.literal("skybridge.local_goal_generator.v1"),
+  generated_at: z.string().datetime(),
+  mode: LocalGoalGeneratorModeSchema,
+  project_id: z.string().min(1),
+  campaign_id: z.string().min(1),
+  goal_budget_remaining: z.number().int().min(0),
+  provider_inventory_checked: z.boolean(),
+  direct_provider_available: z.boolean(),
+  codex_detected: z.boolean(),
+  codex_generation_requested: z.boolean(),
+  codex_generation_called: z.boolean(),
+  codex_generation_succeeded: z.boolean(),
+  generated_goal_id: z.string(),
+  generated_goal_title: z.string(),
+  generated_goal_path_safe: z.string(),
+  generated_goal_hash: z.string(),
+  generated_goal_schema_valid: z.boolean(),
+  generated_goal_safety_valid: z.boolean(),
+  proposed_goal_written: z.boolean(),
+  blockers: z.array(z.string()),
+  warnings: z.array(z.string()),
+  safety_flags: LocalGoalGeneratorSafetyFlagsSchema,
+  evidence: LocalGoalGeneratorEvidenceSchema,
+  report_json_path: z.string().optional(),
+  report_markdown_path: z.string().optional(),
+});
 export const ManualTaskAuditSchema = z.object({
   schema: z.literal("skybridge.manual_task_audit.v1"),
   action: z.enum(["add-question", "clear-completed"]),
@@ -619,6 +699,11 @@ export type MultiGoalLoopSafetyFlags = z.infer<typeof MultiGoalLoopSafetyFlagsSc
 export type MultiGoalLoopStep = z.infer<typeof MultiGoalLoopStepSchema>;
 export type MultiGoalLoopEvidence = z.infer<typeof MultiGoalLoopEvidenceSchema>;
 export type MultiGoalLoop = z.infer<typeof MultiGoalLoopSchema>;
+export type LocalGoalGeneratorMode = z.infer<typeof LocalGoalGeneratorModeSchema>;
+export type GeneratedGoalMetadata = z.infer<typeof GeneratedGoalMetadataSchema>;
+export type LocalGoalGeneratorSafetyFlags = z.infer<typeof LocalGoalGeneratorSafetyFlagsSchema>;
+export type LocalGoalGeneratorEvidence = z.infer<typeof LocalGoalGeneratorEvidenceSchema>;
+export type LocalGoalGenerator = z.infer<typeof LocalGoalGeneratorSchema>;
 export type ManualTaskAudit = z.infer<typeof ManualTaskAuditSchema>;
 
 export const ChatToTaskDraftTypeSchema = z.enum([

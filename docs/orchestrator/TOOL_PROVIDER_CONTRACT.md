@@ -206,8 +206,13 @@ without invoking those tools; live mode may only consider those steps when the
 direct provider and required tool are detected. Hermes is still optional and MCP
 is still future/disabled.
 
-MG354-MG359 should continue consuming this inventory before deciding whether a
-campaign step can progress toward execution. The expected sequence is:
+MG354 consumes this inventory for authoring only. The local goal generator can
+check direct provider and Codex availability before drafting one markdown
+candidate, but it does not import, approve, append, create tasks or execute the
+candidate. See [LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
+
+MG355-MG359 should continue consuming this inventory before deciding whether a
+campaign step can progress toward import or execution. The expected sequence is:
 
 1. SkyBridge reads campaign state and step dependencies.
 2. SkyBridge checks the provider inventory for required tools.

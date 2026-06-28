@@ -60,6 +60,12 @@ The planner still does not dynamically create those steps during apply. The
 controller consumes static ids, checks dependencies and provider inventory, then
 applies at most one selected step per invocation.
 
+MG354 adds local Codex goal markdown generation for reviewed candidates only.
+It can draft one proposed markdown goal from campaign context and an operator
+objective, validate `skybridge.generated_goal_metadata.v1`, and stop before
+import, append, approval, task creation or execution. MG355 remains responsible
+for any later review/import decision.
+
 Hermes gate evaluation returns strict `skybridge.campaign_gate.v1` JSON. Auto-advance requires:
 
 - deterministic gate passes;

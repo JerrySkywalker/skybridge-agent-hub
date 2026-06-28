@@ -10,6 +10,14 @@ Goal 199 can generate fixture drafts for human review. Import remains a separate
 
 Goal 200 adds the controlled review/import command surface. Proposed drafts can be approved, rejected, edited or superseded with audit metadata. Import preview reports target path, manifest diff, dependency/order changes and hash changes. Import apply is approved-only, reason-gated and stages into `goals/reviewed/` by default, leaving execution disabled.
 
+MG354 adds the M4 local goal markdown generator for the newer provider-driven
+orchestration line. It writes one fixture or exact-confirmed local Codex
+candidate under `.agent/tmp/generated-goals`, validates
+`skybridge.generated_goal_metadata.v1`, records a sanitized report and stops.
+It does not write to `goals/proposed`, import, approve, append, create tasks,
+claim tasks or execute generated content. Direct `goals/proposed` staging is
+left to the MG355 review/import milestone.
+
 ## Author A Goal Pack
 
 A goal pack is a directory with `campaign.skybridge.json` and one markdown file per goal. Use the templates in `goals/templates/`:
@@ -134,6 +142,12 @@ first dependency-ready static step and requires an exact confirmation for each
 `apply-next`. Fixture mode can prove safe-local-smoke, fixed MATLAB and fixed
 Codex report steps in order without live tool calls. It does not generate,
 append, import or execute arbitrary queue goals.
+
+MG354 adds the M4 local goal markdown generator. It is an authoring surface, not
+a queue command: it can draft one markdown candidate with fixture or local
+Codex mode, validate required safety metadata and produce sanitized evidence.
+It keeps `import_allowed=false`, `execution_allowed=false` and
+`token_printed=false` in the generated metadata.
 
 ## Goal 196 Follow-on
 

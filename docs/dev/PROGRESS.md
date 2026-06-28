@@ -1206,3 +1206,21 @@
 - Documented MG353 as a static multi-step loop built on MG351 and MG352: not a
   queue runner, not goal generation or append/import, and not a Hermes/MCP or
   arbitrary shell/Codex/MATLAB execution surface.
+
+## 2026-06-28 Mega Goal 354 Local Codex Goal Markdown Generator
+
+- Added the `skybridge.local_goal_generator.v1`,
+  `skybridge.generated_goal_metadata.v1` and
+  `skybridge.local_goal_generator_evidence.v1` schemas for reviewed generated
+  goal markdown candidates.
+- Added `skybridge-local-goal-generator.ps1` with read-only preview, exact
+  confirmation for one generate-one operation, fixture generation, optional
+  local Codex mode, metadata validation, safety classification and sanitized
+  reports under `.agent/tmp/generated-goals`.
+- Added the M4 manual fixture wrapper and CI-safe smokes covering preview
+  immutability, confirmation rejection, unsafe input/path rejection, metadata
+  validation, no import, no execution, no worker loop and `token_printed=false`.
+- Documented MG354 as an authoring-only milestone built on the MG351 provider
+  contract and separate from MG352/MG353 execution loops: no generated goal
+  import, approval, append, task creation, task claim, MATLAB, Hermes, MCP,
+  worker loop or campaign mutation.

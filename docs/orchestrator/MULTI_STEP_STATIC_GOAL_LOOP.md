@@ -282,7 +282,9 @@ When `-WriteReport` is used:
 
 ## Next Milestone
 
-MG354 can build the local Codex goal markdown generator on top of this static
-loop. MG353 deliberately does not generate, append or import new goals.
+MG354 adds the local Codex goal markdown generator as a separate authoring
+surface. It can draft one reviewed markdown candidate, but it does not append,
+import or execute the generated goal. See
+[LOCAL_CODEX_GOAL_GENERATOR.md](LOCAL_CODEX_GOAL_GENERATOR.md).
 
 `token_printed=false`

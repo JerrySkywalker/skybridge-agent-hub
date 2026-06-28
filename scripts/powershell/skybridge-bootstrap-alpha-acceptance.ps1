@@ -37,6 +37,7 @@ $requiredDocs = @(
   "docs/orchestrator/TOOL_PROVIDER_CONTRACT.md",
   "docs/orchestrator/SINGLE_GOAL_LOOP_CONTROLLER.md",
   "docs/orchestrator/MULTI_STEP_STATIC_GOAL_LOOP.md",
+  "docs/orchestrator/LOCAL_CODEX_GOAL_GENERATOR.md",
   "docs/dev/CODEX_STOP_HOOK_HYGIENE.md"
 )
 
@@ -124,6 +125,17 @@ $requiredScripts = @{
   multi_goal_loop_evidence_smoke = "scripts/powershell/smoke-multi-goal-loop-evidence.ps1"
   multi_goal_loop_no_worker_loop_smoke = "scripts/powershell/smoke-multi-goal-loop-no-worker-loop.ps1"
   manual_multi_goal_loop_fixture_smoke = "scripts/powershell/smoke-manual-multi-goal-loop-fixture.ps1"
+  local_goal_generator = "scripts/powershell/skybridge-local-goal-generator.ps1"
+  manual_local_goal_generate_test = "scripts/powershell/manual-local-goal-generate-test.ps1"
+  local_goal_generator_status_smoke = "scripts/powershell/smoke-local-goal-generator-status.ps1"
+  local_goal_generator_preview_smoke = "scripts/powershell/smoke-local-goal-generator-preview.ps1"
+  local_goal_generator_fixture_smoke = "scripts/powershell/smoke-local-goal-generator-fixture.ps1"
+  local_goal_generator_validate_smoke = "scripts/powershell/smoke-local-goal-generator-validate.ps1"
+  local_goal_generator_reject_no_confirm_smoke = "scripts/powershell/smoke-local-goal-generator-reject-no-confirm.ps1"
+  local_goal_generator_reject_unsafe_smoke = "scripts/powershell/smoke-local-goal-generator-reject-unsafe.ps1"
+  local_goal_generator_no_import_smoke = "scripts/powershell/smoke-local-goal-generator-no-import.ps1"
+  local_goal_generator_no_execution_smoke = "scripts/powershell/smoke-local-goal-generator-no-execution.ps1"
+  manual_local_goal_generator_fixture_smoke = "scripts/powershell/smoke-manual-local-goal-generator-fixture.ps1"
 }
 
 $componentPaths = @{
@@ -323,7 +335,16 @@ $requiredPackageScripts = @(
   "smoke:multi-goal-loop-reject-unsafe",
   "smoke:multi-goal-loop-evidence",
   "smoke:multi-goal-loop-no-worker-loop",
-  "smoke:manual-multi-goal-loop-fixture"
+  "smoke:manual-multi-goal-loop-fixture",
+  "smoke:local-goal-generator-status",
+  "smoke:local-goal-generator-preview",
+  "smoke:local-goal-generator-fixture",
+  "smoke:local-goal-generator-validate",
+  "smoke:local-goal-generator-reject-no-confirm",
+  "smoke:local-goal-generator-reject-unsafe",
+  "smoke:local-goal-generator-no-import",
+  "smoke:local-goal-generator-no-execution",
+  "smoke:manual-local-goal-generator-fixture"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
