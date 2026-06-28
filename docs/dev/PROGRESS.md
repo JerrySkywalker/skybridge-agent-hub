@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 368B Ratatui Read-only Local/Cloud Monitor
+
+- Upgraded `apps/operator-tui` from fixture-only status to read-only
+  `--local`, `--cloud` and `--local-cloud` monitor modes.
+- Added local Git state collection for branch, HEAD, local `main`,
+  `origin/main`, alignment, bounded worktree status, repository root and package
+  manager marker without checkout, pull, fetch or repo mutation.
+- Added sanitized cloud health/version/image/parity collection through existing
+  SkyBridge cloud conventions and snapshot/report fields for
+  `local_state_loaded`, `cloud_state_loaded` and
+  `local_cloud_parity_checked`.
+- Kept all mutation-capable TUI actions disabled: no candidate append,
+  candidate approval, task creation, task claim, execution, branch/PR creation,
+  merge, deploy, worker loop, queue runner, Hermes live call, MCP run or token
+  printing.
+- Added MG368B PowerShell smokes, package entries and Bootstrap Alpha
+  acceptance wiring. The recommended next milestone is MG368C Ratatui Candidate
+  Review/Append Console.
+
 ## 2026-06-29 Mega Goal 368A Ratatui Operator Console Skeleton
 
 - Added the standalone Rust `apps/operator-tui` Ratatui app for the first

@@ -24,9 +24,9 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(7),
+            Constraint::Length(9),
             Constraint::Min(10),
-            Constraint::Length(7),
+            Constraint::Length(11),
             Constraint::Length(12),
             Constraint::Length(5),
         ])
@@ -42,7 +42,10 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
 pub fn render_snapshot_text(state: &OperatorState) -> String {
     let mut lines = Vec::new();
 
-    lines.push("SkyBridge Operator Console - MG368A Snapshot".to_string());
+    lines.push(format!(
+        "SkyBridge Operator Console - MG368B Read-only Snapshot ({})",
+        state.mode
+    ));
     lines.push("".to_string());
     lines.push(format!("## {}", PANELS[0]));
     lines.extend(header_lines(state));
@@ -63,7 +66,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
         let suffix = if action.enabled() {
             ""
         } else {
-            " [disabled in MG368A]"
+            " [disabled in MG368B]"
         };
         lines.push(format!("- {} {}{}", action.key(), action.label(), suffix));
         if !action.enabled() {
@@ -83,7 +86,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
 }
 
 pub fn render_report_markdown(app: &App, snapshot_path: &str, state_path: &str) -> String {
-    let report = app.report("snapshot", false);
+    let report = app.report(false);
     let disabled = report
         .disabled_actions
         .iter()
@@ -98,10 +101,13 @@ pub fn render_report_markdown(app: &App, snapshot_path: &str, state_path: &str) 
         .join(", ");
 
     format!(
-        "# Operator TUI MG368A Snapshot Report\n\n- schema: {}\n- mode: {}\n- fixture_used: {}\n- interactive_started: {}\n- snapshot: {}\n- state: {}\n- panels_rendered: {}\n- active_actions: {}\n- disabled_actions:\n- {}\n- mutation_attempted: false\n- append_attempted: false\n- approval_attempted: false\n- task_created: false\n- task_claimed: false\n- execution_started: false\n- worker_loop_started: false\n- hermes_live_called: false\n- mcp_run_called: false\n- token_printed: false\n",
+        "# Operator TUI MG368B Snapshot Report\n\n- schema: {}\n- mode: {}\n- fixture_used: {}\n- local_state_loaded: {}\n- cloud_state_loaded: {}\n- local_cloud_parity_checked: {}\n- interactive_started: {}\n- snapshot: {}\n- state: {}\n- panels_rendered: {}\n- active_actions: {}\n- disabled_actions:\n- {}\n- mutation_attempted: false\n- append_attempted: false\n- approval_attempted: false\n- task_created: false\n- task_claimed: false\n- execution_started: false\n- worker_loop_started: false\n- queue_runner_started: false\n- hermes_live_called: false\n- mcp_run_called: false\n- token_printed: false\n",
         report.schema,
         report.mode,
         report.fixture_used,
+        report.local_state_loaded,
+        report.cloud_state_loaded,
+        report.local_cloud_parity_checked,
         report.interactive_started,
         snapshot_path,
         state_path,
@@ -152,7 +158,7 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect) {
             let disabled = !action.enabled();
             let mut label = format!("{} {}", action.key(), action.label());
             if disabled {
-                label.push_str(" [disabled in MG368A]");
+                label.push_str(" [disabled in MG368B]");
             }
             let style = if disabled {
                 Style::default().fg(Color::DarkGray)
@@ -187,17 +193,34 @@ fn panel_block(title: &'static str) -> Block<'static> {
 fn header_lines(state: &OperatorState) -> Vec<String> {
     vec![
         format!(
-            "repo: branch={} head={} clean={} origin_aligned={}",
+            "repo: branch={} head={} clean={} main_aligned={} origin_aligned={}",
             state.repo.branch,
-            &state.repo.head[..12],
+            short(&state.repo.head),
             state.repo.worktree_clean,
+            state.repo.main_aligned,
             state.repo.origin_aligned
         ),
         format!(
-            "cloud: health={} version={} parity={}",
-            state.cloud.health,
-            &state.cloud.version[..12],
-            state.cloud.parity
+            "cloud: health_ok={} version_ok={} image_tag={} parity_ok={}",
+            state.cloud.health_ok,
+            state.cloud.version_ok,
+            value_or_unknown(&state.cloud.image_tag),
+            state.cloud.parity_ok
+        ),
+        format!(
+            "cloud detail: commit={} parity={} missing_routes={}",
+            short(&state.cloud.commit_sha),
+            state.cloud.parity,
+            state.cloud.missing_routes.len()
+        ),
+        format!(
+            "sources: local={} cloud={} read_only={}",
+            state.local_state_source, state.cloud_state_source, state.read_only
+        ),
+        format!(
+            "freshness: local_age_seconds={} cloud_age_seconds={}",
+            format_age(state.status_freshness.local_age_seconds),
+            format_age(state.status_freshness.cloud_age_seconds)
         ),
         format!(
             "worker: id={} local={} remote={} stale={}",
@@ -217,33 +240,101 @@ fn header_lines(state: &OperatorState) -> Vec<String> {
 }
 
 fn current_object_lines(state: &OperatorState) -> Vec<String> {
+    if state.mode == "fixture" {
+        return vec![
+            "Hermes candidate summary".to_string(),
+            format!("candidate_path: {}", state.hermes_candidate.candidate_path),
+            format!("candidate_hash: {}", state.hermes_candidate.candidate_hash),
+            format!(
+                "validated: {}",
+                if state.hermes_candidate.candidate_validated {
+                    "yes"
+                } else {
+                    "no"
+                }
+            ),
+            format!(
+                "approved/appended: {}/{}",
+                state.hermes_candidate.candidate_approved,
+                state.hermes_candidate.candidate_appended
+            ),
+        ];
+    }
+
     vec![
-        "Hermes candidate summary".to_string(),
-        format!("candidate_path: {}", state.hermes_candidate.candidate_path),
-        format!("candidate_hash: {}", state.hermes_candidate.candidate_hash),
+        "Read-only local/cloud monitor".to_string(),
         format!(
-            "validated: {}",
-            if state.hermes_candidate.candidate_validated {
-                "yes"
-            } else {
-                "no"
-            }
+            "local: branch={} head={} root={} package_manager={}",
+            state.repo.branch,
+            short(&state.repo.head),
+            state.repo.repository_root,
+            state.repo.package_manager_marker
         ),
         format!(
-            "approved/appended: {}/{}",
-            state.hermes_candidate.candidate_approved, state.hermes_candidate.candidate_appended
+            "main: local={} origin={} aligned={}",
+            short(&state.repo.local_main_commit),
+            short(&state.repo.origin_main_commit),
+            state.repo.main_aligned
         ),
+        format!(
+            "git_status: clean={} summary={}",
+            state.repo.worktree_clean,
+            state.repo.git_status_summary.join(" | ")
+        ),
+        format!(
+            "cloud: health_ok={} version_ok={} commit={} image_tag={} parity_ok={}",
+            state.cloud.health_ok,
+            state.cloud.version_ok,
+            short(&state.cloud.commit_sha),
+            value_or_unknown(&state.cloud.image_tag),
+            state.cloud.parity_ok
+        ),
+        format!(
+            "stage close: baseline={} image={}",
+            short(&state.stage_close.baseline_commit),
+            state.stage_close.baseline_image_ref
+        ),
+        format!("tracked warning: {}", state.stage_close.tracked_warning),
+        format!("resolved warning: {}", state.stage_close.resolved_warning),
+        "pipeline operations disabled until MG368C/MG368D".to_string(),
     ]
 }
 
 fn safety_footer_lines(state: &OperatorState) -> Vec<String> {
     vec![
-        "READ ONLY | fixture mode | no mutation".to_string(),
         format!(
-            "no worker loop={} | no task claim={} | token_printed={}",
+            "READ ONLY LOCAL/CLOUD MONITOR | mode={} | no mutation",
+            state.mode
+        ),
+        format!(
+            "no worker loop={} | no task claim={} | no Hermes live={} | no MCP={}",
             !state.safety.worker_loop_started,
             !state.safety.task_claimed,
-            state.safety.token_printed
+            !state.safety.hermes_live_called,
+            !state.safety.mcp_run_called
         ),
+        format!("token_printed={}", state.safety.token_printed),
     ]
+}
+
+fn short(value: &str) -> String {
+    if value.is_empty() {
+        "unknown".to_string()
+    } else {
+        value.chars().take(12).collect()
+    }
+}
+
+fn value_or_unknown(value: &str) -> &str {
+    if value.is_empty() {
+        "unknown"
+    } else {
+        value
+    }
+}
+
+fn format_age(value: Option<u64>) -> String {
+    value
+        .map(|seconds| seconds.to_string())
+        .unwrap_or_else(|| "not_loaded".to_string())
 }

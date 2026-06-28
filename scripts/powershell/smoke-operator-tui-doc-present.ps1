@@ -11,11 +11,15 @@ Assert-NoUnsafeText $doc
 foreach ($required in @(
   "MG368A",
   "fixture/read-only",
+  "MG368B",
+  "--local-cloud",
+  "local_state_loaded",
+  "cloud_state_loaded",
+  "local_cloud_parity_checked",
   "no start_one_apply",
   "no start_queue_apply",
   "no worker loop",
   "token_printed=false",
-  "MG368B",
   "MG368C",
   "MG368D",
   "MG369"

@@ -1,5 +1,6 @@
 mod actions;
 mod app;
+mod collect;
 mod model;
 mod render;
 
@@ -16,20 +17,17 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
-    let mut app = App::fixture();
+    let mut app = App::new(cli.state_mode);
 
     if cli.snapshot || cli.write_report || cli.json {
         let wrote_artifacts = cli.snapshot || cli.write_report;
+        let output_dir = cli.artifact_output_dir();
         if wrote_artifacts {
-            app.write_snapshot_artifacts(&cli.output_dir)?;
+            app.write_snapshot_artifacts(&output_dir)?;
         }
 
         if cli.json {
-            let mode = if cli.snapshot { "snapshot" } else { "json" };
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&app.report(mode, false))?
-            );
+            println!("{}", serde_json::to_string_pretty(&app.report(false))?);
         } else {
             println!("{}", app.snapshot_text());
         }
@@ -71,7 +69,7 @@ fn run_loop(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Char('r') => app.refresh_fixture_state(),
+                    KeyCode::Char('r') => app.refresh_state(),
                     KeyCode::Char('c') => {
                         let _ = actions::handle_action(actions::Action::CopySafeSummary);
                     }

@@ -7,32 +7,47 @@ use anyhow::Context;
 
 use crate::{
     actions::{active_action_statuses, disabled_action_statuses},
-    model::{
-        fixture_state, OperatorReport, OperatorState, FIXTURE_GENERATED_AT, REPORT_SCHEMA,
-        STATE_SCHEMA,
-    },
+    collect::{collect_operator_state, StateMode},
+    model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
 };
 
 #[derive(Debug, Clone)]
 pub struct Cli {
-    pub fixture: bool,
+    pub state_mode: StateMode,
     pub snapshot: bool,
     pub json: bool,
     pub write_report: bool,
     pub output_dir: PathBuf,
+    pub output_dir_provided: bool,
     pub no_alt_screen: bool,
 }
 
 impl Default for Cli {
     fn default() -> Self {
         Self {
-            fixture: true,
+            state_mode: StateMode::Fixture,
             snapshot: false,
             json: false,
             write_report: false,
             output_dir: PathBuf::from(".agent/tmp/operator-tui"),
+            output_dir_provided: false,
             no_alt_screen: false,
+        }
+    }
+}
+
+impl Cli {
+    pub fn artifact_output_dir(&self) -> PathBuf {
+        if self.output_dir_provided {
+            return self.output_dir.clone();
+        }
+
+        match self.state_mode {
+            StateMode::Fixture => PathBuf::from(".agent/tmp/operator-tui"),
+            StateMode::Local => PathBuf::from(".agent/tmp/operator-tui/local"),
+            StateMode::Cloud => PathBuf::from(".agent/tmp/operator-tui/cloud"),
+            StateMode::LocalCloud => PathBuf::from(".agent/tmp/operator-tui/local-cloud"),
         }
     }
 }
@@ -40,45 +55,52 @@ impl Default for Cli {
 #[derive(Debug, Clone)]
 pub struct App {
     pub state: OperatorState,
+    pub state_mode: StateMode,
 }
 
 impl App {
-    pub fn fixture() -> Self {
+    pub fn new(state_mode: StateMode) -> Self {
         Self {
-            state: fixture_state(),
+            state: collect_operator_state(state_mode),
+            state_mode,
         }
     }
 
-    pub fn refresh_fixture_state(&mut self) {
-        self.state = fixture_state();
+    pub fn refresh_state(&mut self) {
+        self.state = collect_operator_state(self.state_mode);
     }
 
-    pub fn report(&self, mode: impl Into<String>, interactive_started: bool) -> OperatorReport {
+    pub fn report(&self, interactive_started: bool) -> OperatorReport {
+        let safety = &self.state.safety;
         OperatorReport {
             schema: REPORT_SCHEMA,
-            generated_at: FIXTURE_GENERATED_AT,
-            mode: mode.into(),
+            generated_at: self.state.generated_at.clone(),
+            mode: self.state.mode.clone(),
             fixture_used: self.state.mode == "fixture",
             interactive_started,
             state_schema: STATE_SCHEMA,
+            local_state_loaded: self.state.local_state_loaded,
+            cloud_state_loaded: self.state.cloud_state_loaded,
+            local_cloud_parity_checked: self.state.mode == "local-cloud"
+                && self.state.cloud_state_loaded,
             panels_rendered: PANELS.to_vec(),
             disabled_actions: disabled_action_statuses(),
             active_actions: active_action_statuses(),
-            mutation_attempted: false,
-            append_attempted: false,
-            approval_attempted: false,
-            task_created: false,
-            task_claimed: false,
-            execution_started: false,
-            branch_created: false,
-            pr_created: false,
-            merge_performed: false,
-            deploy_triggered: false,
-            worker_loop_started: false,
-            queue_runner_started: false,
-            hermes_live_called: false,
-            mcp_run_called: false,
-            token_printed: false,
+            mutation_attempted: safety.mutation_attempted,
+            append_attempted: safety.append_attempted,
+            approval_attempted: safety.approval_attempted,
+            task_created: safety.task_created,
+            task_claimed: safety.task_claimed,
+            execution_started: safety.execution_started,
+            branch_created: safety.branch_created,
+            pr_created: safety.pr_created,
+            merge_performed: safety.merge_performed,
+            deploy_triggered: safety.deploy_triggered,
+            worker_loop_started: safety.worker_loop_started,
+            queue_runner_started: safety.queue_runner_started,
+            hermes_live_called: safety.hermes_live_called,
+            mcp_run_called: safety.mcp_run_called,
+            token_printed: safety.token_printed,
             blockers: self.state.campaign.blockers.clone(),
             warnings: self.state.campaign.warnings.clone(),
         }
@@ -99,7 +121,7 @@ impl App {
 
         let snapshot_text = self.snapshot_text();
         let state_json = serde_json::to_string_pretty(&self.state)?;
-        let report = self.report("snapshot", false);
+        let report = self.report(false);
         let report_json = serde_json::to_string_pretty(&report)?;
         let report_md = render_report_markdown(
             self,
@@ -125,7 +147,10 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--fixture" => cli.fixture = true,
+            "--fixture" => cli.state_mode = StateMode::Fixture,
+            "--local" => cli.state_mode = StateMode::Local,
+            "--cloud" => cli.state_mode = StateMode::Cloud,
+            "--local-cloud" => cli.state_mode = StateMode::LocalCloud,
             "--snapshot" => cli.snapshot = true,
             "--json" => cli.json = true,
             "--write-report" => cli.write_report = true,
@@ -135,6 +160,7 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     .next()
                     .context("--output-dir requires a following path")?;
                 cli.output_dir = PathBuf::from(value);
+                cli.output_dir_provided = true;
             }
             "--help" | "-h" => {
                 print_help();
@@ -148,14 +174,17 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
 
 pub fn print_help() {
     println!(
-        "skybridge-operator-tui -- fixture-only read-only Ratatui console\n\
+        "skybridge-operator-tui -- read-only Ratatui operator console\n\
 \n\
 Flags:\n\
   --fixture              Use deterministic fixture state (default)\n\
+  --local                Read local repository state only\n\
+  --cloud                Read cloud health/version/parity state only\n\
+  --local-cloud          Read both local repository and cloud state\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\
-  --output-dir <path>    Artifact directory (default .agent/tmp/operator-tui)\n\
+  --output-dir <path>    Artifact directory (default .agent/tmp/operator-tui, or mode subdir)\n\
   --no-alt-screen        Do not enter alternate screen in interactive mode\n"
     );
 }
