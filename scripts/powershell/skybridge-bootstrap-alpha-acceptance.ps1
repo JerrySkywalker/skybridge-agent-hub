@@ -163,6 +163,15 @@ $requiredScripts = @{
   managed_dev_pilot_forbidden_paths_smoke = "scripts/powershell/smoke-managed-dev-pilot-forbidden-paths.ps1"
   managed_dev_pilot_no_auto_merge_smoke = "scripts/powershell/smoke-managed-dev-pilot-no-auto-merge.ps1"
   manual_managed_dev_pilot_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-pilot-fixture.ps1"
+  managed_dev_controller_native_git_smoke = "scripts/powershell/smoke-managed-dev-git-provider-detect.ps1"
+  managed_dev_controller_native_gh_smoke = "scripts/powershell/smoke-managed-dev-gh-provider-detect.ps1"
+  managed_dev_controller_native_preview_smoke = "scripts/powershell/smoke-managed-dev-controller-native-preview.ps1"
+  managed_dev_controller_native_apply_fixture_smoke = "scripts/powershell/smoke-managed-dev-controller-native-apply-fixture.ps1"
+  managed_dev_controller_native_pr_fixture_smoke = "scripts/powershell/smoke-managed-dev-controller-native-pr-fixture.ps1"
+  managed_dev_controller_native_no_fallback_smoke = "scripts/powershell/smoke-managed-dev-controller-native-no-fallback.ps1"
+  managed_dev_controller_native_blocker_classification_smoke = "scripts/powershell/smoke-managed-dev-controller-native-blocker-classification.ps1"
+  manual_managed_dev_controller_native_fixture_smoke = "scripts/powershell/smoke-manual-managed-dev-controller-native-fixture.ps1"
+  managed_dev_controller_native_mg360_doc = "docs/orchestrator/MANAGED_DEVELOPMENT_PR_PILOT_MG360.md"
 }
 
 $componentPaths = @{

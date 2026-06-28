@@ -1,5 +1,20 @@
 # Progress Log
 
+## 2026-06-28 Mega Goal 360 Managed Dev Git/GH Provider Repair
+
+- Repaired the managed-dev controller-native Git/GH path after MG359A exposed
+  `git_unavailable` from the controller before mutation.
+- Added bounded Git/GH detection fields, explicit blocker classification and
+  `manual_fallback_used=false` reporting for the managed-dev pilot schema.
+- Added controller-native fixture smokes for Git detection, GH detection,
+  preview, apply, PR creation, no fallback and blocker classification.
+- Added the MG360 controller-native pilot note and wired Bootstrap Alpha
+  acceptance to require the MG360 smokes and documentation.
+- Kept auto-merge, release creation, tag creation, asset upload, worker loops,
+  Codex generation/execution, MATLAB, Hermes, MCP, task creation, task claim,
+  project-control unpause, deployment infrastructure changes and token printing
+  disabled.
+
 ## 2026-06-28 Mega Goal 357 Managed Development PR Pilot
 
 - Added the managed development PR pilot controller for fixture and guarded
