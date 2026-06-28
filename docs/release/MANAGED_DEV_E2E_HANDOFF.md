@@ -1,13 +1,13 @@
 # Managed Dev E2E Handoff
 
-This document freezes the managed development end-to-end capability baseline at
-the close of MG363.
+This document freezes the managed development end-to-end capability baseline
+through Stage S1.1, closing MG351-MG366C.
 
 ## Current State
 
-- Current main commit: `961b492fabdcc7a737043e83d906d6c8d3f4bf38`
+- Current main commit: `2652d8fd34c82ece95cf61217a6fadc07c67e754`
 - Current cloud image:
-  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-961b492fabdcc7a737043e83d906d6c8d3f4bf38`
+  `ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2652d8fd34c82ece95cf61217a6fadc07c67e754`
 - Cloud health: `/v1/health` ok
 - Cloud version: `/v1/version` matches the current main commit
 - Cloud parity: ok
@@ -59,6 +59,14 @@ merge, deploy, run worker loops or mutate `project_control`. Direct providers
 remain the execution path. See
 `docs/orchestrator/HERMES_PLANNER_PROVIDER.md`.
 
+## Stage S1.1 Close
+
+MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
+the final MG351-MG366C main/cloud baseline, keeps the same safety boundaries,
+and adds only read-only audit and smoke wiring. See
+`docs/release/STAGE_S1_1_CLOSE.md` and
+`scripts/powershell/skybridge-stage-s1-1-close.ps1`.
+
 ## PR Evidence
 
 - PR #267: Tool Provider Contract and Local Direct Provider Inventory
@@ -74,6 +82,11 @@ remain the execution path. See
 - PR #277: Campaign-Driven Managed Dev E2E implementation
 - PR #278: managed-dev campaign delegate repair
 - PR #279: merged campaign-driven managed-dev pilot proof
+- PR #280: Managed Dev E2E handoff and capability freeze
+- PR #281: Warning inventory real task
+- PR #282: GitHub Actions Node runtime hygiene
+- PR #283: Vite chunk warning analysis
+- PR #284: Hermes Planner Provider Pilot
 
 ## Safety Boundary
 
@@ -99,7 +112,7 @@ remain the execution path. See
 Run a read-only local handoff audit:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-dev-e2e-handoff.ps1 -Command audit -ExpectedCommit 961b492fabdcc7a737043e83d906d6c8d3f4bf38 -ExpectedCloudImage ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-961b492fabdcc7a737043e83d906d6c8d3f4bf38 -Json -WriteReport
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-managed-dev-e2e-handoff.ps1 -Command audit -ExpectedCommit 2652d8fd34c82ece95cf61217a6fadc07c67e754 -ExpectedCloudImage ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2652d8fd34c82ece95cf61217a6fadc07c67e754 -Json -WriteReport
 ```
 
 The audit is read-only. It must not mutate Git, GitHub PR state, deployment,
