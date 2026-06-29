@@ -242,6 +242,13 @@ $requiredScripts = @{
   operator_tui_candidate_append_preview_smoke = "scripts/powershell/smoke-operator-tui-candidate-append-preview.ps1"
   operator_tui_candidate_append_apply_fixture_smoke = "scripts/powershell/smoke-operator-tui-candidate-append-apply-fixture.ps1"
   operator_tui_candidate_no_execution_smoke = "scripts/powershell/smoke-operator-tui-candidate-no-execution.ps1"
+  operator_tui_single_step_preview_smoke = "scripts/powershell/smoke-operator-tui-single-step-preview.ps1"
+  operator_tui_single_step_start_fixture_smoke = "scripts/powershell/smoke-operator-tui-single-step-start-fixture.ps1"
+  operator_tui_single_step_safe_pause_smoke = "scripts/powershell/smoke-operator-tui-single-step-safe-pause.ps1"
+  operator_tui_single_step_abort_preview_smoke = "scripts/powershell/smoke-operator-tui-single-step-abort-preview.ps1"
+  operator_tui_single_step_no_loop_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-loop.ps1"
+  operator_tui_single_step_no_auto_merge_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-auto-merge.ps1"
+  operator_tui_single_step_no_release_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-release.ps1"
 }
 
 $componentPaths = @{
@@ -534,7 +541,14 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-candidate-review-preview",
   "smoke:operator-tui-candidate-append-preview",
   "smoke:operator-tui-candidate-append-apply-fixture",
-  "smoke:operator-tui-candidate-no-execution"
+  "smoke:operator-tui-candidate-no-execution",
+  "smoke:operator-tui-single-step-preview",
+  "smoke:operator-tui-single-step-start-fixture",
+  "smoke:operator-tui-single-step-safe-pause",
+  "smoke:operator-tui-single-step-abort-preview",
+  "smoke:operator-tui-single-step-no-loop",
+  "smoke:operator-tui-single-step-no-auto-merge",
+  "smoke:operator-tui-single-step-no-release"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

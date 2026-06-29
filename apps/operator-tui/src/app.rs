@@ -14,6 +14,11 @@ use crate::{
     collect::{collect_operator_state, StateMode},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
+    single_step::{
+        load_default_candidate_state, load_single_step_state, run_single_step_action,
+        single_step_report, write_single_step_artifacts, SingleStepAction, SingleStepOptions,
+        DEFAULT_SINGLE_STEP_OUTPUT_DIR,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -28,6 +33,13 @@ pub struct Cli {
     pub candidate_action: CandidateAction,
     pub review_confirm: String,
     pub append_confirm: String,
+    pub single_step_action: SingleStepAction,
+    pub single_step_mode: String,
+    pub start_confirm: String,
+    pub pause_confirm: String,
+    pub abort_confirm: String,
+    pub pause_reason: String,
+    pub abort_reason: String,
 }
 
 impl Default for Cli {
@@ -43,6 +55,13 @@ impl Default for Cli {
             candidate_action: CandidateAction::None,
             review_confirm: String::new(),
             append_confirm: String::new(),
+            single_step_action: SingleStepAction::None,
+            single_step_mode: "fixture".to_string(),
+            start_confirm: String::new(),
+            pause_confirm: String::new(),
+            abort_confirm: String::new(),
+            pause_reason: String::new(),
+            abort_reason: String::new(),
         }
     }
 }
@@ -59,6 +78,7 @@ impl Cli {
             StateMode::Cloud => PathBuf::from(".agent/tmp/operator-tui/cloud"),
             StateMode::LocalCloud => PathBuf::from(".agent/tmp/operator-tui/local-cloud"),
             StateMode::CandidateFlow => PathBuf::from(".agent/tmp/operator-tui/candidate-flow"),
+            StateMode::SingleStep => PathBuf::from(DEFAULT_SINGLE_STEP_OUTPUT_DIR),
         }
     }
 }
@@ -72,13 +92,23 @@ pub struct App {
 impl App {
     pub fn new(state_mode: StateMode, output_dir: &Path) -> Self {
         let mut state = collect_operator_state(state_mode);
-        state.candidate_flow = load_candidate_state(output_dir);
+        if state_mode == StateMode::SingleStep {
+            state.candidate_flow = load_default_candidate_state();
+            state.single_step = load_single_step_state(output_dir);
+        } else {
+            state.candidate_flow = load_candidate_state(output_dir);
+        }
         Self { state, state_mode }
     }
 
     pub fn refresh_state(&mut self, output_dir: &Path) {
         self.state = collect_operator_state(self.state_mode);
-        self.state.candidate_flow = load_candidate_state(output_dir);
+        if self.state_mode == StateMode::SingleStep {
+            self.state.candidate_flow = load_default_candidate_state();
+            self.state.single_step = load_single_step_state(output_dir);
+        } else {
+            self.state.candidate_flow = load_candidate_state(output_dir);
+        }
     }
 
     pub fn run_candidate_action(&mut self, cli: &Cli) {
@@ -90,6 +120,21 @@ impl App {
             append_confirm: cli.append_confirm.clone(),
         };
         self.state.candidate_flow = run_candidate_action(&options);
+    }
+
+    pub fn run_single_step_action(&mut self, cli: &Cli) {
+        let output_dir = cli.artifact_output_dir();
+        let options = SingleStepOptions {
+            output_dir,
+            action: cli.single_step_action,
+            mode: cli.single_step_mode.clone(),
+            start_confirm: cli.start_confirm.clone(),
+            pause_confirm: cli.pause_confirm.clone(),
+            abort_confirm: cli.abort_confirm.clone(),
+            pause_reason: cli.pause_reason.clone(),
+            abort_reason: cli.abort_reason.clone(),
+        };
+        self.state.single_step = run_single_step_action(&options, &self.state);
     }
 
     pub fn report(&self, interactive_started: bool) -> OperatorReport {
@@ -145,6 +190,9 @@ impl App {
         if self.state_mode == StateMode::CandidateFlow {
             return write_candidate_artifacts(output_dir, &self.state, &snapshot_text);
         }
+        if self.state_mode == StateMode::SingleStep {
+            return write_single_step_artifacts(output_dir, &self.state, &snapshot_text);
+        }
 
         let state_json = serde_json::to_string_pretty(&self.state)?;
         let report = self.report(false);
@@ -173,6 +221,11 @@ impl App {
                 &self.state,
             ))?);
         }
+        if self.state_mode == StateMode::SingleStep {
+            return Ok(serde_json::to_string_pretty(&single_step_report(
+                &self.state,
+            ))?);
+        }
         Ok(serde_json::to_string_pretty(
             &self.report(interactive_started),
         )?)
@@ -189,6 +242,7 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
             "--cloud" => cli.state_mode = StateMode::Cloud,
             "--local-cloud" => cli.state_mode = StateMode::LocalCloud,
             "--candidate-flow" => cli.state_mode = StateMode::CandidateFlow,
+            "--single-step" => cli.state_mode = StateMode::SingleStep,
             "--snapshot" => cli.snapshot = true,
             "--json" => cli.json = true,
             "--write-report" => cli.write_report = true,
@@ -200,6 +254,19 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                 cli.candidate_action = CandidateAction::from_str(&value)?;
                 cli.state_mode = StateMode::CandidateFlow;
             }
+            "--single-step-action" => {
+                let value = iter
+                    .next()
+                    .context("--single-step-action requires a following value")?;
+                cli.single_step_action = SingleStepAction::from_str(&value)?;
+                cli.state_mode = StateMode::SingleStep;
+            }
+            "--single-step-mode" => {
+                cli.single_step_mode = iter
+                    .next()
+                    .context("--single-step-mode requires a following value")?;
+                cli.state_mode = StateMode::SingleStep;
+            }
             "--review-confirm" => {
                 cli.review_confirm = iter
                     .next()
@@ -209,6 +276,31 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                 cli.append_confirm = iter
                     .next()
                     .context("--append-confirm requires a following value")?;
+            }
+            "--start-confirm" => {
+                cli.start_confirm = iter
+                    .next()
+                    .context("--start-confirm requires a following value")?;
+            }
+            "--pause-confirm" => {
+                cli.pause_confirm = iter
+                    .next()
+                    .context("--pause-confirm requires a following value")?;
+            }
+            "--abort-confirm" => {
+                cli.abort_confirm = iter
+                    .next()
+                    .context("--abort-confirm requires a following value")?;
+            }
+            "--pause-reason" => {
+                cli.pause_reason = iter
+                    .next()
+                    .context("--pause-reason requires a following value")?;
+            }
+            "--abort-reason" => {
+                cli.abort_reason = iter
+                    .next()
+                    .context("--abort-reason requires a following value")?;
             }
             "--output-dir" => {
                 let value = iter
@@ -241,6 +333,16 @@ Flags:\n\
                          append-preview, or append-apply-fixture\n\
   --review-confirm <s>   Exact review confirmation for review-approve\n\
   --append-confirm <s>   Exact append confirmation for append-apply-fixture\n\
+  --single-step          Use MG368D single-step gate mode\n\
+  --single-step-action <a>\n\
+                         Run preview, start-fixture, safe-pause, abort-preview,\n\
+                         or abort-apply-fixture\n\
+  --single-step-mode <m> Use fixture, preview, or manual metadata mode\n\
+  --start-confirm <s>    Exact confirmation for start-fixture\n\
+  --pause-confirm <s>    Exact confirmation for safe-pause\n\
+  --abort-confirm <s>    Exact confirmation for abort-apply-fixture\n\
+  --pause-reason <s>     Sanitized reason for safe-pause\n\
+  --abort-reason <s>     Sanitized reason for abort preview/apply\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

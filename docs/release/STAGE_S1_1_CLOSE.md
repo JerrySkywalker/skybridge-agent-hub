@@ -86,11 +86,18 @@ bounded action apply, no task creation, no task claim, no branch or PR
 creation, no merge, no deploy, no live Hermes call, no MCP run, no worker loop
 and no queue runner. The appended fixture step is pending for a future goal.
 
+MG368D adds the Ratatui single-step goal control gate. It can preview the next
+bounded action and exercise fixture-safe start-one, safe-pause and abort
+metadata gates with exact confirmations. It remains one-action-only and does
+not run a queue, run forever, create a worker loop, create or claim tasks,
+execute, create branches or PRs, merge, deploy, call live Hermes, call MCP,
+auto-merge, create releases, tags or assets, or print tokens. The first real
+manual hosted-dev experiment remains deferred to MG369.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368D Single-step Goal Control Gate
-2. MG369 Manual Single-step Hosted-dev Experiment
+1. MG369 Manual Single-step Hosted-dev Experiment
 
 ## Read-Only Audit
 

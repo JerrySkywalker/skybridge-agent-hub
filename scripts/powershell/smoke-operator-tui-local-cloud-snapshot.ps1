@@ -17,7 +17,7 @@ foreach ($text in @(
   "Read-only local/cloud monitor",
   "tracked warning: Vite chunk-size warning non-failing",
   "resolved warning: GitHub Actions Node.js 20 deprecation resolved",
-  "candidate flow enabled in MG368C; execution disabled until MG368D",
+  "single-step gate enabled in MG368D; first real experiment deferred to MG369",
   "token_printed=false"
 )) {
   if ($result.snapshot_text -notmatch [regex]::Escape($text)) { throw "Local-cloud snapshot missing text: $text" }

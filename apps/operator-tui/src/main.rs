@@ -4,6 +4,7 @@ mod candidate;
 mod collect;
 mod model;
 mod render;
+mod single_step;
 
 use std::{io, time::Duration};
 
@@ -23,15 +24,20 @@ fn main() -> anyhow::Result<()> {
     if cli.candidate_action != candidate::CandidateAction::None {
         app.run_candidate_action(&cli);
     }
+    if cli.single_step_action != single_step::SingleStepAction::None {
+        app.run_single_step_action(&cli);
+    }
 
     if cli.snapshot
         || cli.write_report
         || cli.json
         || cli.candidate_action != candidate::CandidateAction::None
+        || cli.single_step_action != single_step::SingleStepAction::None
     {
         let wrote_artifacts = cli.snapshot
             || cli.write_report
-            || cli.candidate_action != candidate::CandidateAction::None;
+            || cli.candidate_action != candidate::CandidateAction::None
+            || cli.single_step_action != single_step::SingleStepAction::None;
         if wrote_artifacts {
             app.write_snapshot_artifacts(&output_dir)?;
         }

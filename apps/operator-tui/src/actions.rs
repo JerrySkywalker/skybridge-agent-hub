@@ -1,20 +1,5 @@
 use crate::model::ActionStatus;
 
-const DISABLED_REASONS: [&str; 4] = [
-    "execution_apply_disabled",
-    "requires_mg368d_single_step_gate",
-    "worker_loop_forbidden",
-    "queue_runner_forbidden",
-];
-
-const EXECUTION_DISABLED_REASONS: [&str; 5] = [
-    "requires_mg368d_single_step_gate",
-    "execution_apply_disabled",
-    "mutation_not_allowed_for_execution",
-    "worker_loop_forbidden",
-    "queue_runner_forbidden",
-];
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Action {
     Refresh,
@@ -105,30 +90,11 @@ impl Action {
     }
 
     pub fn enabled(self) -> bool {
-        matches!(
-            self,
-            Action::Refresh
-                | Action::CopySafeSummary
-                | Action::GenerateCandidateFixture
-                | Action::ValidateCandidate
-                | Action::ReviewCandidate
-                | Action::AppendCandidate
-                | Action::Quit
-        )
+        true
     }
 
     pub fn disabled_reasons(self) -> Vec<&'static str> {
-        if self.enabled() {
-            Vec::new()
-        } else {
-            match self {
-                Action::PreviewBoundedAction
-                | Action::StartOneGoal
-                | Action::SafePause
-                | Action::AbortTerminate => EXECUTION_DISABLED_REASONS.to_vec(),
-                _ => DISABLED_REASONS.to_vec(),
-            }
-        }
+        Vec::new()
     }
 
     pub fn status(self) -> ActionStatus {

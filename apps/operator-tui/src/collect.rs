@@ -19,6 +19,7 @@ pub enum StateMode {
     Cloud,
     LocalCloud,
     CandidateFlow,
+    SingleStep,
 }
 
 impl StateMode {
@@ -29,20 +30,27 @@ impl StateMode {
             StateMode::Cloud => "cloud",
             StateMode::LocalCloud => "local-cloud",
             StateMode::CandidateFlow => "candidate-flow",
+            StateMode::SingleStep => "single-step",
         }
     }
 
     pub fn loads_local(self) -> bool {
         matches!(
             self,
-            StateMode::Local | StateMode::LocalCloud | StateMode::CandidateFlow
+            StateMode::Local
+                | StateMode::LocalCloud
+                | StateMode::CandidateFlow
+                | StateMode::SingleStep
         )
     }
 
     pub fn loads_cloud(self) -> bool {
         matches!(
             self,
-            StateMode::Cloud | StateMode::LocalCloud | StateMode::CandidateFlow
+            StateMode::Cloud
+                | StateMode::LocalCloud
+                | StateMode::CandidateFlow
+                | StateMode::SingleStep
         )
     }
 }

@@ -43,7 +43,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
     let mut lines = Vec::new();
 
     lines.push(format!(
-        "SkyBridge Operator Console - MG368C Candidate Review/Append Snapshot ({})",
+        "SkyBridge Operator Console - MG368D Single-Step Gate Snapshot ({})",
         state.mode
     ));
     lines.push("".to_string());
@@ -63,11 +63,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
 
     lines.push(format!("## {}", PANELS[3]));
     for action in Action::all() {
-        let suffix = if action.enabled() {
-            ""
-        } else {
-            " [disabled until MG368D]"
-        };
+        let suffix = if action.enabled() { "" } else { " [disabled]" };
         lines.push(format!("- {} {}{}", action.key(), action.label(), suffix));
         if !action.enabled() {
             lines.push(format!(
@@ -91,8 +87,12 @@ pub fn render_report_markdown(app: &App, snapshot_path: &str, state_path: &str) 
         .disabled_actions
         .iter()
         .map(|action| format!("{} ({})", action.action, action.disabled_reasons.join(", ")))
-        .collect::<Vec<_>>()
-        .join("\n- ");
+        .collect::<Vec<_>>();
+    let disabled = if disabled.is_empty() {
+        "none".to_string()
+    } else {
+        disabled.join("\n- ")
+    };
     let active = report
         .active_actions
         .iter()
@@ -101,7 +101,7 @@ pub fn render_report_markdown(app: &App, snapshot_path: &str, state_path: &str) 
         .join(", ");
 
     format!(
-        "# Operator TUI MG368B Snapshot Report\n\n- schema: {}\n- mode: {}\n- fixture_used: {}\n- local_state_loaded: {}\n- cloud_state_loaded: {}\n- local_cloud_parity_checked: {}\n- interactive_started: {}\n- snapshot: {}\n- state: {}\n- panels_rendered: {}\n- active_actions: {}\n- disabled_actions:\n- {}\n- mutation_attempted: false\n- append_attempted: false\n- approval_attempted: false\n- task_created: false\n- task_claimed: false\n- execution_started: false\n- worker_loop_started: false\n- queue_runner_started: false\n- hermes_live_called: false\n- mcp_run_called: false\n- token_printed: false\n",
+        "# Operator TUI MG368D Snapshot Report\n\n- schema: {}\n- mode: {}\n- fixture_used: {}\n- local_state_loaded: {}\n- cloud_state_loaded: {}\n- local_cloud_parity_checked: {}\n- interactive_started: {}\n- snapshot: {}\n- state: {}\n- panels_rendered: {}\n- active_actions: {}\n- disabled_actions: {}\n- mutation_attempted: false\n- append_attempted: false\n- approval_attempted: false\n- task_created: false\n- task_claimed: false\n- execution_started: false\n- worker_loop_started: false\n- queue_runner_started: false\n- hermes_live_called: false\n- mcp_run_called: false\n- token_printed: false\n",
         report.schema,
         report.mode,
         report.fixture_used,
@@ -158,7 +158,7 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect) {
             let disabled = !action.enabled();
             let mut label = format!("{} {}", action.key(), action.label());
             if disabled {
-                label.push_str(" [disabled until MG368D]");
+                label.push_str(" [disabled]");
             }
             let style = if disabled {
                 Style::default().fg(Color::DarkGray)
@@ -240,6 +240,67 @@ fn header_lines(state: &OperatorState) -> Vec<String> {
 }
 
 fn current_object_lines(state: &OperatorState) -> Vec<String> {
+    if state.mode == "single-step" {
+        let candidate = &state.candidate_flow;
+        let step = &state.single_step;
+        return vec![
+            "Single-step goal control gate".to_string(),
+            format!(
+                "appended_step_id: {}",
+                value_or_unknown(&step.appended_step_id)
+            ),
+            format!("candidate_appended: {}", step.candidate_appended),
+            format!(
+                "candidate_hash: {}",
+                value_or_unknown(&candidate.candidate_hash)
+            ),
+            format!(
+                "bounded_action: previewed={} type={} allowed={} blockers={}",
+                step.next_bounded_action_previewed,
+                step.next_bounded_action_type,
+                step.next_bounded_action_allowed,
+                if step.next_bounded_action_blockers.is_empty() {
+                    "none".to_string()
+                } else {
+                    step.next_bounded_action_blockers.join(" | ")
+                }
+            ),
+            format!(
+                "start_one: requested={} confirmed={} performed={} mode={} result={}",
+                step.start_one_requested,
+                step.start_one_confirmed,
+                step.start_one_performed,
+                step.start_one_mode,
+                step.start_one_result
+            ),
+            format!(
+                "safe_pause: requested={} confirmed={} performed={} reason={}",
+                step.safe_pause_requested,
+                step.safe_pause_confirmed,
+                step.safe_pause_performed,
+                value_or_unknown(&step.safe_pause_reason)
+            ),
+            format!(
+                "abort: requested={} previewed={} confirmed={} performed={} reason={}",
+                step.abort_requested,
+                step.abort_previewed,
+                step.abort_confirmed,
+                step.abort_performed,
+                value_or_unknown(&step.abort_reason)
+            ),
+            "safety: one action only, no queue loop, no worker loop, no run forever".to_string(),
+            format!(
+                "task_created={} task_claimed={} execution_started={}",
+                step.task_created, step.task_claimed, step.execution_started
+            ),
+            format!(
+                "branch_created={} pr_created={} draft_pr_created={}",
+                step.branch_created, step.pr_created, step.draft_pr_created
+            ),
+            format!("token_printed={}", step.token_printed),
+        ];
+    }
+
     if state.mode == "candidate-flow" {
         let candidate = &state.candidate_flow;
         return vec![
@@ -322,11 +383,19 @@ fn current_object_lines(state: &OperatorState) -> Vec<String> {
         ),
         format!("tracked warning: {}", state.stage_close.tracked_warning),
         format!("resolved warning: {}", state.stage_close.resolved_warning),
-        "candidate flow enabled in MG368C; execution disabled until MG368D".to_string(),
+        "single-step gate enabled in MG368D; first real experiment deferred to MG369".to_string(),
     ]
 }
 
 fn safety_footer_lines(state: &OperatorState) -> Vec<String> {
+    if state.mode == "single-step" {
+        return vec![
+            "SINGLE-STEP GATE | one action only | no queue loop".to_string(),
+            "no worker loop | no run forever | no auto-merge | no release/tag/assets".to_string(),
+            format!("token_printed={}", state.single_step.token_printed),
+        ];
+    }
+
     if state.mode == "candidate-flow" {
         return vec![
             "CANDIDATE REVIEW/APPEND ONLY | no execution | no task claim".to_string(),
