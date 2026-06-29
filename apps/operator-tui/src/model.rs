@@ -1,12 +1,14 @@
 use serde::Serialize;
 
+use crate::candidate::CandidateState;
+
 pub const STATE_SCHEMA: &str = "skybridge.operator_tui_state.v1";
 pub const REPORT_SCHEMA: &str = "skybridge.operator_tui_report.v1";
 pub const FIXTURE_GENERATED_AT: &str = "2026-06-29T00:00:00Z";
-pub const BASELINE_HEAD: &str = "9303808ce06789bc918f49f41277ba287bceb7e2";
+pub const BASELINE_HEAD: &str = "7cb325fa10d67de619451c4b593f99999a60d1da";
 pub const STAGE_S1_1_HEAD: &str = "c2bd551370f68950c2cd759de6a4f30b5e0396d8";
 pub const CLOUD_IMAGE_REF: &str =
-    "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-9303808ce06789bc918f49f41277ba287bceb7e2";
+    "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-7cb325fa10d67de619451c4b593f99999a60d1da";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OperatorState {
@@ -25,6 +27,7 @@ pub struct OperatorState {
     pub worker: WorkerState,
     pub campaign: CampaignState,
     pub hermes_candidate: HermesCandidateState,
+    pub candidate_flow: CandidateState,
     pub managed_dev: ManagedDevState,
     pub safety: SafetyState,
 }
@@ -253,13 +256,15 @@ pub fn fixture_state() -> OperatorState {
                 "MG369 manual single-step hosted-dev experiment".to_string(),
             ],
             blockers: vec![
-                "requires_later_reviewed_gate".to_string(),
+                "requires_mg368d_single_step_gate".to_string(),
                 "execution_apply_disabled".to_string(),
-                "mutation_not_allowed_in_read_only_monitor".to_string(),
+                "mutation_not_allowed_for_execution".to_string(),
+                "worker_loop_forbidden".to_string(),
+                "queue_runner_forbidden".to_string(),
             ],
             warnings: vec![
-                "pipeline operations remain disabled until MG368C/MG368D".to_string(),
-                "all mutation-capable actions are visible but disabled".to_string(),
+                "candidate append stops before execution in MG368C".to_string(),
+                "bounded action and start goal remain disabled until MG368D".to_string(),
             ],
         },
         hermes_candidate: HermesCandidateState {
@@ -273,6 +278,7 @@ pub fn fixture_state() -> OperatorState {
             candidate_approved: false,
             candidate_appended: false,
         },
+        candidate_flow: CandidateState::empty(),
         managed_dev: ManagedDevState {
             branch: None,
             pr_number: None,
@@ -312,6 +318,10 @@ impl SafetyState {
 }
 
 pub fn timeline_steps(state: &OperatorState) -> Vec<TimelineStep> {
+    let candidate = &state.candidate_flow;
+    let candidate_generated = !candidate.candidate_hash.is_empty();
+    let candidate_reviewed = candidate.review_status == "approved_for_append";
+
     vec![
         TimelineStep {
             label: "Objective",
@@ -319,11 +329,11 @@ pub fn timeline_steps(state: &OperatorState) -> Vec<TimelineStep> {
         },
         TimelineStep {
             label: "Candidate generated",
-            status: "done",
+            status: if candidate_generated { "done" } else { "ready" },
         },
         TimelineStep {
             label: "Candidate validated",
-            status: if state.hermes_candidate.candidate_validated {
+            status: if candidate.candidate_validated || state.hermes_candidate.candidate_validated {
                 "done"
             } else {
                 "pending"
@@ -331,11 +341,23 @@ pub fn timeline_steps(state: &OperatorState) -> Vec<TimelineStep> {
         },
         TimelineStep {
             label: "Candidate reviewed",
-            status: "blocked",
+            status: if candidate_reviewed {
+                "done"
+            } else if candidate.candidate_validated {
+                "ready"
+            } else {
+                "pending"
+            },
         },
         TimelineStep {
             label: "Candidate appended",
-            status: "blocked",
+            status: if candidate.append_performed {
+                "done"
+            } else if candidate_reviewed {
+                "ready"
+            } else {
+                "pending"
+            },
         },
         TimelineStep {
             label: "Bounded action previewed",

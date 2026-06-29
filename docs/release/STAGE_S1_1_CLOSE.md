@@ -78,12 +78,19 @@ health/version/parity and the tracked Stage S1.1 warning baseline without
 enabling candidate append, task creation, task claim, queue execution, worker
 loops, Hermes live calls or MCP runs.
 
+MG368C keeps the MG368B monitor and enables the first reviewed candidate flow:
+fixture Hermes candidate generation, validation, review preview, exact
+confirmation review approval and fixture-safe append metadata. It remains
+append-only/no-execution: no `start_one_apply`, no `start_queue_apply`, no
+bounded action apply, no task creation, no task claim, no branch or PR
+creation, no merge, no deploy, no live Hermes call, no MCP run, no worker loop
+and no queue runner. The appended fixture step is pending for a future goal.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368C Candidate Review/Append Console
-2. MG368D Single-step Goal Control Gate
-3. MG369 Manual Single-step Hosted-dev Experiment
+1. MG368D Single-step Goal Control Gate
+2. MG369 Manual Single-step Hosted-dev Experiment
 
 ## Read-Only Audit
 

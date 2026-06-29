@@ -4,7 +4,7 @@ $result = Invoke-OperatorTuiSnapshot "smoke-snapshot" "fixture"
 
 if ($result.report.mode -ne "fixture") { throw "Operator TUI report mode must be fixture." }
 foreach ($text in @(
-  "SkyBridge Operator Console - MG368B Read-only Snapshot",
+  "SkyBridge Operator Console - MG368C Candidate Review/Append Snapshot",
   "READ ONLY",
   "mode=fixture",
   "no mutation",

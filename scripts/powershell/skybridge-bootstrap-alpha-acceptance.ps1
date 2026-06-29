@@ -236,6 +236,12 @@ $requiredScripts = @{
   operator_tui_cloud_state_smoke = "scripts/powershell/smoke-operator-tui-cloud-state.ps1"
   operator_tui_local_cloud_snapshot_smoke = "scripts/powershell/smoke-operator-tui-local-cloud-snapshot.ps1"
   operator_tui_local_cloud_no_mutation_smoke = "scripts/powershell/smoke-operator-tui-local-cloud-no-mutation.ps1"
+  operator_tui_candidate_generate_smoke = "scripts/powershell/smoke-operator-tui-candidate-generate.ps1"
+  operator_tui_candidate_validate_smoke = "scripts/powershell/smoke-operator-tui-candidate-validate.ps1"
+  operator_tui_candidate_review_preview_smoke = "scripts/powershell/smoke-operator-tui-candidate-review-preview.ps1"
+  operator_tui_candidate_append_preview_smoke = "scripts/powershell/smoke-operator-tui-candidate-append-preview.ps1"
+  operator_tui_candidate_append_apply_fixture_smoke = "scripts/powershell/smoke-operator-tui-candidate-append-apply-fixture.ps1"
+  operator_tui_candidate_no_execution_smoke = "scripts/powershell/smoke-operator-tui-candidate-no-execution.ps1"
 }
 
 $componentPaths = @{
@@ -522,7 +528,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-local-state",
   "smoke:operator-tui-cloud-state",
   "smoke:operator-tui-local-cloud-snapshot",
-  "smoke:operator-tui-local-cloud-no-mutation"
+  "smoke:operator-tui-local-cloud-no-mutation",
+  "smoke:operator-tui-candidate-generate",
+  "smoke:operator-tui-candidate-validate",
+  "smoke:operator-tui-candidate-review-preview",
+  "smoke:operator-tui-candidate-append-preview",
+  "smoke:operator-tui-candidate-append-apply-fixture",
+  "smoke:operator-tui-candidate-no-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

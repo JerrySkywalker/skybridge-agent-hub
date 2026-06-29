@@ -43,7 +43,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
     let mut lines = Vec::new();
 
     lines.push(format!(
-        "SkyBridge Operator Console - MG368B Read-only Snapshot ({})",
+        "SkyBridge Operator Console - MG368C Candidate Review/Append Snapshot ({})",
         state.mode
     ));
     lines.push("".to_string());
@@ -66,7 +66,7 @@ pub fn render_snapshot_text(state: &OperatorState) -> String {
         let suffix = if action.enabled() {
             ""
         } else {
-            " [disabled in MG368B]"
+            " [disabled until MG368D]"
         };
         lines.push(format!("- {} {}{}", action.key(), action.label(), suffix));
         if !action.enabled() {
@@ -158,7 +158,7 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect) {
             let disabled = !action.enabled();
             let mut label = format!("{} {}", action.key(), action.label());
             if disabled {
-                label.push_str(" [disabled in MG368B]");
+                label.push_str(" [disabled until MG368D]");
             }
             let style = if disabled {
                 Style::default().fg(Color::DarkGray)
@@ -240,6 +240,32 @@ fn header_lines(state: &OperatorState) -> Vec<String> {
 }
 
 fn current_object_lines(state: &OperatorState) -> Vec<String> {
+    if state.mode == "candidate-flow" {
+        let candidate = &state.candidate_flow;
+        return vec![
+            "Candidate review/append flow".to_string(),
+            format!("candidate_path: {}", candidate.candidate_path),
+            format!(
+                "candidate_hash: {}",
+                value_or_unknown(&candidate.candidate_hash)
+            ),
+            format!("candidate_title: {}", candidate.candidate_title),
+            format!("candidate_goal_id: {}", candidate.candidate_goal_id),
+            format!("validation_result: {}", candidate.validation_result),
+            format!("validated: {}", candidate.candidate_validated),
+            format!("review_status: {}", candidate.review_status),
+            format!("append_allowed: {}", candidate.append_allowed),
+            format!("append_previewed: {}", candidate.append_previewed),
+            format!("append_performed: {}", candidate.append_performed),
+            format!(
+                "appended_step_id: {}",
+                value_or_unknown(&candidate.appended_step_id)
+            ),
+            "safety: no execution, no task claim, no branch/PR creation".to_string(),
+            format!("token_printed={}", candidate.token_printed),
+        ];
+    }
+
     if state.mode == "fixture" {
         return vec![
             "Hermes candidate summary".to_string(),
@@ -296,11 +322,19 @@ fn current_object_lines(state: &OperatorState) -> Vec<String> {
         ),
         format!("tracked warning: {}", state.stage_close.tracked_warning),
         format!("resolved warning: {}", state.stage_close.resolved_warning),
-        "pipeline operations disabled until MG368C/MG368D".to_string(),
+        "candidate flow enabled in MG368C; execution disabled until MG368D".to_string(),
     ]
 }
 
 fn safety_footer_lines(state: &OperatorState) -> Vec<String> {
+    if state.mode == "candidate-flow" {
+        return vec![
+            "CANDIDATE REVIEW/APPEND ONLY | no execution | no task claim".to_string(),
+            "no worker loop | no branch/PR creation | no Hermes live | no MCP".to_string(),
+            format!("token_printed={}", state.candidate_flow.token_printed),
+        ];
+    }
+
     vec![
         format!(
             "READ ONLY LOCAL/CLOUD MONITOR | mode={} | no mutation",

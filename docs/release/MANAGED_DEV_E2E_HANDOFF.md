@@ -71,6 +71,14 @@ tag and route parity. It still does not append goals, approve candidates, start
 goals, pause, terminate, create branches or PRs, merge, deploy, call Hermes
 live, call MCP, start a worker loop or run a queue runner.
 
+MG368C keeps the MG368B local/cloud monitor and enables one reviewed candidate
+flow through the Ratatui console: fixture Hermes candidate generation,
+candidate validation, review preview, exact-confirmed approval for append, and
+fixture-safe append metadata. It is append-only/no-execution. It does not start
+the appended goal, run a bounded action, create or claim tasks, create branches
+or PRs, merge, deploy, call live Hermes, call MCP, start a worker loop or run a
+queue runner.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -141,11 +149,9 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-1. MG368C Candidate Review/Append Console: review and append one candidate only
-   behind a later explicit gate.
-2. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
+1. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
    path without unbounded queue execution.
-3. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
+2. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
    single-step hosted-dev experiment through the TUI after the gates above.
 
 `token_printed=false`

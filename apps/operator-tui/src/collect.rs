@@ -18,6 +18,7 @@ pub enum StateMode {
     Local,
     Cloud,
     LocalCloud,
+    CandidateFlow,
 }
 
 impl StateMode {
@@ -27,15 +28,22 @@ impl StateMode {
             StateMode::Local => "local",
             StateMode::Cloud => "cloud",
             StateMode::LocalCloud => "local-cloud",
+            StateMode::CandidateFlow => "candidate-flow",
         }
     }
 
     pub fn loads_local(self) -> bool {
-        matches!(self, StateMode::Local | StateMode::LocalCloud)
+        matches!(
+            self,
+            StateMode::Local | StateMode::LocalCloud | StateMode::CandidateFlow
+        )
     }
 
     pub fn loads_cloud(self) -> bool {
-        matches!(self, StateMode::Cloud | StateMode::LocalCloud)
+        matches!(
+            self,
+            StateMode::Cloud | StateMode::LocalCloud | StateMode::CandidateFlow
+        )
     }
 }
 

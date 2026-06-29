@@ -123,6 +123,7 @@ function Test-AllowedCandidatePath([string]$FullPath) {
   $allowedRoots = @(
     [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/generated-goals")),
     [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/goal-append")),
+    [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/hermes-planner-provider")),
     [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/reviewed-goals")),
     [IO.Path]::GetFullPath((Join-Path $RepoRoot "goals/reviewed")),
     [IO.Path]::GetFullPath((Join-Path $RepoRoot "goals/proposed"))
