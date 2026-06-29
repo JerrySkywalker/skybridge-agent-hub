@@ -1,14 +1,14 @@
 use serde::Serialize;
 
-use crate::candidate::CandidateState;
+use crate::{candidate::CandidateState, single_step::SingleStepState};
 
 pub const STATE_SCHEMA: &str = "skybridge.operator_tui_state.v1";
 pub const REPORT_SCHEMA: &str = "skybridge.operator_tui_report.v1";
 pub const FIXTURE_GENERATED_AT: &str = "2026-06-29T00:00:00Z";
-pub const BASELINE_HEAD: &str = "7cb325fa10d67de619451c4b593f99999a60d1da";
+pub const BASELINE_HEAD: &str = "2742dc2aef93b4e153de594f78f056f1eab82992";
 pub const STAGE_S1_1_HEAD: &str = "c2bd551370f68950c2cd759de6a4f30b5e0396d8";
 pub const CLOUD_IMAGE_REF: &str =
-    "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-7cb325fa10d67de619451c4b593f99999a60d1da";
+    "ghcr.io/jerryskywalker/skybridge-agent-hub-server:sha-2742dc2aef93b4e153de594f78f056f1eab82992";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OperatorState {
@@ -28,6 +28,7 @@ pub struct OperatorState {
     pub campaign: CampaignState,
     pub hermes_candidate: HermesCandidateState,
     pub candidate_flow: CandidateState,
+    pub single_step: SingleStepState,
     pub managed_dev: ManagedDevState,
     pub safety: SafetyState,
 }
@@ -247,24 +248,21 @@ pub fn fixture_state() -> OperatorState {
         },
         campaign: CampaignState {
             campaign_id: "mg368-manual-hosted-dev-simulation".to_string(),
-            current_step: "MG368B Ratatui read-only local/cloud monitor".to_string(),
-            current_goal_id: "MG368B".to_string(),
-            current_goal_status: "read_only_monitor".to_string(),
-            pending_steps: vec![
-                "MG368C candidate review/append console".to_string(),
-                "MG368D single-step goal control gate".to_string(),
-                "MG369 manual single-step hosted-dev experiment".to_string(),
-            ],
+            current_step: "MG368D Ratatui single-step goal control gate".to_string(),
+            current_goal_id: "MG368D".to_string(),
+            current_goal_status: "single_step_gate_fixture_safe".to_string(),
+            pending_steps: vec!["MG369 manual single-step hosted-dev experiment".to_string()],
             blockers: vec![
-                "requires_mg368d_single_step_gate".to_string(),
+                "requires_exact_single_step_confirmation".to_string(),
+                "manual_experiment_deferred_to_mg369".to_string(),
                 "execution_apply_disabled".to_string(),
-                "mutation_not_allowed_for_execution".to_string(),
                 "worker_loop_forbidden".to_string(),
                 "queue_runner_forbidden".to_string(),
+                "run_forever_forbidden".to_string(),
             ],
             warnings: vec![
-                "candidate append stops before execution in MG368C".to_string(),
-                "bounded action and start goal remain disabled until MG368D".to_string(),
+                "single-step start is fixture-safe in automated smokes".to_string(),
+                "first real manual hosted-dev experiment is deferred to MG369".to_string(),
             ],
         },
         hermes_candidate: HermesCandidateState {
@@ -279,6 +277,7 @@ pub fn fixture_state() -> OperatorState {
             candidate_appended: false,
         },
         candidate_flow: CandidateState::empty(),
+        single_step: SingleStepState::empty(),
         managed_dev: ManagedDevState {
             branch: None,
             pr_number: None,
@@ -319,6 +318,7 @@ impl SafetyState {
 
 pub fn timeline_steps(state: &OperatorState) -> Vec<TimelineStep> {
     let candidate = &state.candidate_flow;
+    let single_step = &state.single_step;
     let candidate_generated = !candidate.candidate_hash.is_empty();
     let candidate_reviewed = candidate.review_status == "approved_for_append";
 
@@ -361,11 +361,39 @@ pub fn timeline_steps(state: &OperatorState) -> Vec<TimelineStep> {
         },
         TimelineStep {
             label: "Bounded action previewed",
-            status: "blocked",
+            status: if single_step.next_bounded_action_previewed {
+                "done"
+            } else if candidate.append_performed {
+                "ready"
+            } else {
+                "pending"
+            },
         },
         TimelineStep {
             label: "Single-step started",
-            status: "blocked",
+            status: if single_step.start_one_performed {
+                "done"
+            } else if single_step.next_bounded_action_allowed {
+                "ready"
+            } else {
+                "pending"
+            },
+        },
+        TimelineStep {
+            label: "Safe pause requested",
+            status: if single_step.safe_pause_performed {
+                "done"
+            } else {
+                "pending"
+            },
+        },
+        TimelineStep {
+            label: "Abort/terminate previewed",
+            status: if single_step.abort_previewed {
+                "done"
+            } else {
+                "pending"
+            },
         },
         TimelineStep {
             label: "Draft PR created",

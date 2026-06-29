@@ -79,6 +79,15 @@ the appended goal, run a bounded action, create or claim tasks, create branches
 or PRs, merge, deploy, call live Hermes, call MCP, start a worker loop or run a
 queue runner.
 
+MG368D keeps the MG368C candidate flow and adds the Ratatui single-step goal
+control gate. The TUI can preview the next bounded action, exercise a
+fixture-safe start-one gate, record a reason-gated fixture-safe pause, and
+preview abort/terminate metadata. It remains one-action-only: no queue runner,
+no worker loop, no run forever, no unbounded execution, no branch or PR
+creation in CI, no merge, no deploy, no live Hermes, no MCP, no auto-merge, no
+release/tag/assets and `token_printed=false`. The first real manual
+hosted-dev experiment belongs to MG369.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -149,9 +158,7 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-1. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
-   path without unbounded queue execution.
-2. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
-   single-step hosted-dev experiment through the TUI after the gates above.
+1. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
+   single-step hosted-dev experiment through the TUI after the MG368D gate.
 
 `token_printed=false`

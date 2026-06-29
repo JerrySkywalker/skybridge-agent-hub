@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 368D Ratatui Single-Step Goal Control Gate
+
+- Upgraded `apps/operator-tui` to `--single-step` mode while preserving the
+  MG368B local/cloud monitor and MG368C candidate review/append flow.
+- Added `skybridge.operator_tui_single_step_state.v1` and
+  `skybridge.operator_tui_single_step_report.v1` artifacts under
+  `.agent/tmp/operator-tui/single-step/`.
+- Enabled preview bounded action, start-one goal, safe pause and
+  abort/terminate actions behind exact-confirmation fixture-safe gates.
+- Kept the gate one-action-only: no queue runner, no worker loop, no run
+  forever, no task creation, no task claim, no real execution, no branch/PR
+  creation in CI, no merge, no deploy, no live Hermes, no MCP, no auto-merge,
+  no release/tag/assets and `token_printed=false`.
+- Added MG368D PowerShell smokes, package entries and Bootstrap Alpha
+  acceptance wiring. The recommended next milestone is MG369 Manual
+  Single-Step Goal Experiment via TUI.
+
 ## 2026-06-29 Mega Goal 368C Ratatui Candidate Review/Append Console
 
 - Upgraded `apps/operator-tui` to `--candidate-flow` mode while preserving the
