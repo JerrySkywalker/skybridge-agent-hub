@@ -1,10 +1,10 @@
 use crate::model::ActionStatus;
 
 const DISABLED_REASONS: [&str; 4] = [
-    "action_disabled_in_mg368a",
+    "action_disabled_in_mg368b",
     "requires_later_reviewed_gate",
     "execution_apply_disabled",
-    "mutation_not_allowed_in_fixture",
+    "mutation_not_allowed_in_read_only_monitor",
 ];
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -48,7 +48,7 @@ impl Action {
 
     pub fn action_id(self) -> &'static str {
         match self {
-            Action::Refresh => "refresh_fixture_state",
+            Action::Refresh => "refresh_local_cloud_state",
             Action::CopySafeSummary => "copy_safe_summary",
             Action::GenerateCandidateFixture => "generate_candidate_fixture",
             Action::ValidateCandidate => "validate_candidate",

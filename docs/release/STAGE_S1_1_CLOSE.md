@@ -72,13 +72,18 @@ adds only the fixture/read-only skeleton before any manual hosted-dev
 simulation. It does not enable candidate append, queue execution, worker loops
 or apply behavior.
 
+MG368B upgrades that same terminal surface into a read-only local/cloud monitor.
+It can display local Git state, `main`/`origin/main` alignment, cloud
+health/version/parity and the tracked Stage S1.1 warning baseline without
+enabling candidate append, task creation, task claim, queue execution, worker
+loops, Hermes live calls or MCP runs.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368B Ratatui Read-only Local/Cloud Monitor
-2. MG368C Candidate Review/Append Console
-3. MG368D Single-step Goal Control Gate
-4. MG369 Manual Single-step Hosted-dev Experiment
+1. MG368C Candidate Review/Append Console
+2. MG368D Single-step Goal Control Gate
+3. MG369 Manual Single-step Hosted-dev Experiment
 
 ## Read-Only Audit
 

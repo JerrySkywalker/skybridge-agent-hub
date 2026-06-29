@@ -64,6 +64,13 @@ surface. It is fixture/read-only only, shows the pipeline layout and safety
 state, and keeps candidate append, goal start, task claim, worker loops, Hermes
 live calls and MCP runs disabled until later reviewed gates.
 
+MG368B keeps the same read-only boundary and adds live monitor value: the TUI
+can read local Git branch/HEAD, local `main` and `origin/main` alignment,
+bounded worktree status, cloud `/v1/health`, cloud `/v1/version`, cloud image
+tag and route parity. It still does not append goals, approve candidates, start
+goals, pause, terminate, create branches or PRs, merge, deploy, call Hermes
+live, call MCP, start a worker loop or run a queue runner.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -134,13 +141,11 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-1. MG368B Ratatui Read-only Local/Cloud Monitor: connect the TUI to read-only
-   local/cloud status without enabling apply.
-2. MG368C Candidate Review/Append Console: review and append one candidate only
+1. MG368C Candidate Review/Append Console: review and append one candidate only
    behind a later explicit gate.
-3. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
+2. MG368D Single-step Goal Control Gate: expose one reviewed single-step control
    path without unbounded queue execution.
-4. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
+3. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
    single-step hosted-dev experiment through the TUI after the gates above.
 
 `token_printed=false`

@@ -1,12 +1,12 @@
 . "$PSScriptRoot\operator-tui-smoke-common.ps1"
 
-$result = Invoke-OperatorTuiSnapshot "smoke-snapshot"
+$result = Invoke-OperatorTuiSnapshot "smoke-snapshot" "fixture"
 
-if ($result.report.mode -ne "snapshot") { throw "Operator TUI report mode must be snapshot." }
+if ($result.report.mode -ne "fixture") { throw "Operator TUI report mode must be fixture." }
 foreach ($text in @(
-  "SkyBridge Operator Console - MG368A Snapshot",
+  "SkyBridge Operator Console - MG368B Read-only Snapshot",
   "READ ONLY",
-  "fixture mode",
+  "mode=fixture",
   "no mutation",
   "token_printed=false"
 )) {

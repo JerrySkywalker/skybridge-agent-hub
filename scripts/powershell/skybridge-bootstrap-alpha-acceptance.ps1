@@ -232,6 +232,10 @@ $requiredScripts = @{
   operator_tui_snapshot_smoke = "scripts/powershell/smoke-operator-tui-snapshot.ps1"
   operator_tui_no_mutation_smoke = "scripts/powershell/smoke-operator-tui-no-mutation.ps1"
   operator_tui_doc_present_smoke = "scripts/powershell/smoke-operator-tui-doc-present.ps1"
+  operator_tui_local_state_smoke = "scripts/powershell/smoke-operator-tui-local-state.ps1"
+  operator_tui_cloud_state_smoke = "scripts/powershell/smoke-operator-tui-cloud-state.ps1"
+  operator_tui_local_cloud_snapshot_smoke = "scripts/powershell/smoke-operator-tui-local-cloud-snapshot.ps1"
+  operator_tui_local_cloud_no_mutation_smoke = "scripts/powershell/smoke-operator-tui-local-cloud-no-mutation.ps1"
 }
 
 $componentPaths = @{
@@ -514,7 +518,11 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-fixture",
   "smoke:operator-tui-snapshot",
   "smoke:operator-tui-no-mutation",
-  "smoke:operator-tui-doc-present"
+  "smoke:operator-tui-doc-present",
+  "smoke:operator-tui-local-state",
+  "smoke:operator-tui-cloud-state",
+  "smoke:operator-tui-local-cloud-snapshot",
+  "smoke:operator-tui-local-cloud-no-mutation"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
