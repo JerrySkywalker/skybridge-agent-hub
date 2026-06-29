@@ -7,6 +7,10 @@ use anyhow::Context;
 
 use crate::{
     actions::{active_action_statuses, disabled_action_statuses},
+    candidate::{
+        candidate_report, load_candidate_state, run_candidate_action, write_candidate_artifacts,
+        CandidateAction, CandidateFlowOptions,
+    },
     collect::{collect_operator_state, StateMode},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
@@ -21,6 +25,9 @@ pub struct Cli {
     pub output_dir: PathBuf,
     pub output_dir_provided: bool,
     pub no_alt_screen: bool,
+    pub candidate_action: CandidateAction,
+    pub review_confirm: String,
+    pub append_confirm: String,
 }
 
 impl Default for Cli {
@@ -33,6 +40,9 @@ impl Default for Cli {
             output_dir: PathBuf::from(".agent/tmp/operator-tui"),
             output_dir_provided: false,
             no_alt_screen: false,
+            candidate_action: CandidateAction::None,
+            review_confirm: String::new(),
+            append_confirm: String::new(),
         }
     }
 }
@@ -48,6 +58,7 @@ impl Cli {
             StateMode::Local => PathBuf::from(".agent/tmp/operator-tui/local"),
             StateMode::Cloud => PathBuf::from(".agent/tmp/operator-tui/cloud"),
             StateMode::LocalCloud => PathBuf::from(".agent/tmp/operator-tui/local-cloud"),
+            StateMode::CandidateFlow => PathBuf::from(".agent/tmp/operator-tui/candidate-flow"),
         }
     }
 }
@@ -59,15 +70,26 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(state_mode: StateMode) -> Self {
-        Self {
-            state: collect_operator_state(state_mode),
-            state_mode,
-        }
+    pub fn new(state_mode: StateMode, output_dir: &Path) -> Self {
+        let mut state = collect_operator_state(state_mode);
+        state.candidate_flow = load_candidate_state(output_dir);
+        Self { state, state_mode }
     }
 
-    pub fn refresh_state(&mut self) {
+    pub fn refresh_state(&mut self, output_dir: &Path) {
         self.state = collect_operator_state(self.state_mode);
+        self.state.candidate_flow = load_candidate_state(output_dir);
+    }
+
+    pub fn run_candidate_action(&mut self, cli: &Cli) {
+        let output_dir = cli.artifact_output_dir();
+        let options = CandidateFlowOptions {
+            output_dir,
+            action: cli.candidate_action,
+            review_confirm: cli.review_confirm.clone(),
+            append_confirm: cli.append_confirm.clone(),
+        };
+        self.state.candidate_flow = run_candidate_action(&options);
     }
 
     pub fn report(&self, interactive_started: bool) -> OperatorReport {
@@ -120,6 +142,10 @@ impl App {
         let report_md_path = output_dir.join("operator-tui-report.md");
 
         let snapshot_text = self.snapshot_text();
+        if self.state_mode == StateMode::CandidateFlow {
+            return write_candidate_artifacts(output_dir, &self.state, &snapshot_text);
+        }
+
         let state_json = serde_json::to_string_pretty(&self.state)?;
         let report = self.report(false);
         let report_json = serde_json::to_string_pretty(&report)?;
@@ -140,6 +166,17 @@ impl App {
 
         Ok(())
     }
+
+    pub fn report_json(&self, interactive_started: bool) -> anyhow::Result<String> {
+        if self.state_mode == StateMode::CandidateFlow {
+            return Ok(serde_json::to_string_pretty(&candidate_report(
+                &self.state,
+            ))?);
+        }
+        Ok(serde_json::to_string_pretty(
+            &self.report(interactive_started),
+        )?)
+    }
 }
 
 pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> {
@@ -151,10 +188,28 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
             "--local" => cli.state_mode = StateMode::Local,
             "--cloud" => cli.state_mode = StateMode::Cloud,
             "--local-cloud" => cli.state_mode = StateMode::LocalCloud,
+            "--candidate-flow" => cli.state_mode = StateMode::CandidateFlow,
             "--snapshot" => cli.snapshot = true,
             "--json" => cli.json = true,
             "--write-report" => cli.write_report = true,
             "--no-alt-screen" => cli.no_alt_screen = true,
+            "--candidate-action" => {
+                let value = iter
+                    .next()
+                    .context("--candidate-action requires a following value")?;
+                cli.candidate_action = CandidateAction::from_str(&value)?;
+                cli.state_mode = StateMode::CandidateFlow;
+            }
+            "--review-confirm" => {
+                cli.review_confirm = iter
+                    .next()
+                    .context("--review-confirm requires a following value")?;
+            }
+            "--append-confirm" => {
+                cli.append_confirm = iter
+                    .next()
+                    .context("--append-confirm requires a following value")?;
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -181,6 +236,11 @@ Flags:\n\
   --local                Read local repository state only\n\
   --cloud                Read cloud health/version/parity state only\n\
   --local-cloud          Read both local repository and cloud state\n\
+  --candidate-flow       Use MG368C candidate review/append monitor mode\n\
+  --candidate-action <a> Run generate, validate, review-preview, review-approve,\n\
+                         append-preview, or append-apply-fixture\n\
+  --review-confirm <s>   Exact review confirmation for review-approve\n\
+  --append-confirm <s>   Exact append confirmation for append-apply-fixture\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

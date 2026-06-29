@@ -1,10 +1,18 @@
 use crate::model::ActionStatus;
 
 const DISABLED_REASONS: [&str; 4] = [
-    "action_disabled_in_mg368b",
-    "requires_later_reviewed_gate",
     "execution_apply_disabled",
-    "mutation_not_allowed_in_read_only_monitor",
+    "requires_mg368d_single_step_gate",
+    "worker_loop_forbidden",
+    "queue_runner_forbidden",
+];
+
+const EXECUTION_DISABLED_REASONS: [&str; 5] = [
+    "requires_mg368d_single_step_gate",
+    "execution_apply_disabled",
+    "mutation_not_allowed_for_execution",
+    "worker_loop_forbidden",
+    "queue_runner_forbidden",
 ];
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -13,6 +21,7 @@ pub enum Action {
     CopySafeSummary,
     GenerateCandidateFixture,
     ValidateCandidate,
+    ReviewCandidate,
     AppendCandidate,
     PreviewBoundedAction,
     StartOneGoal,
@@ -37,6 +46,7 @@ impl Action {
             Action::CopySafeSummary,
             Action::GenerateCandidateFixture,
             Action::ValidateCandidate,
+            Action::ReviewCandidate,
             Action::AppendCandidate,
             Action::PreviewBoundedAction,
             Action::StartOneGoal,
@@ -52,6 +62,7 @@ impl Action {
             Action::CopySafeSummary => "copy_safe_summary",
             Action::GenerateCandidateFixture => "generate_candidate_fixture",
             Action::ValidateCandidate => "validate_candidate",
+            Action::ReviewCandidate => "review_candidate",
             Action::AppendCandidate => "append_candidate",
             Action::PreviewBoundedAction => "preview_bounded_action",
             Action::StartOneGoal => "start_one_goal",
@@ -67,6 +78,7 @@ impl Action {
             Action::CopySafeSummary => "c",
             Action::GenerateCandidateFixture => "g",
             Action::ValidateCandidate => "v",
+            Action::ReviewCandidate => "e",
             Action::AppendCandidate => "a",
             Action::PreviewBoundedAction => "p",
             Action::StartOneGoal => "s",
@@ -82,6 +94,7 @@ impl Action {
             Action::CopySafeSummary => "Copy safe summary",
             Action::GenerateCandidateFixture => "Generate candidate fixture",
             Action::ValidateCandidate => "Validate candidate",
+            Action::ReviewCandidate => "Review candidate",
             Action::AppendCandidate => "Append candidate",
             Action::PreviewBoundedAction => "Preview bounded action",
             Action::StartOneGoal => "Start one goal",
@@ -94,7 +107,13 @@ impl Action {
     pub fn enabled(self) -> bool {
         matches!(
             self,
-            Action::Refresh | Action::CopySafeSummary | Action::Quit
+            Action::Refresh
+                | Action::CopySafeSummary
+                | Action::GenerateCandidateFixture
+                | Action::ValidateCandidate
+                | Action::ReviewCandidate
+                | Action::AppendCandidate
+                | Action::Quit
         )
     }
 
@@ -102,7 +121,13 @@ impl Action {
         if self.enabled() {
             Vec::new()
         } else {
-            DISABLED_REASONS.to_vec()
+            match self {
+                Action::PreviewBoundedAction
+                | Action::StartOneGoal
+                | Action::SafePause
+                | Action::AbortTerminate => EXECUTION_DISABLED_REASONS.to_vec(),
+                _ => DISABLED_REASONS.to_vec(),
+            }
         }
     }
 

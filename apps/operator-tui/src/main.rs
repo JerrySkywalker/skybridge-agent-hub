@@ -1,5 +1,6 @@
 mod actions;
 mod app;
+mod candidate;
 mod collect;
 mod model;
 mod render;
@@ -17,27 +18,40 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
-    let mut app = App::new(cli.state_mode);
+    let output_dir = cli.artifact_output_dir();
+    let mut app = App::new(cli.state_mode, &output_dir);
+    if cli.candidate_action != candidate::CandidateAction::None {
+        app.run_candidate_action(&cli);
+    }
 
-    if cli.snapshot || cli.write_report || cli.json {
-        let wrote_artifacts = cli.snapshot || cli.write_report;
-        let output_dir = cli.artifact_output_dir();
+    if cli.snapshot
+        || cli.write_report
+        || cli.json
+        || cli.candidate_action != candidate::CandidateAction::None
+    {
+        let wrote_artifacts = cli.snapshot
+            || cli.write_report
+            || cli.candidate_action != candidate::CandidateAction::None;
         if wrote_artifacts {
             app.write_snapshot_artifacts(&output_dir)?;
         }
 
         if cli.json {
-            println!("{}", serde_json::to_string_pretty(&app.report(false))?);
+            println!("{}", app.report_json(false)?);
         } else {
             println!("{}", app.snapshot_text());
         }
         return Ok(());
     }
 
-    run_interactive(&mut app, cli.no_alt_screen)
+    run_interactive(&mut app, cli.no_alt_screen, output_dir)
 }
 
-fn run_interactive(app: &mut App, no_alt_screen: bool) -> anyhow::Result<()> {
+fn run_interactive(
+    app: &mut App,
+    no_alt_screen: bool,
+    output_dir: std::path::PathBuf,
+) -> anyhow::Result<()> {
     enable_raw_mode().context("failed to enable terminal raw mode")?;
     let mut stdout = io::stdout();
     if !no_alt_screen {
@@ -46,7 +60,7 @@ fn run_interactive(app: &mut App, no_alt_screen: bool) -> anyhow::Result<()> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
-    let result = run_loop(app, &mut terminal);
+    let result = run_loop(app, &mut terminal, &output_dir);
 
     disable_raw_mode().context("failed to disable terminal raw mode")?;
     if !no_alt_screen {
@@ -61,6 +75,7 @@ fn run_interactive(app: &mut App, no_alt_screen: bool) -> anyhow::Result<()> {
 fn run_loop(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    output_dir: &std::path::Path,
 ) -> anyhow::Result<()> {
     loop {
         terminal.draw(|frame| render::draw(frame, app))?;
@@ -69,7 +84,7 @@ fn run_loop(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Char('r') => app.refresh_state(),
+                    KeyCode::Char('r') => app.refresh_state(output_dir),
                     KeyCode::Char('c') => {
                         let _ = actions::handle_action(actions::Action::CopySafeSummary);
                     }
@@ -78,6 +93,9 @@ fn run_loop(
                     }
                     KeyCode::Char('v') => {
                         let _ = actions::handle_action(actions::Action::ValidateCandidate);
+                    }
+                    KeyCode::Char('e') => {
+                        let _ = actions::handle_action(actions::Action::ReviewCandidate);
                     }
                     KeyCode::Char('a') => {
                         let _ = actions::handle_action(actions::Action::AppendCandidate);

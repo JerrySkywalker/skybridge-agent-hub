@@ -1,5 +1,23 @@
 # Progress Log
 
+## 2026-06-29 Mega Goal 368C Ratatui Candidate Review/Append Console
+
+- Upgraded `apps/operator-tui` to `--candidate-flow` mode while preserving the
+  MG368B read-only local/cloud monitor.
+- Enabled the reviewed candidate actions: fixture Hermes candidate generation,
+  candidate validation, review preview/approval and fixture-safe append apply
+  after exact confirmations.
+- Added `skybridge.operator_tui_candidate_state.v1` and
+  `skybridge.operator_tui_candidate_flow_report.v1` artifacts under
+  `.agent/tmp/operator-tui/candidate-flow/`.
+- Kept execution controls disabled until MG368D: no bounded action apply, no
+  start-one goal, no task creation, no task claim, no branch/PR creation, no
+  merge, no deploy, no live Hermes call, no MCP run, no worker loop, no queue
+  runner and `token_printed=false`.
+- Added MG368C PowerShell smokes, package entries and Bootstrap Alpha
+  acceptance wiring. The recommended next milestone is MG368D Ratatui
+  Single-Step Goal Control Gate.
+
 ## 2026-06-29 Mega Goal 368B Ratatui Read-only Local/Cloud Monitor
 
 - Upgraded `apps/operator-tui` from fixture-only status to read-only
