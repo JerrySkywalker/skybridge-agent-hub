@@ -249,6 +249,12 @@ $requiredScripts = @{
   operator_tui_single_step_no_loop_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-loop.ps1"
   operator_tui_single_step_no_auto_merge_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-auto-merge.ps1"
   operator_tui_single_step_no_release_smoke = "scripts/powershell/smoke-operator-tui-single-step-no-release.ps1"
+  operator_tui_interactive_actions_smoke = "scripts/powershell/smoke-operator-tui-interactive-actions.ps1"
+  operator_tui_interactive_confirmation_reject_smoke = "scripts/powershell/smoke-operator-tui-interactive-confirmation-reject.ps1"
+  operator_tui_interactive_reason_required_smoke = "scripts/powershell/smoke-operator-tui-interactive-reason-required.ps1"
+  operator_tui_interactive_candidate_dispatch_smoke = "scripts/powershell/smoke-operator-tui-interactive-candidate-dispatch.ps1"
+  operator_tui_interactive_single_step_dispatch_smoke = "scripts/powershell/smoke-operator-tui-interactive-single-step-dispatch.ps1"
+  operator_tui_interactive_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-interactive-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -548,7 +554,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-single-step-abort-preview",
   "smoke:operator-tui-single-step-no-loop",
   "smoke:operator-tui-single-step-no-auto-merge",
-  "smoke:operator-tui-single-step-no-release"
+  "smoke:operator-tui-single-step-no-release",
+  "smoke:operator-tui-interactive-actions",
+  "smoke:operator-tui-interactive-confirmation-reject",
+  "smoke:operator-tui-interactive-reason-required",
+  "smoke:operator-tui-interactive-candidate-dispatch",
+  "smoke:operator-tui-interactive-single-step-dispatch",
+  "smoke:operator-tui-interactive-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

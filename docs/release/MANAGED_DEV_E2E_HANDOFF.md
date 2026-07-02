@@ -88,6 +88,15 @@ creation in CI, no merge, no deploy, no live Hermes, no MCP, no auto-merge, no
 release/tag/assets and `token_printed=false`. The first real manual
 hosted-dev experiment belongs to MG369.
 
+MG368E is the Ratatui interactive unblocker added after the first MG369
+attempt correctly stopped at the manual gate. It adds real keyboard action
+selection, exact-confirmation input, reason input, status feedback and
+sanitized artifacts for the existing MG368C/MG368D fixture-safe runners. It
+does not perform MG369, create the docs-only experiment PR, execute tasks,
+claim tasks, create branches or PRs by the TUI, merge, deploy, run a queue
+runner, start a worker loop, run forever, call live Hermes, call MCP,
+auto-merge, create release/tag/assets or print tokens.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -158,6 +167,8 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
+After MG368E, reattempt MG369 Manual Single-Step Goal Experiment via Ratatui
+TUI with Jerry operating the confirmation-gated interactive flow.
 1. MG369 Manual Single-step Hosted-dev Experiment: run the first manual
    single-step hosted-dev experiment through the TUI after the MG368D gate.
 

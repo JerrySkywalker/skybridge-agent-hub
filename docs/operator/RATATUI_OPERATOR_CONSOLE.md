@@ -8,10 +8,10 @@ plain terminal before later goals add reviewed apply behavior.
 This is separate from Codex TUI. Codex TUI is an agent coding interface. The
 SkyBridge Operator Console is a product control-plane view for SkyBridge state:
 repo/cloud status, worker pairing, campaign progress, candidate review state,
-managed-dev PR state and safety flags. MG368D makes the console a
-single-step gate surface: it can preview one bounded action and exercise
-fixture-safe start/pause/abort metadata paths, but it still is not a queue
-runner, worker loop, run-forever controller or unattended executor.
+managed-dev PR state and safety flags. MG368E makes the console a real
+interactive confirmation/action runner for the existing fixture-safe
+candidate and single-step paths, but it still is not a queue runner, worker
+loop, run-forever controller or unattended executor.
 
 This is also separate from the Web/Desktop dashboard. The Web/Desktop surfaces
 remain richer read-only dashboards for normal inspection. The Ratatui console
@@ -228,6 +228,64 @@ Fixture start, safe pause and abort preview keep `task_created=false`,
 MG369 is required for the first real manual single-step hosted-dev experiment
 through the TUI.
 
+## MG368E Scope
+
+MG368E unblocks the MG369 manual experiment by adding real interactive
+Ratatui action handling. The interactive loop now supports action selection,
+hotkeys, exact-confirmation input, reason input, status feedback and sanitized
+artifact writing.
+
+Keyboard map:
+
+- `r`: refresh local/cloud state;
+- `g`: generate fixture candidate;
+- `v`: validate candidate;
+- `e`: review candidate;
+- `a`: append candidate;
+- `p`: preview bounded action;
+- `s`: start one goal;
+- `h`: safe pause;
+- `x`: abort/terminate preview;
+- `c`: copy/render safe summary;
+- `q`: quit.
+
+Up/Down moves the selected action and Enter activates it. Actions that require
+confirmation enter confirmation-input mode inside the TUI. Safe pause and
+abort/terminate first require a non-empty reason, then the exact confirmation.
+
+Exact confirmations remain unchanged:
+
+```text
+I_UNDERSTAND_REVIEW_CANDIDATE_FOR_APPEND_ONLY_NO_EXECUTION
+I_UNDERSTAND_APPEND_REVIEWED_CANDIDATE_TO_CAMPAIGN_NO_EXECUTION
+I_UNDERSTAND_START_ONE_GOAL_SINGLE_STEP_ONLY_NO_QUEUE_LOOP
+I_UNDERSTAND_SAFE_PAUSE_SINGLE_STEP_PIPELINE_WITH_REASON
+I_UNDERSTAND_ABORT_TERMINATE_PREVIEW_OR_FIXTURE_ONLY_NO_PROCESS_KILL
+```
+
+Confirmation mismatches are rejected and recorded as blocked. Reason text is
+sanitized before it reaches the fixture-safe runner: Authorization headers,
+Bearer tokens, `token=`, `password=` and `secret=` markers are redacted, long
+reasons are truncated, and `token_printed=false` remains mandatory.
+
+Interactive actions reuse the existing MG368C/MG368D runners:
+
+- candidate actions dispatch to fixture generation, validation, review
+  approval, append preview and fixture-safe append apply;
+- single-step actions dispatch to bounded preview, fixture start-one,
+  reason-gated fixture pause and abort preview.
+
+MG368E does not perform MG369. It writes this manual gate message:
+
+```text
+MG369 manual experiment can now be attempted by Jerry. This TUI supports confirmation-gated interactive actions, but real docs-only PR creation must be authorized and reported in MG369.
+```
+
+The same safety boundary remains: no real task execution, no real branch
+creation, no real PR creation, no merge, no deploy, no queue runner, no worker
+loop, no run forever, no live Hermes, no MCP, no auto-merge, no release, tag or
+asset creation and `token_printed=false`.
+
 ## Snapshot Mode
 
 CI and smoke tests must use snapshot mode instead of interactive raw-terminal
@@ -244,6 +302,7 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action start-fixture --start-confirm I_UNDERSTAND_START_ONE_GOAL_SINGLE_STEP_ONLY_NO_QUEUE_LOOP --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action safe-pause --pause-reason "manual hold" --pause-confirm I_UNDERSTAND_SAFE_PAUSE_SINGLE_STEP_PIPELINE_WITH_REASON --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action abort-preview --abort-reason "operator preview" --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- --interactive-unblocker-smoke no-real-execution --output-dir .agent/tmp/operator-tui/interactive-unblocker
 ```
 
 Fixture snapshot mode writes:
@@ -279,6 +338,14 @@ Single-step snapshot mode writes:
 - `.agent/tmp/operator-tui/single-step/operator-tui-single-step-preview.json`
 - `.agent/tmp/operator-tui/single-step/operator-tui-single-step-preview.md`
 
+Interactive unblocker simulation writes:
+
+- `.agent/tmp/operator-tui/interactive-unblocker/interactive-state.json`
+- `.agent/tmp/operator-tui/interactive-unblocker/interactive-report.json`
+- `.agent/tmp/operator-tui/interactive-unblocker/interactive-report.md`
+- `.agent/tmp/operator-tui/interactive-unblocker/last-action.json`
+- `.agent/tmp/operator-tui/interactive-unblocker/manual-gate.md`
+
 The report schema is `skybridge.operator_tui_report.v1`. In MG368A it must
 report `fixture_used=true`, `interactive_started=false`,
 `mutation_attempted=false`, `append_attempted=false`,
@@ -311,16 +378,27 @@ bounded preview result, start-one result, safe-pause result,
 abort/terminate result, required confirmations, matched confirmations and the
 same no-loop/no-execution/no-release safety flags.
 
+In MG368E interactive-unblocker mode it reports
+`skybridge.operator_tui_interactive_unblocker_report.v1`,
+`mode=interactive-unblocker`, `interactive_loop_available=true`,
+`keyboard_actions_registered=true`, `confirmation_input_available=true`,
+`reason_input_available=true`, candidate/single-step dispatchability flags,
+confirmation mismatch rejection, reason-required enforcement, sanitized reason
+enforcement, `manual_gate_written=true` and the same no-real-execution safety
+flags.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
 MG368D is a single-step gate with fixture-safe CI paths and manual-mode wiring
-for a future goal. The safety boundary remains:
+for a future goal. MG368E adds interactive input and dispatch for those same
+fixture-safe paths. The safety boundary remains:
 
 - no start_one_apply in MG368A;
 - no start_one_apply in MG368B;
 - no start_one_apply in MG368C;
 - no unconfirmed start_one_goal in MG368D;
+- no unconfirmed interactive action in MG368E;
 - no start_queue_apply in MG368A;
 - no start_queue_apply in MG368B;
 - no start_queue_apply in MG368C;
@@ -329,6 +407,7 @@ for a future goal. The safety boundary remains:
 - no `start_queue_apply`;
 - no bounded action apply in MG368C;
 - no unbounded execution in MG368D;
+- no MG369 docs-only PR creation in MG368E;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -349,8 +428,8 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG369 Manual Single-step Hosted-dev Experiment: perform the first manual
-  single-step hosted-dev experiment through the TUI after the MG368D gate is
-  reviewed.
+- MG369 Manual Single-step Hosted-dev Experiment reattempt: perform the first
+  manual single-step hosted-dev experiment through the TUI after the MG368E
+  interactive unblocker is reviewed.
 
 `token_printed=false`

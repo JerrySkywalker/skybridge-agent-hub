@@ -15,15 +15,6 @@ pub enum Action {
     Quit,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ActionOutcome {
-    Allowed(&'static str),
-    Blocked {
-        action: &'static str,
-        reasons: Vec<&'static str>,
-    },
-}
-
 impl Action {
     pub fn all() -> Vec<Action> {
         vec![
@@ -39,6 +30,16 @@ impl Action {
             Action::AbortTerminate,
             Action::Quit,
         ]
+    }
+
+    pub fn from_action_id(value: &str) -> Option<Action> {
+        Self::all()
+            .into_iter()
+            .find(|action| action.action_id() == value)
+    }
+
+    pub fn from_key(value: char) -> Option<Action> {
+        Self::all().into_iter().find(|action| action.key() == value.to_string())
     }
 
     pub fn action_id(self) -> &'static str {
@@ -122,15 +123,4 @@ pub fn disabled_action_statuses() -> Vec<ActionStatus> {
         .filter(|action| !action.enabled())
         .map(Action::status)
         .collect()
-}
-
-pub fn handle_action(action: Action) -> ActionOutcome {
-    if action.enabled() {
-        return ActionOutcome::Allowed(action.action_id());
-    }
-
-    ActionOutcome::Blocked {
-        action: action.action_id(),
-        reasons: action.disabled_reasons(),
-    }
 }

@@ -8,6 +8,7 @@ $OperatorTuiPauseConfirmation = "I_UNDERSTAND_SAFE_PAUSE_SINGLE_STEP_PIPELINE_WI
 $OperatorTuiAbortConfirmation = "I_UNDERSTAND_ABORT_TERMINATE_PREVIEW_OR_FIXTURE_ONLY_NO_PROCESS_KILL"
 $OperatorTuiCandidateOutputDir = ".agent/tmp/operator-tui/candidate-flow"
 $OperatorTuiSingleStepOutputDir = ".agent/tmp/operator-tui/single-step"
+$OperatorTuiInteractiveOutputDir = ".agent/tmp/operator-tui/interactive-unblocker"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -236,6 +237,56 @@ function Invoke-OperatorTuiSingleStepFlow(
   }
 }
 
+function Invoke-OperatorTuiInteractiveSimulation(
+  [string]$Name,
+  [ValidateSet("actions", "confirmation-reject", "reason-required", "candidate-dispatch", "single-step-dispatch", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiInteractiveOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiInteractiveArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --interactive-unblocker-smoke $Scenario `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI interactive simulation failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/interactive-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/interactive-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/interactive-report.md"
+  $lastActionPath = Join-Path $RepoRoot "$OutputDir/last-action.json"
+  $manualGatePath = Join-Path $RepoRoot "$OutputDir/manual-gate.md"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $lastActionPath, $manualGatePath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI interactive artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  $manualGateMarkdown = Get-Content -Raw -LiteralPath $manualGatePath
+  Assert-NoUnsafeText $reportMarkdown
+  Assert-NoUnsafeText $manualGateMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $lastAction = Get-Content -Raw -LiteralPath $lastActionPath | ConvertFrom-Json
+
+  Assert-OperatorTuiInteractiveShape -State $state -Report $report -LastAction $lastAction
+  Assert-OperatorTuiInteractiveNoRealExecution -Report $report
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    last_action_path = $lastActionPath
+    manual_gate_path = $manualGatePath
+    state = $state
+    report = $report
+    last_action = $lastAction
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -262,6 +313,49 @@ function Clear-OperatorTuiSingleStepArtifacts([string]$OutputDir = $OperatorTuiS
   if (Test-Path -LiteralPath $operatorDir) {
     Remove-Item -LiteralPath $operatorDir -Recurse -Force
   }
+}
+
+function Clear-OperatorTuiInteractiveArtifacts([string]$OutputDir = $OperatorTuiInteractiveOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+  $slug = Get-OperatorTuiOutputSlug -OutputDir $OutputDir
+  $hermesDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/hermes-planner-provider/$slug"))
+  $appendDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp/goal-append/$slug"))
+
+  foreach ($path in @($operatorDir, $hermesDir, $appendDir)) {
+    if (-not $path.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Refusing to remove non-temp operator TUI interactive artifact path: $path"
+    }
+    if (Test-Path -LiteralPath $path) {
+      Remove-Item -LiteralPath $path -Recurse -Force
+    }
+  }
+}
+
+function Get-OperatorTuiOutputSlug([string]$OutputDir) {
+  $normalized = $OutputDir.Replace("\", "/")
+  if ($normalized.TrimEnd("/") -eq ".agent/tmp/operator-tui/candidate-flow") {
+    return "operator-tui-candidate-flow"
+  }
+
+  $builder = New-Object System.Text.StringBuilder
+  foreach ($ch in $normalized.ToCharArray()) {
+    $code = [int][char]$ch
+    $isAsciiLetterOrDigit = (
+      ($code -ge 48 -and $code -le 57) -or
+      ($code -ge 65 -and $code -le 90) -or
+      ($code -ge 97 -and $code -le 122)
+    )
+    if ($isAsciiLetterOrDigit -or $ch -eq '-') {
+      [void]$builder.Append($ch)
+    } else {
+      [void]$builder.Append("_")
+    }
+  }
+  $slug = $builder.ToString().Trim("_")
+  if ([string]::IsNullOrWhiteSpace($slug)) { $slug = "operator-tui-candidate-flow" }
+  if ($slug.Length -gt 96) { $slug = $slug.Substring(0, 96) }
+  $slug
 }
 
 function Assert-OperatorTuiShape($State, $Report, [string]$SnapshotText) {
@@ -297,6 +391,42 @@ function Assert-OperatorTuiSingleStepShape($State, $Report, [string]$SnapshotTex
   Assert-True $Report.cloud_parity_shown "single_step.cloud_parity_shown"
   Assert-True $Report.candidate_appended "single_step.candidate_appended"
   if ([string]::IsNullOrWhiteSpace([string]$Report.appended_step_id)) { throw "single_step.appended_step_id missing." }
+}
+
+function Assert-OperatorTuiInteractiveShape($State, $Report, $LastAction) {
+  if ($Report.schema -ne "skybridge.operator_tui_interactive_unblocker_report.v1") {
+    throw "Unexpected interactive unblocker report schema."
+  }
+  if ($Report.mode -ne "interactive-unblocker") { throw "Interactive report must use interactive-unblocker mode." }
+  Assert-True $Report.interactive_loop_available "interactive_loop_available"
+  Assert-True $Report.keyboard_actions_registered "keyboard_actions_registered"
+  Assert-True $Report.confirmation_input_available "confirmation_input_available"
+  Assert-True $Report.reason_input_available "reason_input_available"
+  Assert-True $Report.sanitized_reason_enforced "sanitized_reason_enforced"
+  Assert-True $Report.manual_gate_written "manual_gate_written"
+  Assert-False $Report.token_printed "interactive token_printed"
+  if ($LastAction.token_printed -ne $false) { throw "last_action token_printed must be false." }
+
+  $keys = @($Report.keyboard_actions | ForEach-Object { [string]$_ })
+  foreach ($key in @("r", "g", "v", "e", "a", "p", "s", "h", "x", "c", "q")) {
+    if ($keys -notcontains $key) { throw "Interactive keyboard action missing: $key" }
+  }
+
+  $confirmations = @($Report.exact_confirmations_required | ForEach-Object { [string]$_ })
+  foreach ($confirmation in @(
+    $OperatorTuiReviewConfirmation,
+    $OperatorTuiAppendConfirmation,
+    $OperatorTuiStartConfirmation,
+    $OperatorTuiPauseConfirmation,
+    $OperatorTuiAbortConfirmation
+  )) {
+    if ($confirmations -notcontains $confirmation) { throw "Missing interactive confirmation requirement." }
+  }
+
+  $panels = @($Report.panels_rendered | ForEach-Object { [string]$_ })
+  foreach ($panel in @("Header / Global Status", "Pipeline Timeline", "Current Object", "Action Menu", "Safety Footer")) {
+    if ($panels -notcontains $panel) { throw "Interactive report missing panel: $panel" }
+  }
 }
 
 function Assert-OperatorTuiPanels($Panels, [string]$SnapshotText) {
@@ -440,5 +570,21 @@ function Assert-OperatorTuiSingleStepNoLoop($State, $Report) {
   Assert-False $Report.release_created "single_step_report.release_created"
   Assert-False $Report.tag_created "single_step_report.tag_created"
   Assert-False $Report.asset_uploaded "single_step_report.asset_uploaded"
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiInteractiveNoRealExecution($Report) {
+  Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
+  Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
+  Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
+  Assert-False $Report.queue_runner_started "queue_runner_started"
+  Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.run_forever_started "run_forever_started"
+  Assert-False $Report.hermes_live_called "hermes_live_called"
+  Assert-False $Report.mcp_run_called "mcp_run_called"
+  Assert-False $Report.auto_merge_enabled "auto_merge_enabled"
+  Assert-False $Report.release_created "release_created"
+  Assert-False $Report.tag_created "tag_created"
+  Assert-False $Report.asset_uploaded "asset_uploaded"
   Assert-TokenPrintedFalse $Report
 }

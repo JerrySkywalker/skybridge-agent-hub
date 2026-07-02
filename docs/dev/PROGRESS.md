@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-07-01 Mega Goal 368E Ratatui Interactive Confirmation and Action Runner
+
+- Added the MG368E interactive unblocker for `apps/operator-tui`: action
+  selection, hotkeys, exact-confirmation input, reason input, last-action
+  status feedback and sanitized interactive artifacts.
+- Wired interactive candidate actions to the existing MG368C fixture-safe
+  generation, validation, review approval, append preview and append apply
+  runners.
+- Wired interactive single-step actions to the existing MG368D fixture-safe
+  bounded preview, start-one, safe-pause and abort-preview runners.
+- Added `skybridge.operator_tui_interactive_unblocker_report.v1` artifacts
+  under `.agent/tmp/operator-tui/interactive-unblocker/`.
+- Kept MG368E as an unblocker only: it does not perform MG369, create the
+  docs-only experiment PR, execute tasks, claim tasks, create branches or PRs
+  by the TUI, merge, deploy, run worker/queue loops, run forever, call live
+  Hermes, call MCP, auto-merge, create release/tag/assets or print tokens.
+- Added MG368E PowerShell smokes, package entries and Bootstrap Alpha
+  acceptance wiring. The recommended next milestone is MG369 Manual
+  Single-Step Goal Experiment via Ratatui TUI reattempt.
+
 ## 2026-06-29 Mega Goal 368D Ratatui Single-Step Goal Control Gate
 
 - Upgraded `apps/operator-tui` to `--single-step` mode while preserving the

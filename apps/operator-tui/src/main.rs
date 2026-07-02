@@ -2,6 +2,7 @@ mod actions;
 mod app;
 mod candidate;
 mod collect;
+mod interactive;
 mod model;
 mod render;
 mod single_step;
@@ -11,7 +12,7 @@ use std::{io, time::Duration};
 use anyhow::Context;
 use app::{parse_cli, App};
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -21,6 +22,15 @@ fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
     let output_dir = cli.artifact_output_dir();
     let mut app = App::new(cli.state_mode, &output_dir);
+    if cli.interactive_scenario.is_some() {
+        interactive::run_simulation(&mut app, cli.interactive_scenario, &output_dir)?;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&interactive::interactive_report(&app, &output_dir))?
+        );
+        return Ok(());
+    }
+
     if cli.candidate_action != candidate::CandidateAction::None {
         app.run_candidate_action(&cli);
     }
@@ -88,37 +98,10 @@ fn run_loop(
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Char('r') => app.refresh_state(output_dir),
-                    KeyCode::Char('c') => {
-                        let _ = actions::handle_action(actions::Action::CopySafeSummary);
-                    }
-                    KeyCode::Char('g') => {
-                        let _ = actions::handle_action(actions::Action::GenerateCandidateFixture);
-                    }
-                    KeyCode::Char('v') => {
-                        let _ = actions::handle_action(actions::Action::ValidateCandidate);
-                    }
-                    KeyCode::Char('e') => {
-                        let _ = actions::handle_action(actions::Action::ReviewCandidate);
-                    }
-                    KeyCode::Char('a') => {
-                        let _ = actions::handle_action(actions::Action::AppendCandidate);
-                    }
-                    KeyCode::Char('p') => {
-                        let _ = actions::handle_action(actions::Action::PreviewBoundedAction);
-                    }
-                    KeyCode::Char('s') => {
-                        let _ = actions::handle_action(actions::Action::StartOneGoal);
-                    }
-                    KeyCode::Char('h') => {
-                        let _ = actions::handle_action(actions::Action::SafePause);
-                    }
-                    KeyCode::Char('x') => {
-                        let _ = actions::handle_action(actions::Action::AbortTerminate);
-                    }
-                    _ => {}
+                if interactive::handle_key(app, key.code, output_dir)?
+                    == interactive::InteractiveControl::Quit
+                {
+                    break;
                 }
             }
         }
