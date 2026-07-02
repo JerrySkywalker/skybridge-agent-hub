@@ -34,8 +34,8 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
 
     draw_header(frame, outer[0], &app.state);
     draw_timeline(frame, outer[1], &app.state);
-    draw_current_object(frame, outer[2], &app.state);
-    draw_action_menu(frame, outer[3]);
+    draw_current_object(frame, outer[2], app);
+    draw_action_menu(frame, outer[3], app);
     draw_safety_footer(frame, outer[4], &app.state);
 }
 
@@ -144,27 +144,40 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
     frame.render_widget(list, area);
 }
 
-fn draw_current_object(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
-    let paragraph = Paragraph::new(current_object_lines(state).join("\n"))
+fn draw_current_object(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let mut lines = current_object_lines(&app.state);
+    lines.extend(app.interactive.status_lines());
+    let paragraph = Paragraph::new(lines.join("\n"))
         .block(panel_block(PANELS[2]))
         .wrap(Wrap { trim: true });
     frame.render_widget(paragraph, area);
 }
 
-fn draw_action_menu(frame: &mut Frame<'_>, area: Rect) {
+fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let items = Action::all()
         .into_iter()
-        .map(|action| {
+        .enumerate()
+        .map(|(index, action)| {
             let disabled = !action.enabled();
-            let mut label = format!("{} {}", action.key(), action.label());
+            let prefix = if index == app.interactive.selected_action_index {
+                ">"
+            } else {
+                " "
+            };
+            let mut label = format!("{prefix} {} {}", action.key(), action.label());
             if disabled {
                 label.push_str(" [disabled]");
             }
-            let style = if disabled {
+            let mut style = if disabled {
                 Style::default().fg(Color::DarkGray)
+            } else if index == app.interactive.selected_action_index {
+                Style::default().fg(Color::Yellow)
             } else {
                 Style::default().fg(Color::Cyan)
             };
+            if index == app.interactive.selected_action_index {
+                style = style.add_modifier(Modifier::BOLD);
+            }
             ListItem::new(Line::from(Span::styled(label, style)))
         })
         .collect::<Vec<_>>();

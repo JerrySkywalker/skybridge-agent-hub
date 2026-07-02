@@ -94,10 +94,19 @@ execute, create branches or PRs, merge, deploy, call live Hermes, call MCP,
 auto-merge, create releases, tags or assets, or print tokens. The first real
 manual hosted-dev experiment remains deferred to MG369.
 
+MG368E follows the blocked MG369 manual-gate attempt and adds the missing
+interactive confirmation/action runner. The Ratatui loop can now navigate
+actions, accept exact confirmations, require sanitized pause/abort reasons,
+dispatch candidate and single-step fixture-safe runners, refresh displayed
+state and write sanitized interactive-unblocker artifacts. It is still not the
+MG369 experiment and it does not enable real task execution, branch creation,
+PR creation, merge, deploy, queue runners, worker loops, run forever, live
+Hermes, MCP, auto-merge, release/tag/assets or token printing.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG369 Manual Single-step Hosted-dev Experiment
+1. MG369 Manual Single-step Hosted-dev Experiment reattempt after MG368E
 
 ## Read-Only Audit
 

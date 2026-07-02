@@ -12,6 +12,7 @@ use crate::{
         CandidateAction, CandidateFlowOptions,
     },
     collect::{collect_operator_state, StateMode},
+    interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
     single_step::{
@@ -40,6 +41,7 @@ pub struct Cli {
     pub abort_confirm: String,
     pub pause_reason: String,
     pub abort_reason: String,
+    pub interactive_scenario: InteractiveScenario,
 }
 
 impl Default for Cli {
@@ -62,6 +64,7 @@ impl Default for Cli {
             abort_confirm: String::new(),
             pause_reason: String::new(),
             abort_reason: String::new(),
+            interactive_scenario: InteractiveScenario::None,
         }
     }
 }
@@ -87,24 +90,29 @@ impl Cli {
 pub struct App {
     pub state: OperatorState,
     pub state_mode: StateMode,
+    pub interactive: InteractiveState,
 }
 
 impl App {
     pub fn new(state_mode: StateMode, output_dir: &Path) -> Self {
         let mut state = collect_operator_state(state_mode);
         if state_mode == StateMode::SingleStep {
-            state.candidate_flow = load_default_candidate_state();
+            state.candidate_flow = load_candidate_state_with_fallback(output_dir);
             state.single_step = load_single_step_state(output_dir);
         } else {
             state.candidate_flow = load_candidate_state(output_dir);
         }
-        Self { state, state_mode }
+        Self {
+            state,
+            state_mode,
+            interactive: InteractiveState::default(),
+        }
     }
 
     pub fn refresh_state(&mut self, output_dir: &Path) {
         self.state = collect_operator_state(self.state_mode);
         if self.state_mode == StateMode::SingleStep {
-            self.state.candidate_flow = load_default_candidate_state();
+            self.state.candidate_flow = load_candidate_state_with_fallback(output_dir);
             self.state.single_step = load_single_step_state(output_dir);
         } else {
             self.state.candidate_flow = load_candidate_state(output_dir);
@@ -302,6 +310,16 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     .next()
                     .context("--abort-reason requires a following value")?;
             }
+            "--interactive-unblocker-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--interactive-unblocker-smoke requires a following value")?;
+                cli.interactive_scenario = InteractiveScenario::from_str(&value)?;
+                cli.state_mode = StateMode::LocalCloud;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_INTERACTIVE_OUTPUT_DIR);
+                }
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -343,6 +361,10 @@ Flags:\n\
   --abort-confirm <s>    Exact confirmation for abort-apply-fixture\n\
   --pause-reason <s>     Sanitized reason for safe-pause\n\
   --abort-reason <s>     Sanitized reason for abort preview/apply\n\
+  --interactive-unblocker-smoke <s>\n\
+                         Run MG368E actions, confirmation-reject,\n\
+                         reason-required, candidate-dispatch,\n\
+                         single-step-dispatch, or no-real-execution simulation\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\
@@ -353,4 +375,12 @@ Flags:\n\
 
 fn path_for_report(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+fn load_candidate_state_with_fallback(output_dir: &Path) -> crate::candidate::CandidateState {
+    let local_state = load_candidate_state(output_dir);
+    if !local_state.candidate_hash.is_empty() || !local_state.appended_step_id.is_empty() {
+        return local_state;
+    }
+    load_default_candidate_state()
 }
