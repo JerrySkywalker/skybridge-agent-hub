@@ -39,7 +39,9 @@ impl Action {
     }
 
     pub fn from_key(value: char) -> Option<Action> {
-        Self::all().into_iter().find(|action| action.key() == value.to_string())
+        Self::all()
+            .into_iter()
+            .find(|action| action.key() == value.to_string())
     }
 
     pub fn action_id(self) -> &'static str {

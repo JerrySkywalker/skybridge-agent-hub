@@ -13,8 +13,10 @@ use crate::{
     app::{App, Cli},
     candidate::{CandidateAction, APPEND_CONFIRMATION, REVIEW_CONFIRMATION},
     collect::StateMode,
+    commands::{CommandStatus, OperatorCommand, OperatorCommandResult},
     model::ActionStatus,
     render::PANELS,
+    runtime::{EnqueueOutcome, OperatorRuntime, RuntimeDispatchOptions},
     single_step::{SingleStepAction, ABORT_CONFIRMATION, PAUSE_CONFIRMATION, START_CONFIRMATION},
 };
 
@@ -209,30 +211,6 @@ impl InteractiveLastAction {
 }
 
 impl InteractiveState {
-    pub fn status_lines(&self) -> Vec<String> {
-        let prompt = match self.input_mode.as_str() {
-            "confirmation" => format!(
-                "confirmation input for {}: {}",
-                self.pending_action,
-                mask_input_len(&self.input_buffer)
-            ),
-            "reason" => format!(
-                "reason input for {}: {}",
-                self.pending_action,
-                value_or_none(&self.input_buffer)
-            ),
-            _ => "input mode: normal".to_string(),
-        };
-        vec![
-            format!(
-                "last_action_result: {} {}",
-                self.last_action.status, self.last_action.result
-            ),
-            prompt,
-            MG369_MANUAL_GATE_MESSAGE.to_string(),
-        ]
-    }
-
     fn record(&mut self, action: InteractiveLastAction) {
         self.last_action = action.clone();
         self.history.push(action);
@@ -263,11 +241,16 @@ impl InteractiveState {
     }
 }
 
-pub fn handle_key(app: &mut App, key: KeyCode, output_dir: &Path) -> anyhow::Result<InteractiveControl> {
+pub fn handle_key(
+    app: &mut App,
+    key: KeyCode,
+    output_dir: &Path,
+    runtime: &mut OperatorRuntime,
+) -> anyhow::Result<InteractiveControl> {
     match app.interactive.input_mode.as_str() {
-        "confirmation" => handle_confirmation_key(app, key, output_dir),
+        "confirmation" => handle_confirmation_key(app, key, output_dir, runtime),
         "reason" => handle_reason_key(app, key, output_dir),
-        _ => handle_normal_key(app, key, output_dir),
+        _ => handle_normal_key(app, key, output_dir, runtime),
     }
 }
 
@@ -279,22 +262,16 @@ pub fn run_simulation(
     match scenario {
         InteractiveScenario::None => {}
         InteractiveScenario::Actions => {
-            dispatch_action(app, Action::Refresh, output_dir, "", "")?;
-            dispatch_action(app, Action::CopySafeSummary, output_dir, "", "")?;
+            dispatch_action_sync(app, Action::Refresh, output_dir, "", "")?;
+            dispatch_action_sync(app, Action::CopySafeSummary, output_dir, "", "")?;
         }
         InteractiveScenario::ConfirmationReject => {
-            dispatch_action(app, Action::GenerateCandidateFixture, output_dir, "", "")?;
-            dispatch_action(app, Action::ValidateCandidate, output_dir, "", "")?;
-            dispatch_action(app, Action::ReviewCandidate, output_dir, "NO_MATCH", "")?;
+            dispatch_action_sync(app, Action::GenerateCandidateFixture, output_dir, "", "")?;
+            dispatch_action_sync(app, Action::ValidateCandidate, output_dir, "", "")?;
+            dispatch_action_sync(app, Action::ReviewCandidate, output_dir, "NO_MATCH", "")?;
         }
         InteractiveScenario::ReasonRequired => {
-            dispatch_action(
-                app,
-                Action::SafePause,
-                output_dir,
-                PAUSE_CONFIRMATION,
-                "",
-            )?;
+            dispatch_action_sync(app, Action::SafePause, output_dir, PAUSE_CONFIRMATION, "")?;
         }
         InteractiveScenario::CandidateDispatch => {
             run_candidate_sequence(app, output_dir)?;
@@ -304,14 +281,8 @@ pub fn run_simulation(
             run_single_step_sequence(app, output_dir)?;
         }
         InteractiveScenario::NoRealExecution => {
-            dispatch_action(app, Action::ReviewCandidate, output_dir, "NO_MATCH", "")?;
-            dispatch_action(
-                app,
-                Action::SafePause,
-                output_dir,
-                PAUSE_CONFIRMATION,
-                "",
-            )?;
+            dispatch_action_sync(app, Action::ReviewCandidate, output_dir, "NO_MATCH", "")?;
+            dispatch_action_sync(app, Action::SafePause, output_dir, PAUSE_CONFIRMATION, "")?;
             run_candidate_sequence(app, output_dir)?;
             run_single_step_sequence(app, output_dir)?;
         }
@@ -360,7 +331,10 @@ pub fn interactive_report(app: &App, output_dir: &Path) -> InteractiveReport {
         warnings.push("reason_required_enforced".to_string());
     }
     if app.interactive.last_action.status == "blocked" {
-        warnings.push(format!("last_action_blocked:{}", app.interactive.last_action.result));
+        warnings.push(format!(
+            "last_action_blocked:{}",
+            app.interactive.last_action.result
+        ));
     }
 
     InteractiveReport {
@@ -369,7 +343,10 @@ pub fn interactive_report(app: &App, output_dir: &Path) -> InteractiveReport {
         mode: "interactive-unblocker",
         interactive_loop_available: true,
         keyboard_actions_registered: keyboard_actions_registered(),
-        keyboard_actions: Action::all().into_iter().map(|action| action.key()).collect(),
+        keyboard_actions: Action::all()
+            .into_iter()
+            .map(|action| action.key())
+            .collect(),
         confirmation_input_available: true,
         reason_input_available: true,
         candidate_actions_dispatchable: app.interactive.candidate_actions_dispatchable,
@@ -406,6 +383,7 @@ fn handle_normal_key(
     app: &mut App,
     key: KeyCode,
     output_dir: &Path,
+    runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
     match key {
         KeyCode::Char('q') | KeyCode::Esc => Ok(InteractiveControl::Quit),
@@ -428,11 +406,11 @@ fn handle_normal_key(
                 .get(app.interactive.selected_action_index)
                 .copied()
                 .unwrap_or(Action::Refresh);
-            begin_or_dispatch(app, action, output_dir)
+            begin_or_dispatch(app, action, output_dir, runtime)
         }
         KeyCode::Char(value) => {
             if let Some(action) = Action::from_key(value) {
-                begin_or_dispatch(app, action, output_dir)
+                begin_or_dispatch(app, action, output_dir, runtime)
             } else {
                 Ok(InteractiveControl::Continue)
             }
@@ -445,6 +423,7 @@ fn handle_confirmation_key(
     app: &mut App,
     key: KeyCode,
     output_dir: &Path,
+    runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
     match key {
         KeyCode::Esc => {
@@ -462,7 +441,7 @@ fn handle_confirmation_key(
             let confirmation = app.interactive.input_buffer.clone();
             let reason = app.interactive.pending_reason.clone();
             app.interactive.clear_input();
-            dispatch_action(app, action, output_dir, &confirmation, &reason)?;
+            dispatch_action_async(app, action, output_dir, &confirmation, &reason, runtime)?;
         }
         KeyCode::Backspace => {
             app.interactive.input_buffer.pop();
@@ -518,6 +497,7 @@ fn begin_or_dispatch(
     app: &mut App,
     action: Action,
     output_dir: &Path,
+    runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
     if action == Action::Quit {
         return Ok(InteractiveControl::Quit);
@@ -532,11 +512,144 @@ fn begin_or_dispatch(
         write_interactive_artifacts(output_dir, app)?;
         return Ok(InteractiveControl::Continue);
     }
-    dispatch_action(app, action, output_dir, "", "")?;
+    dispatch_action_async(app, action, output_dir, "", "", runtime)?;
     Ok(InteractiveControl::Continue)
 }
 
-fn dispatch_action(
+fn dispatch_action_async(
+    app: &mut App,
+    action: Action,
+    output_dir: &Path,
+    confirmation: &str,
+    reason: &str,
+    runtime: &mut OperatorRuntime,
+) -> anyhow::Result<()> {
+    if let Some(expected) = confirmation_for(action) {
+        if confirmation != expected {
+            app.interactive.exact_confirmation_mismatch_rejected = true;
+            app.interactive.record(InteractiveLastAction::blocked(
+                action,
+                "exact_confirmation_mismatch",
+                vec!["exact_confirmation_mismatch".to_string()],
+            ));
+            app.sync_view_model();
+            write_interactive_artifacts(output_dir, app)?;
+            return Ok(());
+        }
+    }
+
+    let sanitized_reason = sanitize_reason(reason);
+    let reason_sanitized = !reason.is_empty() && sanitized_reason != reason.trim();
+    if reason_required(action) && sanitized_reason.is_empty() {
+        app.interactive.reason_required_enforced = true;
+        app.interactive.record(InteractiveLastAction::blocked(
+            action,
+            "reason_required",
+            vec!["reason_required".to_string()],
+        ));
+        app.sync_view_model();
+        write_interactive_artifacts(output_dir, app)?;
+        return Ok(());
+    }
+
+    let Some(command) = OperatorCommand::from_action(action) else {
+        return Ok(());
+    };
+    let options = RuntimeDispatchOptions::new(output_dir.to_path_buf(), app.state_mode)
+        .with_reason(sanitized_reason.clone());
+    match runtime.enqueue(command, options) {
+        EnqueueOutcome::Started {
+            command_id,
+            command,
+        } => {
+            app.view_model.command_started(command_id, command.label());
+            let mut last =
+                InteractiveLastAction::allowed(action, "command_enqueued_nonblocking", Vec::new());
+            last.status = CommandStatus::Queued.as_str().to_string();
+            last.reason_required = reason_required(action);
+            last.reason_provided = !sanitized_reason.is_empty();
+            last.reason_sanitized = reason_sanitized;
+            last.sanitized_reason = sanitized_reason;
+            app.interactive.record(last);
+        }
+        EnqueueOutcome::Blocked(result) => {
+            app.view_model.apply_command_result(result.clone());
+            app.interactive.record(InteractiveLastAction::blocked(
+                action,
+                &result.result_summary,
+                result.blockers,
+            ));
+        }
+    }
+
+    if reason_sanitized {
+        app.interactive.sanitized_reason_enforced = true;
+    }
+    app.sync_view_model();
+    write_interactive_artifacts(output_dir, app)
+}
+
+pub fn record_command_result(
+    app: &mut App,
+    result: &OperatorCommandResult,
+    output_dir: &Path,
+) -> anyhow::Result<()> {
+    let action = action_for_command(result.command);
+    if matches!(
+        result.command,
+        OperatorCommand::GenerateCandidateFixture
+            | OperatorCommand::ValidateCandidate
+            | OperatorCommand::ReviewCandidate
+            | OperatorCommand::AppendCandidate
+    ) {
+        app.interactive.candidate_actions_dispatchable = true;
+    }
+    if matches!(
+        result.command,
+        OperatorCommand::PreviewBoundedAction
+            | OperatorCommand::StartOneFixture
+            | OperatorCommand::SafePauseFixture
+            | OperatorCommand::AbortPreview
+    ) {
+        app.interactive.single_step_actions_dispatchable = true;
+    }
+
+    let last = InteractiveLastAction {
+        action: action.action_id().to_string(),
+        status: result.status.as_str().to_string(),
+        result: result.result_summary.clone(),
+        confirmation_required: confirmation_for(action).is_some(),
+        confirmation_matched: confirmation_for(action).is_some(),
+        reason_required: reason_required(action),
+        reason_provided: false,
+        reason_sanitized: false,
+        sanitized_reason: String::new(),
+        artifact_paths: result.artifact_paths.clone(),
+        blockers: result.blockers.clone(),
+        warnings: result.warnings.clone(),
+        token_printed: false,
+    };
+    app.interactive.record(last);
+    app.sync_view_model();
+    write_interactive_artifacts(output_dir, app)
+}
+
+fn action_for_command(command: OperatorCommand) -> Action {
+    match command {
+        OperatorCommand::RefreshLocalCloud => Action::Refresh,
+        OperatorCommand::GenerateCandidateFixture => Action::GenerateCandidateFixture,
+        OperatorCommand::ValidateCandidate => Action::ValidateCandidate,
+        OperatorCommand::ReviewCandidate => Action::ReviewCandidate,
+        OperatorCommand::AppendCandidate => Action::AppendCandidate,
+        OperatorCommand::PreviewBoundedAction => Action::PreviewBoundedAction,
+        OperatorCommand::StartOneFixture => Action::StartOneGoal,
+        OperatorCommand::SafePauseFixture => Action::SafePause,
+        OperatorCommand::AbortPreview => Action::AbortTerminate,
+        OperatorCommand::CopySafeSummary => Action::CopySafeSummary,
+    }
+}
+
+fn dispatch_action_sync(
     app: &mut App,
     action: Action,
     output_dir: &Path,
@@ -672,7 +785,8 @@ fn dispatch_action(
         Action::Quit => interactive_artifact_paths(output_dir),
     };
 
-    let mut last = InteractiveLastAction::allowed(action, "action_dispatched_fixture_safe", artifact_paths);
+    let mut last =
+        InteractiveLastAction::allowed(action, "action_dispatched_fixture_safe", artifact_paths);
     last.reason_required = reason_required(action);
     last.reason_provided = !sanitized_reason.is_empty();
     last.reason_sanitized = reason_sanitized;
@@ -685,24 +799,42 @@ fn dispatch_action(
 }
 
 fn run_candidate_sequence(app: &mut App, output_dir: &Path) -> anyhow::Result<()> {
-    dispatch_action(app, Action::GenerateCandidateFixture, output_dir, "", "")?;
-    dispatch_action(app, Action::ValidateCandidate, output_dir, "", "")?;
-    dispatch_action(app, Action::ReviewCandidate, output_dir, REVIEW_CONFIRMATION, "")?;
-    dispatch_action(app, Action::AppendCandidate, output_dir, APPEND_CONFIRMATION, "")?;
+    dispatch_action_sync(app, Action::GenerateCandidateFixture, output_dir, "", "")?;
+    dispatch_action_sync(app, Action::ValidateCandidate, output_dir, "", "")?;
+    dispatch_action_sync(
+        app,
+        Action::ReviewCandidate,
+        output_dir,
+        REVIEW_CONFIRMATION,
+        "",
+    )?;
+    dispatch_action_sync(
+        app,
+        Action::AppendCandidate,
+        output_dir,
+        APPEND_CONFIRMATION,
+        "",
+    )?;
     Ok(())
 }
 
 fn run_single_step_sequence(app: &mut App, output_dir: &Path) -> anyhow::Result<()> {
-    dispatch_action(app, Action::PreviewBoundedAction, output_dir, "", "")?;
-    dispatch_action(app, Action::StartOneGoal, output_dir, START_CONFIRMATION, "")?;
-    dispatch_action(
+    dispatch_action_sync(app, Action::PreviewBoundedAction, output_dir, "", "")?;
+    dispatch_action_sync(
+        app,
+        Action::StartOneGoal,
+        output_dir,
+        START_CONFIRMATION,
+        "",
+    )?;
+    dispatch_action_sync(
         app,
         Action::SafePause,
         output_dir,
         PAUSE_CONFIRMATION,
         "fixture safe pause",
     )?;
-    dispatch_action(
+    dispatch_action_sync(
         app,
         Action::AbortTerminate,
         output_dir,
@@ -864,22 +996,6 @@ fn write_text(path: &Path, text: &str) -> anyhow::Result<()> {
 fn path_for_report(path: &Path) -> String {
     let path = PathBuf::from(path);
     path.to_string_lossy().replace('\\', "/")
-}
-
-fn mask_input_len(value: &str) -> String {
-    if value.is_empty() {
-        "empty".to_string()
-    } else {
-        format!("{} chars", value.chars().count())
-    }
-}
-
-fn value_or_none(value: &str) -> &str {
-    if value.is_empty() {
-        "none"
-    } else {
-        value
-    }
 }
 
 fn now_utc() -> String {

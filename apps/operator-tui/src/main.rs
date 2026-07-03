@@ -2,10 +2,13 @@ mod actions;
 mod app;
 mod candidate;
 mod collect;
+mod commands;
 mod interactive;
 mod model;
 mod render;
+mod runtime;
 mod single_step;
+mod view_model;
 
 use std::{io, time::Duration};
 
@@ -22,6 +25,12 @@ fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
     let output_dir = cli.artifact_output_dir();
     let mut app = App::new(cli.state_mode, &output_dir);
+    if cli.runtime_scenario.is_some() {
+        let report =
+            runtime::run_runtime_refactor_simulation(&mut app, cli.runtime_scenario, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     if cli.interactive_scenario.is_some() {
         interactive::run_simulation(&mut app, cli.interactive_scenario, &output_dir)?;
         println!(
@@ -60,13 +69,19 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    run_interactive(&mut app, cli.no_alt_screen, output_dir)
+    run_interactive(
+        &mut app,
+        cli.no_alt_screen,
+        output_dir,
+        cli.runtime_timeout_ms,
+    )
 }
 
 fn run_interactive(
     app: &mut App,
     no_alt_screen: bool,
     output_dir: std::path::PathBuf,
+    runtime_timeout_ms: u64,
 ) -> anyhow::Result<()> {
     enable_raw_mode().context("failed to enable terminal raw mode")?;
     let mut stdout = io::stdout();
@@ -76,7 +91,9 @@ fn run_interactive(
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
-    let result = run_loop(app, &mut terminal, &output_dir);
+    let mut command_runtime =
+        runtime::OperatorRuntime::new(Duration::from_millis(runtime_timeout_ms));
+    let result = run_loop(app, &mut terminal, &output_dir, &mut command_runtime);
 
     disable_raw_mode().context("failed to disable terminal raw mode")?;
     if !no_alt_screen {
@@ -85,6 +102,12 @@ fn run_interactive(
     }
     terminal.show_cursor().context("failed to show cursor")?;
 
+    runtime::write_runtime_refactor_artifacts(
+        std::path::Path::new(runtime::DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR),
+        app,
+        &command_runtime,
+    )?;
+
     result
 }
 
@@ -92,13 +115,20 @@ fn run_loop(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     output_dir: &std::path::Path,
+    command_runtime: &mut runtime::OperatorRuntime,
 ) -> anyhow::Result<()> {
     loop {
+        let events = command_runtime.poll();
+        let results = runtime::apply_runtime_events(app, events);
+        for result in results {
+            interactive::record_command_result(app, &result, output_dir)?;
+        }
+        app.sync_view_model();
         terminal.draw(|frame| render::draw(frame, app))?;
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
-                if interactive::handle_key(app, key.code, output_dir)?
+                if interactive::handle_key(app, key.code, output_dir, command_runtime)?
                     == interactive::InteractiveControl::Quit
                 {
                     break;
