@@ -3,6 +3,7 @@ mod app;
 mod candidate;
 mod collect;
 mod commands;
+mod input_ux;
 mod interactive;
 mod model;
 mod render;
@@ -26,6 +27,11 @@ fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
     let output_dir = cli.artifact_output_dir();
     let mut app = App::new(cli.state_mode, &output_dir);
+    if cli.input_ux_scenario.is_some() {
+        let report = input_ux::run_input_ux_smoke(&mut app, cli.input_ux_scenario, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     if cli.layout_scenario.is_some() {
         let report = ui_layout::run_layout_smoke(&mut app, cli.layout_scenario, &output_dir)?;
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -134,7 +140,7 @@ fn run_loop(
 
         if event::poll(Duration::from_millis(250))? {
             if let Event::Key(key) = event::read()? {
-                if interactive::handle_key(app, key.code, output_dir, command_runtime)?
+                if interactive::handle_key_event(app, key, output_dir, command_runtime)?
                     == interactive::InteractiveControl::Quit
                 {
                     break;

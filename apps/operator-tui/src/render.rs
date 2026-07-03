@@ -9,6 +9,7 @@ use ratatui::{
 use crate::{
     actions::Action,
     app::App,
+    input_ux,
     model::{timeline_steps, OperatorState},
     ui_layout::{self, OperatorLayoutMode},
     view_model::ViewModel,
@@ -25,11 +26,35 @@ pub const PANELS: [&str; 5] = [
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let view_model = &app.view_model;
     let area = frame.area();
+    if view_model.input_mode == "confirmation" {
+        draw_confirmation_dialog(frame, area, view_model);
+        return;
+    }
+    if view_model.input_mode == "reason" {
+        draw_reason_dialog(frame, area, view_model);
+        return;
+    }
     match OperatorLayoutMode::detect(area) {
         OperatorLayoutMode::Full => draw_full_layout(frame, area, app),
         OperatorLayoutMode::Compact => draw_compact_layout(frame, area, app),
         OperatorLayoutMode::Tiny => draw_tiny_layout(frame, area, view_model),
     }
+}
+
+fn draw_confirmation_dialog(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let paragraph = Paragraph::new(input_ux::confirmation_dialog_lines(view_model).join("\n"))
+        .block(panel_block("Confirmation Required"))
+        .style(Style::default().fg(Color::Yellow))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, centered_rect(area, 82, 62));
+}
+
+fn draw_reason_dialog(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let paragraph = Paragraph::new(input_ux::reason_dialog_lines(view_model).join("\n"))
+        .block(panel_block("Reason Required"))
+        .style(Style::default().fg(Color::Cyan))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, centered_rect(area, 82, 62));
 }
 
 fn draw_full_layout(frame: &mut Frame<'_>, area: Rect, app: &App) {
@@ -273,6 +298,14 @@ fn panel_block(title: impl Into<String>) -> Block<'static> {
         .title(title.into())
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
+}
+
+fn centered_rect(area: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let width = area.width.saturating_mul(percent_x).saturating_div(100);
+    let height = area.height.saturating_mul(percent_y).saturating_div(100);
+    let x = area.x + area.width.saturating_sub(width).saturating_div(2);
+    let y = area.y + area.height.saturating_sub(height).saturating_div(2);
+    Rect::new(x, y, width.max(1), height.max(1))
 }
 
 fn header_lines(state: &OperatorState) -> Vec<String> {

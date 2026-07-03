@@ -267,6 +267,12 @@ $requiredScripts = @{
   operator_tui_layout_tabs_smoke = "scripts/powershell/smoke-operator-tui-layout-tabs.ps1"
   operator_tui_layout_actions_compact_smoke = "scripts/powershell/smoke-operator-tui-layout-actions-compact.ps1"
   operator_tui_layout_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-layout-no-real-execution.ps1"
+  operator_tui_input_confirmation_dialog_smoke = "scripts/powershell/smoke-operator-tui-input-confirmation-dialog.ps1"
+  operator_tui_input_confirmation_mismatch_smoke = "scripts/powershell/smoke-operator-tui-input-confirmation-mismatch.ps1"
+  operator_tui_input_confirmation_clear_smoke = "scripts/powershell/smoke-operator-tui-input-confirmation-clear.ps1"
+  operator_tui_input_reason_required_smoke = "scripts/powershell/smoke-operator-tui-input-reason-required.ps1"
+  operator_tui_input_reason_sanitization_smoke = "scripts/powershell/smoke-operator-tui-input-reason-sanitization.ps1"
+  operator_tui_input_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-input-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -584,7 +590,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-layout-tiny",
   "smoke:operator-tui-layout-tabs",
   "smoke:operator-tui-layout-actions-compact",
-  "smoke:operator-tui-layout-no-real-execution"
+  "smoke:operator-tui-layout-no-real-execution",
+  "smoke:operator-tui-input-confirmation-dialog",
+  "smoke:operator-tui-input-confirmation-mismatch",
+  "smoke:operator-tui-input-confirmation-clear",
+  "smoke:operator-tui-input-reason-required",
+  "smoke:operator-tui-input-reason-sanitization",
+  "smoke:operator-tui-input-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

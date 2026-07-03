@@ -710,9 +710,12 @@ fn help_lines() -> Vec<String> {
         "Enter: run selected fixture-safe command or enter confirmation mode".to_string(),
         "?: toggle this help surface".to_string(),
         "q or Esc: quit".to_string(),
-        "confirmation mode: type exact required phrase, Enter submits, Esc cancels".to_string(),
-        "reason mode: type sanitized reason, Enter continues to confirmation, Esc cancels"
+        "confirmation mode: type or paste the exact phrase; Enter submits; Esc cancels".to_string(),
+        "reason mode: enter a non-empty reason; sanitized preview is shown before confirmation"
             .to_string(),
+        "input editing: Backspace deletes; Ctrl+U clears; pasted characters arrive as input"
+            .to_string(),
+        "q only quits from normal mode; in confirmation/reason mode it is text input".to_string(),
         "token_printed=false".to_string(),
     ]
 }
