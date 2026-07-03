@@ -115,13 +115,22 @@ late results by command id. It does not retry MG369 or enable real execution,
 branch creation, PR creation, queue runners, worker loops, run forever, live
 Hermes, MCP, auto-merge, release/tag/assets or token printing.
 
+MG368G follows the remaining manual-operation blocker: the fixed five-panel
+Ratatui layout was too dense and did not support small Windows Terminal sizes.
+MG368G keeps runtime semantics unchanged and adds full, compact and tiny layout
+modes, tabbed details, a stable status header, command/safety footer, a help
+surface and deterministic layout snapshots. Tiny mode renders a
+terminal-too-small message instead of overflowing dense panels. It does not
+retry MG369 or enable real execution, branch creation, PR creation, queue
+runners, worker loops, run forever, live Hermes, MCP, auto-merge,
+release/tag/assets or token printing.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368G Ratatui Responsive Layout and Tabs.
-2. MG368H Ratatui Confirmation UX.
-3. MG368I Ratatui Manual Dry Run.
-4. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
+1. MG368H Ratatui Confirmation UX.
+2. MG368I Ratatui Manual Dry Run.
+3. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
 
 ## Read-Only Audit
 

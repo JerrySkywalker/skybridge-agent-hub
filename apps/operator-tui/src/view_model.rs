@@ -4,6 +4,7 @@ use crate::{
     actions::Action,
     commands::{CommandStatus, OperatorCommandResult},
     model::OperatorState,
+    ui_layout::OperatorTab,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -24,6 +25,8 @@ pub struct ViewModel {
     pub safety_flags: ViewModelSafetyFlags,
     pub ui_loop_nonblocking: bool,
     pub running_state_rendered: bool,
+    pub active_tab: OperatorTab,
+    pub help_visible: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +70,8 @@ impl ViewModel {
             safety_flags: ViewModelSafetyFlags::disabled(),
             ui_loop_nonblocking: true,
             running_state_rendered: false,
+            active_tab: OperatorTab::Overview,
+            help_visible: false,
         }
     }
 
@@ -133,6 +138,20 @@ impl ViewModel {
             format!("running_command: {active}"),
             format!("last_command_result: {last}"),
         ]
+    }
+
+    pub fn next_tab(&mut self) {
+        self.active_tab = self.active_tab.next();
+        self.help_visible = false;
+    }
+
+    pub fn previous_tab(&mut self) {
+        self.active_tab = self.active_tab.previous();
+        self.help_visible = false;
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.help_visible = !self.help_visible;
     }
 }
 
