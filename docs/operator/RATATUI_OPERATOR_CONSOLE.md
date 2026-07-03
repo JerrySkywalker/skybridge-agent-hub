@@ -374,7 +374,78 @@ The runtime report schema is
 
 Deferred follow-up milestones:
 
-- MG368G: responsive layout and tabs;
+- MG368H: confirmation UX hardening;
+- MG368I: manual dry run;
+- MG369A/B: real manual experiment after the runtime and UX work are reviewed.
+
+## MG368G Scope
+
+MG368G makes the Ratatui console usable in normal and small Windows Terminal
+sizes without changing runtime semantics. The blocker after MG368F was visual
+density: the nonblocking runtime worked, but the old five-panel vertical stack
+was still too cramped for real manual operation.
+
+The console now detects three layout modes:
+
+- full: width >= 120 and height >= 40;
+- compact: width >= 80 and height >= 24;
+- tiny: below compact threshold.
+
+Full layout keeps a persistent status header, tab bar, wide current-tab detail
+area, side action/status column and command/safety footer. Compact layout keeps
+only the compact status header, tab bar, current tab and footer visible. Tiny
+layout does not attempt to render the full operator surface; it shows a
+terminal-too-small message, current size, minimum recommended size, current
+command status, `? help`, `q quit` and `token_printed=false`.
+
+The required tabs are:
+
+- Overview;
+- Pipeline;
+- Candidate;
+- Single-step;
+- Actions;
+- Runtime;
+- Safety;
+- Artifacts.
+
+Tab navigation:
+
+- `Tab` or `]`: next tab;
+- `Shift+Tab` or `[`: previous tab;
+- `?`: toggle the help surface;
+- `q` or Esc: quit.
+
+The Actions tab is the compact-mode home for the full action menu. Full mode
+also shows the action menu as a side panel. Tiny mode intentionally hides the
+full action list and shows only minimal key hints.
+
+Candidate, single-step, runtime, safety and artifact details are no longer
+packed into one Current Object view in the live UI. They are split into their
+matching tabs. Runtime status remains visible through the header/footer and
+the Runtime tab, including active command, command status, last result and
+timeout/stale-result notes. Safety status remains visible through the footer
+and Safety tab.
+
+MG368G writes deterministic layout artifacts under
+`.agent/tmp/operator-tui/layout/`:
+
+- `layout-state.json`;
+- `layout-report.json`;
+- `layout-report.md`;
+- `full-snapshot.txt`;
+- `compact-snapshot.txt`;
+- `tiny-snapshot.txt`.
+
+The layout report schema is `skybridge.operator_tui_layout_report.v1`.
+
+MG368G does not retry MG369, change the command runtime semantics, execute
+tasks, claim tasks, create branches or PRs by the TUI, merge, deploy, run a
+queue runner, start a worker loop, run forever, call live Hermes, call MCP,
+auto-merge, create release/tag/assets or print tokens.
+
+Deferred follow-up milestones:
+
 - MG368H: confirmation UX hardening;
 - MG368I: manual dry run;
 - MG369A/B: real manual experiment after the runtime and UX work are reviewed.
@@ -397,6 +468,7 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action abort-preview --abort-reason "operator preview" --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --interactive-unblocker-smoke no-real-execution --output-dir .agent/tmp/operator-tui/interactive-unblocker
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --runtime-refactor-smoke no-real-execution --output-dir .agent/tmp/operator-tui/runtime-refactor
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- --layout-smoke no-real-execution --output-dir .agent/tmp/operator-tui/layout
 ```
 
 Fixture snapshot mode writes:
@@ -449,6 +521,15 @@ Runtime refactor simulation writes:
 - `.agent/tmp/operator-tui/runtime-refactor/timeout-report.json`
 - `.agent/tmp/operator-tui/runtime-refactor/stale-result-report.json`
 
+Responsive layout simulation writes:
+
+- `.agent/tmp/operator-tui/layout/layout-state.json`
+- `.agent/tmp/operator-tui/layout/layout-report.json`
+- `.agent/tmp/operator-tui/layout/layout-report.md`
+- `.agent/tmp/operator-tui/layout/full-snapshot.txt`
+- `.agent/tmp/operator-tui/layout/compact-snapshot.txt`
+- `.agent/tmp/operator-tui/layout/tiny-snapshot.txt`
+
 The report schema is `skybridge.operator_tui_report.v1`. In MG368A it must
 report `fixture_used=true`, `interactive_started=false`,
 `mutation_attempted=false`, `append_attempted=false`,
@@ -500,6 +581,14 @@ In MG368F runtime-refactor mode it reports
 stale-result state, running-state rendering, last command status, command
 history count and the same no-real-execution/no-loop/no-release safety flags.
 
+In MG368G layout-responsive mode it reports
+`skybridge.operator_tui_layout_report.v1`,
+`mode=layout-responsive`, full/compact/tiny layout availability,
+tab-model availability, active tab, tab list, small/tiny window support,
+terminal-too-small message availability, compact action-menu availability,
+runtime status visibility, safety status visibility and the same
+no-real-execution/no-loop/no-release safety flags.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -513,6 +602,7 @@ fixture-safe paths. The safety boundary remains:
 - no unconfirmed start_one_goal in MG368D;
 - no unconfirmed interactive action in MG368E;
 - no blocking action execution on the interactive UI path in MG368F;
+- no runtime semantic change in MG368G;
 - no start_queue_apply in MG368A;
 - no start_queue_apply in MG368B;
 - no start_queue_apply in MG368C;
@@ -543,8 +633,6 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG368G Ratatui Responsive Layout and Tabs: improve small-window usability
-  without changing execution capability.
 - MG368H Ratatui Confirmation UX: harden confirmation/reason interaction.
 - MG368I Ratatui Manual Dry Run: exercise the nonblocking console manually
   without real task execution.

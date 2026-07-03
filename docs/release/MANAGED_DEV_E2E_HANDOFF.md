@@ -109,6 +109,19 @@ tasks, claim tasks, create branches or PRs by the TUI, merge, deploy, run a
 queue runner, start a worker loop, run forever, call live Hermes, call MCP,
 auto-merge, create release/tag/assets or print tokens.
 
+MG368G is the Ratatui responsive layout and tabs repair added after MG368F.
+It keeps the nonblocking runtime semantics unchanged but replaces the live
+fixed five-panel stack with full, compact and tiny layout modes. Full mode
+uses a status header, tab bar, current-tab detail area, side action/status
+column and footer. Compact mode renders only the current tab plus header and
+footer. Tiny mode renders a terminal-too-small message, current/minimum size,
+command status, help/quit hints and `token_printed=false`. Tabs split the dense
+operator details into Overview, Pipeline, Candidate, Single-step, Actions,
+Runtime, Safety and Artifacts. MG368G does not retry MG369, execute tasks,
+claim tasks, create branches or PRs by the TUI, merge, deploy, run a queue
+runner, start a worker loop, run forever, call live Hermes, call MCP,
+auto-merge, create release/tag/assets or print tokens.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records

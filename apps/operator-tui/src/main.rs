@@ -8,6 +8,7 @@ mod model;
 mod render;
 mod runtime;
 mod single_step;
+mod ui_layout;
 mod view_model;
 
 use std::{io, time::Duration};
@@ -25,6 +26,11 @@ fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
     let output_dir = cli.artifact_output_dir();
     let mut app = App::new(cli.state_mode, &output_dir);
+    if cli.layout_scenario.is_some() {
+        let report = ui_layout::run_layout_smoke(&mut app, cli.layout_scenario, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     if cli.runtime_scenario.is_some() {
         let report =
             runtime::run_runtime_refactor_simulation(&mut app, cli.runtime_scenario, &output_dir)?;

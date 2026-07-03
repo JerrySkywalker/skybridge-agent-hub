@@ -10,6 +10,7 @@ use crate::{
     actions::Action,
     app::App,
     model::{timeline_steps, OperatorState},
+    ui_layout::{self, OperatorLayoutMode},
     view_model::ViewModel,
 };
 
@@ -23,23 +24,138 @@ pub const PANELS: [&str; 5] = [
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let view_model = &app.view_model;
-    let state = &view_model.current_operator_state;
+    let area = frame.area();
+    match OperatorLayoutMode::detect(area) {
+        OperatorLayoutMode::Full => draw_full_layout(frame, area, app),
+        OperatorLayoutMode::Compact => draw_compact_layout(frame, area, app),
+        OperatorLayoutMode::Tiny => draw_tiny_layout(frame, area, view_model),
+    }
+}
+
+fn draw_full_layout(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(9),
-            Constraint::Min(10),
-            Constraint::Length(11),
-            Constraint::Length(12),
-            Constraint::Length(5),
+            Constraint::Length(4),
+            Constraint::Length(3),
+            Constraint::Min(12),
+            Constraint::Length(4),
         ])
-        .split(frame.area());
+        .split(area);
 
-    draw_header(frame, outer[0], state);
-    draw_timeline(frame, outer[1], state);
-    draw_current_object(frame, outer[2], view_model);
-    draw_action_menu(frame, outer[3], app);
-    draw_safety_footer(frame, outer[4], state);
+    draw_status_header(
+        frame,
+        outer[0],
+        &app.view_model,
+        OperatorLayoutMode::Full,
+        area,
+    );
+    draw_tabs(frame, outer[1], &app.view_model);
+
+    let main = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(68), Constraint::Length(42)])
+        .split(outer[2]);
+    draw_tab_content(frame, main[0], &app.view_model);
+
+    let right = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(10), Constraint::Length(8)])
+        .split(main[1]);
+    draw_action_menu(frame, right[0], app);
+    draw_command_status_panel(frame, right[1], &app.view_model);
+    draw_footer(frame, outer[3], &app.view_model, OperatorLayoutMode::Full);
+}
+
+fn draw_compact_layout(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let outer = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(4),
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(4),
+        ])
+        .split(area);
+
+    draw_status_header(
+        frame,
+        outer[0],
+        &app.view_model,
+        OperatorLayoutMode::Compact,
+        area,
+    );
+    draw_tabs(frame, outer[1], &app.view_model);
+    draw_tab_content(frame, outer[2], &app.view_model);
+    draw_footer(
+        frame,
+        outer[3],
+        &app.view_model,
+        OperatorLayoutMode::Compact,
+    );
+}
+
+fn draw_tiny_layout(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let paragraph =
+        Paragraph::new(ui_layout::tiny_lines(view_model, area.width, area.height).join("\n"))
+            .block(panel_block("Tiny Layout"))
+            .style(Style::default().fg(Color::Yellow))
+            .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_status_header(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view_model: &ViewModel,
+    mode: OperatorLayoutMode,
+    screen: Rect,
+) {
+    let paragraph =
+        Paragraph::new(ui_layout::status_header_lines(view_model, mode, screen).join("\n"))
+            .block(panel_block("Global Status"))
+            .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_tabs(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let paragraph = Paragraph::new(ui_layout::tab_bar_line(view_model))
+        .block(panel_block("Tabs"))
+        .style(Style::default().fg(Color::Cyan))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_tab_content(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let title = if view_model.help_visible {
+        "Help".to_string()
+    } else {
+        format!("{} Tab", view_model.active_tab.label())
+    };
+    let paragraph = Paragraph::new(ui_layout::tab_content_lines(view_model).join("\n"))
+        .block(panel_block(title))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_command_status_panel(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let paragraph = Paragraph::new(ui_layout::runtime_lines(view_model).join("\n"))
+        .block(panel_block("Runtime Status"))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_footer(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view_model: &ViewModel,
+    mode: OperatorLayoutMode,
+) {
+    let paragraph = Paragraph::new(ui_layout::footer_lines(view_model, mode).join("\n"))
+        .block(panel_block("Command / Safety Footer"))
+        .style(Style::default().fg(Color::Green))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
 }
 
 pub fn render_snapshot_text(state: &OperatorState) -> String {
@@ -120,42 +236,6 @@ pub fn render_report_markdown(app: &App, snapshot_path: &str, state_path: &str) 
     )
 }
 
-fn draw_header(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
-    let paragraph = Paragraph::new(header_lines(state).join("\n"))
-        .block(panel_block(PANELS[0]))
-        .wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, area);
-}
-
-fn draw_timeline(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
-    let items = timeline_steps(state)
-        .into_iter()
-        .map(|step| {
-            let color = match step.status {
-                "done" => Color::Green,
-                "ready" => Color::Yellow,
-                "blocked" => Color::Red,
-                _ => Color::Gray,
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("[{}] ", step.status), Style::default().fg(color)),
-                Span::raw(step.label),
-            ]))
-        })
-        .collect::<Vec<_>>();
-    let list = List::new(items).block(panel_block(PANELS[1]));
-    frame.render_widget(list, area);
-}
-
-fn draw_current_object(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
-    let mut lines = current_object_lines(&view_model.current_operator_state);
-    lines.extend(view_model.status_lines());
-    let paragraph = Paragraph::new(lines.join("\n"))
-        .block(panel_block(PANELS[2]))
-        .wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, area);
-}
-
 fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
     let selected_action_index = app.view_model.selected_action_index;
     let items = Action::all()
@@ -188,21 +268,9 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
     frame.render_widget(List::new(items).block(panel_block(PANELS[3])), area);
 }
 
-fn draw_safety_footer(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
-    let paragraph = Paragraph::new(safety_footer_lines(state).join("\n"))
-        .block(panel_block(PANELS[4]))
-        .style(
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )
-        .wrap(Wrap { trim: true });
-    frame.render_widget(paragraph, area);
-}
-
-fn panel_block(title: &'static str) -> Block<'static> {
+fn panel_block(title: impl Into<String>) -> Block<'static> {
     Block::default()
-        .title(title)
+        .title(title.into())
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
 }

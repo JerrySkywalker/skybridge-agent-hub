@@ -261,6 +261,12 @@ $requiredScripts = @{
   operator_tui_runtime_stale_result_smoke = "scripts/powershell/smoke-operator-tui-runtime-stale-result.ps1"
   operator_tui_runtime_one_command_smoke = "scripts/powershell/smoke-operator-tui-runtime-one-command.ps1"
   operator_tui_runtime_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-runtime-no-real-execution.ps1"
+  operator_tui_layout_full_smoke = "scripts/powershell/smoke-operator-tui-layout-full.ps1"
+  operator_tui_layout_compact_smoke = "scripts/powershell/smoke-operator-tui-layout-compact.ps1"
+  operator_tui_layout_tiny_smoke = "scripts/powershell/smoke-operator-tui-layout-tiny.ps1"
+  operator_tui_layout_tabs_smoke = "scripts/powershell/smoke-operator-tui-layout-tabs.ps1"
+  operator_tui_layout_actions_compact_smoke = "scripts/powershell/smoke-operator-tui-layout-actions-compact.ps1"
+  operator_tui_layout_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-layout-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -572,7 +578,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-runtime-timeout",
   "smoke:operator-tui-runtime-stale-result",
   "smoke:operator-tui-runtime-one-command",
-  "smoke:operator-tui-runtime-no-real-execution"
+  "smoke:operator-tui-runtime-no-real-execution",
+  "smoke:operator-tui-layout-full",
+  "smoke:operator-tui-layout-compact",
+  "smoke:operator-tui-layout-tiny",
+  "smoke:operator-tui-layout-tabs",
+  "smoke:operator-tui-layout-actions-compact",
+  "smoke:operator-tui-layout-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

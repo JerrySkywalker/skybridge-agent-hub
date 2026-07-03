@@ -387,6 +387,18 @@ fn handle_normal_key(
 ) -> anyhow::Result<InteractiveControl> {
     match key {
         KeyCode::Char('q') | KeyCode::Esc => Ok(InteractiveControl::Quit),
+        KeyCode::Tab | KeyCode::Char(']') => {
+            app.view_model.next_tab();
+            Ok(InteractiveControl::Continue)
+        }
+        KeyCode::BackTab | KeyCode::Char('[') => {
+            app.view_model.previous_tab();
+            Ok(InteractiveControl::Continue)
+        }
+        KeyCode::Char('?') => {
+            app.view_model.toggle_help();
+            Ok(InteractiveControl::Continue)
+        }
         KeyCode::Up => {
             if app.interactive.selected_action_index == 0 {
                 app.interactive.selected_action_index = Action::all().len() - 1;

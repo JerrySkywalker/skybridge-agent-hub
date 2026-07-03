@@ -10,6 +10,7 @@ $OperatorTuiCandidateOutputDir = ".agent/tmp/operator-tui/candidate-flow"
 $OperatorTuiSingleStepOutputDir = ".agent/tmp/operator-tui/single-step"
 $OperatorTuiInteractiveOutputDir = ".agent/tmp/operator-tui/interactive-unblocker"
 $OperatorTuiRuntimeOutputDir = ".agent/tmp/operator-tui/runtime-refactor"
+$OperatorTuiLayoutOutputDir = ".agent/tmp/operator-tui/layout"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -342,6 +343,62 @@ function Invoke-OperatorTuiRuntimeRefactorSimulation(
   }
 }
 
+function Invoke-OperatorTuiLayoutSmoke(
+  [string]$Name,
+  [ValidateSet("full", "compact", "tiny", "tabs", "actions-compact", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiLayoutOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiLayoutArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --layout-smoke $Scenario `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI layout smoke failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/layout-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/layout-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/layout-report.md"
+  $fullSnapshotPath = Join-Path $RepoRoot "$OutputDir/full-snapshot.txt"
+  $compactSnapshotPath = Join-Path $RepoRoot "$OutputDir/compact-snapshot.txt"
+  $tinySnapshotPath = Join-Path $RepoRoot "$OutputDir/tiny-snapshot.txt"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $fullSnapshotPath, $compactSnapshotPath, $tinySnapshotPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI layout artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  $fullSnapshot = Get-Content -Raw -LiteralPath $fullSnapshotPath
+  $compactSnapshot = Get-Content -Raw -LiteralPath $compactSnapshotPath
+  $tinySnapshot = Get-Content -Raw -LiteralPath $tinySnapshotPath
+  foreach ($text in @($reportMarkdown, $fullSnapshot, $compactSnapshot, $tinySnapshot)) {
+    Assert-NoUnsafeText $text
+  }
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+
+  Assert-OperatorTuiLayoutShape -State $state -Report $report -FullSnapshot $fullSnapshot -CompactSnapshot $compactSnapshot -TinySnapshot $tinySnapshot
+  Assert-OperatorTuiLayoutNoRealExecution -Report $report
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    full_snapshot_path = $fullSnapshotPath
+    compact_snapshot_path = $compactSnapshotPath
+    tiny_snapshot_path = $tinySnapshotPath
+    state = $state
+    report = $report
+    full_snapshot = $fullSnapshot
+    compact_snapshot = $compactSnapshot
+    tiny_snapshot = $tinySnapshot
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -393,6 +450,18 @@ function Clear-OperatorTuiRuntimeArtifacts([string]$OutputDir = $OperatorTuiRunt
 
   if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to remove non-temp operator TUI runtime artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
+  }
+}
+
+function Clear-OperatorTuiLayoutArtifacts([string]$OutputDir = $OperatorTuiLayoutOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI layout artifact path: $operatorDir"
   }
   if (Test-Path -LiteralPath $operatorDir) {
     Remove-Item -LiteralPath $operatorDir -Recurse -Force
@@ -529,6 +598,56 @@ function Assert-OperatorTuiRuntimeShape($State, $Report, $History, $Timeout, $St
   }
   Assert-False $Timeout.token_printed "timeout token_printed"
   Assert-False $Stale.token_printed "stale token_printed"
+}
+
+function Assert-OperatorTuiLayoutShape($State, $Report, [string]$FullSnapshot, [string]$CompactSnapshot, [string]$TinySnapshot) {
+  if ($State.schema -ne "skybridge.operator_tui_layout_state.v1") {
+    throw "Unexpected operator TUI layout state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_layout_report.v1") {
+    throw "Unexpected operator TUI layout report schema."
+  }
+  if ($Report.mode -ne "layout-responsive") { throw "Layout report must use layout-responsive mode." }
+  Assert-True $Report.full_layout_available "full_layout_available"
+  Assert-True $Report.compact_layout_available "compact_layout_available"
+  Assert-True $Report.tiny_layout_available "tiny_layout_available"
+  Assert-True $Report.tab_model_available "tab_model_available"
+  Assert-True $Report.small_window_supported "small_window_supported"
+  Assert-True $Report.tiny_window_supported "tiny_window_supported"
+  Assert-True $Report.terminal_too_small_message_available "terminal_too_small_message_available"
+  Assert-True $Report.action_menu_compact_available "action_menu_compact_available"
+  Assert-True $Report.runtime_status_visible "runtime_status_visible"
+  Assert-True $Report.safety_status_visible "safety_status_visible"
+  Assert-False $Report.token_printed "layout token_printed"
+  Assert-False $State.token_printed "layout_state token_printed"
+
+  $tabs = @($Report.tabs | ForEach-Object { [string]$_ })
+  foreach ($tab in @("Overview", "Pipeline", "Candidate", "Single-step", "Actions", "Runtime", "Safety", "Artifacts")) {
+    if ($tabs -notcontains $tab) { throw "Layout tab missing: $tab" }
+    if ($FullSnapshot -notmatch [regex]::Escape($tab)) { throw "Full snapshot missing tab: $tab" }
+  }
+
+  foreach ($needle in @("layout=full", "Global Status", "Command / Safety Footer", "command_status", "token_printed=false")) {
+    if ($FullSnapshot -notmatch [regex]::Escape($needle)) { throw "Full snapshot missing: $needle" }
+  }
+  foreach ($needle in @("mode=compact", "current tab only", "command_status", "token_printed=false")) {
+    if ($CompactSnapshot -notmatch [regex]::Escape($needle)) { throw "Compact snapshot missing: $needle" }
+  }
+  foreach ($needle in @("terminal too small", "minimum recommended size", "command_status", "q quit", "token_printed=false")) {
+    if ($TinySnapshot -notmatch [regex]::Escape($needle)) { throw "Tiny snapshot missing: $needle" }
+  }
+
+  $oldPanelNames = @(
+    "Header / Global Status",
+    "Pipeline Timeline",
+    "Current Object",
+    "Action Menu",
+    "Safety Footer"
+  )
+  $oldPanelHits = @($oldPanelNames | Where-Object { $CompactSnapshot -match [regex]::Escape($_) })
+  if ($oldPanelHits.Count -ge 5) {
+    throw "Compact layout rendered all old five panels at once."
+  }
 }
 
 function Assert-OperatorTuiPanels($Panels, [string]$SnapshotText) {
@@ -700,6 +819,22 @@ function Assert-OperatorTuiRuntimeNoRealExecution($Report) {
   Assert-False $Report.execution_started "execution_started"
   Assert-False $Report.branch_created "branch_created"
   Assert-False $Report.pr_created "pr_created"
+  Assert-False $Report.queue_runner_started "queue_runner_started"
+  Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.run_forever_started "run_forever_started"
+  Assert-False $Report.hermes_live_called "hermes_live_called"
+  Assert-False $Report.mcp_run_called "mcp_run_called"
+  Assert-False $Report.auto_merge_enabled "auto_merge_enabled"
+  Assert-False $Report.release_created "release_created"
+  Assert-False $Report.tag_created "tag_created"
+  Assert-False $Report.asset_uploaded "asset_uploaded"
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiLayoutNoRealExecution($Report) {
+  Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
+  Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
+  Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
   Assert-False $Report.queue_runner_started "queue_runner_started"
   Assert-False $Report.worker_loop_started "worker_loop_started"
   Assert-False $Report.run_forever_started "run_forever_started"

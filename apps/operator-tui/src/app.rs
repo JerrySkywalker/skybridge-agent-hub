@@ -23,6 +23,7 @@ use crate::{
         single_step_report, write_single_step_artifacts, SingleStepAction, SingleStepOptions,
         DEFAULT_SINGLE_STEP_OUTPUT_DIR,
     },
+    ui_layout::{LayoutSmokeScenario, DEFAULT_LAYOUT_OUTPUT_DIR},
     view_model::ViewModel,
 };
 
@@ -48,6 +49,7 @@ pub struct Cli {
     pub interactive_scenario: InteractiveScenario,
     pub runtime_scenario: RuntimeSmokeScenario,
     pub runtime_timeout_ms: u64,
+    pub layout_scenario: LayoutSmokeScenario,
 }
 
 impl Default for Cli {
@@ -73,6 +75,7 @@ impl Default for Cli {
             interactive_scenario: InteractiveScenario::None,
             runtime_scenario: RuntimeSmokeScenario::None,
             runtime_timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
+            layout_scenario: LayoutSmokeScenario::None,
         }
     }
 }
@@ -85,6 +88,10 @@ impl Cli {
 
         if self.runtime_scenario.is_some() {
             return PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
+        }
+
+        if self.layout_scenario.is_some() {
+            return PathBuf::from(DEFAULT_LAYOUT_OUTPUT_DIR);
         }
 
         match self.state_mode {
@@ -364,6 +371,15 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     .parse::<u64>()
                     .context("--runtime-timeout-ms must be an unsigned integer")?;
             }
+            "--layout-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--layout-smoke requires a following value")?;
+                cli.layout_scenario = LayoutSmokeScenario::from_str(&value)?;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_LAYOUT_OUTPUT_DIR);
+                }
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -414,6 +430,8 @@ Flags:\n\
                          stale-result, one-command, or no-real-execution simulation\n\
   --runtime-timeout-ms <n>\n\
                          Interactive command timeout in milliseconds\n\
+  --layout-smoke <s>     Run MG368G full, compact, tiny, tabs,\n\
+                         actions-compact, or no-real-execution layout simulation\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

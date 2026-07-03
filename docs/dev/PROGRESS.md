@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2026-07-03 Mega Goal 368G Ratatui Responsive Layout and Tabs
+
+- Refactored the live `apps/operator-tui` renderer from the fixed five-panel
+  vertical stack into responsive full, compact and tiny layouts.
+- Added layout mode detection with documented thresholds: full at 120x40 or
+  larger, compact at 80x24 or larger, and tiny below compact size.
+- Added tab state and navigation for Overview, Pipeline, Candidate,
+  Single-step, Actions, Runtime, Safety and Artifacts, with Tab/Shift+Tab and
+  `[`/`]` navigation plus a `?` help surface.
+- Moved dense candidate, single-step, runtime, safety and artifact details into
+  tabs while keeping a stable status header and command/safety footer.
+- Added tiny-window behavior that renders only a terminal-too-small message,
+  current/minimum size, command status, help/quit hints and
+  `token_printed=false`.
+- Added deterministic layout artifacts under `.agent/tmp/operator-tui/layout/`
+  and PowerShell smokes for full, compact, tiny, tabs, compact actions and
+  no-real-execution.
+- Kept MG368G as UI layout/readability only: no MG369 retry, no runtime
+  semantic change, no real task execution, no branch or PR creation by the
+  TUI, no queue runner, no worker loop, no run forever, no live Hermes, no MCP,
+  no auto-merge, no release/tag/assets and `token_printed=false`.
+- Recommended next milestone: MG368H Ratatui Confirmation and Reason UX.
+
 ## 2026-07-03 Mega Goal 368F Ratatui Non-blocking Runtime and ViewModel Refactor
 
 - Repaired the `apps/operator-tui` interactive runtime after MG369 was blocked
