@@ -10,6 +10,7 @@ use crate::{
     actions::Action,
     app::App,
     model::{timeline_steps, OperatorState},
+    view_model::ViewModel,
 };
 
 pub const PANELS: [&str; 5] = [
@@ -21,6 +22,8 @@ pub const PANELS: [&str; 5] = [
 ];
 
 pub fn draw(frame: &mut Frame<'_>, app: &App) {
+    let view_model = &app.view_model;
+    let state = &view_model.current_operator_state;
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -32,11 +35,11 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
         ])
         .split(frame.area());
 
-    draw_header(frame, outer[0], &app.state);
-    draw_timeline(frame, outer[1], &app.state);
-    draw_current_object(frame, outer[2], app);
+    draw_header(frame, outer[0], state);
+    draw_timeline(frame, outer[1], state);
+    draw_current_object(frame, outer[2], view_model);
     draw_action_menu(frame, outer[3], app);
-    draw_safety_footer(frame, outer[4], &app.state);
+    draw_safety_footer(frame, outer[4], state);
 }
 
 pub fn render_snapshot_text(state: &OperatorState) -> String {
@@ -144,9 +147,9 @@ fn draw_timeline(frame: &mut Frame<'_>, area: Rect, state: &OperatorState) {
     frame.render_widget(list, area);
 }
 
-fn draw_current_object(frame: &mut Frame<'_>, area: Rect, app: &App) {
-    let mut lines = current_object_lines(&app.state);
-    lines.extend(app.interactive.status_lines());
+fn draw_current_object(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
+    let mut lines = current_object_lines(&view_model.current_operator_state);
+    lines.extend(view_model.status_lines());
     let paragraph = Paragraph::new(lines.join("\n"))
         .block(panel_block(PANELS[2]))
         .wrap(Wrap { trim: true });
@@ -154,12 +157,13 @@ fn draw_current_object(frame: &mut Frame<'_>, area: Rect, app: &App) {
 }
 
 fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let selected_action_index = app.view_model.selected_action_index;
     let items = Action::all()
         .into_iter()
         .enumerate()
         .map(|(index, action)| {
             let disabled = !action.enabled();
-            let prefix = if index == app.interactive.selected_action_index {
+            let prefix = if index == selected_action_index {
                 ">"
             } else {
                 " "
@@ -170,12 +174,12 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
             }
             let mut style = if disabled {
                 Style::default().fg(Color::DarkGray)
-            } else if index == app.interactive.selected_action_index {
+            } else if index == selected_action_index {
                 Style::default().fg(Color::Yellow)
             } else {
                 Style::default().fg(Color::Cyan)
             };
-            if index == app.interactive.selected_action_index {
+            if index == selected_action_index {
                 style = style.add_modifier(Modifier::BOLD);
             }
             ListItem::new(Line::from(Span::styled(label, style)))

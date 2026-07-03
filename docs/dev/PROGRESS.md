@@ -1,5 +1,25 @@
 # Progress Log
 
+## 2026-07-03 Mega Goal 368F Ratatui Non-blocking Runtime and ViewModel Refactor
+
+- Repaired the `apps/operator-tui` interactive runtime after MG369 was blocked
+  by freeze risk in the manual Ratatui loop.
+- Added a command request/result model, ViewModel, one-command background
+  runner, timeout handling, stale-result handling and sanitized runtime
+  refactor artifacts under `.agent/tmp/operator-tui/runtime-refactor/`.
+- Moved interactive action dispatch off the render/input path: the UI now
+  enqueues fixture-safe commands, renders `running` state and applies completed
+  results by command id.
+- Preserved the one-action-only safety model with `command_already_running`
+  blocking and no command queue, worker loop, queue runner or run-forever path.
+- Added runtime smokes for nonblocking behavior, command status transitions,
+  timeout, stale-result ignore, one-command enforcement and no-real-execution.
+- Kept MG368F as architecture repair only: no MG369 retry, no real task
+  execution, no branch or PR creation by the TUI, no merge, no deploy, no live
+  Hermes, no MCP, no auto-merge, no release/tag/assets and
+  `token_printed=false`.
+- Recommended next milestone: MG368G Ratatui Responsive Layout and Tabs.
+
 ## 2026-07-01 Mega Goal 368E Ratatui Interactive Confirmation and Action Runner
 
 - Added the MG368E interactive unblocker for `apps/operator-tui`: action

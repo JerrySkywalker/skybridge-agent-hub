@@ -15,11 +15,15 @@ use crate::{
     interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
+    runtime::{
+        RuntimeSmokeScenario, DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR,
+    },
     single_step::{
         load_default_candidate_state, load_single_step_state, run_single_step_action,
         single_step_report, write_single_step_artifacts, SingleStepAction, SingleStepOptions,
         DEFAULT_SINGLE_STEP_OUTPUT_DIR,
     },
+    view_model::ViewModel,
 };
 
 #[derive(Debug, Clone)]
@@ -42,6 +46,8 @@ pub struct Cli {
     pub pause_reason: String,
     pub abort_reason: String,
     pub interactive_scenario: InteractiveScenario,
+    pub runtime_scenario: RuntimeSmokeScenario,
+    pub runtime_timeout_ms: u64,
 }
 
 impl Default for Cli {
@@ -65,6 +71,8 @@ impl Default for Cli {
             pause_reason: String::new(),
             abort_reason: String::new(),
             interactive_scenario: InteractiveScenario::None,
+            runtime_scenario: RuntimeSmokeScenario::None,
+            runtime_timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
         }
     }
 }
@@ -73,6 +81,10 @@ impl Cli {
     pub fn artifact_output_dir(&self) -> PathBuf {
         if self.output_dir_provided {
             return self.output_dir.clone();
+        }
+
+        if self.runtime_scenario.is_some() {
+            return PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
         }
 
         match self.state_mode {
@@ -91,6 +103,7 @@ pub struct App {
     pub state: OperatorState,
     pub state_mode: StateMode,
     pub interactive: InteractiveState,
+    pub view_model: ViewModel,
 }
 
 impl App {
@@ -103,6 +116,7 @@ impl App {
             state.candidate_flow = load_candidate_state(output_dir);
         }
         Self {
+            view_model: ViewModel::new(state.clone()),
             state,
             state_mode,
             interactive: InteractiveState::default(),
@@ -117,6 +131,7 @@ impl App {
         } else {
             self.state.candidate_flow = load_candidate_state(output_dir);
         }
+        self.sync_view_model();
     }
 
     pub fn run_candidate_action(&mut self, cli: &Cli) {
@@ -128,6 +143,7 @@ impl App {
             append_confirm: cli.append_confirm.clone(),
         };
         self.state.candidate_flow = run_candidate_action(&options);
+        self.sync_view_model();
     }
 
     pub fn run_single_step_action(&mut self, cli: &Cli) {
@@ -143,6 +159,17 @@ impl App {
             abort_reason: cli.abort_reason.clone(),
         };
         self.state.single_step = run_single_step_action(&options, &self.state);
+        self.sync_view_model();
+    }
+
+    pub fn sync_view_model(&mut self) {
+        self.view_model.sync_state(&self.state);
+        self.view_model.sync_interactive(
+            self.interactive.selected_action_index,
+            &self.interactive.input_mode,
+            &self.interactive.pending_action,
+            &self.interactive.pending_reason,
+        );
     }
 
     pub fn report(&self, interactive_started: bool) -> OperatorReport {
@@ -320,6 +347,23 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(DEFAULT_INTERACTIVE_OUTPUT_DIR);
                 }
             }
+            "--runtime-refactor-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--runtime-refactor-smoke requires a following value")?;
+                cli.runtime_scenario = RuntimeSmokeScenario::from_str(&value)?;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
+                }
+            }
+            "--runtime-timeout-ms" => {
+                let value = iter
+                    .next()
+                    .context("--runtime-timeout-ms requires a following value")?;
+                cli.runtime_timeout_ms = value
+                    .parse::<u64>()
+                    .context("--runtime-timeout-ms must be an unsigned integer")?;
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -365,6 +409,11 @@ Flags:\n\
                          Run MG368E actions, confirmation-reject,\n\
                          reason-required, candidate-dispatch,\n\
                          single-step-dispatch, or no-real-execution simulation\n\
+  --runtime-refactor-smoke <s>\n\
+                         Run MG368F nonblocking, command-status, timeout,\n\
+                         stale-result, one-command, or no-real-execution simulation\n\
+  --runtime-timeout-ms <n>\n\
+                         Interactive command timeout in milliseconds\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

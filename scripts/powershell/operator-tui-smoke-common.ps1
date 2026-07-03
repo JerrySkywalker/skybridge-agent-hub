@@ -9,6 +9,7 @@ $OperatorTuiAbortConfirmation = "I_UNDERSTAND_ABORT_TERMINATE_PREVIEW_OR_FIXTURE
 $OperatorTuiCandidateOutputDir = ".agent/tmp/operator-tui/candidate-flow"
 $OperatorTuiSingleStepOutputDir = ".agent/tmp/operator-tui/single-step"
 $OperatorTuiInteractiveOutputDir = ".agent/tmp/operator-tui/interactive-unblocker"
+$OperatorTuiRuntimeOutputDir = ".agent/tmp/operator-tui/runtime-refactor"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -287,6 +288,60 @@ function Invoke-OperatorTuiInteractiveSimulation(
   }
 }
 
+function Invoke-OperatorTuiRuntimeRefactorSimulation(
+  [string]$Name,
+  [ValidateSet("nonblocking", "command-status", "timeout", "stale-result", "one-command", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiRuntimeOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiRuntimeArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --runtime-refactor-smoke $Scenario `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI runtime refactor simulation failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/runtime-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/runtime-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/runtime-report.md"
+  $historyPath = Join-Path $RepoRoot "$OutputDir/command-history.json"
+  $timeoutPath = Join-Path $RepoRoot "$OutputDir/timeout-report.json"
+  $stalePath = Join-Path $RepoRoot "$OutputDir/stale-result-report.json"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $historyPath, $timeoutPath, $stalePath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI runtime artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  Assert-NoUnsafeText $reportMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $history = @(Get-Content -Raw -LiteralPath $historyPath | ConvertFrom-Json)
+  $timeout = Get-Content -Raw -LiteralPath $timeoutPath | ConvertFrom-Json
+  $stale = Get-Content -Raw -LiteralPath $stalePath | ConvertFrom-Json
+
+  Assert-OperatorTuiRuntimeShape -State $state -Report $report -History $history -Timeout $timeout -Stale $stale
+  Assert-OperatorTuiRuntimeNoRealExecution -Report $report
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    history_path = $historyPath
+    timeout_path = $timeoutPath
+    stale_path = $stalePath
+    state = $state
+    report = $report
+    history = $history
+    timeout = $timeout
+    stale = $stale
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -329,6 +384,18 @@ function Clear-OperatorTuiInteractiveArtifacts([string]$OutputDir = $OperatorTui
     if (Test-Path -LiteralPath $path) {
       Remove-Item -LiteralPath $path -Recurse -Force
     }
+  }
+}
+
+function Clear-OperatorTuiRuntimeArtifacts([string]$OutputDir = $OperatorTuiRuntimeOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI runtime artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
   }
 }
 
@@ -427,6 +494,41 @@ function Assert-OperatorTuiInteractiveShape($State, $Report, $LastAction) {
   foreach ($panel in @("Header / Global Status", "Pipeline Timeline", "Current Object", "Action Menu", "Safety Footer")) {
     if ($panels -notcontains $panel) { throw "Interactive report missing panel: $panel" }
   }
+}
+
+function Assert-OperatorTuiRuntimeShape($State, $Report, $History, $Timeout, $Stale) {
+  if ($Report.schema -ne "skybridge.operator_tui_runtime_refactor_report.v1") {
+    throw "Unexpected runtime refactor report schema."
+  }
+  if ($Report.mode -ne "runtime-refactor") { throw "Runtime report must use runtime-refactor mode." }
+  Assert-True $Report.ui_loop_nonblocking "ui_loop_nonblocking"
+  Assert-True $Report.background_command_runner_available "background_command_runner_available"
+  Assert-True $Report.command_request_model_available "command_request_model_available"
+  Assert-True $Report.command_result_model_available "command_result_model_available"
+  Assert-True $Report.view_model_available "view_model_available"
+  Assert-True $Report.one_command_at_a_time_enforced "one_command_at_a_time_enforced"
+  Assert-True $Report.command_timeout_enforced "command_timeout_enforced"
+  Assert-True $Report.running_state_rendered "running_state_rendered"
+  Assert-True $Report.fixture_safe_only "fixture_safe_only"
+  Assert-False $Report.token_printed "runtime token_printed"
+  Assert-False $State.safety_flags.token_printed "runtime state token_printed"
+  if ([string]::IsNullOrWhiteSpace([string]$Report.last_command_status)) {
+    throw "runtime last_command_status missing."
+  }
+  if ([int]$Report.command_history_count -lt 2) {
+    throw "runtime command_history_count too low."
+  }
+  if (@($History).Count -ne [int]$Report.command_history_count) {
+    throw "runtime command history count mismatch."
+  }
+  if ($Timeout.schema -ne "skybridge.operator_tui_runtime_timeout_report.v1") {
+    throw "Unexpected timeout report schema."
+  }
+  if ($Stale.schema -ne "skybridge.operator_tui_runtime_stale_result_report.v1") {
+    throw "Unexpected stale result report schema."
+  }
+  Assert-False $Timeout.token_printed "timeout token_printed"
+  Assert-False $Stale.token_printed "stale token_printed"
 }
 
 function Assert-OperatorTuiPanels($Panels, [string]$SnapshotText) {
@@ -577,6 +679,27 @@ function Assert-OperatorTuiInteractiveNoRealExecution($Report) {
   Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
   Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
   Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
+  Assert-False $Report.queue_runner_started "queue_runner_started"
+  Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.run_forever_started "run_forever_started"
+  Assert-False $Report.hermes_live_called "hermes_live_called"
+  Assert-False $Report.mcp_run_called "mcp_run_called"
+  Assert-False $Report.auto_merge_enabled "auto_merge_enabled"
+  Assert-False $Report.release_created "release_created"
+  Assert-False $Report.tag_created "tag_created"
+  Assert-False $Report.asset_uploaded "asset_uploaded"
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiRuntimeNoRealExecution($Report) {
+  Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
+  Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
+  Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
+  Assert-False $Report.task_created "task_created"
+  Assert-False $Report.task_claimed "task_claimed"
+  Assert-False $Report.execution_started "execution_started"
+  Assert-False $Report.branch_created "branch_created"
+  Assert-False $Report.pr_created "pr_created"
   Assert-False $Report.queue_runner_started "queue_runner_started"
   Assert-False $Report.worker_loop_started "worker_loop_started"
   Assert-False $Report.run_forever_started "run_forever_started"

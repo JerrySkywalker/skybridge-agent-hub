@@ -286,6 +286,99 @@ creation, no real PR creation, no merge, no deploy, no queue runner, no worker
 loop, no run forever, no live Hermes, no MCP, no auto-merge, no release, tag or
 asset creation and `token_printed=false`.
 
+## MG368F Scope
+
+MG368F repairs the Ratatui runtime architecture after MG369 was blocked by
+interactive usability risk. The observed blocker was not a missing business
+capability: the TUI could freeze because the render/input loop, state
+collection, PowerShell probes, candidate actions, single-step actions and
+artifact writing were too tightly coupled on the interactive path.
+
+MG368F separates the console into:
+
+- UI render/input loop;
+- ViewModel state rendered by the five existing panels;
+- command request model;
+- one-command background command runner;
+- command result handling;
+- timeout handling;
+- stale-result handling;
+- sanitized runtime artifact writing.
+
+The command request model is `OperatorCommand` and covers:
+
+- `RefreshLocalCloud`;
+- `GenerateCandidateFixture`;
+- `ValidateCandidate`;
+- `ReviewCandidate`;
+- `AppendCandidate`;
+- `PreviewBoundedAction`;
+- `StartOneFixture`;
+- `SafePauseFixture`;
+- `AbortPreview`;
+- `CopySafeSummary`.
+
+The result model records a command id, command, status, start/finish time,
+duration, safe result summary, artifact paths, blockers, warnings and
+`token_printed=false`. Command status values are:
+
+- `idle`;
+- `queued`;
+- `running`;
+- `completed`;
+- `blocked`;
+- `failed`;
+- `timed_out`.
+
+Interactive action dispatch now enqueues one background command and returns to
+the UI loop. The UI continues rendering while the command is running and shows
+a minimal runtime banner in the existing Current Object panel:
+
+- `UI responsive while command runs`;
+- current command status;
+- active command label/id;
+- last command result.
+
+The one-action-only rule remains strict. If a command is running, a second
+mutation-capable command is blocked with `command_already_running`. There is no
+parallel candidate flow, no parallel single-step flow and no queue longer than
+one active command. MG368F does not add a background queue loop.
+
+Timeouts are enforced by the runtime. The default interactive timeout is 30
+seconds, with deterministic smoke scenarios using shorter internal timeouts.
+When a command times out, the ViewModel moves to `timed_out`, the UI remains
+responsive, the timeout report records `timed_out=true`, and any later result
+from that command is treated as stale. MG368F does not require process kill.
+
+Stale results carry the command id/generation that produced them. If a result
+arrives after timeout or after a newer command is active, it is not applied to
+the current ViewModel and the runtime records `stale_result_ignored=true`.
+
+MG368F does not retry MG369, create a docs-only experiment PR, create a real
+branch, create a real PR, execute tasks, claim tasks, merge, deploy, run a
+queue runner, start a worker loop, run forever, call live Hermes, call MCP,
+auto-merge, create release/tag/assets or print tokens.
+
+Runtime refactor artifacts are written under
+`.agent/tmp/operator-tui/runtime-refactor/`:
+
+- `runtime-state.json`;
+- `runtime-report.json`;
+- `runtime-report.md`;
+- `command-history.json`;
+- `timeout-report.json`;
+- `stale-result-report.json`.
+
+The runtime report schema is
+`skybridge.operator_tui_runtime_refactor_report.v1`.
+
+Deferred follow-up milestones:
+
+- MG368G: responsive layout and tabs;
+- MG368H: confirmation UX hardening;
+- MG368I: manual dry run;
+- MG369A/B: real manual experiment after the runtime and UX work are reviewed.
+
 ## Snapshot Mode
 
 CI and smoke tests must use snapshot mode instead of interactive raw-terminal
@@ -303,6 +396,7 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action safe-pause --pause-reason "manual hold" --pause-confirm I_UNDERSTAND_SAFE_PAUSE_SINGLE_STEP_PIPELINE_WITH_REASON --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single-step-action abort-preview --abort-reason "operator preview" --snapshot --write-report --output-dir .agent/tmp/operator-tui/single-step
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --interactive-unblocker-smoke no-real-execution --output-dir .agent/tmp/operator-tui/interactive-unblocker
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- --runtime-refactor-smoke no-real-execution --output-dir .agent/tmp/operator-tui/runtime-refactor
 ```
 
 Fixture snapshot mode writes:
@@ -346,6 +440,15 @@ Interactive unblocker simulation writes:
 - `.agent/tmp/operator-tui/interactive-unblocker/last-action.json`
 - `.agent/tmp/operator-tui/interactive-unblocker/manual-gate.md`
 
+Runtime refactor simulation writes:
+
+- `.agent/tmp/operator-tui/runtime-refactor/runtime-state.json`
+- `.agent/tmp/operator-tui/runtime-refactor/runtime-report.json`
+- `.agent/tmp/operator-tui/runtime-refactor/runtime-report.md`
+- `.agent/tmp/operator-tui/runtime-refactor/command-history.json`
+- `.agent/tmp/operator-tui/runtime-refactor/timeout-report.json`
+- `.agent/tmp/operator-tui/runtime-refactor/stale-result-report.json`
+
 The report schema is `skybridge.operator_tui_report.v1`. In MG368A it must
 report `fixture_used=true`, `interactive_started=false`,
 `mutation_attempted=false`, `append_attempted=false`,
@@ -387,6 +490,16 @@ confirmation mismatch rejection, reason-required enforcement, sanitized reason
 enforcement, `manual_gate_written=true` and the same no-real-execution safety
 flags.
 
+In MG368F runtime-refactor mode it reports
+`skybridge.operator_tui_runtime_refactor_report.v1`,
+`mode=runtime-refactor`, `ui_loop_nonblocking=true`,
+`background_command_runner_available=true`,
+`command_request_model_available=true`,
+`command_result_model_available=true`, `view_model_available=true`,
+`one_command_at_a_time_enforced=true`, `command_timeout_enforced=true`,
+stale-result state, running-state rendering, last command status, command
+history count and the same no-real-execution/no-loop/no-release safety flags.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -399,6 +512,7 @@ fixture-safe paths. The safety boundary remains:
 - no start_one_apply in MG368C;
 - no unconfirmed start_one_goal in MG368D;
 - no unconfirmed interactive action in MG368E;
+- no blocking action execution on the interactive UI path in MG368F;
 - no start_queue_apply in MG368A;
 - no start_queue_apply in MG368B;
 - no start_queue_apply in MG368C;
@@ -408,6 +522,7 @@ fixture-safe paths. The safety boundary remains:
 - no bounded action apply in MG368C;
 - no unbounded execution in MG368D;
 - no MG369 docs-only PR creation in MG368E;
+- no MG369 retry in MG368F;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -428,8 +543,12 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG369 Manual Single-step Hosted-dev Experiment reattempt: perform the first
-  manual single-step hosted-dev experiment through the TUI after the MG368E
-  interactive unblocker is reviewed.
+- MG368G Ratatui Responsive Layout and Tabs: improve small-window usability
+  without changing execution capability.
+- MG368H Ratatui Confirmation UX: harden confirmation/reason interaction.
+- MG368I Ratatui Manual Dry Run: exercise the nonblocking console manually
+  without real task execution.
+- MG369A/B Manual Single-step Hosted-dev Experiment: perform the first real
+  manual single-step hosted-dev experiment only after MG368F-G-H-I are reviewed.
 
 `token_printed=false`
