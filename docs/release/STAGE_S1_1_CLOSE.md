@@ -103,10 +103,25 @@ MG369 experiment and it does not enable real task execution, branch creation,
 PR creation, merge, deploy, queue runners, worker loops, run forever, live
 Hermes, MCP, auto-merge, release/tag/assets or token printing.
 
+MG368F follows the second MG369 blocker: the interactive Ratatui loop was not
+yet usable enough for real manual operation because slow local/cloud probes,
+PowerShell scripts, candidate actions, single-step actions and artifact writes
+could run on the interactive path. MG368F separates render/input from a
+ViewModel, command request/result model, one-command background runner,
+timeout handling and stale-result handling. The TUI now renders running command
+state while the command executes, blocks overlapping commands with
+`command_already_running`, records `timed_out` command state and ignores stale
+late results by command id. It does not retry MG369 or enable real execution,
+branch creation, PR creation, queue runners, worker loops, run forever, live
+Hermes, MCP, auto-merge, release/tag/assets or token printing.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG369 Manual Single-step Hosted-dev Experiment reattempt after MG368E
+1. MG368G Ratatui Responsive Layout and Tabs.
+2. MG368H Ratatui Confirmation UX.
+3. MG368I Ratatui Manual Dry Run.
+4. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
 
 ## Read-Only Audit
 
