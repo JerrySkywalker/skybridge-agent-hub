@@ -1,5 +1,27 @@
 # Progress Log
 
+## 2026-07-05 Mega Goal 368I Ratatui Manual Dry Run
+
+- Recorded Jerry's human-operated Ratatui dry run under
+  `.agent/tmp/operator-tui/manual-dry-run/`.
+- Preserved the original TUI artifacts and added sanitized summary artifacts:
+  `manual-dry-run-state.json`, `manual-dry-run-report.json`,
+  `manual-dry-run-report.md`, `manual-action-history.json`,
+  `manual-artifact-index.json` and `manual-safety-report.json`.
+- Classified the dry run as partial pass / blocked. The TUI loaded local/cloud
+  state at `4e3335a4ed5e2b64d34dca71014857c3f483f52e`, reported cloud parity
+  ok, generated and validated a fixture candidate, and exercised confirmation
+  and reason surfaces.
+- The action history did not prove the intended full dry-run sequence:
+  confirmation mismatch blocked review, append, start-one, safe pause and abort
+  preview completion; single-step dispatch did not complete.
+- Kept MG368I as an operator validation record only: no MG369 run, no real task
+  execution, no TUI-created branch or PR, no queue runner, no worker loop, no
+  run forever, no live Hermes, no MCP, no auto-merge, no release/tag/assets and
+  `token_printed=false`.
+- Recommended next milestone: do not start MG369A yet; reattempt MG368I or
+  repair the observed TUI input/timeout usability blocker first.
+
 ## 2026-07-03 Mega Goal 368H Ratatui Confirmation and Reason UX
 
 - Added a focused confirmation surface for exact-confirmation actions in
