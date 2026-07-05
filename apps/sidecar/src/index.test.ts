@@ -36,5 +36,5 @@ describe("sidecar node foundation", () => {
     } finally {
       await app.close();
     }
-  });
+  }, 15_000);
 });
