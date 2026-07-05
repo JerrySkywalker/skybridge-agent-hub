@@ -5,6 +5,7 @@ mod collect;
 mod commands;
 mod input_ux;
 mod interactive;
+mod manual_reliability;
 mod model;
 mod render;
 mod runtime;
@@ -31,6 +32,24 @@ fn main() -> anyhow::Result<()> {
         let report = input_ux::run_input_ux_smoke(&mut app, cli.input_ux_scenario, &output_dir)?;
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
+    }
+    if cli.manual_reliability_scenario.is_some() {
+        let report = manual_reliability::run_manual_reliability_smoke(
+            &mut app,
+            cli.manual_reliability_scenario,
+            &output_dir,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if cli.manual_dry_run_guide {
+        app.manual_dry_run_guide = true;
+        app.sync_view_model();
+        let report = manual_reliability::run_manual_dry_run_guide(&mut app, &output_dir)?;
+        if cli.json || cli.snapshot || cli.write_report {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            return Ok(());
+        }
     }
     if cli.layout_scenario.is_some() {
         let report = ui_layout::run_layout_smoke(&mut app, cli.layout_scenario, &output_dir)?;
@@ -136,6 +155,10 @@ fn run_loop(
             interactive::record_command_result(app, &result, output_dir)?;
         }
         app.sync_view_model();
+        app.view_model.sync_running_guard(
+            command_runtime.active_command_label(),
+            command_runtime.active_elapsed_seconds(),
+        );
         terminal.draw(|frame| render::draw(frame, app))?;
 
         if event::poll(Duration::from_millis(250))? {

@@ -149,6 +149,14 @@ start a worker loop, run forever, call live Hermes, call MCP, auto-merge,
 create release/tag/assets or print tokens. See
 `docs/operator/MANUAL_DRY_RUN_MG368I.md`.
 
+MG368J is a repair milestone for the MG368I blockers. It adds confirmation
+mismatch diagnostics, running command guard UX, a `120000` ms manual timeout
+default, manual timeout guidance, `--manual-dry-run-guide` and
+machine-readable tab/layout evidence under
+`.agent/tmp/operator-tui/manual-reliability/`. MG368J does not reattempt
+MG368I, does not start MG369A, does not create a TUI branch/PR and does not
+enable real execution. The next milestone remains MG368I-R2 before MG369A.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -221,7 +229,7 @@ tasks, worker state, or provider state.
 
 After MG368I, continue TUI readiness before reattempting MG369:
 
-1. Reattempt MG368I or repair the observed TUI input/timeout usability blocker.
+1. Run MG368I-R2 using the MG368J manual guide and reliability artifacts.
 2. MG369A/B Manual Single-step Hosted-dev Experiment only after a passing
    manual dry run is recorded.
 

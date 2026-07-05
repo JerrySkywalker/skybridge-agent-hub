@@ -131,6 +131,27 @@ The final recorded action was `abort_terminate` with
   `command_already_running` and timeout states.
 - Automated smoke evidence remains separate from this manual evidence.
 
+## MG368J Follow-Up Repair
+
+MG368I remains partial pass / blocked. MG368J was added after this run as a
+focused reliability repair. It adds confirmation mismatch diagnostics, running
+command guard UX, a safer manual timeout default, a manual dry-run guide mode
+and machine-readable tab/layout evidence under
+`.agent/tmp/operator-tui/manual-reliability/`.
+
+MG368J does not reattempt MG368I and does not start MG369A. A new MG368I
+reattempt is required before MG369A.
+
+Recommended command for MG368I-R2:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --manual-dry-run-guide `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/manual-reliability
+```
+
 ## Safety Flags
 
 - TUI-created branch=false

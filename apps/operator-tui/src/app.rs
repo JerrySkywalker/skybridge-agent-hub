@@ -14,6 +14,7 @@ use crate::{
     collect::{collect_operator_state, StateMode},
     input_ux::{InputUxSmokeScenario, DEFAULT_INPUT_UX_OUTPUT_DIR},
     interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
+    manual_reliability::{ManualReliabilityScenario, MANUAL_RELIABILITY_OUTPUT_DIR},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
     runtime::{
@@ -52,6 +53,8 @@ pub struct Cli {
     pub runtime_timeout_ms: u64,
     pub layout_scenario: LayoutSmokeScenario,
     pub input_ux_scenario: InputUxSmokeScenario,
+    pub manual_reliability_scenario: ManualReliabilityScenario,
+    pub manual_dry_run_guide: bool,
 }
 
 impl Default for Cli {
@@ -79,6 +82,8 @@ impl Default for Cli {
             runtime_timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
             layout_scenario: LayoutSmokeScenario::None,
             input_ux_scenario: InputUxSmokeScenario::None,
+            manual_reliability_scenario: ManualReliabilityScenario::None,
+            manual_dry_run_guide: false,
         }
     }
 }
@@ -101,6 +106,10 @@ impl Cli {
             return PathBuf::from(DEFAULT_LAYOUT_OUTPUT_DIR);
         }
 
+        if self.manual_reliability_scenario.is_some() || self.manual_dry_run_guide {
+            return PathBuf::from(MANUAL_RELIABILITY_OUTPUT_DIR);
+        }
+
         match self.state_mode {
             StateMode::Fixture => PathBuf::from(".agent/tmp/operator-tui"),
             StateMode::Local => PathBuf::from(".agent/tmp/operator-tui/local"),
@@ -118,6 +127,7 @@ pub struct App {
     pub state_mode: StateMode,
     pub interactive: InteractiveState,
     pub view_model: ViewModel,
+    pub manual_dry_run_guide: bool,
 }
 
 impl App {
@@ -134,6 +144,7 @@ impl App {
             state,
             state_mode,
             interactive: InteractiveState::default(),
+            manual_dry_run_guide: false,
         }
     }
 
@@ -178,16 +189,8 @@ impl App {
 
     pub fn sync_view_model(&mut self) {
         self.view_model.sync_state(&self.state);
-        self.view_model.sync_interactive(
-            self.interactive.selected_action_index,
-            &self.interactive.input_mode,
-            &self.interactive.pending_action,
-            &self.interactive.input_buffer,
-            &self.interactive.pending_reason,
-            &self.interactive.input_feedback,
-            self.interactive.retry_available,
-            self.interactive.reason_sanitized_changed,
-        );
+        self.view_model.sync_interactive(&self.interactive);
+        self.view_model.manual_dry_run_guide_visible = self.manual_dry_run_guide;
     }
 
     pub fn report(&self, interactive_started: bool) -> OperatorReport {
@@ -400,6 +403,21 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(DEFAULT_INPUT_UX_OUTPUT_DIR);
                 }
             }
+            "--manual-reliability-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--manual-reliability-smoke requires a following value")?;
+                cli.manual_reliability_scenario = ManualReliabilityScenario::from_str(&value)?;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MANUAL_RELIABILITY_OUTPUT_DIR);
+                }
+            }
+            "--manual-dry-run-guide" => {
+                cli.manual_dry_run_guide = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MANUAL_RELIABILITY_OUTPUT_DIR);
+                }
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -455,6 +473,13 @@ Flags:\n\
   --input-ux-smoke <s>   Run MG368H confirmation-dialog, confirmation-mismatch,\n\
                          confirmation-clear, reason-required, reason-sanitization,\n\
                          or no-real-execution input simulation\n\
+  --manual-reliability-smoke <s>\n\
+                         Run MG368J confirmation-diagnostics, running-guard,\n\
+                         timeout-guidance, guide, tabs-recorded, or no-real-execution\n\
+                         deterministic manual reliability simulation\n\
+  --manual-dry-run-guide\n\
+                         Open the MG368I reattempt guide/checklist surface and\n\
+                         write artifacts without auto-executing any guide step\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

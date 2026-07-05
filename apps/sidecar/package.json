@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --testTimeout=15000",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -147,11 +147,19 @@ tasks, create branches or PRs, start queues or workers, call live Hermes or
 MCP, auto-merge, create releases/tags/assets or print tokens. See
 `docs/operator/MANUAL_DRY_RUN_MG368I.md`.
 
+MG368J repairs the manual dry-run reliability blockers observed in MG368I. It
+adds confirmation mismatch diagnostics, running command guard UX, a safer
+`120000` ms manual timeout default, manual timeout guidance, a
+`--manual-dry-run-guide` checklist surface and machine-readable tab/layout
+evidence. MG368J does not reattempt MG368I, start MG369A, create a TUI branch
+or PR, execute tasks, start queues or workers, call live Hermes or MCP,
+auto-merge, create releases/tags/assets or print tokens.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. Reattempt MG368I or repair the observed TUI input/timeout usability blocker.
-2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I
+1. MG368I-R2 Ratatui Manual Dry Run Reattempt using the MG368J guide.
+2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I-R2
    dry run is recorded.
 
 ## Read-Only Audit

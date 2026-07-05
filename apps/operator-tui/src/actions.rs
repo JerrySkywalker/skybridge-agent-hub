@@ -96,6 +96,10 @@ impl Action {
         true
     }
 
+    pub fn blocked_while_command_running(self) -> bool {
+        !matches!(self, Action::Quit)
+    }
+
     pub fn disabled_reasons(self) -> Vec<&'static str> {
         Vec::new()
     }

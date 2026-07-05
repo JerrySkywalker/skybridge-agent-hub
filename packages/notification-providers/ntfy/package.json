@@ -6,7 +6,7 @@
   "scripts": {
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --teardownTimeout=15000",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {},

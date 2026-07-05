@@ -104,6 +104,17 @@ pub struct ConfirmationMismatchReport {
     pub exact_confirmation_mismatch: bool,
     pub mismatch_feedback_visible: bool,
     pub rejected_without_dispatch: bool,
+    pub expected_confirmation_length: usize,
+    pub actual_input_length: usize,
+    pub first_mismatch_index: Option<usize>,
+    pub has_leading_or_trailing_whitespace: bool,
+    pub contains_cr_lf_tab: bool,
+    pub contains_non_ascii: bool,
+    pub looks_truncated: bool,
+    pub retry_guidance_visible: bool,
+    pub confirmation_normalized: bool,
+    pub normalization_reason: String,
+    pub raw_input_persisted: bool,
     pub retry_or_cancel_available: bool,
     pub token_printed: bool,
 }
@@ -173,6 +184,50 @@ pub fn confirmation_dialog_lines(view_model: &ViewModel) -> Vec<String> {
             value_or_none(&view_model.pending_confirmation)
         ),
         format!("current_input_length: {}", view_model.input_length),
+        format!(
+            "expected_confirmation_length: {}",
+            view_model.confirmation_expected_length
+        ),
+        format!(
+            "actual_input_length: {}",
+            view_model.confirmation_actual_length
+        ),
+        format!(
+            "first_mismatch_index: {}",
+            view_model
+                .confirmation_first_mismatch_index
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string())
+        ),
+        format!(
+            "leading_or_trailing_whitespace: {}",
+            view_model.confirmation_has_leading_or_trailing_whitespace
+        ),
+        format!(
+            "contains_cr_lf_tab: {}",
+            view_model.confirmation_contains_cr_lf_tab
+        ),
+        format!(
+            "contains_non_ascii: {}",
+            view_model.confirmation_contains_non_ascii
+        ),
+        format!(
+            "looks_truncated: {}",
+            view_model.confirmation_looks_truncated
+        ),
+        format!(
+            "confirmation_normalized: {}",
+            view_model.confirmation_normalized
+        ),
+        format!(
+            "normalization_reason: {}",
+            view_model.confirmation_normalization_reason
+        ),
+        "raw_input_persisted=false".to_string(),
+        format!(
+            "retry_guidance: {}",
+            value_or_none(&view_model.confirmation_retry_guidance)
+        ),
         format!(
             "input_matches_exactly: {}",
             view_model.input_matches_confirmation
@@ -460,6 +515,7 @@ fn input_ux_state(app: &App, output_dir: &Path) -> InputUxState {
 }
 
 fn confirmation_mismatch_report(app: &App) -> ConfirmationMismatchReport {
+    let diagnostics = &app.interactive.last_confirmation_diagnostics;
     ConfirmationMismatchReport {
         schema: CONFIRMATION_MISMATCH_SCHEMA,
         generated_at: now_utc(),
@@ -475,6 +531,17 @@ fn confirmation_mismatch_report(app: &App) -> ConfirmationMismatchReport {
             .history
             .iter()
             .any(|item| item.status == "blocked" && item.result == "exact_confirmation_mismatch"),
+        expected_confirmation_length: diagnostics.expected_confirmation_length,
+        actual_input_length: diagnostics.actual_input_length,
+        first_mismatch_index: diagnostics.first_mismatch_index,
+        has_leading_or_trailing_whitespace: diagnostics.has_leading_or_trailing_whitespace,
+        contains_cr_lf_tab: diagnostics.contains_cr_lf_tab,
+        contains_non_ascii: diagnostics.contains_non_ascii,
+        looks_truncated: diagnostics.looks_truncated,
+        retry_guidance_visible: !diagnostics.retry_guidance.is_empty(),
+        confirmation_normalized: diagnostics.confirmation_normalized,
+        normalization_reason: diagnostics.normalization_reason.clone(),
+        raw_input_persisted: diagnostics.raw_input_persisted,
         retry_or_cancel_available: true,
         token_printed: false,
     }

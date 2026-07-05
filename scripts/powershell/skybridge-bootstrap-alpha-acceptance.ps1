@@ -273,6 +273,12 @@ $requiredScripts = @{
   operator_tui_input_reason_required_smoke = "scripts/powershell/smoke-operator-tui-input-reason-required.ps1"
   operator_tui_input_reason_sanitization_smoke = "scripts/powershell/smoke-operator-tui-input-reason-sanitization.ps1"
   operator_tui_input_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-input-no-real-execution.ps1"
+  operator_tui_manual_reliability_confirmation_diagnostics_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-confirmation-diagnostics.ps1"
+  operator_tui_manual_reliability_running_guard_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-running-guard.ps1"
+  operator_tui_manual_reliability_timeout_guidance_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-timeout-guidance.ps1"
+  operator_tui_manual_reliability_guide_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-guide.ps1"
+  operator_tui_manual_reliability_tabs_recorded_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-tabs-recorded.ps1"
+  operator_tui_manual_reliability_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -596,7 +602,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-input-confirmation-clear",
   "smoke:operator-tui-input-reason-required",
   "smoke:operator-tui-input-reason-sanitization",
-  "smoke:operator-tui-input-no-real-execution"
+  "smoke:operator-tui-input-no-real-execution",
+  "smoke:operator-tui-manual-reliability-confirmation-diagnostics",
+  "smoke:operator-tui-manual-reliability-running-guard",
+  "smoke:operator-tui-manual-reliability-timeout-guidance",
+  "smoke:operator-tui-manual-reliability-guide",
+  "smoke:operator-tui-manual-reliability-tabs-recorded",
+  "smoke:operator-tui-manual-reliability-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
