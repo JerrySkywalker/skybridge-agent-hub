@@ -135,6 +135,20 @@ MG369, execute tasks, claim tasks, create branches or PRs by the TUI, merge,
 deploy, run a queue runner, start a worker loop, run forever, call live Hermes,
 call MCP, auto-merge, create release/tag/assets or print tokens.
 
+MG368I is the first human-operated Ratatui manual dry run after MG368F/G/H.
+Jerry launched the TUI in `--local-cloud` mode with artifacts under
+`.agent/tmp/operator-tui/manual-dry-run/`. The run is recorded as partial
+pass / blocked: local/cloud state loaded at
+`4e3335a4ed5e2b64d34dca71014857c3f483f52e`, cloud parity was ok, fixture
+candidate generation and validation worked, and confirmation/reason surfaces
+were exercised. The full intended sequence did not complete because exact
+confirmation mismatches blocked review, append, start-one, safe pause and
+abort-preview completion. MG368I did not perform MG369, execute tasks, claim
+tasks, create branches or PRs by the TUI, merge, deploy, run a queue runner,
+start a worker loop, run forever, call live Hermes, call MCP, auto-merge,
+create release/tag/assets or print tokens. See
+`docs/operator/MANUAL_DRY_RUN_MG368I.md`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -205,10 +219,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG368H, continue TUI readiness before reattempting MG369:
+After MG368I, continue TUI readiness before reattempting MG369:
 
-1. MG368I Ratatui Manual Dry Run.
-2. MG369A/B Manual Single-step Hosted-dev Experiment after the runtime and UX
-   work are reviewed.
+1. Reattempt MG368I or repair the observed TUI input/timeout usability blocker.
+2. MG369A/B Manual Single-step Hosted-dev Experiment only after a passing
+   manual dry run is recorded.
 
 `token_printed=false`

@@ -137,11 +137,22 @@ and truncates long reasons. It does not retry MG369 or enable real execution,
 branch creation, PR creation, queue runners, worker loops, run forever, live
 Hermes, MCP, auto-merge, release/tag/assets or token printing.
 
+MG368I records the first human-operated Ratatui manual dry run after
+MG368F/G/H. The run is partial pass / blocked: local/cloud state loaded at the
+MG368H merge commit, cloud parity was ok, fixture candidate generation and
+validation worked, and confirmation/reason surfaces were exercised. Exact
+confirmation mismatches blocked the review, append, start-one, safe-pause and
+abort-preview completions, so MG369 remains deferred. The TUI did not execute
+tasks, create branches or PRs, start queues or workers, call live Hermes or
+MCP, auto-merge, create releases/tags/assets or print tokens. See
+`docs/operator/MANUAL_DRY_RUN_MG368I.md`.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368I Ratatui Manual Dry Run.
-2. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
+1. Reattempt MG368I or repair the observed TUI input/timeout usability blocker.
+2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I
+   dry run is recorded.
 
 ## Read-Only Audit
 

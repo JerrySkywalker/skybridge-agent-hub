@@ -670,6 +670,14 @@ terminal-too-small message availability, compact action-menu availability,
 runtime status visibility, safety status visibility and the same
 no-real-execution/no-loop/no-release safety flags.
 
+MG368I manual dry-run evidence is stored under
+`.agent/tmp/operator-tui/manual-dry-run/` and summarized in
+`docs/operator/MANUAL_DRY_RUN_MG368I.md`. The first human-operated run was
+partial pass / blocked: local/cloud status loaded, candidate generation and
+validation worked, and confirmation/reason surfaces were exercised, but exact
+confirmation mismatches blocked review, append, start-one, safe-pause and
+abort-preview completion.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -714,10 +722,11 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG368H Ratatui Confirmation UX: harden confirmation/reason interaction.
-- MG368I Ratatui Manual Dry Run: exercise the nonblocking console manually
-  without real task execution.
+- MG368I Ratatui Manual Dry Run reattempt or focused input usability repair:
+  resolve the confirmation mismatch and timeout behavior observed in the first
+  human-operated dry run.
 - MG369A/B Manual Single-step Hosted-dev Experiment: perform the first real
-  manual single-step hosted-dev experiment only after MG368F-G-H-I are reviewed.
+  manual single-step hosted-dev experiment only after a passing MG368I dry run
+  is recorded.
 
 `token_printed=false`
