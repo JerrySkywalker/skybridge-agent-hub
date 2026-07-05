@@ -122,6 +122,19 @@ claim tasks, create branches or PRs by the TUI, merge, deploy, run a queue
 runner, start a worker loop, run forever, call live Hermes, call MCP,
 auto-merge, create release/tag/assets or print tokens.
 
+MG368H is the Ratatui confirmation and reason UX hardening milestone added
+after MG368G. It keeps runtime semantics unchanged and adds focused
+confirmation/reason surfaces, visible exact confirmation strings, input length
+and match feedback, Backspace, Ctrl+U clear, Esc cancel, Enter submit,
+paste-friendly character input, non-empty reason enforcement, sanitized reason
+preview and deterministic input UX artifacts. Confirmation mismatch is rejected
+without dispatch and recorded as `exact_confirmation_mismatch`. Reason
+sanitization redacts Authorization/Bearer/token/secret/password markers,
+normalizes newlines/tabs and truncates long reasons. MG368H does not retry
+MG369, execute tasks, claim tasks, create branches or PRs by the TUI, merge,
+deploy, run a queue runner, start a worker loop, run forever, call live Hermes,
+call MCP, auto-merge, create release/tag/assets or print tokens.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -192,12 +205,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG368F, continue TUI readiness before reattempting MG369:
+After MG368H, continue TUI readiness before reattempting MG369:
 
-1. MG368G Ratatui Responsive Layout and Tabs.
-2. MG368H Ratatui Confirmation UX.
-3. MG368I Ratatui Manual Dry Run.
-4. MG369A/B Manual Single-step Hosted-dev Experiment after the runtime and UX
+1. MG368I Ratatui Manual Dry Run.
+2. MG369A/B Manual Single-step Hosted-dev Experiment after the runtime and UX
    work are reviewed.
 
 `token_printed=false`

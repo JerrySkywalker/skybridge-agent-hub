@@ -125,12 +125,23 @@ retry MG369 or enable real execution, branch creation, PR creation, queue
 runners, worker loops, run forever, live Hermes, MCP, auto-merge,
 release/tag/assets or token printing.
 
+MG368H follows the remaining confirmation usability blocker. It keeps runtime
+semantics unchanged and adds focused confirmation and reason surfaces with
+visible exact confirmation strings, input length and match feedback,
+Backspace, Ctrl+U clear, Esc cancel, Enter submit, paste-friendly character
+input, non-empty reason enforcement and sanitized reason preview. Mismatched
+confirmation is rejected without dispatch and recorded as
+`exact_confirmation_mismatch`; reason sanitization redacts
+Authorization/Bearer/token/secret/password markers, normalizes newlines/tabs
+and truncates long reasons. It does not retry MG369 or enable real execution,
+branch creation, PR creation, queue runners, worker loops, run forever, live
+Hermes, MCP, auto-merge, release/tag/assets or token printing.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368H Ratatui Confirmation UX.
-2. MG368I Ratatui Manual Dry Run.
-3. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
+1. MG368I Ratatui Manual Dry Run.
+2. MG369A/B Manual Single-step Hosted-dev Experiment after MG368F-G-H-I review.
 
 ## Read-Only Audit
 

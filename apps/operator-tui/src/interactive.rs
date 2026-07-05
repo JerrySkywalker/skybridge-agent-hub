@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
@@ -62,6 +62,18 @@ pub struct InteractiveState {
     pub pending_action: String,
     pub input_buffer: String,
     pub pending_reason: String,
+    pub input_feedback: String,
+    pub retry_available: bool,
+    pub last_required_confirmation: String,
+    pub last_confirmation_input_length: usize,
+    pub last_confirmation_matched: bool,
+    pub sanitized_reason_preview: String,
+    pub reason_sanitized_changed: bool,
+    pub ctrl_u_clear_used: bool,
+    pub esc_cancel_used: bool,
+    pub backspace_used: bool,
+    pub enter_submit_used: bool,
+    pub paste_friendly_input_observed: bool,
     pub last_action: InteractiveLastAction,
     pub history: Vec<InteractiveLastAction>,
     pub exact_confirmation_mismatch_rejected: bool,
@@ -142,6 +154,18 @@ impl Default for InteractiveState {
             pending_action: String::new(),
             input_buffer: String::new(),
             pending_reason: String::new(),
+            input_feedback: String::new(),
+            retry_available: false,
+            last_required_confirmation: String::new(),
+            last_confirmation_input_length: 0,
+            last_confirmation_matched: false,
+            sanitized_reason_preview: String::new(),
+            reason_sanitized_changed: false,
+            ctrl_u_clear_used: false,
+            esc_cancel_used: false,
+            backspace_used: false,
+            enter_submit_used: false,
+            paste_friendly_input_observed: false,
             last_action: InteractiveLastAction::idle(),
             history: Vec::new(),
             exact_confirmation_mismatch_rejected: false,
@@ -224,6 +248,11 @@ impl InteractiveState {
         self.pending_action = action.action_id().to_string();
         self.input_buffer.clear();
         self.pending_reason = reason;
+        self.input_feedback = "type_or_paste_exact_confirmation".to_string();
+        self.retry_available = true;
+        self.last_required_confirmation = confirmation_for(action).unwrap_or("").to_string();
+        self.last_confirmation_input_length = 0;
+        self.last_confirmation_matched = false;
     }
 
     fn begin_reason(&mut self, action: Action) {
@@ -231,6 +260,10 @@ impl InteractiveState {
         self.pending_action = action.action_id().to_string();
         self.input_buffer.clear();
         self.pending_reason.clear();
+        self.input_feedback = "enter_non_empty_sanitized_reason".to_string();
+        self.retry_available = true;
+        self.sanitized_reason_preview.clear();
+        self.reason_sanitized_changed = false;
     }
 
     fn clear_input(&mut self) {
@@ -238,18 +271,29 @@ impl InteractiveState {
         self.pending_action.clear();
         self.input_buffer.clear();
         self.pending_reason.clear();
+        self.retry_available = false;
     }
 }
 
-pub fn handle_key(
+pub fn handle_key_event(
+    app: &mut App,
+    key: KeyEvent,
+    output_dir: &Path,
+    runtime: &mut OperatorRuntime,
+) -> anyhow::Result<InteractiveControl> {
+    handle_key_with_modifiers(app, key.code, key.modifiers, output_dir, runtime)
+}
+
+fn handle_key_with_modifiers(
     app: &mut App,
     key: KeyCode,
+    modifiers: KeyModifiers,
     output_dir: &Path,
     runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
     match app.interactive.input_mode.as_str() {
-        "confirmation" => handle_confirmation_key(app, key, output_dir, runtime),
-        "reason" => handle_reason_key(app, key, output_dir),
+        "confirmation" => handle_confirmation_key(app, key, modifiers, output_dir, runtime),
+        "reason" => handle_reason_key(app, key, modifiers, output_dir),
         _ => handle_normal_key(app, key, output_dir, runtime),
     }
 }
@@ -434,12 +478,24 @@ fn handle_normal_key(
 fn handle_confirmation_key(
     app: &mut App,
     key: KeyCode,
+    modifiers: KeyModifiers,
     output_dir: &Path,
     runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
+    if modifiers.contains(KeyModifiers::CONTROL) && matches!(key, KeyCode::Char('u' | 'U')) {
+        app.interactive.ctrl_u_clear_used = true;
+        app.interactive.input_buffer.clear();
+        app.interactive.input_feedback = "confirmation_input_cleared".to_string();
+        update_confirmation_metrics(app);
+        app.sync_view_model();
+        write_interactive_artifacts(output_dir, app)?;
+        return Ok(InteractiveControl::Continue);
+    }
+
     match key {
         KeyCode::Esc => {
             let action = pending_action(app).unwrap_or(Action::Refresh);
+            app.interactive.esc_cancel_used = true;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "confirmation_cancelled",
@@ -452,26 +508,47 @@ fn handle_confirmation_key(
             let action = pending_action(app).unwrap_or(Action::Refresh);
             let confirmation = app.interactive.input_buffer.clone();
             let reason = app.interactive.pending_reason.clone();
+            app.interactive.enter_submit_used = true;
+            update_confirmation_metrics(app);
             app.interactive.clear_input();
             dispatch_action_async(app, action, output_dir, &confirmation, &reason, runtime)?;
         }
         KeyCode::Backspace => {
+            app.interactive.backspace_used = true;
             app.interactive.input_buffer.pop();
+            update_confirmation_metrics(app);
         }
-        KeyCode::Char(value) => app.interactive.input_buffer.push(value),
+        KeyCode::Char(value) => {
+            app.interactive.paste_friendly_input_observed = true;
+            app.interactive.input_buffer.push(value);
+            update_confirmation_metrics(app);
+        }
         _ => {}
     }
+    app.sync_view_model();
     Ok(InteractiveControl::Continue)
 }
 
 fn handle_reason_key(
     app: &mut App,
     key: KeyCode,
+    modifiers: KeyModifiers,
     output_dir: &Path,
 ) -> anyhow::Result<InteractiveControl> {
+    if modifiers.contains(KeyModifiers::CONTROL) && matches!(key, KeyCode::Char('u' | 'U')) {
+        app.interactive.ctrl_u_clear_used = true;
+        app.interactive.input_buffer.clear();
+        app.interactive.input_feedback = "reason_input_cleared".to_string();
+        update_reason_preview(app);
+        app.sync_view_model();
+        write_interactive_artifacts(output_dir, app)?;
+        return Ok(InteractiveControl::Continue);
+    }
+
     match key {
         KeyCode::Esc => {
             let action = pending_action(app).unwrap_or(Action::Refresh);
+            app.interactive.esc_cancel_used = true;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "reason_cancelled",
@@ -483,8 +560,13 @@ fn handle_reason_key(
         KeyCode::Enter => {
             let action = pending_action(app).unwrap_or(Action::Refresh);
             let reason = sanitize_reason(&app.interactive.input_buffer);
+            app.interactive.enter_submit_used = true;
+            app.interactive.sanitized_reason_preview = reason.clone();
+            app.interactive.reason_sanitized_changed = !app.interactive.input_buffer.is_empty()
+                && reason != app.interactive.input_buffer.trim();
             if reason.is_empty() {
                 app.interactive.reason_required_enforced = true;
+                app.interactive.input_feedback = "reason_required".to_string();
                 app.interactive.record(InteractiveLastAction::blocked(
                     action,
                     "reason_required",
@@ -497,11 +579,18 @@ fn handle_reason_key(
             }
         }
         KeyCode::Backspace => {
+            app.interactive.backspace_used = true;
             app.interactive.input_buffer.pop();
+            update_reason_preview(app);
         }
-        KeyCode::Char(value) => app.interactive.input_buffer.push(value),
+        KeyCode::Char(value) => {
+            app.interactive.paste_friendly_input_observed = true;
+            app.interactive.input_buffer.push(value);
+            update_reason_preview(app);
+        }
         _ => {}
     }
+    app.sync_view_model();
     Ok(InteractiveControl::Continue)
 }
 
@@ -539,6 +628,11 @@ fn dispatch_action_async(
     if let Some(expected) = confirmation_for(action) {
         if confirmation != expected {
             app.interactive.exact_confirmation_mismatch_rejected = true;
+            app.interactive.input_feedback = "exact_confirmation_mismatch".to_string();
+            app.interactive.retry_available = true;
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = confirmation.chars().count();
+            app.interactive.last_confirmation_matched = false;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "exact_confirmation_mismatch",
@@ -671,6 +765,11 @@ fn dispatch_action_sync(
     if let Some(expected) = confirmation_for(action) {
         if confirmation != expected {
             app.interactive.exact_confirmation_mismatch_rejected = true;
+            app.interactive.input_feedback = "exact_confirmation_mismatch".to_string();
+            app.interactive.retry_available = true;
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = confirmation.chars().count();
+            app.interactive.last_confirmation_matched = false;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "exact_confirmation_mismatch",
@@ -907,7 +1006,7 @@ fn pending_action(app: &App) -> Option<Action> {
     Action::from_action_id(&app.interactive.pending_action)
 }
 
-fn confirmation_for(action: Action) -> Option<&'static str> {
+pub(crate) fn confirmation_for(action: Action) -> Option<&'static str> {
     match action {
         Action::ReviewCandidate => Some(REVIEW_CONFIRMATION),
         Action::AppendCandidate => Some(APPEND_CONFIRMATION),
@@ -918,11 +1017,11 @@ fn confirmation_for(action: Action) -> Option<&'static str> {
     }
 }
 
-fn reason_required(action: Action) -> bool {
+pub(crate) fn reason_required(action: Action) -> bool {
     matches!(action, Action::SafePause | Action::AbortTerminate)
 }
 
-fn exact_confirmations() -> Vec<&'static str> {
+pub(crate) fn exact_confirmations() -> Vec<&'static str> {
     vec![
         REVIEW_CONFIRMATION,
         APPEND_CONFIRMATION,
@@ -939,9 +1038,9 @@ fn keyboard_actions_registered() -> bool {
         .all(|key| Action::all().iter().any(|action| action.key() == *key))
 }
 
-fn sanitize_reason(value: &str) -> String {
+pub(crate) fn sanitize_reason(value: &str) -> String {
     let mut safe = value.trim().replace(['\r', '\n', '\t'], " ");
-    for marker in ["Authorization", "Bearer ", "token=", "secret=", "password="] {
+    for marker in ["Authorization", "Bearer", "token=", "secret=", "password="] {
         if safe
             .to_ascii_lowercase()
             .contains(&marker.to_ascii_lowercase())
@@ -954,6 +1053,34 @@ fn sanitize_reason(value: &str) -> String {
         safe.truncate(180);
     }
     safe
+}
+
+fn update_confirmation_metrics(app: &mut App) {
+    let action = pending_action(app).unwrap_or(Action::Refresh);
+    let expected = confirmation_for(action).unwrap_or("");
+    app.interactive.last_required_confirmation = expected.to_string();
+    app.interactive.last_confirmation_input_length = app.interactive.input_buffer.chars().count();
+    app.interactive.last_confirmation_matched =
+        !expected.is_empty() && app.interactive.input_buffer == expected;
+    app.interactive.input_feedback = if app.interactive.last_confirmation_matched {
+        "exact_confirmation_matches".to_string()
+    } else {
+        "waiting_for_exact_confirmation".to_string()
+    };
+}
+
+fn update_reason_preview(app: &mut App) {
+    let preview = sanitize_reason(&app.interactive.input_buffer);
+    app.interactive.reason_sanitized_changed =
+        !app.interactive.input_buffer.is_empty() && preview != app.interactive.input_buffer.trim();
+    app.interactive.sanitized_reason_preview = preview;
+    app.interactive.input_feedback = if app.interactive.sanitized_reason_preview.is_empty() {
+        "reason_required".to_string()
+    } else if app.interactive.reason_sanitized_changed {
+        "sanitized_reason_preview_changed".to_string()
+    } else {
+        "reason_preview_ready".to_string()
+    };
 }
 
 fn interactive_artifact_paths(output_dir: &Path) -> Vec<String> {

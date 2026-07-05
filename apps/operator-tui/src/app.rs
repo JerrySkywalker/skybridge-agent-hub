@@ -12,6 +12,7 @@ use crate::{
         CandidateAction, CandidateFlowOptions,
     },
     collect::{collect_operator_state, StateMode},
+    input_ux::{InputUxSmokeScenario, DEFAULT_INPUT_UX_OUTPUT_DIR},
     interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
     model::{OperatorReport, OperatorState, REPORT_SCHEMA, STATE_SCHEMA},
     render::{render_report_markdown, render_snapshot_text, PANELS},
@@ -50,6 +51,7 @@ pub struct Cli {
     pub runtime_scenario: RuntimeSmokeScenario,
     pub runtime_timeout_ms: u64,
     pub layout_scenario: LayoutSmokeScenario,
+    pub input_ux_scenario: InputUxSmokeScenario,
 }
 
 impl Default for Cli {
@@ -76,6 +78,7 @@ impl Default for Cli {
             runtime_scenario: RuntimeSmokeScenario::None,
             runtime_timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS,
             layout_scenario: LayoutSmokeScenario::None,
+            input_ux_scenario: InputUxSmokeScenario::None,
         }
     }
 }
@@ -88,6 +91,10 @@ impl Cli {
 
         if self.runtime_scenario.is_some() {
             return PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
+        }
+
+        if self.input_ux_scenario.is_some() {
+            return PathBuf::from(DEFAULT_INPUT_UX_OUTPUT_DIR);
         }
 
         if self.layout_scenario.is_some() {
@@ -175,7 +182,11 @@ impl App {
             self.interactive.selected_action_index,
             &self.interactive.input_mode,
             &self.interactive.pending_action,
+            &self.interactive.input_buffer,
             &self.interactive.pending_reason,
+            &self.interactive.input_feedback,
+            self.interactive.retry_available,
+            self.interactive.reason_sanitized_changed,
         );
     }
 
@@ -380,6 +391,15 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(DEFAULT_LAYOUT_OUTPUT_DIR);
                 }
             }
+            "--input-ux-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--input-ux-smoke requires a following value")?;
+                cli.input_ux_scenario = InputUxSmokeScenario::from_str(&value)?;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_INPUT_UX_OUTPUT_DIR);
+                }
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -432,6 +452,9 @@ Flags:\n\
                          Interactive command timeout in milliseconds\n\
   --layout-smoke <s>     Run MG368G full, compact, tiny, tabs,\n\
                          actions-compact, or no-real-execution layout simulation\n\
+  --input-ux-smoke <s>   Run MG368H confirmation-dialog, confirmation-mismatch,\n\
+                         confirmation-clear, reason-required, reason-sanitization,\n\
+                         or no-real-execution input simulation\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

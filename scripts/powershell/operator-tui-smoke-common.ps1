@@ -11,6 +11,7 @@ $OperatorTuiSingleStepOutputDir = ".agent/tmp/operator-tui/single-step"
 $OperatorTuiInteractiveOutputDir = ".agent/tmp/operator-tui/interactive-unblocker"
 $OperatorTuiRuntimeOutputDir = ".agent/tmp/operator-tui/runtime-refactor"
 $OperatorTuiLayoutOutputDir = ".agent/tmp/operator-tui/layout"
+$OperatorTuiInputUxOutputDir = ".agent/tmp/operator-tui/input-ux"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -399,6 +400,66 @@ function Invoke-OperatorTuiLayoutSmoke(
   }
 }
 
+function Invoke-OperatorTuiInputUxSmoke(
+  [string]$Name,
+  [ValidateSet("confirmation-dialog", "confirmation-mismatch", "confirmation-clear", "reason-required", "reason-sanitization", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiInputUxOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiInputUxArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --input-ux-smoke $Scenario `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI input UX smoke failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/input-ux-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/input-ux-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/input-ux-report.md"
+  $mismatchPath = Join-Path $RepoRoot "$OutputDir/confirmation-mismatch.json"
+  $reasonPath = Join-Path $RepoRoot "$OutputDir/reason-sanitization.json"
+  $confirmationSnapshotPath = Join-Path $RepoRoot "$OutputDir/confirmation-dialog-snapshot.txt"
+  $reasonSnapshotPath = Join-Path $RepoRoot "$OutputDir/reason-dialog-snapshot.txt"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $mismatchPath, $reasonPath, $confirmationSnapshotPath, $reasonSnapshotPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI input UX artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  $confirmationSnapshot = Get-Content -Raw -LiteralPath $confirmationSnapshotPath
+  $reasonSnapshot = Get-Content -Raw -LiteralPath $reasonSnapshotPath
+  foreach ($text in @($reportMarkdown, $confirmationSnapshot, $reasonSnapshot)) {
+    Assert-NoUnsafeText $text
+  }
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $mismatch = Get-Content -Raw -LiteralPath $mismatchPath | ConvertFrom-Json
+  $reason = Get-Content -Raw -LiteralPath $reasonPath | ConvertFrom-Json
+
+  Assert-OperatorTuiInputUxShape -State $state -Report $report -Mismatch $mismatch -Reason $reason -ConfirmationSnapshot $confirmationSnapshot -ReasonSnapshot $reasonSnapshot
+  Assert-OperatorTuiInputUxNoRealExecution -Report $report
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    mismatch_path = $mismatchPath
+    reason_path = $reasonPath
+    confirmation_snapshot_path = $confirmationSnapshotPath
+    reason_snapshot_path = $reasonSnapshotPath
+    state = $state
+    report = $report
+    mismatch = $mismatch
+    reason = $reason
+    confirmation_snapshot = $confirmationSnapshot
+    reason_snapshot = $reasonSnapshot
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -462,6 +523,18 @@ function Clear-OperatorTuiLayoutArtifacts([string]$OutputDir = $OperatorTuiLayou
 
   if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to remove non-temp operator TUI layout artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
+  }
+}
+
+function Clear-OperatorTuiInputUxArtifacts([string]$OutputDir = $OperatorTuiInputUxOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI input UX artifact path: $operatorDir"
   }
   if (Test-Path -LiteralPath $operatorDir) {
     Remove-Item -LiteralPath $operatorDir -Recurse -Force
@@ -648,6 +721,87 @@ function Assert-OperatorTuiLayoutShape($State, $Report, [string]$FullSnapshot, [
   if ($oldPanelHits.Count -ge 5) {
     throw "Compact layout rendered all old five panels at once."
   }
+}
+
+function Assert-OperatorTuiInputUxShape($State, $Report, $Mismatch, $Reason, [string]$ConfirmationSnapshot, [string]$ReasonSnapshot) {
+  if ($State.schema -ne "skybridge.operator_tui_input_ux_state.v1") {
+    throw "Unexpected operator TUI input UX state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_input_ux_report.v1") {
+    throw "Unexpected operator TUI input UX report schema."
+  }
+  if ($Report.mode -ne "input-ux") { throw "Input UX report must use input-ux mode." }
+  if ($Mismatch.schema -ne "skybridge.operator_tui_confirmation_mismatch.v1") {
+    throw "Unexpected confirmation mismatch schema."
+  }
+  if ($Reason.schema -ne "skybridge.operator_tui_reason_sanitization.v1") {
+    throw "Unexpected reason sanitization schema."
+  }
+
+  Assert-True $Report.confirmation_dialog_available "confirmation_dialog_available"
+  Assert-True $Report.required_confirmation_visible "required_confirmation_visible"
+  Assert-True $Report.input_match_indicator_available "input_match_indicator_available"
+  Assert-True $Report.mismatch_feedback_available "mismatch_feedback_available"
+  Assert-True $Report.retry_or_cancel_available "retry_or_cancel_available"
+  Assert-True $Report.reason_dialog_available "reason_dialog_available"
+  Assert-True $Report.reason_required_enforced "reason_required_enforced"
+  Assert-True $Report.sanitized_reason_preview_available "sanitized_reason_preview_available"
+  Assert-True $Report.ctrl_u_clear_available "ctrl_u_clear_available"
+  Assert-True $Report.esc_cancel_available "esc_cancel_available"
+  Assert-True $Report.backspace_available "backspace_available"
+  Assert-True $Report.enter_submit_available "enter_submit_available"
+  Assert-True $Report.paste_friendly_input_available "paste_friendly_input_available"
+  Assert-True $Report.artifact_paths_visible_after_action "artifact_paths_visible_after_action"
+  Assert-True $Report.help_available "help_available"
+  Assert-False $Report.token_printed "input UX token_printed"
+  Assert-False $State.token_printed "input UX state token_printed"
+  Assert-False $Mismatch.token_printed "confirmation mismatch token_printed"
+  Assert-False $Reason.token_printed "reason sanitization token_printed"
+  Assert-False $Reason.raw_reason_persisted "reason raw_reason_persisted"
+
+  $confirmations = @($Report.exact_confirmations_required | ForEach-Object { [string]$_ })
+  foreach ($confirmation in @(
+    $OperatorTuiReviewConfirmation,
+    $OperatorTuiAppendConfirmation,
+    $OperatorTuiStartConfirmation,
+    $OperatorTuiPauseConfirmation,
+    $OperatorTuiAbortConfirmation
+  )) {
+    if ($confirmations -notcontains $confirmation) { throw "Missing input UX confirmation requirement." }
+  }
+  $snapshotHasARequiredConfirmation = $false
+  foreach ($confirmation in $confirmations) {
+    if ($ConfirmationSnapshot -match [regex]::Escape($confirmation)) {
+      $snapshotHasARequiredConfirmation = $true
+      break
+    }
+  }
+  if (-not $snapshotHasARequiredConfirmation) {
+    throw "Confirmation snapshot missing a required exact confirmation."
+  }
+
+  foreach ($needle in @("Confirmation required", "risk_class", "required_exact_confirmation", "current_input_length", "input_matches_exactly", "Enter submit", "Esc cancel", "Ctrl+U clear", "Backspace delete", "q is treated as input", "token_printed=false")) {
+    if ($ConfirmationSnapshot -notmatch [regex]::Escape($needle)) { throw "Confirmation snapshot missing: $needle" }
+  }
+  foreach ($needle in @("Reason required", "sanitized_reason_preview", "sanitization_changed", "Enter accept reason", "Esc cancel", "Ctrl+U clear", "Backspace delete", "token_printed=false")) {
+    if ($ReasonSnapshot -notmatch [regex]::Escape($needle)) { throw "Reason snapshot missing: $needle" }
+  }
+}
+
+function Assert-OperatorTuiInputUxNoRealExecution($Report) {
+  Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
+  Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
+  Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
+  Assert-False $Report.queue_runner_started "queue_runner_started"
+  Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.run_forever_started "run_forever_started"
+  Assert-False $Report.hermes_live_called "hermes_live_called"
+  Assert-False $Report.mcp_run_called "mcp_run_called"
+  Assert-False $Report.auto_merge_enabled "auto_merge_enabled"
+  Assert-False $Report.release_created "release_created"
+  Assert-False $Report.tag_created "tag_created"
+  Assert-False $Report.asset_uploaded "asset_uploaded"
+  Assert-TokenPrintedFalse $Report
 }
 
 function Assert-OperatorTuiPanels($Panels, [string]$SnapshotText) {

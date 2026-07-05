@@ -2,8 +2,10 @@ use serde::Serialize;
 
 use crate::{
     actions::Action,
+    candidate::{APPEND_CONFIRMATION, REVIEW_CONFIRMATION},
     commands::{CommandStatus, OperatorCommandResult},
     model::OperatorState,
+    single_step::{ABORT_CONFIRMATION, PAUSE_CONFIRMATION, START_CONFIRMATION},
     ui_layout::OperatorTab,
 };
 
@@ -13,8 +15,18 @@ pub struct ViewModel {
     pub selected_action: String,
     pub selected_action_index: usize,
     pub input_mode: String,
+    pub pending_action: String,
+    pub pending_action_label: String,
+    pub pending_risk_class: String,
     pub pending_confirmation: String,
     pub pending_reason: String,
+    pub input_buffer: String,
+    pub input_length: usize,
+    pub input_matches_confirmation: bool,
+    pub input_feedback: String,
+    pub retry_or_cancel_available: bool,
+    pub sanitized_reason_preview: String,
+    pub reason_sanitized_changed: bool,
     pub active_command_id: Option<u64>,
     pub active_command_label: String,
     pub command_status: CommandStatus,
@@ -58,8 +70,18 @@ impl ViewModel {
             selected_action: Action::Refresh.action_id().to_string(),
             selected_action_index: 0,
             input_mode: "normal".to_string(),
+            pending_action: String::new(),
+            pending_action_label: String::new(),
+            pending_risk_class: String::new(),
             pending_confirmation: String::new(),
             pending_reason: String::new(),
+            input_buffer: String::new(),
+            input_length: 0,
+            input_matches_confirmation: false,
+            input_feedback: String::new(),
+            retry_or_cancel_available: false,
+            sanitized_reason_preview: String::new(),
+            reason_sanitized_changed: false,
             active_command_id: None,
             active_command_label: String::new(),
             command_status: CommandStatus::Idle,
@@ -91,8 +113,12 @@ impl ViewModel {
         &mut self,
         selected_action_index: usize,
         input_mode: &str,
-        pending_confirmation: &str,
+        pending_action: &str,
+        input_buffer: &str,
         pending_reason: &str,
+        input_feedback: &str,
+        retry_available: bool,
+        reason_sanitized_changed: bool,
     ) {
         self.selected_action_index = selected_action_index;
         self.selected_action = Action::all()
@@ -100,8 +126,31 @@ impl ViewModel {
             .map(|action| action.action_id().to_string())
             .unwrap_or_else(|| Action::Refresh.action_id().to_string());
         self.input_mode = input_mode.to_string();
-        self.pending_confirmation = pending_confirmation.to_string();
+        self.pending_action = pending_action.to_string();
+        let action = Action::from_action_id(pending_action);
+        self.pending_action_label = action
+            .map(|action| action.label().to_string())
+            .unwrap_or_else(|| "none".to_string());
+        self.pending_risk_class = action
+            .map(risk_class_for_action)
+            .unwrap_or_else(|| "no real execution".to_string());
+        self.pending_confirmation = action
+            .and_then(confirmation_for_action)
+            .unwrap_or("")
+            .to_string();
         self.pending_reason = pending_reason.to_string();
+        self.input_buffer = input_buffer.to_string();
+        self.input_length = input_buffer.chars().count();
+        self.input_matches_confirmation =
+            !self.pending_confirmation.is_empty() && input_buffer == self.pending_confirmation;
+        self.input_feedback = input_feedback.to_string();
+        self.retry_or_cancel_available = retry_available;
+        self.sanitized_reason_preview = sanitize_reason_preview(input_buffer);
+        if !pending_reason.is_empty() && self.sanitized_reason_preview.is_empty() {
+            self.sanitized_reason_preview = pending_reason.to_string();
+        }
+        self.reason_sanitized_changed = reason_sanitized_changed
+            || (!input_buffer.is_empty() && self.sanitized_reason_preview != input_buffer.trim());
     }
 
     pub fn command_started(&mut self, command_id: u64, label: impl Into<String>) {
@@ -198,6 +247,46 @@ impl ViewModelSafetyFlags {
             token_printed: safety.token_printed,
         }
     }
+}
+
+fn confirmation_for_action(action: Action) -> Option<&'static str> {
+    match action {
+        Action::ReviewCandidate => Some(REVIEW_CONFIRMATION),
+        Action::AppendCandidate => Some(APPEND_CONFIRMATION),
+        Action::StartOneGoal => Some(START_CONFIRMATION),
+        Action::SafePause => Some(PAUSE_CONFIRMATION),
+        Action::AbortTerminate => Some(ABORT_CONFIRMATION),
+        _ => None,
+    }
+}
+
+fn risk_class_for_action(action: Action) -> String {
+    match action {
+        Action::ReviewCandidate | Action::AppendCandidate | Action::StartOneGoal => {
+            "fixture-safe | metadata-only | no real execution".to_string()
+        }
+        Action::SafePause | Action::AbortTerminate => {
+            "fixture-safe | metadata-only | no real execution".to_string()
+        }
+        _ => "no real execution".to_string(),
+    }
+}
+
+fn sanitize_reason_preview(value: &str) -> String {
+    let mut safe = value.trim().replace(['\r', '\n', '\t'], " ");
+    for marker in ["Authorization", "Bearer", "token=", "secret=", "password="] {
+        if safe
+            .to_ascii_lowercase()
+            .contains(&marker.to_ascii_lowercase())
+        {
+            safe = "redacted_reason".to_string();
+            break;
+        }
+    }
+    if safe.len() > 180 {
+        safe.truncate(180);
+    }
+    safe
 }
 
 fn value_or_none(value: &str) -> &str {

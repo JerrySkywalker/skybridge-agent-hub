@@ -1,5 +1,29 @@
 # Progress Log
 
+## 2026-07-03 Mega Goal 368H Ratatui Confirmation and Reason UX
+
+- Added a focused confirmation surface for exact-confirmation actions in
+  `apps/operator-tui`, showing action name, fixture-safe/no-real-execution risk
+  class, required phrase, input length, exact-match status, feedback and edit
+  keys.
+- Added a focused reason surface for safe pause and abort/terminate with
+  non-empty reason enforcement, sanitized reason preview and continuation into
+  exact confirmation.
+- Preserved runtime semantics from MG368F and layout behavior from MG368G while
+  keeping `q` as quit only in normal mode; confirmation/reason mode treats it
+  as text input.
+- Added input editing support for Backspace, Ctrl+U clear, Esc cancel, Enter
+  submit and paste-friendly character input.
+- Added deterministic input UX artifacts under
+  `.agent/tmp/operator-tui/input-ux/` and PowerShell smokes for confirmation
+  dialog, mismatch, clear/edit keys, reason-required, reason sanitization and
+  no-real-execution.
+- Kept MG368H as UX hardening only: no MG369 retry, no real task execution, no
+  branch or PR creation by the TUI, no queue runner, no worker loop, no run
+  forever, no live Hermes, no MCP, no auto-merge, no release/tag/assets and
+  `token_printed=false`.
+- Recommended next milestone: MG368I Ratatui Manual Dry Run.
+
 ## 2026-07-03 Mega Goal 368G Ratatui Responsive Layout and Tabs
 
 - Refactored the live `apps/operator-tui` renderer from the fixed five-panel

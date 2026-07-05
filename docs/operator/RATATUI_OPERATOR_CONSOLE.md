@@ -446,9 +446,89 @@ auto-merge, create release/tag/assets or print tokens.
 
 Deferred follow-up milestones:
 
-- MG368H: confirmation UX hardening;
 - MG368I: manual dry run;
 - MG369A/B: real manual experiment after the runtime and UX work are reviewed.
+
+## MG368H Scope
+
+MG368H hardens the confirmation and reason-entry UX without changing the
+MG368F runtime semantics or the MG368G layout model. The blocker after MG368G
+was not command capability: exact confirmations and pause/abort reasons were
+still too easy to mistype and too hard to recover from during manual use.
+
+When an action requires exact confirmation, the TUI now switches from the
+normal tabbed surface to a focused confirmation surface. It shows:
+
+- action name;
+- risk class: `fixture-safe | metadata-only | no real execution`;
+- required exact confirmation string;
+- current input length;
+- whether the input matches exactly;
+- mismatch or waiting feedback;
+- keys: Enter submit, Esc cancel, Ctrl+U clear and Backspace delete;
+- the rule that `q` only quits from normal mode and is treated as text input in
+  confirmation mode.
+
+Required confirmation strings are:
+
+```text
+I_UNDERSTAND_REVIEW_CANDIDATE_FOR_APPEND_ONLY_NO_EXECUTION
+I_UNDERSTAND_APPEND_REVIEWED_CANDIDATE_TO_CAMPAIGN_NO_EXECUTION
+I_UNDERSTAND_START_ONE_GOAL_SINGLE_STEP_ONLY_NO_QUEUE_LOOP
+I_UNDERSTAND_SAFE_PAUSE_SINGLE_STEP_PIPELINE_WITH_REASON
+I_UNDERSTAND_ABORT_TERMINATE_PREVIEW_OR_FIXTURE_ONLY_NO_PROCESS_KILL
+```
+
+If the submitted input does not match, the action is rejected, the UI remains
+responsive, `exact_confirmation_mismatch` is recorded, mismatch feedback is
+shown, and retry/cancel context remains visible through the input UX report.
+The command runner is not invoked for mismatched confirmation.
+
+Safe pause and abort/terminate first show a focused reason surface. The reason
+must be non-empty. The surface shows a sanitized preview and then proceeds to
+the exact confirmation surface after the reason is accepted. Sanitization
+redacts Authorization/Bearer/token/secret/password markers, replaces
+newlines/tabs with spaces and truncates overly long reasons. Raw reason text,
+prompts, logs, stdout, stderr, environment values and tokens are not persisted.
+
+Input editing is intentionally simple and paste-friendly:
+
+- normal characters are appended as terminal key events;
+- pasted text is accepted when the terminal delivers it as ordinary character
+  events;
+- Backspace deletes one character;
+- Ctrl+U clears the current input;
+- Esc cancels the input mode;
+- Enter submits the current field.
+
+The normal `?` help surface now describes tab navigation, action triggering,
+confirmation mode, reason mode, cancel behavior and `token_printed=false`.
+Inside confirmation and reason mode, `?` is ordinary input unless a later goal
+adds a non-disruptive inline help overlay.
+
+MG368H writes deterministic input UX artifacts under
+`.agent/tmp/operator-tui/input-ux/`:
+
+- `input-ux-state.json`;
+- `input-ux-report.json`;
+- `input-ux-report.md`;
+- `confirmation-mismatch.json`;
+- `reason-sanitization.json`;
+- `confirmation-dialog-snapshot.txt`;
+- `reason-dialog-snapshot.txt`.
+
+The input UX report schema is
+`skybridge.operator_tui_input_ux_report.v1`.
+
+MG368H does not retry MG369, change command runtime semantics, execute tasks,
+claim tasks, create branches or PRs by the TUI, merge, deploy, run a queue
+runner, start a worker loop, run forever, call live Hermes, call MCP,
+auto-merge, create release/tag/assets or print tokens.
+
+Deferred follow-up milestones:
+
+- MG368I: Ratatui manual dry run;
+- MG369A/B: real manual experiment after MG368H and MG368I are reviewed.
 
 ## Snapshot Mode
 
@@ -469,6 +549,7 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- --single-step --single
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --interactive-unblocker-smoke no-real-execution --output-dir .agent/tmp/operator-tui/interactive-unblocker
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --runtime-refactor-smoke no-real-execution --output-dir .agent/tmp/operator-tui/runtime-refactor
 cargo run --manifest-path apps/operator-tui/Cargo.toml -- --layout-smoke no-real-execution --output-dir .agent/tmp/operator-tui/layout
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- --input-ux-smoke no-real-execution --output-dir .agent/tmp/operator-tui/input-ux
 ```
 
 Fixture snapshot mode writes:
