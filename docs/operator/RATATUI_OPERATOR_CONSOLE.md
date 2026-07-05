@@ -678,6 +678,55 @@ validation worked, and confirmation/reason surfaces were exercised, but exact
 confirmation mismatches blocked review, append, start-one, safe-pause and
 abort-preview completion.
 
+MG368J is the focused manual reliability repair after MG368I. It does not
+reattempt MG368I, does not start MG369A, does not create a real docs-only
+managed-dev PR from the TUI and does not enable real execution. It adds:
+
+- confirmation mismatch diagnostics with expected/actual lengths, first
+  mismatch index, leading/trailing whitespace detection, CR/LF/tab detection,
+  non-ASCII detection, truncated-input detection, retry guidance,
+  normalization metadata and `raw_input_persisted=false`;
+- one documented normalization path: a single trailing CR/LF from terminal
+  paste may be trimmed, with `confirmation_normalized=true` and a recorded
+  normalization reason;
+- a running command guard that displays the active command, elapsed seconds and
+  wait guidance, visually marks mutation-capable actions as blocked while
+  running, prevents new mutation-capable commands from being enqueued and
+  records `command_already_running` only when the operator tries anyway;
+- an interactive manual timeout default of `120000` ms, with timeout still
+  enforced and bounded smoke simulations still fast;
+- `--manual-dry-run-guide`, which opens a manual guide/checklist surface for
+  the next MG368I reattempt, lists all required steps, shows the current step,
+  required next action, command-running/wait state, required confirmation,
+  pause/abort reason suggestions and completed/blocked status without
+  auto-executing any step;
+- machine-readable tab/layout evidence under
+  `.agent/tmp/operator-tui/manual-reliability/`.
+
+MG368J writes:
+
+- `.agent/tmp/operator-tui/manual-reliability/reliability-state.json`
+- `.agent/tmp/operator-tui/manual-reliability/reliability-report.json`
+- `.agent/tmp/operator-tui/manual-reliability/reliability-report.md`
+- `.agent/tmp/operator-tui/manual-reliability/confirmation-diagnostics.json`
+- `.agent/tmp/operator-tui/manual-reliability/running-guard-report.json`
+- `.agent/tmp/operator-tui/manual-reliability/manual-timeout-report.json`
+- `.agent/tmp/operator-tui/manual-reliability/dry-run-guide-report.json`
+- `.agent/tmp/operator-tui/manual-reliability/tab-layout-history.json`
+
+The MG368J report schema is
+`skybridge.operator_tui_manual_reliability_report.v1`.
+
+Recommended command for the next MG368I reattempt:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --manual-dry-run-guide `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/manual-reliability
+```
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -702,6 +751,7 @@ fixture-safe paths. The safety boundary remains:
 - no unbounded execution in MG368D;
 - no MG369 docs-only PR creation in MG368E;
 - no MG369 retry in MG368F;
+- no MG368I reattempt or MG369A start in MG368J;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -722,9 +772,9 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG368I Ratatui Manual Dry Run reattempt or focused input usability repair:
-  resolve the confirmation mismatch and timeout behavior observed in the first
-  human-operated dry run.
+- MG368I-R2 Ratatui Manual Dry Run Reattempt: use the MG368J guide and
+  reliability evidence paths to rerun the dry-run sequence and prove the
+  repaired confirmation, running-guard, timeout and tab/layout behavior.
 - MG369A/B Manual Single-step Hosted-dev Experiment: perform the first real
   manual single-step hosted-dev experiment only after a passing MG368I dry run
   is recorded.

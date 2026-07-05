@@ -426,6 +426,32 @@ $parityOk = $false
 $parityStatus = ""
 $missingRoutes = @()
 
+function Invoke-SkyBridgeGetWithRetry([string]$Path) {
+  $lastError = $null
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    try {
+      return Invoke-RestMethod -Method GET -Uri ($apiBase.TrimEnd("/") + $Path) -TimeoutSec 20
+    } catch {
+      $lastError = $_
+      Start-Sleep -Milliseconds (250 * $attempt)
+    }
+  }
+  throw $lastError
+}
+
+function Invoke-SkyBridgeParityWithRetry([string]$ParityScript) {
+  $lastRaw = $null
+  for ($attempt = 1; $attempt -le 3; $attempt++) {
+    $raw = & pwsh -NoProfile -ExecutionPolicy Bypass -File $ParityScript -ApiBase $apiBase -Json 2>$null
+    $lastRaw = $raw
+    if ($LASTEXITCODE -eq 0) {
+      return (($raw | Out-String).Trim() | ConvertFrom-Json)
+    }
+    Start-Sleep -Milliseconds (250 * $attempt)
+  }
+  throw "cloud_parity_check_failed: $lastRaw"
+}
+
 if ([string]::IsNullOrWhiteSpace($apiBase)) {
   Add-Warning "cloud_api_base_not_configured"
   [pscustomobject]@{
@@ -445,14 +471,14 @@ if ([string]::IsNullOrWhiteSpace($apiBase)) {
 }
 
 try {
-  $health = Invoke-RestMethod -Method GET -Uri ($apiBase.TrimEnd("/") + "/v1/health") -TimeoutSec 20
+  $health = Invoke-SkyBridgeGetWithRetry "/v1/health"
   $healthOk = $true
 } catch {
   Add-Warning "cloud_health_unavailable"
 }
 
 try {
-  $version = Invoke-RestMethod -Method GET -Uri ($apiBase.TrimEnd("/") + "/v1/version") -TimeoutSec 20
+  $version = Invoke-SkyBridgeGetWithRetry "/v1/version"
   $versionOk = $true
   if ($version.commit_sha) { $commitSha = [string]$version.commit_sha }
   if ($version.image_ref) { $imageRef = [string]$version.image_ref }
@@ -465,16 +491,10 @@ try {
   $repoRoot = $env:SKYBRIDGE_OPERATOR_TUI_REPO_ROOT
   $parityScript = Join-Path $repoRoot "scripts/powershell/skybridge-cloud-parity-check.ps1"
   if (Test-Path -LiteralPath $parityScript -PathType Leaf) {
-    $rawParity = & pwsh -NoProfile -ExecutionPolicy Bypass -File $parityScript -ApiBase $apiBase -Json 2>$null
-    if ($LASTEXITCODE -eq 0) {
-      $parsed = (($rawParity | Out-String).Trim() | ConvertFrom-Json)
-      $parityOk = [bool]$parsed.ok
-      $parityStatus = if ($parsed.status) { [string]$parsed.status } else { "unknown" }
-      $missingRoutes = @($parsed.missing_routes | ForEach-Object { [string]$_ })
-    } else {
-      Add-Warning "cloud_parity_check_failed"
-      $parityStatus = "failed"
-    }
+    $parsed = Invoke-SkyBridgeParityWithRetry $parityScript
+    $parityOk = [bool]$parsed.ok
+    $parityStatus = if ($parsed.status) { [string]$parsed.status } else { "unknown" }
+    $missingRoutes = @($parsed.missing_routes | ForEach-Object { [string]$_ })
   } else {
     Add-Warning "cloud_parity_script_missing"
     $parityStatus = "script_missing"

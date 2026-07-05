@@ -8,6 +8,7 @@ use crate::{
     actions::Action,
     app::App,
     commands::now_utc,
+    manual_reliability::guide_steps,
     model::{timeline_steps, OperatorState},
     view_model::ViewModel,
 };
@@ -199,7 +200,22 @@ pub fn status_header_lines(
     area: Rect,
 ) -> Vec<String> {
     let state = &view_model.current_operator_state;
-    vec![
+    let mut lines = Vec::new();
+    if view_model.running_guard_visible {
+        lines.push(format!(
+            "RUNNING: {} | elapsed_seconds={} | wait for completed/blocked/timed_out before continuing",
+            active_command_label(view_model),
+            view_model.active_command_elapsed_seconds
+        ));
+        lines.push("mutation-capable actions are blocked while this command is active".to_string());
+    }
+    if view_model.command_already_running_feedback_visible {
+        lines.push(
+            "command_already_running: wait for completed/blocked/timed_out before continuing"
+                .to_string(),
+        );
+    }
+    lines.extend(vec![
         format!(
             "SkyBridge Operator TUI | layout={} size={}x{} | tab={} | selected_action={}",
             mode.as_str(),
@@ -223,7 +239,8 @@ pub fn status_header_lines(
             active_command_label(view_model),
             view_model.safety_flags.token_printed
         ),
-    ]
+    ]);
+    lines
 }
 
 pub fn tab_bar_line(view_model: &ViewModel) -> String {
@@ -267,14 +284,26 @@ pub fn action_menu_lines(view_model: &ViewModel) -> Vec<String> {
             } else {
                 " "
             };
-            let disabled = if action.enabled() { "" } else { " [disabled]" };
+            let running_blocked =
+                view_model.running_guard_visible && action.blocked_while_command_running();
+            let disabled = if !action.enabled() {
+                " [disabled]"
+            } else if running_blocked {
+                " [blocked while running]"
+            } else {
+                ""
+            };
             let mut lines = vec![format!(
                 "{selected} {} {}{}",
                 action.key(),
                 action.label(),
                 disabled
             )];
-            if !action.enabled() {
+            if running_blocked {
+                lines.push(
+                    "  reasons: wait for completed/blocked/timed_out before continuing".to_string(),
+                );
+            } else if !action.enabled() {
                 lines.push(format!(
                     "  reasons: {}",
                     action.disabled_reasons().join(", ")
@@ -298,6 +327,26 @@ pub fn runtime_lines(view_model: &ViewModel) -> Vec<String> {
     lines.push(format!(
         "active_command_label={}",
         value_or_none(&view_model.active_command_label)
+    ));
+    lines.push(format!(
+        "active_command_elapsed_seconds={}",
+        view_model.active_command_elapsed_seconds
+    ));
+    lines.push(format!(
+        "running_guard_visible={}",
+        view_model.running_guard_visible
+    ));
+    lines.push(format!(
+        "mutation_actions_blocked_while_running={}",
+        view_model.mutation_actions_blocked_while_running
+    ));
+    lines.push(format!(
+        "command_already_running_feedback_visible={}",
+        view_model.command_already_running_feedback_visible
+    ));
+    lines.push(format!(
+        "expected_wait_behavior={}",
+        view_model.running_wait_guidance
     ));
     if let Some(result) = &view_model.last_command_result {
         lines.push(format!(
@@ -558,6 +607,10 @@ fn snapshot_for(app: &App, mode: OperatorLayoutMode, width: u16, height: u16) ->
 }
 
 fn overview_lines(view_model: &ViewModel) -> Vec<String> {
+    if view_model.manual_dry_run_guide_visible {
+        return manual_guide_lines(view_model);
+    }
+
     let state = &view_model.current_operator_state;
     vec![
         "Overview".to_string(),
@@ -586,6 +639,97 @@ fn overview_lines(view_model: &ViewModel) -> Vec<String> {
         format!("command_status={}", view_model.command_status.as_str()),
         format!("token_printed={}", view_model.safety_flags.token_printed),
     ]
+}
+
+fn manual_guide_lines(view_model: &ViewModel) -> Vec<String> {
+    let mut lines = vec![
+        "MG368I-R2 Manual Dry Run Guide".to_string(),
+        "guide_does_not_auto_execute=true".to_string(),
+        format!(
+            "current_dry_run_step={}",
+            current_guide_step_label(view_model)
+        ),
+        format!(
+            "required_next_action={}",
+            current_guide_next_action(view_model)
+        ),
+        format!("command_running={}", view_model.running_guard_visible),
+        format!("command_status={}", view_model.command_status.as_str()),
+        "when_to_wait=wait for completed/blocked/timed_out before continuing".to_string(),
+        format!(
+            "required_confirmation={}",
+            current_guide_confirmation(view_model)
+        ),
+        "pause_reason_suggestion=manual dry run pause after fixture-safe start".to_string(),
+        "abort_reason_suggestion=manual dry run abort preview only".to_string(),
+        "token_printed=false".to_string(),
+        String::new(),
+        "Steps".to_string(),
+    ];
+
+    lines.extend(guide_steps().into_iter().map(|step| {
+        format!(
+            "- [{}] {}. {} | action={} | confirmation={} | reason={}",
+            guide_step_status(view_model, step.index),
+            step.index,
+            step.label,
+            step.required_next_action,
+            value_or_none(step.required_confirmation),
+            value_or_none(step.reason_suggestion)
+        )
+    }));
+    lines
+}
+
+fn current_guide_step_label(view_model: &ViewModel) -> String {
+    guide_steps()
+        .into_iter()
+        .find(|step| guide_step_status(view_model, step.index) == "pending")
+        .map(|step| format!("{}. {}", step.index, step.label))
+        .unwrap_or_else(|| "11. Quit".to_string())
+}
+
+fn current_guide_next_action(view_model: &ViewModel) -> String {
+    guide_steps()
+        .into_iter()
+        .find(|step| guide_step_status(view_model, step.index) == "pending")
+        .map(|step| step.required_next_action.to_string())
+        .unwrap_or_else(|| "press q".to_string())
+}
+
+fn current_guide_confirmation(view_model: &ViewModel) -> String {
+    guide_steps()
+        .into_iter()
+        .find(|step| guide_step_status(view_model, step.index) == "pending")
+        .map(|step| value_or_none(step.required_confirmation).to_string())
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn guide_step_status(view_model: &ViewModel, index: u8) -> &'static str {
+    let state = &view_model.current_operator_state;
+    let last_blocked_action = view_model
+        .last_command_result
+        .as_ref()
+        .map(|result| result.status.as_str() == "blocked" || result.status.as_str() == "timed_out")
+        .unwrap_or(false);
+
+    match index {
+        1 if state.local_state_loaded || state.cloud_state_loaded => "completed",
+        2 if view_model.active_tab != OperatorTab::Overview || view_model.help_visible => {
+            "completed"
+        }
+        3 if !state.candidate_flow.candidate_hash.is_empty() => "completed",
+        4 if state.candidate_flow.candidate_validated => "completed",
+        5 if state.candidate_flow.review_status == "approved_for_append" => "completed",
+        6 if state.candidate_flow.append_performed => "completed",
+        7 if state.single_step.next_bounded_action_previewed => "completed",
+        8 if state.single_step.start_one_performed => "completed",
+        9 if state.single_step.safe_pause_performed => "completed",
+        10 if state.single_step.abort_previewed => "completed",
+        11 if false => "completed",
+        _ if last_blocked_action => "blocked_or_timed_out",
+        _ => "pending",
+    }
 }
 
 fn pipeline_lines(state: &OperatorState) -> Vec<String> {

@@ -21,7 +21,7 @@ use crate::{
 pub const RUNTIME_REFACTOR_REPORT_SCHEMA: &str =
     "skybridge.operator_tui_runtime_refactor_report.v1";
 pub const DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR: &str = ".agent/tmp/operator-tui/runtime-refactor";
-pub const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 30_000;
+pub const DEFAULT_COMMAND_TIMEOUT_MS: u64 = 120_000;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum RuntimeSmokeScenario {
@@ -293,6 +293,18 @@ impl OperatorRuntime {
 
     pub fn is_running(&self) -> bool {
         self.active.is_some()
+    }
+
+    pub fn active_command_label(&self) -> Option<String> {
+        self.active
+            .as_ref()
+            .map(|active| active.command.label().to_string())
+    }
+
+    pub fn active_elapsed_seconds(&self) -> Option<u64> {
+        self.active
+            .as_ref()
+            .map(|active| active.started.elapsed().as_secs())
     }
 
     fn record_status(

@@ -74,6 +74,8 @@ pub struct InteractiveState {
     pub backspace_used: bool,
     pub enter_submit_used: bool,
     pub paste_friendly_input_observed: bool,
+    pub last_confirmation_diagnostics: ConfirmationDiagnostics,
+    pub command_already_running_feedback_visible: bool,
     pub last_action: InteractiveLastAction,
     pub history: Vec<InteractiveLastAction>,
     pub exact_confirmation_mismatch_rejected: bool,
@@ -99,6 +101,29 @@ pub struct InteractiveLastAction {
     pub blockers: Vec<String>,
     pub warnings: Vec<String>,
     pub token_printed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmationDiagnostics {
+    pub schema: String,
+    pub generated_at: String,
+    pub expected_confirmation_length: usize,
+    pub actual_input_length: usize,
+    pub first_mismatch_index: Option<usize>,
+    pub has_leading_or_trailing_whitespace: bool,
+    pub contains_cr_lf_tab: bool,
+    pub contains_non_ascii: bool,
+    pub looks_truncated: bool,
+    pub retry_guidance: String,
+    pub confirmation_normalized: bool,
+    pub normalization_reason: String,
+    pub raw_input_persisted: bool,
+    pub token_printed: bool,
+}
+
+struct ConfirmationCheck {
+    accepted: bool,
+    diagnostics: ConfirmationDiagnostics,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -166,6 +191,8 @@ impl Default for InteractiveState {
             backspace_used: false,
             enter_submit_used: false,
             paste_friendly_input_observed: false,
+            last_confirmation_diagnostics: ConfirmationDiagnostics::empty(),
+            command_already_running_feedback_visible: false,
             last_action: InteractiveLastAction::idle(),
             history: Vec::new(),
             exact_confirmation_mismatch_rejected: false,
@@ -234,6 +261,81 @@ impl InteractiveLastAction {
     }
 }
 
+impl ConfirmationDiagnostics {
+    pub fn empty() -> Self {
+        Self {
+            schema: "skybridge.operator_tui_confirmation_diagnostics.v1".to_string(),
+            generated_at: now_utc(),
+            expected_confirmation_length: 0,
+            actual_input_length: 0,
+            first_mismatch_index: None,
+            has_leading_or_trailing_whitespace: false,
+            contains_cr_lf_tab: false,
+            contains_non_ascii: false,
+            looks_truncated: false,
+            retry_guidance:
+                "type or paste the exact confirmation; press Ctrl+U to clear or Esc to cancel"
+                    .to_string(),
+            confirmation_normalized: false,
+            normalization_reason: "none".to_string(),
+            raw_input_persisted: false,
+            token_printed: false,
+        }
+    }
+
+    pub fn from_input(expected: &str, actual: &str, confirmation_normalized: bool) -> Self {
+        let expected_chars: Vec<char> = expected.chars().collect();
+        let actual_chars: Vec<char> = actual.chars().collect();
+        let first_mismatch_index = expected_chars
+            .iter()
+            .zip(actual_chars.iter())
+            .position(|(left, right)| left != right)
+            .or_else(|| {
+                if expected_chars.len() != actual_chars.len() {
+                    Some(expected_chars.len().min(actual_chars.len()))
+                } else {
+                    None
+                }
+            });
+        let has_leading_or_trailing_whitespace = actual
+            .chars()
+            .next()
+            .map(char::is_whitespace)
+            .unwrap_or(false)
+            || actual
+                .chars()
+                .last()
+                .map(char::is_whitespace)
+                .unwrap_or(false);
+        let contains_cr_lf_tab = actual.chars().any(|ch| matches!(ch, '\r' | '\n' | '\t'));
+        let contains_non_ascii = !actual.is_ascii();
+        let looks_truncated =
+            actual_chars.len() < expected_chars.len() && expected.starts_with(actual);
+        let normalization_reason = if confirmation_normalized {
+            "trimmed_single_trailing_cr_or_lf_from_terminal_paste"
+        } else {
+            "none"
+        };
+
+        Self {
+            schema: "skybridge.operator_tui_confirmation_diagnostics.v1".to_string(),
+            generated_at: now_utc(),
+            expected_confirmation_length: expected_chars.len(),
+            actual_input_length: actual_chars.len(),
+            first_mismatch_index,
+            has_leading_or_trailing_whitespace,
+            contains_cr_lf_tab,
+            contains_non_ascii,
+            looks_truncated,
+            retry_guidance: "clear with Ctrl+U, paste the full exact confirmation, then press Enter; wait for completed/blocked/timed_out before starting another action".to_string(),
+            confirmation_normalized,
+            normalization_reason: normalization_reason.to_string(),
+            raw_input_persisted: false,
+            token_printed: false,
+        }
+    }
+}
+
 impl InteractiveState {
     fn record(&mut self, action: InteractiveLastAction) {
         self.last_action = action.clone();
@@ -244,15 +346,18 @@ impl InteractiveState {
     }
 
     fn begin_confirmation(&mut self, action: Action, reason: String) {
+        let expected = confirmation_for(action).unwrap_or("");
         self.input_mode = "confirmation".to_string();
         self.pending_action = action.action_id().to_string();
         self.input_buffer.clear();
         self.pending_reason = reason;
         self.input_feedback = "type_or_paste_exact_confirmation".to_string();
         self.retry_available = true;
-        self.last_required_confirmation = confirmation_for(action).unwrap_or("").to_string();
+        self.last_required_confirmation = expected.to_string();
         self.last_confirmation_input_length = 0;
         self.last_confirmation_matched = false;
+        self.last_confirmation_diagnostics =
+            ConfirmationDiagnostics::from_input(expected, "", false);
     }
 
     fn begin_reason(&mut self, action: Action) {
@@ -603,6 +708,19 @@ fn begin_or_dispatch(
     if action == Action::Quit {
         return Ok(InteractiveControl::Quit);
     }
+    if runtime.is_running() && action.blocked_while_command_running() {
+        app.interactive.command_already_running_feedback_visible = true;
+        app.interactive.input_feedback =
+            "command_already_running_wait_for_completed_blocked_or_timed_out".to_string();
+        app.interactive.record(InteractiveLastAction::blocked(
+            action,
+            "command_already_running",
+            vec!["wait_for_completed_blocked_or_timed_out".to_string()],
+        ));
+        app.sync_view_model();
+        write_interactive_artifacts(output_dir, app)?;
+        return Ok(InteractiveControl::Continue);
+    }
     if reason_required(action) {
         app.interactive.begin_reason(action);
         write_interactive_artifacts(output_dir, app)?;
@@ -626,13 +744,15 @@ fn dispatch_action_async(
     runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<()> {
     if let Some(expected) = confirmation_for(action) {
-        if confirmation != expected {
+        let check = check_confirmation(expected, confirmation);
+        app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
+        app.interactive.last_required_confirmation = expected.to_string();
+        app.interactive.last_confirmation_input_length = confirmation.chars().count();
+        app.interactive.last_confirmation_matched = check.accepted;
+        if !check.accepted {
             app.interactive.exact_confirmation_mismatch_rejected = true;
-            app.interactive.input_feedback = "exact_confirmation_mismatch".to_string();
+            app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
             app.interactive.retry_available = true;
-            app.interactive.last_required_confirmation = expected.to_string();
-            app.interactive.last_confirmation_input_length = confirmation.chars().count();
-            app.interactive.last_confirmation_matched = false;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "exact_confirmation_mismatch",
@@ -763,13 +883,15 @@ fn dispatch_action_sync(
     reason: &str,
 ) -> anyhow::Result<()> {
     if let Some(expected) = confirmation_for(action) {
-        if confirmation != expected {
+        let check = check_confirmation(expected, confirmation);
+        app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
+        app.interactive.last_required_confirmation = expected.to_string();
+        app.interactive.last_confirmation_input_length = confirmation.chars().count();
+        app.interactive.last_confirmation_matched = check.accepted;
+        if !check.accepted {
             app.interactive.exact_confirmation_mismatch_rejected = true;
-            app.interactive.input_feedback = "exact_confirmation_mismatch".to_string();
+            app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
             app.interactive.retry_available = true;
-            app.interactive.last_required_confirmation = expected.to_string();
-            app.interactive.last_confirmation_input_length = confirmation.chars().count();
-            app.interactive.last_confirmation_matched = false;
             app.interactive.record(InteractiveLastAction::blocked(
                 action,
                 "exact_confirmation_mismatch",
@@ -1055,6 +1177,41 @@ pub(crate) fn sanitize_reason(value: &str) -> String {
     safe
 }
 
+fn check_confirmation(expected: &str, actual: &str) -> ConfirmationCheck {
+    if actual == expected {
+        return ConfirmationCheck {
+            accepted: true,
+            diagnostics: ConfirmationDiagnostics::from_input(expected, actual, false),
+        };
+    }
+
+    let normalized = trim_single_trailing_cr_lf(actual);
+    if normalized != actual && normalized == expected {
+        return ConfirmationCheck {
+            accepted: true,
+            diagnostics: ConfirmationDiagnostics::from_input(expected, actual, true),
+        };
+    }
+
+    ConfirmationCheck {
+        accepted: false,
+        diagnostics: ConfirmationDiagnostics::from_input(expected, actual, false),
+    }
+}
+
+fn trim_single_trailing_cr_lf(value: &str) -> &str {
+    if let Some(trimmed) = value.strip_suffix("\r\n") {
+        return trimmed;
+    }
+    if let Some(trimmed) = value.strip_suffix('\n') {
+        return trimmed;
+    }
+    if let Some(trimmed) = value.strip_suffix('\r') {
+        return trimmed;
+    }
+    value
+}
+
 fn update_confirmation_metrics(app: &mut App) {
     let action = pending_action(app).unwrap_or(Action::Refresh);
     let expected = confirmation_for(action).unwrap_or("");
@@ -1062,6 +1219,8 @@ fn update_confirmation_metrics(app: &mut App) {
     app.interactive.last_confirmation_input_length = app.interactive.input_buffer.chars().count();
     app.interactive.last_confirmation_matched =
         !expected.is_empty() && app.interactive.input_buffer == expected;
+    app.interactive.last_confirmation_diagnostics =
+        ConfirmationDiagnostics::from_input(expected, &app.interactive.input_buffer, false);
     app.interactive.input_feedback = if app.interactive.last_confirmation_matched {
         "exact_confirmation_matches".to_string()
     } else {

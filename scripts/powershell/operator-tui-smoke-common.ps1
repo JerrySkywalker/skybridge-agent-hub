@@ -12,6 +12,7 @@ $OperatorTuiInteractiveOutputDir = ".agent/tmp/operator-tui/interactive-unblocke
 $OperatorTuiRuntimeOutputDir = ".agent/tmp/operator-tui/runtime-refactor"
 $OperatorTuiLayoutOutputDir = ".agent/tmp/operator-tui/layout"
 $OperatorTuiInputUxOutputDir = ".agent/tmp/operator-tui/input-ux"
+$OperatorTuiManualReliabilityOutputDir = ".agent/tmp/operator-tui/manual-reliability"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -460,6 +461,75 @@ function Invoke-OperatorTuiInputUxSmoke(
   }
 }
 
+function Invoke-OperatorTuiManualReliabilitySmoke(
+  [string]$Name,
+  [ValidateSet("confirmation-diagnostics", "running-guard", "timeout-guidance", "guide", "tabs-recorded", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiManualReliabilityOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiManualReliabilityArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --manual-reliability-smoke $Scenario `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI manual reliability smoke failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/reliability-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/reliability-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/reliability-report.md"
+  $diagnosticsPath = Join-Path $RepoRoot "$OutputDir/confirmation-diagnostics.json"
+  $runningGuardPath = Join-Path $RepoRoot "$OutputDir/running-guard-report.json"
+  $timeoutPath = Join-Path $RepoRoot "$OutputDir/manual-timeout-report.json"
+  $guidePath = Join-Path $RepoRoot "$OutputDir/dry-run-guide-report.json"
+  $tabHistoryPath = Join-Path $RepoRoot "$OutputDir/tab-layout-history.json"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $diagnosticsPath, $runningGuardPath, $timeoutPath, $guidePath, $tabHistoryPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI manual reliability artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  Assert-NoUnsafeText $reportMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $diagnostics = Get-Content -Raw -LiteralPath $diagnosticsPath | ConvertFrom-Json
+  $runningGuard = Get-Content -Raw -LiteralPath $runningGuardPath | ConvertFrom-Json
+  $timeout = Get-Content -Raw -LiteralPath $timeoutPath | ConvertFrom-Json
+  $guide = Get-Content -Raw -LiteralPath $guidePath | ConvertFrom-Json
+  $tabHistory = Get-Content -Raw -LiteralPath $tabHistoryPath | ConvertFrom-Json
+
+  Assert-OperatorTuiManualReliabilityShape `
+    -State $state `
+    -Report $report `
+    -Diagnostics $diagnostics `
+    -RunningGuard $runningGuard `
+    -Timeout $timeout `
+    -Guide $guide `
+    -TabHistory $tabHistory
+  Assert-OperatorTuiManualReliabilityNoRealExecution -Report $report
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    diagnostics_path = $diagnosticsPath
+    running_guard_path = $runningGuardPath
+    timeout_path = $timeoutPath
+    guide_path = $guidePath
+    tab_history_path = $tabHistoryPath
+    state = $state
+    report = $report
+    diagnostics = $diagnostics
+    running_guard = $runningGuard
+    timeout = $timeout
+    guide = $guide
+    tab_history = $tabHistory
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -535,6 +605,18 @@ function Clear-OperatorTuiInputUxArtifacts([string]$OutputDir = $OperatorTuiInpu
 
   if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to remove non-temp operator TUI input UX artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
+  }
+}
+
+function Clear-OperatorTuiManualReliabilityArtifacts([string]$OutputDir = $OperatorTuiManualReliabilityOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI manual reliability artifact path: $operatorDir"
   }
   if (Test-Path -LiteralPath $operatorDir) {
     Remove-Item -LiteralPath $operatorDir -Recurse -Force
@@ -794,6 +876,133 @@ function Assert-OperatorTuiInputUxNoRealExecution($Report) {
   Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
   Assert-False $Report.queue_runner_started "queue_runner_started"
   Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.run_forever_started "run_forever_started"
+  Assert-False $Report.hermes_live_called "hermes_live_called"
+  Assert-False $Report.mcp_run_called "mcp_run_called"
+  Assert-False $Report.auto_merge_enabled "auto_merge_enabled"
+  Assert-False $Report.release_created "release_created"
+  Assert-False $Report.tag_created "tag_created"
+  Assert-False $Report.asset_uploaded "asset_uploaded"
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiManualReliabilityShape($State, $Report, $Diagnostics, $RunningGuard, $Timeout, $Guide, $TabHistory) {
+  if ($State.schema -ne "skybridge.operator_tui_manual_reliability_state.v1") {
+    throw "Unexpected operator TUI manual reliability state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_manual_reliability_report.v1") {
+    throw "Unexpected operator TUI manual reliability report schema."
+  }
+  if ($Report.mode -ne "manual-reliability-repair") { throw "Manual reliability report mode mismatch." }
+  if ($Diagnostics.schema -ne "skybridge.operator_tui_confirmation_diagnostics.v1") {
+    throw "Unexpected confirmation diagnostics schema."
+  }
+  if ($RunningGuard.schema -ne "skybridge.operator_tui_manual_reliability_running_guard.v1") {
+    throw "Unexpected running guard schema."
+  }
+  if ($Timeout.schema -ne "skybridge.operator_tui_manual_reliability_timeout.v1") {
+    throw "Unexpected manual timeout schema."
+  }
+  if ($Guide.schema -ne "skybridge.operator_tui_manual_reliability_guide.v1") {
+    throw "Unexpected dry-run guide schema."
+  }
+  if ($TabHistory.schema -ne "skybridge.operator_tui_manual_reliability_tab_layout_history.v1") {
+    throw "Unexpected tab layout history schema."
+  }
+
+  Assert-True $Report.confirmation_diagnostics_available "confirmation_diagnostics_available"
+  Assert-True $Report.expected_confirmation_length_recorded "expected_confirmation_length_recorded"
+  Assert-True $Report.actual_confirmation_length_recorded "actual_confirmation_length_recorded"
+  Assert-True $Report.first_mismatch_index_recorded "first_mismatch_index_recorded"
+  Assert-True $Report.hidden_character_detection_available "hidden_character_detection_available"
+  Assert-True $Report.confirmation_retry_guidance_visible "confirmation_retry_guidance_visible"
+  Assert-True $Report.confirmation_normalization_available "confirmation_normalization_available"
+  Assert-False $Report.raw_input_persisted "raw_input_persisted"
+  Assert-True $Report.running_guard_visible "running_guard_visible"
+  Assert-True $Report.mutation_actions_blocked_while_running "mutation_actions_blocked_while_running"
+  Assert-True $Report.command_already_running_feedback_visible "command_already_running_feedback_visible"
+  Assert-True $Report.manual_timeout_guidance_visible "manual_timeout_guidance_visible"
+  Assert-True $Report.timeout_enforced "timeout_enforced"
+  Assert-True $Report.dry_run_guide_available "dry_run_guide_available"
+  Assert-True $Report.dry_run_steps_listed "dry_run_steps_listed"
+  Assert-True $Report.layout_modes_recorded "layout_modes_recorded"
+  Assert-True $Report.tabs_visited_recorded "tabs_visited_recorded"
+  Assert-True $Report.confirmation_dialog_seen_recorded "confirmation_dialog_seen_recorded"
+  Assert-True $Report.reason_dialog_seen_recorded "reason_dialog_seen_recorded"
+  Assert-False $Report.token_printed "manual reliability token_printed"
+
+  if ([int]$Report.manual_timeout_ms -lt 120000) {
+    throw "manual_timeout_ms should be at least 120000."
+  }
+  if ([int]$Diagnostics.expected_confirmation_length -le 0) {
+    throw "Expected confirmation length was not recorded."
+  }
+  if ([int]$Diagnostics.actual_input_length -le 0) {
+    throw "Actual confirmation input length was not recorded."
+  }
+  if ($null -eq $Diagnostics.first_mismatch_index) {
+    throw "First mismatch index was not recorded."
+  }
+  Assert-True $Diagnostics.contains_cr_lf_tab "diagnostics contains_cr_lf_tab"
+  Assert-True $Diagnostics.has_leading_or_trailing_whitespace "diagnostics has_leading_or_trailing_whitespace"
+  Assert-False $Diagnostics.raw_input_persisted "diagnostics raw_input_persisted"
+  Assert-False $Diagnostics.token_printed "diagnostics token_printed"
+  if ([string]::IsNullOrWhiteSpace([string]$Diagnostics.retry_guidance)) {
+    throw "Confirmation retry guidance missing."
+  }
+
+  Assert-True $RunningGuard.running_guard_visible "running guard visible"
+  Assert-True $RunningGuard.elapsed_seconds_visible "running guard elapsed_seconds_visible"
+  Assert-True $RunningGuard.expected_wait_behavior_visible "running guard expected_wait_behavior_visible"
+  Assert-True $RunningGuard.mutation_actions_blocked_while_running "running guard mutation blocked"
+  Assert-True $RunningGuard.command_already_running_feedback_visible "running guard feedback visible"
+  Assert-False $RunningGuard.token_printed "running guard token_printed"
+
+  if ([int]$Timeout.manual_timeout_ms -lt 120000) { throw "Manual timeout report timeout too low." }
+  Assert-True $Timeout.timeout_enforced "timeout enforced"
+  Assert-True $Timeout.manual_timeout_guidance_visible "timeout guidance visible"
+  Assert-True $Timeout.smoke_remains_bounded "smoke remains bounded"
+  Assert-True $Timeout.no_unbounded_wait "no unbounded wait"
+  Assert-True $Timeout.blocker_recorded_on_timeout "blocker recorded on timeout"
+  Assert-False $Timeout.token_printed "timeout token_printed"
+
+  Assert-True $Guide.dry_run_guide_available "dry_run_guide_available"
+  Assert-True $Guide.guide_does_not_auto_execute "guide_does_not_auto_execute"
+  Assert-True $Guide.command_running_visible "guide command_running_visible"
+  Assert-True $Guide.wait_guidance_visible "guide wait_guidance_visible"
+  Assert-True $Guide.required_confirmation_visible "guide required_confirmation_visible"
+  Assert-True $Guide.reason_text_suggestions_visible "guide reason_text_suggestions_visible"
+  Assert-True $Guide.completed_or_blocked_status_visible "guide completed_or_blocked_status_visible"
+  if (@($Guide.steps).Count -ne 11) { throw "Expected 11 manual dry-run guide steps." }
+  Assert-False $Guide.token_printed "guide token_printed"
+
+  $modes = @($TabHistory.layout_modes_observed | ForEach-Object { [string]$_ })
+  foreach ($mode in @("full", "compact", "tiny")) {
+    if ($modes -notcontains $mode) { throw "Missing observed layout mode: $mode" }
+  }
+  $tabs = @($TabHistory.tabs_visited | ForEach-Object { [string]$_ })
+  foreach ($tab in @("Overview", "Pipeline", "Candidate", "Single-step", "Actions", "Runtime", "Safety", "Artifacts")) {
+    if ($tabs -notcontains $tab) { throw "Missing visited tab: $tab" }
+  }
+  Assert-True $TabHistory.help_opened "help_opened"
+  Assert-True $TabHistory.actions_tab_visited "actions_tab_visited"
+  Assert-True $TabHistory.runtime_tab_visited "runtime_tab_visited"
+  Assert-True $TabHistory.safety_tab_visited "safety_tab_visited"
+  Assert-True $TabHistory.confirmation_dialog_seen "confirmation_dialog_seen"
+  Assert-True $TabHistory.reason_dialog_seen "reason_dialog_seen"
+  Assert-False $TabHistory.token_printed "tab history token_printed"
+  Assert-False $State.token_printed "manual reliability state token_printed"
+}
+
+function Assert-OperatorTuiManualReliabilityNoRealExecution($Report) {
+  Assert-False $Report.real_task_execution_enabled "real_task_execution_enabled"
+  Assert-False $Report.real_branch_creation_enabled "real_branch_creation_enabled"
+  Assert-False $Report.real_pr_creation_enabled "real_pr_creation_enabled"
+  Assert-False $Report.task_created "task_created"
+  Assert-False $Report.task_claimed "task_claimed"
+  Assert-False $Report.execution_started "execution_started"
+  Assert-False $Report.worker_loop_started "worker_loop_started"
+  Assert-False $Report.queue_runner_started "queue_runner_started"
   Assert-False $Report.run_forever_started "run_forever_started"
   Assert-False $Report.hermes_live_called "hermes_live_called"
   Assert-False $Report.mcp_run_called "mcp_run_called"

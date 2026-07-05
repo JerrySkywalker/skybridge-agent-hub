@@ -1577,3 +1577,21 @@
 - Documented MG356 as a bounded selector across MG352-MG355 gates. Generation
   does not approve or append, append does not execute, and `token_printed=false`
   remains required.
+
+## 2026-07-05 MG368J Ratatui Manual Dry Run Reliability Repair
+
+- Added MG368J manual reliability repair artifacts for the Ratatui Operator
+  Console under `.agent/tmp/operator-tui/manual-reliability/`.
+- Added confirmation mismatch diagnostics with length, mismatch-index,
+  hidden-character, truncation, normalization, retry-guidance and
+  `raw_input_persisted=false` evidence.
+- Added running command guard UX and manual timeout guidance with
+  `manual_timeout_ms=120000`, bounded timeout enforcement and
+  `command_already_running` feedback only when a second mutation-capable action
+  is attempted.
+- Added `--manual-dry-run-guide` for the next MG368I reattempt. It displays
+  the dry-run checklist and writes guide artifacts without auto-executing any
+  step.
+- Added tab/layout, confirmation-dialog and reason-dialog evidence capture plus
+  six CI-safe manual reliability smokes. MG368I remains partial pass / blocked;
+  MG368I-R2 is required before MG369A.

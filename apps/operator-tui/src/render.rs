@@ -268,6 +268,8 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
         .enumerate()
         .map(|(index, action)| {
             let disabled = !action.enabled();
+            let running_blocked =
+                app.view_model.running_guard_visible && action.blocked_while_command_running();
             let prefix = if index == selected_action_index {
                 ">"
             } else {
@@ -276,8 +278,10 @@ fn draw_action_menu(frame: &mut Frame<'_>, area: Rect, app: &App) {
             let mut label = format!("{prefix} {} {}", action.key(), action.label());
             if disabled {
                 label.push_str(" [disabled]");
+            } else if running_blocked {
+                label.push_str(" [blocked while running]");
             }
-            let mut style = if disabled {
+            let mut style = if disabled || running_blocked {
                 Style::default().fg(Color::DarkGray)
             } else if index == selected_action_index {
                 Style::default().fg(Color::Yellow)
