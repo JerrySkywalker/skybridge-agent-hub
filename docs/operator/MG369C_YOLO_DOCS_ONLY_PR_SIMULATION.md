@@ -145,7 +145,14 @@ authorization.
 
 ## Recommendation
 
-Proceed to `MG369D-YOLO Docs-only PR Simulation Review Gate` only because the
-MG369C simulation result is pass.
+MG369D-YOLO reviewed this simulation and froze the result as a controlled
+docs-only PR creation simulation pass. That review does not broaden the claim:
+this remains not real PR creation, not real branch creation, not real execution
+and not human-operated validation.
+
+Proceed next to `MG370A Manual Authorization Gate for First Real Docs-only PR
+Creation` only under a new explicit goal with human authorization before any
+real PR creation. The recommended first real path remains one docs-only branch
+and one draft PR created by Codex controller, not TUI.
 
 `token_printed=false`
