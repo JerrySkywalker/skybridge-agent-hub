@@ -268,18 +268,24 @@ forever, does not call live Hermes or MCP, does not enable auto-merge, does not
 create release/tag/assets and does not print tokens.
 
 MG372A starts the product-verifiable MVP demo cut and freezes MG371B /
-TUI-created PR work for now. The new next-stage options are:
+TUI-created PR work for now. MG372B extends the MVP line with a
+controller-created draft PR demo. The new next-stage options are:
 
 1. MG372A SkyBridge MVP Demo Spine: one local command creates an isolated demo
    server/database, demo project, demo goal, demo task and demo worker, then
    completes exactly one safe task with PollOnce semantics and sanitized
    reports.
 2. MG372B Controller-created Draft PR Demo: build on the MVP spine with a
-   controller-created draft PR demo. This is not TUI-created PR behavior.
-3. MG371B / TUI-created real branch and PR work remains frozen until a future
+   controller-created docs-only branch and draft PR demo. This is not
+   TUI-created PR behavior, does not call Codex, does not mark the demo PR
+   ready and does not merge the demo PR.
+3. MG372C MVP Demo Review and Decision Gate: decide whether the MVP demo is
+   good enough to continue, whether to add Codex-generated diff next, or
+   whether to cut a smaller skybridge-lite prototype.
+4. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-4. Any future real execution requires explicit human authorization.
-5. Any TUI-created real branch or PR requires a separate future authorization
+5. Any future real execution requires explicit human authorization.
+6. Any TUI-created real branch or PR requires a separate future authorization
    gate before branch or PR creation.
 
 ## Read-Only Audit

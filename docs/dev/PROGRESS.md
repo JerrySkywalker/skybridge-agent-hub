@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372B Controller-created Draft PR Demo
+
+- Extended `scripts/powershell/skybridge-mvp-demo.ps1` with
+  `controller-draft-pr-preview`, `controller-draft-pr`,
+  `controller-draft-pr-status` and `controller-draft-pr-report` modes.
+- Preview mode writes policy artifacts under
+  `.agent/tmp/skybridge-mvp-demo-pr/` without creating a branch or PR and
+  records `would_create_branch=true`, `would_create_draft_pr=true`,
+  `branch_policy_passed=true`, `docs_only_allowlist_passed=true`,
+  `controller_created_branch=false`, `controller_created_draft_pr=false` and
+  `token_printed=false`.
+- Apply mode requires the exact confirmation phrase
+  `I_UNDERSTAND_AUTHORIZE_MG372B_CREATE_ONE_CONTROLLER_CREATED_DOCS_ONLY_DRAFT_PR_DEMO`,
+  a clean synced `main`, Git/GitHub CLI availability, GitHub auth, branch
+  policy, docs-only allowlist and one-branch/one-draft-PR policy before
+  mutation.
+- The controller-created demo PR path is docs-only and writes
+  `docs/product/MG372B_CONTROLLER_DRAFT_PR_DEMO_ARTIFACT.md` on a
+  `demo/mg372b-controller-draft-pr-<utc-date>-<short-id>` branch, then opens
+  one draft PR for inspection.
+- Added smokes:
+  `smoke:skybridge-mvp-demo-controller-draft-pr-preview`,
+  `smoke:skybridge-mvp-demo-controller-draft-pr-policy`,
+  `smoke:skybridge-mvp-demo-controller-draft-pr-no-pr` and
+  `smoke:skybridge-mvp-demo-controller-draft-pr-no-codex`.
+- Preserved the freeze on MG371B / TUI-created PR work:
+  `codex_called=false`, `tui_created_branch=false`,
+  `tui_created_pr=false`, `worker_loop_started=false`,
+  `queue_runner_started=false`, `run_forever_started=false`,
+  `hermes_live_called=false`, `mcp_run_called=false`,
+  `auto_merge_enabled=false`, `release_created=false`,
+  `tag_created=false`, `asset_uploaded=false`,
+  `raw_input_persisted=false` and `token_printed=false`.
+- Recommended next milestone:
+  MG372C MVP Demo Review and Decision Gate.
+
 ## 2026-07-07 Mega Goal 372A SkyBridge MVP Demo Spine
 
 - Added `scripts/powershell/skybridge-mvp-demo.ps1` with `local-safe`,

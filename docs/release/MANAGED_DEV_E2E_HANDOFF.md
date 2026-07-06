@@ -358,20 +358,26 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-MG372A starts the product-verifiable MVP demo cut and freezes MG371B /
-TUI-created PR work for now.
+MG372A started the product-verifiable MVP demo cut and froze MG371B /
+TUI-created PR work. MG372B extends that line with a controller-created draft
+PR demo while keeping TUI-created PR behavior frozen.
 
-1. MG372A SkyBridge MVP Demo Spine: provide one local command that starts an
-   isolated demo server/database, creates `skybridge-mvp-demo`,
-   `mg372a-local-safe-demo` and `mg372a-local-safe-task-001`, registers a
-   local demo worker, completes one safe task with PollOnce semantics and
-   writes JSON/Markdown reports under `.agent/tmp/skybridge-mvp-demo/`.
-2. MG372B Controller-created Draft PR Demo: build on the MVP spine with a
-   controller-created draft PR demo. This is not TUI-created PR behavior.
-3. MG371B / TUI-created real branch and PR work remains frozen until a future
+1. MG372A SkyBridge MVP Demo Spine: one local command starts an isolated demo
+   server/database, creates `skybridge-mvp-demo`, `mg372a-local-safe-demo` and
+   `mg372a-local-safe-task-001`, registers a local demo worker, completes one
+   safe task with PollOnce semantics and writes JSON/Markdown reports under
+   `.agent/tmp/skybridge-mvp-demo/`.
+2. MG372B Controller-created Draft PR Demo: the implementation adds preview
+   and exact-confirmed apply modes for one controller-created docs-only branch
+   and one draft PR. It is not TUI-created PR behavior, does not call Codex,
+   does not mark the demo PR ready and does not merge the demo PR.
+3. MG372C MVP Demo Review and Decision Gate: review whether the MVP demo is
+   good enough to keep building, whether to add Codex-generated diff next, or
+   whether to cut a smaller skybridge-lite prototype.
+4. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-4. Any real execution path still requires explicit human authorization.
-5. Operator TUI polish may continue only with all mutation disabled unless a
+5. Any real execution path still requires explicit human authorization.
+6. Operator TUI polish may continue only with all mutation disabled unless a
    future goal explicitly changes that boundary.
 
 `token_printed=false`
