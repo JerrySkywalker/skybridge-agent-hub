@@ -192,6 +192,15 @@ tasks, did not start execution, did not start queue/worker loops, did not run
 forever, did not call live Hermes or MCP, did not auto-merge and did not create
 release/tag/assets. `token_printed=false`.
 
+MG369B-YOLO reviews and freezes the MG369A-YOLO fixture-only success boundary.
+It records `fixture_experiment_result=pass`, but explicitly rejects broader
+interpretations: not real execution, not human-operated validation, not
+production hosted development, not authorization for TUI-created real
+branches/PRs, and not authorization for worker loops or queue runners. The
+review artifacts are under `.agent/tmp/operator-tui/mg369b-yolo-review/`.
+The next recommended milestone is MG369C-YOLO Controlled Docs-only PR Creation
+Simulation. Do not proceed directly to real execution.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -262,9 +271,9 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG369A-YOLO, continue only under a new explicit goal:
+After MG369B-YOLO, continue only under a new explicit goal:
 
-1. MG369B-YOLO Fixture Experiment Review Gate.
+1. MG369C-YOLO Controlled Docs-only PR Creation Simulation.
 2. Any real execution path requires explicit human authorization.
 
 `token_printed=false`

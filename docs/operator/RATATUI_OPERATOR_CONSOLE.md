@@ -895,6 +895,29 @@ The experiment report is
 MG369A-YOLO does not claim human-operated validation passed, does not perform
 real execution and does not allow the TUI to create a real branch or PR.
 
+## MG369B-YOLO Fixture Experiment Review Gate
+
+MG369B-YOLO reviews the MG369A-YOLO fixture-only evidence and freezes the
+success boundary before any future PR-creation or real-execution milestone.
+It is documentation/audit only and adds no runtime behavior.
+
+Review-gate artifacts are written under
+`.agent/tmp/operator-tui/mg369b-yolo-review/`:
+
+- `mg369b-review-report.json`
+- `mg369b-review-report.md`
+- `mg369b-safety-freeze.json`
+- `mg369b-next-stage-options.json`
+
+MG369B-YOLO records
+`skybridge.operator_tui_mg369b_yolo_review_gate.v1`,
+`fixture_experiment_result=pass`, `real_execution_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+`queue_runner_authorized=false` and `token_printed=false`.
+
+The review gate report is
+`docs/operator/MG369B_YOLO_FIXTURE_EXPERIMENT_REVIEW_GATE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -948,8 +971,10 @@ controller or unattended executor.
 - MG369A-YOLO Fixture Single-Step Experiment: passed as a fixture-only
   self-drive report. It was not real execution and not human-operated
   validation.
-- MG369B-YOLO Fixture Experiment Review Gate: continue only under a separate
-  explicit goal. Any future real execution still requires explicit human
-  authorization.
+- MG369B-YOLO Fixture Experiment Review Gate: freezes the fixture-only pass
+  boundary and recommends MG369C-YOLO simulation next.
+- MG369C-YOLO Controlled Docs-only PR Creation Simulation: continue only under
+  a separate explicit goal. Any future real execution still requires explicit
+  human authorization.
 
 `token_printed=false`
