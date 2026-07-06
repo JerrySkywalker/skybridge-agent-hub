@@ -1034,6 +1034,40 @@ MCP, auto-merge, release, tag or asset upload.
 The MG370A report is
 `docs/operator/MG370A_FIRST_REAL_DOCS_ONLY_PR_CREATION.md`.
 
+## MG370B Codex-controller Docs-only PR Review Gate
+
+MG370B reviews MG370A and freezes the first real Codex-controller docs-only PR
+as pass. The reviewed PR is #302, created by Codex controller, merged at
+`0c68e0227b76c4de7a11cf2a21634782d35716ee`, deployed successfully and verified
+with cloud parity ok.
+
+MG370B does not add runtime behavior and does not authorize the TUI to create a
+real branch or PR. It also does not authorize real task execution, worker loop,
+queue runner, run forever, auto-merge, release, tag, asset upload or non-docs
+changes.
+
+Review-gate artifacts are written under
+`.agent/tmp/operator-tui/mg370b-review/`:
+
+- `mg370b-review-report.json`
+- `mg370b-review-report.md`
+- `mg370b-safety-freeze.json`
+- `mg370b-next-stage-options.json`
+
+MG370B records
+`skybridge.operator_tui_mg370b_codex_controller_docs_pr_review_gate.v1`,
+`codex_controller_docs_pr_result=pass`,
+`real_execution_authorized=false`, `tui_real_branch_pr_authorized=false`,
+`worker_loop_authorized=false`, `queue_runner_authorized=false` and
+`token_printed=false`.
+
+The recommended next milestone is
+`MG370C Codex-controller Docs-only PR Repetition`, because repeatability should
+be proven before any TUI-created branch or PR behavior.
+
+The review gate report is
+`docs/operator/MG370B_CODEX_CONTROLLER_DOCS_ONLY_PR_REVIEW_GATE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1099,6 +1133,9 @@ controller or unattended executor.
 - MG370A First Real Docs-only PR Creation by Codex Controller: explicitly
   authorized for one docs-only branch and one draft PR by Codex controller.
   It does not authorize TUI-created real PRs or real task execution.
+- MG370B Review Gate for Codex-controller Docs-only PR Creation: freezes MG370A
+  as pass and recommends proving repeatability with MG370C before any
+  TUI-created branch or PR behavior.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

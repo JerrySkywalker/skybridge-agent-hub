@@ -146,6 +146,16 @@ MG370A does not authorize real task execution, TUI-created real PRs, worker
 loops, queue runners, run forever, live Hermes, MCP, auto-merge, release, tag
 or asset upload.
 
+## MG370B Follow-up
+
+MG370B reviews the MG370A result and freezes it as a pass for one
+Codex-controller docs-only PR. It does not authorize TUI-created real branches
+or PRs, real task execution, worker loops, queue runners, run forever,
+auto-merge, release, tag, asset upload or non-docs changes.
+
+MG370B recommends MG370C Codex-controller docs-only PR repetition before any
+TUI-created branch/PR milestone.
+
 ## Review Artifacts
 
 The review artifacts use schema

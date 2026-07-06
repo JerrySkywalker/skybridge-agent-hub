@@ -1,5 +1,26 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 370B Codex-controller Docs-only PR Review Gate
+
+- Reviewed MG370A evidence for PR #302:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`.
+- Recorded `MG370A Codex-controller docs-only PR creation: pass`.
+- Confirmed the branch and draft PR were created by Codex controller, not TUI.
+- Confirmed docs-only allowlist passed, CI passed, PR merged, post-merge
+  workflows passed, Deploy Cloud succeeded and cloud parity was ok.
+- Froze the boundary:
+  `TUI-created branch=false`, `TUI-created PR=false`,
+  `real_task_execution_enabled=false`, `real_execution_authorized=false`,
+  `tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+  `queue_runner_authorized=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+  `token_printed=false`.
+- Wrote sanitized review artifacts under
+  `.agent/tmp/operator-tui/mg370b-review/` using
+  `skybridge.operator_tui_mg370b_codex_controller_docs_pr_review_gate.v1`.
+- Recommended next milestone:
+  MG370C Codex-controller Docs-only PR Repetition.
+
 ## 2026-07-06 Mega Goal 370A First Real Docs-only PR Creation
 
 - Started the first real docs-only PR creation milestone under explicit Jerry
