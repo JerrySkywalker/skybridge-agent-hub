@@ -264,6 +264,16 @@ If MG371A passes, recommend:
 
 `MG371B First TUI-created Docs-only PR under Explicit Authorization`
 
+MG371B0 was inserted before MG371B as a capability-staging milestone. MG371B0
+implements the TUI docs-only PR state machine, branch policy, allowlist policy,
+draft PR metadata policy, provider boundary, abort policy and audit artifacts
+behind disabled-by-default real-mutation gates and fake-provider smokes.
+
+MG371B0 is not MG371B. It does not create a real TUI branch or PR, does not use
+the future MG371B phrase as active real-mutation authorization, does not enable
+real task execution, and does not authorize worker loops, queue runners, run
+forever, auto-merge, release, tag or asset upload.
+
 MG371B must require Jerry to provide the exact MG371B authorization phrase
 before any TUI-created branch or PR:
 

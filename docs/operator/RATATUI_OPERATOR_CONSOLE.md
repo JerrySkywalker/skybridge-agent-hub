@@ -1170,6 +1170,62 @@ Design-gate artifacts are written under
 The MG371A report is
 `docs/operator/MG371A_TUI_CREATED_DOCS_ONLY_PR_AUTHORIZATION_DESIGN_GATE.md`.
 
+## MG371B0 TUI-created Docs-only PR Capability Staging
+
+MG371B0 implements the TUI docs-only PR capability path in staged form, with
+real mutation disabled by default. It is not MG371B and does not create a real
+TUI branch or PR.
+
+The new command path is fixture-only/self-drive:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --self-drive-dry-run `
+  --yolo-fixture-only `
+  --stage-tui-docs-pr-capability `
+  --fake-docs-pr-provider `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/mg371b0-capability-staging
+```
+
+MG371B0 stages these states:
+
+- `disabled`
+- `preflight_pending`
+- `authorization_required`
+- `authorization_verified`
+- `branch_plan_prepared`
+- `allowlist_checked`
+- `draft_pr_metadata_prepared`
+- `fake_provider_executed`
+- `real_provider_blocked`
+- `completed_staging`
+
+The fake provider is the default. It records simulated branch and draft PR
+metadata only, writes artifacts only, and never calls `git push`, `gh pr
+create` or the GitHub API. A real-provider request is blocked before provider
+invocation in MG371B0.
+
+MG371B0 enforces the future MG371B branch pattern
+`tui/mg371b-docs-only-pr-<utc-date>-<short-id>`, the MG371A future docs-only
+allowlist, one-branch/one-draft-PR limits, draft-only PR metadata,
+`auto_merge=false`, `release/tag/assets=false` and `merge_by_tui=false`.
+
+The future MG371B authorization phrase is known only as inert fixture/policy
+data. MG371B0 records
+`future_authorization_phrase_used_for_real_mutation=false` and
+`real_mutation_authorized=false`.
+
+MG371B0 writes artifacts under
+`.agent/tmp/operator-tui/mg371b0-capability-staging/` and uses report schema
+`skybridge.operator_tui_mg371b0_tui_docs_pr_capability_staging.v1`.
+
+The MG371B0 report is
+`docs/operator/MG371B0_TUI_CREATED_DOCS_PR_CAPABILITY_STAGING.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1198,6 +1254,8 @@ fixture-safe paths. The safety boundary remains:
 - no real execution, TUI branch/PR creation, queue/worker loop, live Hermes,
   MCP, auto-merge, release/tag/assets or exact-confirmation bypass outside
   fixture-only mode in MG368K;
+- no real TUI branch/PR creation, no real provider call, no git push, no
+  `gh pr create`, no GitHub API call and no real execution in MG371B0;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -1247,6 +1305,9 @@ controller or unattended executor.
 - MG371A TUI-created Docs-only PR Authorization Design Gate: defines the exact
   future MG371B authorization phrase, branch policy, allowlist, PR policy,
   abort policy and audit artifacts. It does not create a branch or PR.
+- MG371B0 TUI-created Docs-only PR Capability Staging: implements the
+  disabled-by-default TUI docs-only PR state machine and fake-provider smokes.
+  It does not create a real branch or PR and does not authorize MG371B.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

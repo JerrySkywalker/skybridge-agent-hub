@@ -12,6 +12,7 @@ use crate::{
         CandidateAction, CandidateFlowOptions,
     },
     collect::{collect_operator_state, StateMode},
+    docs_pr_capability::{Mg371b0Scenario, MG371B0_OUTPUT_DIR, MG371B_FUTURE_AUTHORIZATION_PHRASE},
     input_ux::{InputUxSmokeScenario, DEFAULT_INPUT_UX_OUTPUT_DIR},
     interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
     manual_reliability::{ManualReliabilityScenario, MANUAL_RELIABILITY_OUTPUT_DIR},
@@ -61,6 +62,13 @@ pub struct Cli {
     pub yolo_fixture_only: bool,
     pub self_drive_dry_run: bool,
     pub simulate_docs_pr: bool,
+    pub stage_tui_docs_pr_capability: bool,
+    pub fake_docs_pr_provider: bool,
+    pub request_real_docs_pr_provider: bool,
+    pub docs_pr_capability_scenario: Mg371b0Scenario,
+    pub docs_pr_authorization_phrase: String,
+    pub docs_pr_branch_name: String,
+    pub docs_pr_changed_files: Vec<String>,
     pub ux_yolo_scenario: UxYoloScenario,
 }
 
@@ -96,6 +104,13 @@ impl Default for Cli {
             yolo_fixture_only: false,
             self_drive_dry_run: false,
             simulate_docs_pr: false,
+            stage_tui_docs_pr_capability: false,
+            fake_docs_pr_provider: false,
+            request_real_docs_pr_provider: false,
+            docs_pr_capability_scenario: Mg371b0Scenario::default(),
+            docs_pr_authorization_phrase: MG371B_FUTURE_AUTHORIZATION_PHRASE.to_string(),
+            docs_pr_branch_name: String::new(),
+            docs_pr_changed_files: Vec::new(),
             ux_yolo_scenario: UxYoloScenario::None,
         }
     }
@@ -113,6 +128,10 @@ impl Cli {
 
         if self.simulate_docs_pr {
             return PathBuf::from(".agent/tmp/operator-tui/mg369c-yolo");
+        }
+
+        if self.stage_tui_docs_pr_capability {
+            return PathBuf::from(MG371B0_OUTPUT_DIR);
         }
 
         if self.ux_yolo_scenario.is_some() || self.self_drive_dry_run || self.operator_guide {
@@ -481,6 +500,44 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(".agent/tmp/operator-tui/mg369c-yolo");
                 }
             }
+            "--stage-tui-docs-pr-capability" => {
+                cli.stage_tui_docs_pr_capability = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MG371B0_OUTPUT_DIR);
+                }
+            }
+            "--fake-docs-pr-provider" => {
+                cli.fake_docs_pr_provider = true;
+            }
+            "--request-real-docs-pr-provider" => {
+                cli.request_real_docs_pr_provider = true;
+            }
+            "--mg371b0-scenario" => {
+                let value = iter
+                    .next()
+                    .context("--mg371b0-scenario requires a following value")?;
+                cli.docs_pr_capability_scenario = Mg371b0Scenario::from_str(&value)?;
+                cli.stage_tui_docs_pr_capability = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MG371B0_OUTPUT_DIR);
+                }
+            }
+            "--docs-pr-authorization-phrase" => {
+                cli.docs_pr_authorization_phrase = iter
+                    .next()
+                    .context("--docs-pr-authorization-phrase requires a following value")?;
+            }
+            "--docs-pr-branch-name" => {
+                cli.docs_pr_branch_name = iter
+                    .next()
+                    .context("--docs-pr-branch-name requires a following value")?;
+            }
+            "--docs-pr-changed-file" => {
+                cli.docs_pr_changed_files.push(
+                    iter.next()
+                        .context("--docs-pr-changed-file requires a following path")?,
+                );
+            }
             "--ux-yolo-smoke" => {
                 let value = iter
                     .next()
@@ -561,6 +618,22 @@ Flags:\n\
                          requires --yolo-fixture-only\n\
   --simulate-docs-pr    With --self-drive-dry-run and --yolo-fixture-only,\n\
                          write MG369C metadata-only docs PR simulation artifacts\n\
+  --stage-tui-docs-pr-capability\n\
+                         With --self-drive-dry-run and --yolo-fixture-only,\n\
+                         write MG371B0 disabled-by-default docs PR staging artifacts\n\
+  --fake-docs-pr-provider\n\
+                         Use the MG371B0 fake provider; writes artifacts only\n\
+  --request-real-docs-pr-provider\n\
+                         Exercise the MG371B0 real-provider gate; blocks before provider call\n\
+  --mg371b0-scenario <s>\n\
+                         Run capability-staging, unauthorized-real-mutation-blocked,\n\
+                         allowlist-invalid, branch-invalid, no-real-pr, or no-real-execution\n\
+  --docs-pr-authorization-phrase <s>\n\
+                         Future MG371B phrase as inert fixture/policy data\n\
+  --docs-pr-branch-name <s>\n\
+                         Candidate future branch name for MG371B policy validation\n\
+  --docs-pr-changed-file <path>\n\
+                         Candidate changed file; repeat to validate allowlist\n\
   --ux-yolo-smoke <s>    Run MG368K simplified-guide, bilingual,\n\
                          yolo-fixture-only, self-drive, confirmation-buffer,\n\
                          or no-real-execution simulation\n\

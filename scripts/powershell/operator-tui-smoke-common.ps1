@@ -15,6 +15,8 @@ $OperatorTuiInputUxOutputDir = ".agent/tmp/operator-tui/input-ux"
 $OperatorTuiManualReliabilityOutputDir = ".agent/tmp/operator-tui/manual-reliability"
 $OperatorTuiUxYoloOutputDir = ".agent/tmp/operator-tui/ux-yolo"
 $OperatorTuiMg369cOutputDir = ".agent/tmp/operator-tui/mg369c-yolo"
+$OperatorTuiMg371b0OutputDir = ".agent/tmp/operator-tui/mg371b0-capability-staging"
+$OperatorTuiMg371bFutureAuthorizationPhrase = "I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -679,6 +681,106 @@ function Invoke-OperatorTuiMg369cDocsPrSimulation(
   }
 }
 
+function Invoke-OperatorTuiMg371b0CapabilityStaging(
+  [ValidateSet("capability-staging", "unauthorized-real-mutation-blocked", "allowlist-invalid", "branch-invalid", "no-real-pr", "no-real-execution")]
+  [string]$Scenario = "capability-staging",
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiMg371b0OutputDir,
+  [switch]$RequestRealProvider
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiMg371b0Artifacts -OutputDir $OutputDir }
+
+  $args = @(
+    "--local-cloud",
+    "--operator-guide",
+    "--yolo-fixture-only",
+    "--self-drive-dry-run",
+    "--stage-tui-docs-pr-capability",
+    "--lang",
+    "zh-CN",
+    "--runtime-timeout-ms",
+    "120000",
+    "--mg371b0-scenario",
+    $Scenario,
+    "--docs-pr-authorization-phrase",
+    $OperatorTuiMg371bFutureAuthorizationPhrase,
+    "--output-dir",
+    $OutputDir
+  )
+  if ($RequestRealProvider -or $Scenario -eq "unauthorized-real-mutation-blocked") {
+    $args += "--request-real-docs-pr-provider"
+  } else {
+    $args += "--fake-docs-pr-provider"
+  }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- @args | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI MG371B0 capability staging failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/mg371b0-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/mg371b0-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/mg371b0-report.md"
+  $preflightPath = Join-Path $RepoRoot "$OutputDir/mg371b0-preflight.json"
+  $authorizationPath = Join-Path $RepoRoot "$OutputDir/mg371b0-authorization-check.json"
+  $allowlistPath = Join-Path $RepoRoot "$OutputDir/mg371b0-allowlist-check.json"
+  $branchPath = Join-Path $RepoRoot "$OutputDir/mg371b0-branch-plan.json"
+  $prPath = Join-Path $RepoRoot "$OutputDir/mg371b0-pr-metadata.json"
+  $providerPath = Join-Path $RepoRoot "$OutputDir/mg371b0-provider-report.json"
+  $safetyPath = Join-Path $RepoRoot "$OutputDir/mg371b0-safety-report.json"
+  $historyPath = Join-Path $RepoRoot "$OutputDir/mg371b0-action-history.json"
+  $indexPath = Join-Path $RepoRoot "$OutputDir/mg371b0-artifact-index.json"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $preflightPath, $authorizationPath, $allowlistPath, $branchPath, $prPath, $providerPath, $safetyPath, $historyPath, $indexPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI MG371B0 artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  Assert-NoUnsafeText $reportMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $preflight = Get-Content -Raw -LiteralPath $preflightPath | ConvertFrom-Json
+  $authorization = Get-Content -Raw -LiteralPath $authorizationPath | ConvertFrom-Json
+  $allowlist = Get-Content -Raw -LiteralPath $allowlistPath | ConvertFrom-Json
+  $branch = Get-Content -Raw -LiteralPath $branchPath | ConvertFrom-Json
+  $pr = Get-Content -Raw -LiteralPath $prPath | ConvertFrom-Json
+  $provider = Get-Content -Raw -LiteralPath $providerPath | ConvertFrom-Json
+  $safety = Get-Content -Raw -LiteralPath $safetyPath | ConvertFrom-Json
+  $history = Get-Content -Raw -LiteralPath $historyPath | ConvertFrom-Json
+  $index = Get-Content -Raw -LiteralPath $indexPath | ConvertFrom-Json
+
+  Assert-OperatorTuiMg371b0Shape -State $state -Report $report -Preflight $preflight -Authorization $authorization -Allowlist $allowlist -Branch $branch -Pr $pr -Provider $provider -Safety $safety -History $history -Index $index
+  Assert-OperatorTuiMg371b0NoRealPr -Report $report -Provider $provider -Safety $safety
+  Assert-OperatorTuiMg371b0NoRealExecution -Report $report -Safety $safety
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    preflight_path = $preflightPath
+    authorization_path = $authorizationPath
+    allowlist_path = $allowlistPath
+    branch_path = $branchPath
+    pr_path = $prPath
+    provider_path = $providerPath
+    safety_path = $safetyPath
+    history_path = $historyPath
+    index_path = $indexPath
+    state = $state
+    report = $report
+    preflight = $preflight
+    authorization = $authorization
+    allowlist = $allowlist
+    branch = $branch
+    pr = $pr
+    provider = $provider
+    safety = $safety
+    history = $history
+    index = $index
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -692,6 +794,17 @@ function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCa
     if (Test-Path -LiteralPath $path) {
       Remove-Item -LiteralPath $path -Recurse -Force
     }
+  }
+}
+
+function Clear-OperatorTuiMg371b0Artifacts([string]$OutputDir = $OperatorTuiMg371b0OutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
   }
 }
 
@@ -1432,6 +1545,138 @@ function Assert-OperatorTuiMg369cNoRealExecution($Report, $Safety) {
   }
   Assert-False $Report.raw_input_persisted "mg369c_report.raw_input_persisted"
   Assert-False $Safety.raw_input_persisted "mg369c_safety.raw_input_persisted"
+  Assert-TokenPrintedFalse $Report
+  Assert-TokenPrintedFalse $Safety
+}
+
+function Assert-OperatorTuiMg371b0Shape($State, $Report, $Preflight, $Authorization, $Allowlist, $Branch, $Pr, $Provider, $Safety, $History, $Index) {
+  if ($State.schema -ne "skybridge.operator_tui_mg371b0_state.v1") {
+    throw "Unexpected MG371B0 state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_mg371b0_tui_docs_pr_capability_staging.v1") {
+    throw "Unexpected MG371B0 report schema."
+  }
+  if ($Report.mode -ne "mg371b0-capability-staging") {
+    throw "Unexpected MG371B0 report mode."
+  }
+  if ($Preflight.schema -ne "skybridge.operator_tui_mg371b0_preflight.v1") {
+    throw "Unexpected MG371B0 preflight schema."
+  }
+  if ($Authorization.schema -ne "skybridge.operator_tui_mg371b0_authorization_check.v1") {
+    throw "Unexpected MG371B0 authorization schema."
+  }
+  if ($Allowlist.schema -ne "skybridge.operator_tui_mg371b0_allowlist_check.v1") {
+    throw "Unexpected MG371B0 allowlist schema."
+  }
+  if ($Branch.schema -ne "skybridge.operator_tui_mg371b0_branch_plan.v1") {
+    throw "Unexpected MG371B0 branch schema."
+  }
+  if ($Pr.schema -ne "skybridge.operator_tui_mg371b0_pr_metadata.v1") {
+    throw "Unexpected MG371B0 PR metadata schema."
+  }
+  if ($Provider.schema -ne "skybridge.operator_tui_mg371b0_provider_report.v1") {
+    throw "Unexpected MG371B0 provider schema."
+  }
+  if ($Safety.schema -ne "skybridge.operator_tui_mg371b0_safety_report.v1") {
+    throw "Unexpected MG371B0 safety schema."
+  }
+  if ($History.schema -ne "skybridge.operator_tui_mg371b0_action_history.v1") {
+    throw "Unexpected MG371B0 action history schema."
+  }
+  if ($Index.schema -ne "skybridge.operator_tui_mg371b0_artifact_index.v1") {
+    throw "Unexpected MG371B0 artifact index schema."
+  }
+
+  Assert-True $Report.implementation_added "implementation_added"
+  Assert-True $Report.runtime_behavior_changed "runtime_behavior_changed"
+  Assert-False $Report.real_mutation_enabled "real_mutation_enabled"
+  Assert-False $Report.real_provider_called "real_provider_called"
+  Assert-True $Report.future_authorization_phrase_known "future_authorization_phrase_known"
+  Assert-False $Report.future_authorization_phrase_used_for_real_mutation "future_authorization_phrase_used_for_real_mutation"
+  Assert-False $Report.real_mutation_authorized "real_mutation_authorized"
+  Assert-True $Report.branch_policy_enforced "branch_policy_enforced"
+  Assert-True $Report.allowlist_enforced "allowlist_enforced"
+  Assert-True $Report.pr_policy_enforced "pr_policy_enforced"
+  Assert-True $Report.abort_policy_enforced_or_documented "abort_policy_enforced_or_documented"
+  Assert-True $Report.artifacts_written "artifacts_written"
+  Assert-True $Preflight.capability_disabled_by_default "preflight capability_disabled_by_default"
+  Assert-True $Preflight.fake_provider_default "preflight fake_provider_default"
+  Assert-False $Preflight.real_provider_reachable "preflight real_provider_reachable"
+  Assert-True $Authorization.future_authorization_phrase_known "authorization future_authorization_phrase_known"
+  Assert-False $Authorization.future_authorization_phrase_used_for_real_mutation "authorization future_authorization_phrase_used_for_real_mutation"
+  Assert-False $Authorization.real_mutation_authorized "authorization real_mutation_authorized"
+  Assert-True $Branch.recorded_before_provider_action "branch recorded_before_provider_action"
+  Assert-True $Branch.one_branch_maximum "branch one_branch_maximum"
+  Assert-True $Pr.draft_pr "pr draft_pr"
+  Assert-True $Pr.one_draft_pr_maximum "pr one_draft_pr_maximum"
+  Assert-False $Pr.auto_merge "pr auto_merge"
+  Assert-False $Pr.release_tag_assets "pr release_tag_assets"
+  Assert-False $Pr.merge_by_tui "pr merge_by_tui"
+  Assert-True $Provider.provider_boundary_defined "provider provider_boundary_defined"
+  Assert-True $Provider.fake_provider_default "provider fake_provider_default"
+
+  $states = @($State.lifecycle_states | ForEach-Object { [string]$_ })
+  foreach ($stateName in @("disabled", "preflight_pending", "authorization_required", "branch_plan_prepared", "allowlist_checked", "draft_pr_metadata_prepared", "completed_staging")) {
+    if ($states -notcontains $stateName) { throw "Missing MG371B0 lifecycle state: $stateName" }
+  }
+  if (@($Index.artifacts).Count -lt 12) {
+    throw "MG371B0 artifact index incomplete."
+  }
+
+  foreach ($artifact in @($Preflight, $Authorization, $Allowlist, $Branch, $Pr, $Provider, $Safety, $History, $Index)) {
+    Assert-TokenPrintedFalse $artifact
+  }
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiMg371b0NoRealPr($Report, $Provider, $Safety) {
+  foreach ($name in @(
+    "TUI_created_branch",
+    "TUI_created_PR",
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called"
+  )) {
+    Assert-False $Report.$name "mg371b0_report.$name"
+    Assert-False $Safety.$name "mg371b0_safety.$name"
+  }
+
+  foreach ($name in @(
+    "tui_created_branch",
+    "tui_created_pr",
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called",
+    "real_provider_called"
+  )) {
+    Assert-False $Provider.$name "mg371b0_provider.$name"
+  }
+}
+
+function Assert-OperatorTuiMg371b0NoRealExecution($Report, $Safety) {
+  foreach ($name in @(
+    "real_task_execution_enabled",
+    "real_branch_creation_enabled_by_TUI",
+    "real_PR_creation_enabled_by_TUI",
+    "task_created",
+    "task_claimed",
+    "execution_started",
+    "worker_loop_started",
+    "queue_runner_started",
+    "run_forever_started",
+    "hermes_live_called",
+    "mcp_run_called",
+    "auto_merge_enabled",
+    "release_created",
+    "tag_created",
+    "asset_uploaded",
+    "raw_input_persisted"
+  )) {
+    Assert-False $Report.$name "mg371b0_report.$name"
+    Assert-False $Safety.$name "mg371b0_safety.$name"
+  }
+  Assert-False $Report.real_mutation_enabled "mg371b0_report.real_mutation_enabled"
+  Assert-False $Safety.real_mutation_enabled "mg371b0_safety.real_mutation_enabled"
   Assert-TokenPrintedFalse $Report
   Assert-TokenPrintedFalse $Safety
 }
