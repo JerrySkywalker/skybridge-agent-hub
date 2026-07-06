@@ -36,6 +36,17 @@ fn main() -> anyhow::Result<()> {
     if cli.self_drive_dry_run && !cli.yolo_fixture_only {
         anyhow::bail!("--self-drive-dry-run requires --yolo-fixture-only");
     }
+    if cli.simulate_docs_pr && !cli.yolo_fixture_only {
+        anyhow::bail!("--simulate-docs-pr requires --yolo-fixture-only");
+    }
+    if cli.simulate_docs_pr && !cli.self_drive_dry_run {
+        anyhow::bail!("--simulate-docs-pr requires --self-drive-dry-run");
+    }
+    if cli.simulate_docs_pr {
+        let report = ux_yolo::run_mg369c_docs_pr_simulation(&mut app, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     if cli.ux_yolo_scenario.is_some() || cli.self_drive_dry_run {
         let scenario = if cli.self_drive_dry_run {
             ux_yolo::UxYoloScenario::SelfDrive

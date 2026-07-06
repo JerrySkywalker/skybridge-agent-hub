@@ -20,6 +20,11 @@ use crate::{
 pub const UX_YOLO_REPORT_SCHEMA: &str = "skybridge.operator_tui_ux_yolo_report.v1";
 pub const UX_YOLO_STATE_SCHEMA: &str = "skybridge.operator_tui_ux_yolo_state.v1";
 pub const DEFAULT_UX_YOLO_OUTPUT_DIR: &str = ".agent/tmp/operator-tui/ux-yolo";
+pub const MG369C_REPORT_SCHEMA: &str = "skybridge.operator_tui_mg369c_yolo_docs_pr_simulation.v1";
+pub const MG369C_STATE_SCHEMA: &str =
+    "skybridge.operator_tui_mg369c_yolo_docs_pr_simulation_state.v1";
+pub const MG369C_BASELINE_COMMIT: &str = "d0000158460aeb905664d74424cffc6e67d4ee5b";
+pub const MG369C_CLOUD_VERSION: &str = "d0000158460aeb905664d74424cffc6e67d4ee5b";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 pub enum Language {
@@ -187,6 +192,165 @@ pub struct YoloSafetyReport {
     pub token_printed: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct DocsPrSimulation {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    pub lifecycle_states: Vec<&'static str>,
+    pub current_state: &'static str,
+    pub simulated_branch_name: &'static str,
+    pub simulated_pr_title: &'static str,
+    pub simulated_pr_body_summary: &'static str,
+    pub simulated_changed_files: Vec<&'static str>,
+    pub simulated_changed_files_docs_only: bool,
+    pub simulated_ci_checks: Vec<&'static str>,
+    pub simulated_review_gate: &'static str,
+    pub simulated_merge_allowed: bool,
+    pub simulated_auto_merge_allowed: bool,
+    pub simulated_release_allowed: bool,
+    pub simulated_tag_allowed: bool,
+    pub simulated_asset_upload_allowed: bool,
+    pub metadata_only: bool,
+    #[serde(rename = "TUI_created_branch")]
+    pub tui_created_branch: bool,
+    #[serde(rename = "TUI_created_PR")]
+    pub tui_created_pr: bool,
+    pub git_push_called: bool,
+    pub gh_pr_create_called: bool,
+    pub github_api_called: bool,
+    pub token_printed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mg369cState {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    pub baseline_commit: &'static str,
+    pub cloud_version: &'static str,
+    pub current_state: &'static str,
+    pub lifecycle_states: Vec<&'static str>,
+    pub self_drive_used: bool,
+    pub yolo_fixture_only: bool,
+    pub docs_only_pr_simulation_used: bool,
+    pub simulated_docs_pr_completed: bool,
+    pub language: &'static str,
+    pub simulated_branch_name: &'static str,
+    pub simulated_pr_title: &'static str,
+    pub simulated_changed_files: Vec<&'static str>,
+    #[serde(rename = "TUI_created_branch")]
+    pub tui_created_branch: bool,
+    #[serde(rename = "TUI_created_PR")]
+    pub tui_created_pr: bool,
+    pub token_printed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mg369cReport {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    pub baseline_commit: &'static str,
+    pub cloud_version: &'static str,
+    pub self_drive_used: bool,
+    pub yolo_fixture_only: bool,
+    pub docs_only_pr_simulation_used: bool,
+    pub simulated_docs_pr_completed: bool,
+    pub simulated_branch_name: &'static str,
+    pub simulated_pr_title: &'static str,
+    pub simulated_pr_body_summary: &'static str,
+    pub simulated_changed_files: Vec<&'static str>,
+    pub simulated_changed_files_docs_only: bool,
+    pub simulated_ci_checks: Vec<&'static str>,
+    pub simulated_review_gate: &'static str,
+    pub simulated_merge_allowed: bool,
+    pub simulated_auto_merge_allowed: bool,
+    pub simulated_release_allowed: bool,
+    pub simulated_tag_allowed: bool,
+    pub simulated_asset_upload_allowed: bool,
+    pub manual_verification_performed: bool,
+    pub does_not_claim_human_validation: bool,
+    #[serde(rename = "TUI_created_branch")]
+    pub tui_created_branch: bool,
+    #[serde(rename = "TUI_created_PR")]
+    pub tui_created_pr: bool,
+    pub git_push_called: bool,
+    pub gh_pr_create_called: bool,
+    pub github_api_called: bool,
+    pub real_task_execution_enabled: bool,
+    pub real_branch_creation_enabled: bool,
+    pub real_pr_creation_enabled: bool,
+    pub task_created: bool,
+    pub task_claimed: bool,
+    pub execution_started: bool,
+    pub worker_loop_started: bool,
+    pub queue_runner_started: bool,
+    pub run_forever_started: bool,
+    pub hermes_live_called: bool,
+    pub mcp_run_called: bool,
+    pub auto_merge_enabled: bool,
+    pub release_created: bool,
+    pub tag_created: bool,
+    pub asset_uploaded: bool,
+    pub raw_input_persisted: bool,
+    pub token_printed: bool,
+    pub blockers: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mg369cSafetyReport {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    #[serde(rename = "TUI_created_branch")]
+    pub tui_created_branch: bool,
+    #[serde(rename = "TUI_created_PR")]
+    pub tui_created_pr: bool,
+    pub git_push_called: bool,
+    pub gh_pr_create_called: bool,
+    pub github_api_called: bool,
+    pub real_task_execution_enabled: bool,
+    pub real_branch_creation_enabled: bool,
+    pub real_pr_creation_enabled: bool,
+    pub task_created: bool,
+    pub task_claimed: bool,
+    pub execution_started: bool,
+    pub worker_loop_started: bool,
+    pub queue_runner_started: bool,
+    pub run_forever_started: bool,
+    pub hermes_live_called: bool,
+    pub mcp_run_called: bool,
+    pub auto_merge_enabled: bool,
+    pub release_created: bool,
+    pub tag_created: bool,
+    pub asset_uploaded: bool,
+    pub raw_input_persisted: bool,
+    pub token_printed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mg369cActionHistory {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    pub self_drive_step_history: Vec<String>,
+    pub docs_pr_lifecycle_states: Vec<&'static str>,
+    pub waited_for_commands_to_finish: bool,
+    pub metadata_only: bool,
+    pub token_printed: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mg369cArtifactIndex {
+    pub schema: &'static str,
+    pub generated_at: String,
+    pub mode: &'static str,
+    pub artifacts: Vec<String>,
+    pub token_printed: bool,
+}
+
 impl Language {
     pub fn from_str(value: &str) -> anyhow::Result<Self> {
         match value {
@@ -263,6 +427,42 @@ pub fn run_ux_yolo_smoke(
     app.sync_view_model();
     let report = ux_yolo_report(app, &self_drive, &confirmation);
     write_ux_yolo_artifacts(output_dir, app, &report, &self_drive, &confirmation)?;
+    Ok(report)
+}
+
+pub fn run_mg369c_docs_pr_simulation(
+    app: &mut App,
+    output_dir: &Path,
+) -> anyhow::Result<Mg369cReport> {
+    if !app.yolo_fixture_only {
+        anyhow::bail!("MG369C docs PR simulation requires --yolo-fixture-only");
+    }
+
+    app.operator_guide = true;
+    app.sync_view_model();
+    let self_drive = run_self_drive_flow(app, output_dir)?;
+    let simulation = docs_pr_simulation();
+    let safety = mg369c_safety_report();
+    let action_history = Mg369cActionHistory {
+        schema: "skybridge.operator_tui_mg369c_yolo_action_history.v1",
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        self_drive_step_history: self_drive.step_history.clone(),
+        docs_pr_lifecycle_states: simulation.lifecycle_states.clone(),
+        waited_for_commands_to_finish: self_drive.waited_for_commands_to_finish,
+        metadata_only: true,
+        token_printed: false,
+    };
+    let state = mg369c_state(app, &simulation);
+    let report = mg369c_report(app, &simulation, &self_drive);
+    write_mg369c_artifacts(
+        output_dir,
+        &state,
+        &report,
+        &simulation,
+        &safety,
+        &action_history,
+    )?;
     Ok(report)
 }
 
@@ -871,6 +1071,163 @@ fn yolo_safety_report(app: &App) -> YoloSafetyReport {
     }
 }
 
+fn docs_pr_simulation() -> DocsPrSimulation {
+    DocsPrSimulation {
+        schema: "skybridge.operator_tui_mg369c_docs_pr_simulation.v1",
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        lifecycle_states: docs_pr_lifecycle_states(),
+        current_state: "completed_simulation",
+        simulated_branch_name: "simulated/mg369c-yolo-docs-only-pr",
+        simulated_pr_title: "MG369C-YOLO Controlled Docs-only PR Creation Simulation",
+        simulated_pr_body_summary: "Metadata-only draft PR lifecycle simulation for docs/operator/MG369C_YOLO_DOCS_ONLY_PR_SIMULATION.md; the TUI does not create a real branch, PR, git push, gh pr create call, or GitHub API call.",
+        simulated_changed_files: vec!["docs/operator/MG369C_YOLO_DOCS_ONLY_PR_SIMULATION.md"],
+        simulated_changed_files_docs_only: true,
+        simulated_ci_checks: vec!["Project check", "Docker build server", "Docker build web"],
+        simulated_review_gate: "draft_pr_first_ci_success_required_codex_controller_only_tui_merge_not_allowed",
+        simulated_merge_allowed: false,
+        simulated_auto_merge_allowed: false,
+        simulated_release_allowed: false,
+        simulated_tag_allowed: false,
+        simulated_asset_upload_allowed: false,
+        metadata_only: true,
+        tui_created_branch: false,
+        tui_created_pr: false,
+        git_push_called: false,
+        gh_pr_create_called: false,
+        github_api_called: false,
+        token_printed: false,
+    }
+}
+
+fn docs_pr_lifecycle_states() -> Vec<&'static str> {
+    vec![
+        "not_started",
+        "docs_change_planned",
+        "branch_name_reserved_simulated",
+        "docs_patch_prepared_simulated",
+        "draft_pr_metadata_prepared_simulated",
+        "ci_plan_attached_simulated",
+        "review_gate_pending_simulated",
+        "merge_not_allowed_simulated",
+        "completed_simulation",
+    ]
+}
+
+fn mg369c_state(app: &App, simulation: &DocsPrSimulation) -> Mg369cState {
+    Mg369cState {
+        schema: MG369C_STATE_SCHEMA,
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        baseline_commit: MG369C_BASELINE_COMMIT,
+        cloud_version: MG369C_CLOUD_VERSION,
+        current_state: simulation.current_state,
+        lifecycle_states: simulation.lifecycle_states.clone(),
+        self_drive_used: true,
+        yolo_fixture_only: app.yolo_fixture_only,
+        docs_only_pr_simulation_used: true,
+        simulated_docs_pr_completed: simulation.current_state == "completed_simulation",
+        language: app.language.as_str(),
+        simulated_branch_name: simulation.simulated_branch_name,
+        simulated_pr_title: simulation.simulated_pr_title,
+        simulated_changed_files: simulation.simulated_changed_files.clone(),
+        tui_created_branch: false,
+        tui_created_pr: false,
+        token_printed: false,
+    }
+}
+
+fn mg369c_report(
+    app: &App,
+    simulation: &DocsPrSimulation,
+    self_drive: &SelfDriveReport,
+) -> Mg369cReport {
+    Mg369cReport {
+        schema: MG369C_REPORT_SCHEMA,
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        baseline_commit: MG369C_BASELINE_COMMIT,
+        cloud_version: MG369C_CLOUD_VERSION,
+        self_drive_used: true,
+        yolo_fixture_only: app.yolo_fixture_only,
+        docs_only_pr_simulation_used: true,
+        simulated_docs_pr_completed: self_drive.self_drive_completed_full_fixture_flow
+            && simulation.current_state == "completed_simulation",
+        simulated_branch_name: simulation.simulated_branch_name,
+        simulated_pr_title: simulation.simulated_pr_title,
+        simulated_pr_body_summary: simulation.simulated_pr_body_summary,
+        simulated_changed_files: simulation.simulated_changed_files.clone(),
+        simulated_changed_files_docs_only: simulation.simulated_changed_files_docs_only,
+        simulated_ci_checks: simulation.simulated_ci_checks.clone(),
+        simulated_review_gate: simulation.simulated_review_gate,
+        simulated_merge_allowed: false,
+        simulated_auto_merge_allowed: false,
+        simulated_release_allowed: false,
+        simulated_tag_allowed: false,
+        simulated_asset_upload_allowed: false,
+        manual_verification_performed: false,
+        does_not_claim_human_validation: true,
+        tui_created_branch: false,
+        tui_created_pr: false,
+        git_push_called: false,
+        gh_pr_create_called: false,
+        github_api_called: false,
+        real_task_execution_enabled: false,
+        real_branch_creation_enabled: false,
+        real_pr_creation_enabled: false,
+        task_created: false,
+        task_claimed: false,
+        execution_started: false,
+        worker_loop_started: false,
+        queue_runner_started: false,
+        run_forever_started: false,
+        hermes_live_called: false,
+        mcp_run_called: false,
+        auto_merge_enabled: false,
+        release_created: false,
+        tag_created: false,
+        asset_uploaded: false,
+        raw_input_persisted: false,
+        token_printed: false,
+        blockers: Vec::new(),
+        warnings: vec![
+            "metadata_only_docs_pr_lifecycle_simulation_no_repo_mutation_by_tui".to_string(),
+            "repository_pr_for_mg369c_report_must_be_created_by_codex_controller_not_tui"
+                .to_string(),
+        ],
+    }
+}
+
+fn mg369c_safety_report() -> Mg369cSafetyReport {
+    Mg369cSafetyReport {
+        schema: "skybridge.operator_tui_mg369c_yolo_safety_report.v1",
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        tui_created_branch: false,
+        tui_created_pr: false,
+        git_push_called: false,
+        gh_pr_create_called: false,
+        github_api_called: false,
+        real_task_execution_enabled: false,
+        real_branch_creation_enabled: false,
+        real_pr_creation_enabled: false,
+        task_created: false,
+        task_claimed: false,
+        execution_started: false,
+        worker_loop_started: false,
+        queue_runner_started: false,
+        run_forever_started: false,
+        hermes_live_called: false,
+        mcp_run_called: false,
+        auto_merge_enabled: false,
+        release_created: false,
+        tag_created: false,
+        asset_uploaded: false,
+        raw_input_persisted: false,
+        token_printed: false,
+    }
+}
+
 fn current_step(app: &App, language: Language) -> (String, String, &'static str, String) {
     if app.view_model.running_guard_visible {
         return (
@@ -1065,6 +1422,86 @@ fn render_ux_yolo_markdown(report: &UxYoloReport, output_dir: &Path) -> String {
         path_for_report(&output_dir.join("yolo-safety-report.json")),
         path_for_report(&output_dir.join("simplified-guide-snapshot.txt")),
         path_for_report(&output_dir.join("simplified-guide-zh-snapshot.txt")),
+    )
+}
+
+fn write_mg369c_artifacts(
+    output_dir: &Path,
+    state: &Mg369cState,
+    report: &Mg369cReport,
+    simulation: &DocsPrSimulation,
+    safety: &Mg369cSafetyReport,
+    action_history: &Mg369cActionHistory,
+) -> anyhow::Result<()> {
+    fs::create_dir_all(output_dir)
+        .with_context(|| format!("failed to create {}", output_dir.display()))?;
+    let artifact_index = Mg369cArtifactIndex {
+        schema: "skybridge.operator_tui_mg369c_yolo_artifact_index.v1",
+        generated_at: now_utc(),
+        mode: "mg369c-yolo-docs-pr-simulation",
+        artifacts: mg369c_artifact_paths(output_dir),
+        token_printed: false,
+    };
+    write_json(&output_dir.join("mg369c-yolo-state.json"), state)?;
+    write_json(&output_dir.join("mg369c-yolo-report.json"), report)?;
+    write_text(
+        &output_dir.join("mg369c-yolo-report.md"),
+        &render_mg369c_markdown(report, output_dir),
+    )?;
+    write_json(
+        &output_dir.join("mg369c-docs-pr-simulation.json"),
+        simulation,
+    )?;
+    write_json(&output_dir.join("mg369c-safety-report.json"), safety)?;
+    write_json(
+        &output_dir.join("mg369c-action-history.json"),
+        action_history,
+    )?;
+    write_json(
+        &output_dir.join("mg369c-artifact-index.json"),
+        &artifact_index,
+    )?;
+    Ok(())
+}
+
+fn mg369c_artifact_paths(output_dir: &Path) -> Vec<String> {
+    [
+        "mg369c-yolo-state.json",
+        "mg369c-yolo-report.json",
+        "mg369c-yolo-report.md",
+        "mg369c-docs-pr-simulation.json",
+        "mg369c-safety-report.json",
+        "mg369c-action-history.json",
+        "mg369c-artifact-index.json",
+    ]
+    .iter()
+    .map(|name| path_for_report(&output_dir.join(name)))
+    .collect()
+}
+
+fn render_mg369c_markdown(report: &Mg369cReport, output_dir: &Path) -> String {
+    format!(
+        "# Operator TUI MG369C-YOLO Docs-only PR Simulation Report\n\n- schema: {}\n- mode: {}\n- baseline_commit: {}\n- cloud_version: {}\n- self_drive_used: {}\n- yolo_fixture_only: {}\n- docs_only_pr_simulation_used: {}\n- simulated_docs_pr_completed: {}\n- simulated_branch_name: {}\n- simulated_pr_title: {}\n- simulated_changed_files: {}\n- simulated_changed_files_docs_only: {}\n- simulated_ci_checks: {}\n- simulated_review_gate: {}\n- simulated_merge_allowed: false\n- simulated_auto_merge_allowed: false\n- simulated_release_allowed: false\n- simulated_tag_allowed: false\n- simulated_asset_upload_allowed: false\n- manual_verification_performed: false\n- does_not_claim_human_validation: true\n- TUI_created_branch: false\n- TUI_created_PR: false\n- git_push_called: false\n- gh_pr_create_called: false\n- github_api_called: false\n- real_task_execution_enabled: false\n- real_branch_creation_enabled: false\n- real_pr_creation_enabled: false\n- task_created: false\n- task_claimed: false\n- execution_started: false\n- worker_loop_started: false\n- queue_runner_started: false\n- run_forever_started: false\n- hermes_live_called: false\n- mcp_run_called: false\n- auto_merge_enabled: false\n- release_created: false\n- tag_created: false\n- asset_uploaded: false\n- raw_input_persisted: false\n- token_printed: false\n\n## Artifacts\n\n- state: {}\n- report_json: {}\n- docs_pr_simulation: {}\n- safety_report: {}\n- action_history: {}\n- artifact_index: {}\n",
+        report.schema,
+        report.mode,
+        report.baseline_commit,
+        report.cloud_version,
+        report.self_drive_used,
+        report.yolo_fixture_only,
+        report.docs_only_pr_simulation_used,
+        report.simulated_docs_pr_completed,
+        report.simulated_branch_name,
+        report.simulated_pr_title,
+        report.simulated_changed_files.join(", "),
+        report.simulated_changed_files_docs_only,
+        report.simulated_ci_checks.join(", "),
+        report.simulated_review_gate,
+        path_for_report(&output_dir.join("mg369c-yolo-state.json")),
+        path_for_report(&output_dir.join("mg369c-yolo-report.json")),
+        path_for_report(&output_dir.join("mg369c-docs-pr-simulation.json")),
+        path_for_report(&output_dir.join("mg369c-safety-report.json")),
+        path_for_report(&output_dir.join("mg369c-action-history.json")),
+        path_for_report(&output_dir.join("mg369c-artifact-index.json")),
     )
 }
 

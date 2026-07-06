@@ -918,6 +918,66 @@ MG369B-YOLO records
 The review gate report is
 `docs/operator/MG369B_YOLO_FIXTURE_EXPERIMENT_REVIEW_GATE.md`.
 
+## MG369C-YOLO Docs-only PR Simulation
+
+MG369C-YOLO adds a controlled docs-only PR lifecycle simulation to the TUI
+self-drive path. It is still fixture-only and metadata-only. The TUI models a
+docs-only draft PR lifecycle but does not create a real branch, does not create
+a real PR, does not run `git push`, does not run `gh pr create` and does not
+call the GitHub API.
+
+Simulation command:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --yolo-fixture-only `
+  --self-drive-dry-run `
+  --simulate-docs-pr `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/mg369c-yolo
+```
+
+`--simulate-docs-pr` requires both `--self-drive-dry-run` and
+`--yolo-fixture-only`. The simulated lifecycle states are:
+
+- `not_started`
+- `docs_change_planned`
+- `branch_name_reserved_simulated`
+- `docs_patch_prepared_simulated`
+- `draft_pr_metadata_prepared_simulated`
+- `ci_plan_attached_simulated`
+- `review_gate_pending_simulated`
+- `merge_not_allowed_simulated`
+- `completed_simulation`
+
+MG369C-YOLO writes sanitized metadata artifacts under
+`.agent/tmp/operator-tui/mg369c-yolo/`:
+
+- `mg369c-yolo-state.json`
+- `mg369c-yolo-report.json`
+- `mg369c-yolo-report.md`
+- `mg369c-docs-pr-simulation.json`
+- `mg369c-safety-report.json`
+- `mg369c-action-history.json`
+- `mg369c-artifact-index.json`
+
+The report schema is
+`skybridge.operator_tui_mg369c_yolo_docs_pr_simulation.v1`.
+The report records `docs_only_pr_simulation_used=true`,
+`simulated_docs_pr_completed=true`, `simulated_merge_allowed=false`,
+`TUI_created_branch=false`, `TUI_created_PR=false`, `git_push_called=false`,
+`gh_pr_create_called=false`, `github_api_called=false`,
+`real_task_execution_enabled=false`, `queue_runner_started=false`,
+`worker_loop_started=false`, `release_created=false`, `tag_created=false`,
+`asset_uploaded=false`, `raw_input_persisted=false` and
+`token_printed=false`.
+
+The simulation report is
+`docs/operator/MG369C_YOLO_DOCS_ONLY_PR_SIMULATION.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -973,8 +1033,11 @@ controller or unattended executor.
   validation.
 - MG369B-YOLO Fixture Experiment Review Gate: freezes the fixture-only pass
   boundary and recommends MG369C-YOLO simulation next.
-- MG369C-YOLO Controlled Docs-only PR Creation Simulation: continue only under
-  a separate explicit goal. Any future real execution still requires explicit
-  human authorization.
+- MG369C-YOLO Controlled Docs-only PR Creation Simulation: passed as a
+  metadata-only self-drive simulation. It did not create a real branch or PR
+  from the TUI and did not enable real execution.
+- MG369D-YOLO Docs-only PR Simulation Review Gate: recommended next if MG369C
+  passes. Any future real execution still requires explicit human
+  authorization.
 
 `token_printed=false`

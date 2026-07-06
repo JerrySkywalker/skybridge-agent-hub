@@ -187,10 +187,20 @@ validation, no production hosted development, no TUI-created real branch or
 PR, no worker loop and no queue runner are authorized. The next recommended
 step is a simulation-only docs-PR lifecycle metadata gate, not real execution.
 
+MG369C-YOLO completes that simulation-only docs-PR lifecycle metadata gate. The
+TUI self-drive path records `docs_only_pr_simulation_used=true`,
+`simulated_docs_pr_completed=true`, a docs-only simulated changed file,
+`simulated_merge_allowed=false`, `TUI_created_branch=false`,
+`TUI_created_PR=false`, `git_push_called=false`, `gh_pr_create_called=false`,
+`github_api_called=false`, `real_task_execution_enabled=false`,
+`queue_runner_started=false`, `worker_loop_started=false`,
+`raw_input_persisted=false` and `token_printed=false`. It is not real execution
+and not human-operated validation.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG369C-YOLO Controlled Docs-only PR Creation Simulation.
+1. MG369D-YOLO Docs-only PR Simulation Review Gate.
 2. Any future real execution requires explicit human authorization.
 
 ## Read-Only Audit

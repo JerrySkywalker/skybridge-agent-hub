@@ -60,6 +60,7 @@ pub struct Cli {
     pub language: Language,
     pub yolo_fixture_only: bool,
     pub self_drive_dry_run: bool,
+    pub simulate_docs_pr: bool,
     pub ux_yolo_scenario: UxYoloScenario,
 }
 
@@ -94,6 +95,7 @@ impl Default for Cli {
             language: Language::En,
             yolo_fixture_only: false,
             self_drive_dry_run: false,
+            simulate_docs_pr: false,
             ux_yolo_scenario: UxYoloScenario::None,
         }
     }
@@ -107,6 +109,10 @@ impl Cli {
 
         if self.runtime_scenario.is_some() {
             return PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
+        }
+
+        if self.simulate_docs_pr {
+            return PathBuf::from(".agent/tmp/operator-tui/mg369c-yolo");
         }
 
         if self.ux_yolo_scenario.is_some() || self.self_drive_dry_run || self.operator_guide {
@@ -469,6 +475,12 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
                 }
             }
+            "--simulate-docs-pr" => {
+                cli.simulate_docs_pr = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(".agent/tmp/operator-tui/mg369c-yolo");
+                }
+            }
             "--ux-yolo-smoke" => {
                 let value = iter
                     .next()
@@ -547,6 +559,8 @@ Flags:\n\
   --self-drive-dry-run, --operator-self-drive\n\
                          Deterministically exercise the fixture-only guide flow;\n\
                          requires --yolo-fixture-only\n\
+  --simulate-docs-pr    With --self-drive-dry-run and --yolo-fixture-only,\n\
+                         write MG369C metadata-only docs PR simulation artifacts\n\
   --ux-yolo-smoke <s>    Run MG368K simplified-guide, bilingual,\n\
                          yolo-fixture-only, self-drive, confirmation-buffer,\n\
                          or no-real-execution simulation\n\

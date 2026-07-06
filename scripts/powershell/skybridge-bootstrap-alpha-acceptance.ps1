@@ -285,6 +285,9 @@ $requiredScripts = @{
   operator_tui_ux_self_drive_smoke = "scripts/powershell/smoke-operator-tui-ux-self-drive.ps1"
   operator_tui_ux_confirmation_buffer_smoke = "scripts/powershell/smoke-operator-tui-ux-confirmation-buffer.ps1"
   operator_tui_ux_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-ux-no-real-execution.ps1"
+  operator_tui_mg369c_docs_pr_simulation_smoke = "scripts/powershell/smoke-operator-tui-mg369c-docs-pr-simulation.ps1"
+  operator_tui_mg369c_no_real_pr_smoke = "scripts/powershell/smoke-operator-tui-mg369c-no-real-pr.ps1"
+  operator_tui_mg369c_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-mg369c-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -620,7 +623,10 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-ux-yolo-fixture-only",
   "smoke:operator-tui-ux-self-drive",
   "smoke:operator-tui-ux-confirmation-buffer",
-  "smoke:operator-tui-ux-no-real-execution"
+  "smoke:operator-tui-ux-no-real-execution",
+  "smoke:operator-tui-mg369c-docs-pr-simulation",
+  "smoke:operator-tui-mg369c-no-real-pr",
+  "smoke:operator-tui-mg369c-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{

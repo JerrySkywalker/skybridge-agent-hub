@@ -1,5 +1,29 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 369C-YOLO Docs-only PR Simulation
+
+- Added `--simulate-docs-pr` to the Ratatui operator self-drive path, gated by
+  `--self-drive-dry-run` and `--yolo-fixture-only`.
+- Ran the controlled metadata-only docs PR lifecycle simulation with the
+  simplified guide, fixture-only YOLO mode, Codex self-drive and
+  `--runtime-timeout-ms 120000`.
+- Wrote sanitized artifacts under `.agent/tmp/operator-tui/mg369c-yolo/`,
+  including `mg369c-yolo-report.json`, `mg369c-docs-pr-simulation.json`,
+  `mg369c-safety-report.json`, `mg369c-action-history.json` and
+  `mg369c-artifact-index.json`.
+- Recorded `docs_only_pr_simulation_used=true`,
+  `simulated_docs_pr_completed=true`,
+  `simulated_changed_files_docs_only=true`,
+  `simulated_merge_allowed=false`, `TUI_created_branch=false`,
+  `TUI_created_PR=false`, `git_push_called=false`,
+  `gh_pr_create_called=false`, `github_api_called=false`,
+  `real_task_execution_enabled=false`, `queue_runner_started=false`,
+  `worker_loop_started=false`, `raw_input_persisted=false` and
+  `token_printed=false`.
+- Added MG369C smoke coverage for docs PR simulation completion, no real PR and
+  no real execution.
+- Recommended next milestone: MG369D-YOLO Docs-only PR Simulation Review Gate.
+
 ## 2026-07-06 Mega Goal 369B-YOLO Fixture Experiment Review Gate
 
 - Reviewed MG369A-YOLO fixture-only evidence from

@@ -14,6 +14,7 @@ $OperatorTuiLayoutOutputDir = ".agent/tmp/operator-tui/layout"
 $OperatorTuiInputUxOutputDir = ".agent/tmp/operator-tui/input-ux"
 $OperatorTuiManualReliabilityOutputDir = ".agent/tmp/operator-tui/manual-reliability"
 $OperatorTuiUxYoloOutputDir = ".agent/tmp/operator-tui/ux-yolo"
+$OperatorTuiMg369cOutputDir = ".agent/tmp/operator-tui/mg369c-yolo"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -613,6 +614,68 @@ function Invoke-OperatorTuiUxYoloSmoke(
     safety = $safety
     snapshot = $snapshot
     zh_snapshot = $zhSnapshot
+  }
+}
+
+function Invoke-OperatorTuiMg369cDocsPrSimulation(
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiMg369cOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiUxYoloArtifacts -OutputDir $OutputDir }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- `
+    --local-cloud `
+    --operator-guide `
+    --yolo-fixture-only `
+    --self-drive-dry-run `
+    --simulate-docs-pr `
+    --lang zh-CN `
+    --runtime-timeout-ms 120000 `
+    --output-dir $OutputDir | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI MG369C docs PR simulation failed." }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/mg369c-yolo-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/mg369c-yolo-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/mg369c-yolo-report.md"
+  $simulationPath = Join-Path $RepoRoot "$OutputDir/mg369c-docs-pr-simulation.json"
+  $safetyPath = Join-Path $RepoRoot "$OutputDir/mg369c-safety-report.json"
+  $historyPath = Join-Path $RepoRoot "$OutputDir/mg369c-action-history.json"
+  $indexPath = Join-Path $RepoRoot "$OutputDir/mg369c-artifact-index.json"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $simulationPath, $safetyPath, $historyPath, $indexPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI MG369C artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  Assert-NoUnsafeText $reportMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $simulation = Get-Content -Raw -LiteralPath $simulationPath | ConvertFrom-Json
+  $safety = Get-Content -Raw -LiteralPath $safetyPath | ConvertFrom-Json
+  $history = Get-Content -Raw -LiteralPath $historyPath | ConvertFrom-Json
+  $index = Get-Content -Raw -LiteralPath $indexPath | ConvertFrom-Json
+
+  Assert-OperatorTuiMg369cShape -State $state -Report $report -Simulation $simulation -Safety $safety -History $history -Index $index
+  Assert-OperatorTuiMg369cNoRealPr -Report $report -Simulation $simulation -Safety $safety
+  Assert-OperatorTuiMg369cNoRealExecution -Report $report -Safety $safety
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    simulation_path = $simulationPath
+    safety_path = $safetyPath
+    history_path = $historyPath
+    index_path = $indexPath
+    state = $state
+    report = $report
+    simulation = $simulation
+    safety = $safety
+    history = $history
+    index = $index
   }
 }
 
@@ -1229,6 +1292,146 @@ function Assert-OperatorTuiUxYoloNoRealExecution($Report, $Safety) {
   Assert-True $Safety.yolo_real_execution_blocked "safety yolo_real_execution_blocked"
   Assert-True $Safety.yolo_branch_pr_blocked "safety yolo_branch_pr_blocked"
   Assert-True $Safety.yolo_queue_worker_blocked "safety yolo_queue_worker_blocked"
+  Assert-TokenPrintedFalse $Report
+  Assert-TokenPrintedFalse $Safety
+}
+
+function Assert-OperatorTuiMg369cShape($State, $Report, $Simulation, $Safety, $History, $Index) {
+  if ($State.schema -ne "skybridge.operator_tui_mg369c_yolo_docs_pr_simulation_state.v1") {
+    throw "Unexpected MG369C state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_mg369c_yolo_docs_pr_simulation.v1") {
+    throw "Unexpected MG369C report schema."
+  }
+  if ($Report.mode -ne "mg369c-yolo-docs-pr-simulation") {
+    throw "Unexpected MG369C report mode."
+  }
+  if ($Simulation.schema -ne "skybridge.operator_tui_mg369c_docs_pr_simulation.v1") {
+    throw "Unexpected MG369C simulation schema."
+  }
+  if ($Safety.schema -ne "skybridge.operator_tui_mg369c_yolo_safety_report.v1") {
+    throw "Unexpected MG369C safety schema."
+  }
+  if ($History.schema -ne "skybridge.operator_tui_mg369c_yolo_action_history.v1") {
+    throw "Unexpected MG369C action history schema."
+  }
+  if ($Index.schema -ne "skybridge.operator_tui_mg369c_yolo_artifact_index.v1") {
+    throw "Unexpected MG369C artifact index schema."
+  }
+
+  Assert-True $Report.self_drive_used "self_drive_used"
+  Assert-True $Report.yolo_fixture_only "yolo_fixture_only"
+  Assert-True $Report.docs_only_pr_simulation_used "docs_only_pr_simulation_used"
+  Assert-True $Report.simulated_docs_pr_completed "simulated_docs_pr_completed"
+  Assert-True $Report.simulated_changed_files_docs_only "simulated_changed_files_docs_only"
+  Assert-False $Report.manual_verification_performed "manual_verification_performed"
+  Assert-True $Report.does_not_claim_human_validation "does_not_claim_human_validation"
+  Assert-False $Report.raw_input_persisted "raw_input_persisted"
+  Assert-TokenPrintedFalse $Report
+  Assert-TokenPrintedFalse $Simulation
+  Assert-TokenPrintedFalse $Safety
+  Assert-TokenPrintedFalse $History
+  Assert-TokenPrintedFalse $Index
+
+  if ([string]::IsNullOrWhiteSpace([string]$Report.simulated_branch_name)) {
+    throw "Missing simulated_branch_name."
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$Report.simulated_pr_title)) {
+    throw "Missing simulated_pr_title."
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$Report.simulated_review_gate)) {
+    throw "Missing simulated_review_gate."
+  }
+  $changedFiles = @($Report.simulated_changed_files | ForEach-Object { [string]$_ })
+  if ($changedFiles.Count -lt 1) { throw "Missing simulated changed files." }
+  foreach ($file in $changedFiles) {
+    if ($file -notlike "docs/*") { throw "Simulated changed file is not docs-only: $file" }
+  }
+  $ciChecks = @($Report.simulated_ci_checks | ForEach-Object { [string]$_ })
+  foreach ($check in @("Project check", "Docker build server", "Docker build web")) {
+    if ($ciChecks -notcontains $check) { throw "Missing simulated CI check: $check" }
+  }
+  $states = @($Simulation.lifecycle_states | ForEach-Object { [string]$_ })
+  foreach ($state in @(
+    "not_started",
+    "docs_change_planned",
+    "branch_name_reserved_simulated",
+    "docs_patch_prepared_simulated",
+    "draft_pr_metadata_prepared_simulated",
+    "ci_plan_attached_simulated",
+    "review_gate_pending_simulated",
+    "merge_not_allowed_simulated",
+    "completed_simulation"
+  )) {
+    if ($states -notcontains $state) { throw "Missing MG369C simulated state: $state" }
+  }
+  if (@($History.self_drive_step_history).Count -lt 8) {
+    throw "MG369C self-drive action history incomplete."
+  }
+  if (@($Index.artifacts).Count -lt 7) {
+    throw "MG369C artifact index incomplete."
+  }
+}
+
+function Assert-OperatorTuiMg369cNoRealPr($Report, $Simulation, $Safety) {
+  foreach ($name in @(
+    "TUI_created_branch",
+    "TUI_created_PR",
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called",
+    "simulated_merge_allowed",
+    "simulated_auto_merge_allowed",
+    "simulated_release_allowed",
+    "simulated_tag_allowed",
+    "simulated_asset_upload_allowed"
+  )) {
+    Assert-False $Report.$name "mg369c_report.$name"
+  }
+
+  foreach ($name in @(
+    "TUI_created_branch",
+    "TUI_created_PR",
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called",
+    "simulated_merge_allowed",
+    "simulated_auto_merge_allowed",
+    "simulated_release_allowed",
+    "simulated_tag_allowed",
+    "simulated_asset_upload_allowed"
+  )) {
+    Assert-False $Simulation.$name "mg369c_simulation.$name"
+  }
+
+  foreach ($name in @("TUI_created_branch", "TUI_created_PR", "git_push_called", "gh_pr_create_called", "github_api_called")) {
+    Assert-False $Safety.$name "mg369c_safety.$name"
+  }
+}
+
+function Assert-OperatorTuiMg369cNoRealExecution($Report, $Safety) {
+  foreach ($name in @(
+    "real_task_execution_enabled",
+    "real_branch_creation_enabled",
+    "real_pr_creation_enabled",
+    "task_created",
+    "task_claimed",
+    "execution_started",
+    "worker_loop_started",
+    "queue_runner_started",
+    "run_forever_started",
+    "hermes_live_called",
+    "mcp_run_called",
+    "auto_merge_enabled",
+    "release_created",
+    "tag_created",
+    "asset_uploaded"
+  )) {
+    Assert-False $Report.$name "mg369c_report.$name"
+    Assert-False $Safety.$name "mg369c_safety.$name"
+  }
+  Assert-False $Report.raw_input_persisted "mg369c_report.raw_input_persisted"
+  Assert-False $Safety.raw_input_persisted "mg369c_safety.raw_input_persisted"
   Assert-TokenPrintedFalse $Report
   Assert-TokenPrintedFalse $Safety
 }
