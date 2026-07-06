@@ -31,6 +31,8 @@ reports, and stops the child server process.
 
 ## What The Demo Proves
 
+MG372A local-safe mode proves:
+
 - A local SkyBridge server can be started with an isolated demo database.
 - The server can create the demo project `skybridge-mvp-demo`.
 - The server can create the demo goal `mg372a-local-safe-demo`.
@@ -44,15 +46,58 @@ reports, and stops the child server process.
   `worker_loop_started=false`, `run_forever_started=false` and
   `token_printed=false`.
 
+MG372B controller draft PR mode proves the next slice after the implementation
+PR is merged:
+
+- A controller path can run the same safe local task spine.
+- The controller can create exactly one deterministic docs-only branch.
+- The controller can create exactly one docs-only draft PR.
+- The draft PR remains open, draft-only, unmerged and ready for operator
+  inspection.
+- The demo still records `codex_called=false`, `tui_created_branch=false`,
+  `tui_created_pr=false`, `auto_merge_enabled=false` and
+  `token_printed=false`.
+
 ## What It Does Not Prove
 
 - It does not call Codex.
-- It does not create a GitHub branch or PR.
+- MG372A local-safe mode does not create a GitHub branch or PR.
+- MG372B controller draft PR mode creates only one controller-created docs-only
+  draft PR under exact confirmation.
 - It does not use TUI-created PR behavior.
 - It does not start a worker loop, queue runner or run-forever process.
 - It does not call live Hermes or MCP.
 - It does not touch production infrastructure.
 - It does not enable auto-merge, release, tag or asset upload.
+
+## Controller Draft PR Demo
+
+Preview policy and artifacts without branch or PR mutation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode controller-draft-pr-preview `
+  -Json
+```
+
+After MG372B is merged, run the authorized apply command exactly once:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode controller-draft-pr `
+  -UseTempDatabase `
+  -Apply `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372B_CREATE_ONE_CONTROLLER_CREATED_DOCS_ONLY_DRAFT_PR_DEMO `
+  -Json
+```
+
+The apply command creates one branch matching
+`demo/mg372b-controller-draft-pr-<utc-date>-<short-id>` and one draft PR whose
+title starts with `MG372B Demo: Controller-created Draft PR`. The demo PR
+changes only `docs/product/MG372B_CONTROLLER_DRAFT_PR_DEMO_ARTIFACT.md` and
+must remain draft/open for inspection.
+
+See [SKYBRIDGE_MVP_DRAFT_PR_DEMO.md](SKYBRIDGE_MVP_DRAFT_PR_DEMO.md).
 
 ## Artifacts
 
@@ -128,11 +173,11 @@ Phase 2:
 Recommended next milestone:
 
 ```text
-MG372B Controller-created Draft PR Demo
+MG372C MVP Demo Review and Decision Gate
 ```
 
-MG371B and TUI-created PR execution mode are frozen for now. The next product
-slice should demonstrate a controller-created draft PR from the MVP spine, not
-a TUI-created PR.
+MG371B and TUI-created PR execution mode remain frozen for now. MG372C should
+decide whether to keep building on this MVP demo, add Codex-generated diff
+next, or cut a smaller skybridge-lite prototype.
 
 `token_printed=false`

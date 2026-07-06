@@ -214,6 +214,19 @@ PollOnce semantics and writes reports under `.agent/tmp/skybridge-mvp-demo/`.
 It does not call Codex, create branches or PRs, start worker loops, deploy, tag
 or upload assets. See [docs/product/SKYBRIDGE_MVP_DEMO.md](docs/product/SKYBRIDGE_MVP_DEMO.md).
 
+Preview the controller-created draft PR demo:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode controller-draft-pr-preview `
+  -Json
+```
+
+After explicit authorization, the controller demo can create one docs-only
+draft PR for inspection. It remains controller-created, not TUI-created, and
+does not mark ready or merge the demo PR. See
+[docs/product/SKYBRIDGE_MVP_DRAFT_PR_DEMO.md](docs/product/SKYBRIDGE_MVP_DRAFT_PR_DEMO.md).
+
 Start the local server and web dashboard:
 
 ```powershell
