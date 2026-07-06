@@ -1226,6 +1226,67 @@ MG371B0 writes artifacts under
 The MG371B0 report is
 `docs/operator/MG371B0_TUI_CREATED_DOCS_PR_CAPABILITY_STAGING.md`.
 
+## MG371B1 TUI Real Docs PR Provider Implementation
+
+MG371B1 implements the safely gated real docs-only PR provider boundary needed
+for a future MG371B retry. It is not MG371B and does not create a real TUI
+branch or PR.
+
+The support-probe command path is:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --stage-tui-docs-pr-real-provider `
+  --probe-real-docs-pr-provider-support `
+  --authorization-phrase I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/mg371b1-real-provider-implementation
+```
+
+MG371B1 reports:
+
+- `real_provider_path_implemented=true`
+- `real_provider_disabled_by_default=true`
+- `real_provider_requires_explicit_flag=true`
+- `real_provider_requires_exact_authorization=true`
+- `real_provider_requires_allowlist=true`
+- `real_provider_requires_branch_policy=true`
+- `real_provider_requires_clean_synced_main=true`
+- `support_probe_passed=true`
+- `fake_provider_still_available=true`
+- `real_provider_called=false`
+- `real_provider_mutation_executed=false`
+- `real_mutation_enabled=false`
+- `TUI_created_branch=false`
+- `TUI_created_PR=false`
+- `git_push_called=false`
+- `gh_pr_create_called=false`
+- `github_api_called=false`
+- `token_printed=false`
+
+The future real provider path remains unavailable unless all gates pass:
+
+- explicit `--allow-real-docs-pr-provider` flag;
+- exact MG371B authorization phrase;
+- MG371B execution mode, not MG371B0 or MG371B1 support mode;
+- docs-only allowlist pass;
+- branch-policy pass;
+- clean repo on synced `main`;
+- one branch maximum;
+- one draft PR maximum;
+- preflight artifacts written before mutation.
+
+MG371B1 writes artifacts under
+`.agent/tmp/operator-tui/mg371b1-real-provider-implementation/` and uses report
+schema
+`skybridge.operator_tui_mg371b1_real_docs_pr_provider_implementation.v1`.
+
+The MG371B1 report is
+`docs/operator/MG371B1_TUI_REAL_DOCS_PR_PROVIDER_IMPLEMENTATION.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1256,6 +1317,9 @@ fixture-safe paths. The safety boundary remains:
   fixture-only mode in MG368K;
 - no real TUI branch/PR creation, no real provider call, no git push, no
   `gh pr create`, no GitHub API call and no real execution in MG371B0;
+- no real TUI branch/PR creation, no real provider call, no provider mutation,
+  no git push, no `gh pr create`, no GitHub API call and no real execution in
+  MG371B1;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -1308,6 +1372,10 @@ controller or unattended executor.
 - MG371B0 TUI-created Docs-only PR Capability Staging: implements the
   disabled-by-default TUI docs-only PR state machine and fake-provider smokes.
   It does not create a real branch or PR and does not authorize MG371B.
+- MG371B1 TUI Real Docs PR Provider Implementation: implements the safely gated
+  real provider support boundary and support-probe smokes for a future MG371B
+  retry. It keeps real mutation disabled by default and does not create a real
+  branch or PR.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

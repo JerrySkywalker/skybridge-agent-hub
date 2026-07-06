@@ -256,11 +256,22 @@ or queue loops, does not run forever, does not call live Hermes or MCP, does
 not enable auto-merge, does not create release/tag/assets and does not print
 tokens.
 
+MG371B1 implements the safely gated TUI real docs-only PR provider boundary
+after the first MG371B attempt correctly blocked on the missing provider path.
+It adds the support probe, explicit real-provider flag gate, exact
+authorization phrase gate, docs-only allowlist gate, branch-policy gate, clean
+synced main preflight gate and one-branch/one-draft-PR policy evidence. It is
+not MG371B: the TUI does not create a real branch or PR, does not run
+`git push`, does not run `gh pr create`, does not call the GitHub API, does not
+enable real execution, does not start worker or queue loops, does not run
+forever, does not call live Hermes or MCP, does not enable auto-merge, does not
+create release/tag/assets and does not print tokens.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
-   MG371B0 passes.
+1. Retry MG371B First TUI-created Docs-only PR under Explicit Authorization if
+   MG371B1 passes.
 2. Operator TUI polish before any TUI-created PR, with all mutation disabled.
 3. Any future real execution requires explicit human authorization.
 4. Any TUI-created real branch or PR requires the exact MG371B authorization

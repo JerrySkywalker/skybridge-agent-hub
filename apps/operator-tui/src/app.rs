@@ -13,6 +13,7 @@ use crate::{
     },
     collect::{collect_operator_state, StateMode},
     docs_pr_capability::{Mg371b0Scenario, MG371B0_OUTPUT_DIR, MG371B_FUTURE_AUTHORIZATION_PHRASE},
+    docs_pr_real_provider::MG371B1_OUTPUT_DIR,
     input_ux::{InputUxSmokeScenario, DEFAULT_INPUT_UX_OUTPUT_DIR},
     interactive::{InteractiveScenario, InteractiveState, DEFAULT_INTERACTIVE_OUTPUT_DIR},
     manual_reliability::{ManualReliabilityScenario, MANUAL_RELIABILITY_OUTPUT_DIR},
@@ -65,6 +66,10 @@ pub struct Cli {
     pub stage_tui_docs_pr_capability: bool,
     pub fake_docs_pr_provider: bool,
     pub request_real_docs_pr_provider: bool,
+    pub stage_tui_docs_pr_real_provider: bool,
+    pub probe_real_docs_pr_provider_support: bool,
+    pub allow_real_docs_pr_provider: bool,
+    pub real_docs_pr_authorization_phrase: String,
     pub docs_pr_capability_scenario: Mg371b0Scenario,
     pub docs_pr_authorization_phrase: String,
     pub docs_pr_branch_name: String,
@@ -107,6 +112,10 @@ impl Default for Cli {
             stage_tui_docs_pr_capability: false,
             fake_docs_pr_provider: false,
             request_real_docs_pr_provider: false,
+            stage_tui_docs_pr_real_provider: false,
+            probe_real_docs_pr_provider_support: false,
+            allow_real_docs_pr_provider: false,
+            real_docs_pr_authorization_phrase: String::new(),
             docs_pr_capability_scenario: Mg371b0Scenario::default(),
             docs_pr_authorization_phrase: MG371B_FUTURE_AUTHORIZATION_PHRASE.to_string(),
             docs_pr_branch_name: String::new(),
@@ -132,6 +141,10 @@ impl Cli {
 
         if self.stage_tui_docs_pr_capability {
             return PathBuf::from(MG371B0_OUTPUT_DIR);
+        }
+
+        if self.stage_tui_docs_pr_real_provider {
+            return PathBuf::from(MG371B1_OUTPUT_DIR);
         }
 
         if self.ux_yolo_scenario.is_some() || self.self_drive_dry_run || self.operator_guide {
@@ -512,6 +525,26 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
             "--request-real-docs-pr-provider" => {
                 cli.request_real_docs_pr_provider = true;
             }
+            "--stage-tui-docs-pr-real-provider" => {
+                cli.stage_tui_docs_pr_real_provider = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MG371B1_OUTPUT_DIR);
+                }
+            }
+            "--probe-real-docs-pr-provider-support" => {
+                cli.probe_real_docs_pr_provider_support = true;
+                cli.stage_tui_docs_pr_real_provider = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MG371B1_OUTPUT_DIR);
+                }
+            }
+            "--allow-real-docs-pr-provider" => {
+                cli.allow_real_docs_pr_provider = true;
+                cli.stage_tui_docs_pr_real_provider = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(MG371B1_OUTPUT_DIR);
+                }
+            }
             "--mg371b0-scenario" => {
                 let value = iter
                     .next()
@@ -526,6 +559,11 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                 cli.docs_pr_authorization_phrase = iter
                     .next()
                     .context("--docs-pr-authorization-phrase requires a following value")?;
+            }
+            "--authorization-phrase" => {
+                cli.real_docs_pr_authorization_phrase = iter
+                    .next()
+                    .context("--authorization-phrase requires a following value")?;
             }
             "--docs-pr-branch-name" => {
                 cli.docs_pr_branch_name = iter
@@ -625,11 +663,19 @@ Flags:\n\
                          Use the MG371B0 fake provider; writes artifacts only\n\
   --request-real-docs-pr-provider\n\
                          Exercise the MG371B0 real-provider gate; blocks before provider call\n\
+  --stage-tui-docs-pr-real-provider\n\
+                         Write MG371B1 safely gated real docs PR provider support artifacts\n\
+  --probe-real-docs-pr-provider-support\n\
+                         Probe real provider support without calling provider operations\n\
+  --allow-real-docs-pr-provider\n\
+                         Future real-provider gate; MG371B1 still blocks before mutation\n\
   --mg371b0-scenario <s>\n\
                          Run capability-staging, unauthorized-real-mutation-blocked,\n\
                          allowlist-invalid, branch-invalid, no-real-pr, or no-real-execution\n\
   --docs-pr-authorization-phrase <s>\n\
                          Future MG371B phrase as inert fixture/policy data\n\
+  --authorization-phrase <s>\n\
+                         MG371B1 exact phrase input as inert support-probe/test data\n\
   --docs-pr-branch-name <s>\n\
                          Candidate future branch name for MG371B policy validation\n\
   --docs-pr-changed-file <path>\n\

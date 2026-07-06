@@ -1861,3 +1861,24 @@
 - Added tab/layout, confirmation-dialog and reason-dialog evidence capture plus
   six CI-safe manual reliability smokes. MG368I remains partial pass / blocked;
   MG368I-R2 is required before MG369A.
+
+## 2026-07-06 MG371B1 TUI Real Docs PR Provider Implementation
+
+- Implemented the safely gated TUI real docs-only PR provider boundary for a
+  future MG371B retry, while keeping real mutation disabled by default.
+- Added the MG371B1 support-probe command path, explicit real-provider flag,
+  exact authorization phrase gate, branch-policy gate, docs-only allowlist
+  gate and clean synced main preflight gate.
+- Added MG371B1 artifacts under
+  `.agent/tmp/operator-tui/mg371b1-real-provider-implementation/` with schema
+  `skybridge.operator_tui_mg371b1_real_docs_pr_provider_implementation.v1`.
+- Added seven MG371B1 smokes proving support-probe availability, default block,
+  authorization block, allowlist block, branch-policy block, no real PR and no
+  real execution.
+- MG371B1 does not create a real TUI branch or PR, does not call `git push`,
+  does not call `gh pr create`, does not call the GitHub API from the TUI, does
+  not enable real execution, does not start worker or queue loops, does not run
+  forever, does not call live Hermes or MCP, does not enable auto-merge, does
+  not create release/tag/assets and keeps `token_printed=false`.
+- Recommended next milestone: retry MG371B First TUI-created Docs-only PR under
+  Explicit Authorization only if MG371B1 passes.
