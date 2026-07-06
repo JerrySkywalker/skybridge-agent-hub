@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 368L Self-Drive YOLO Acceptance Policy
+
+- Clarified the fixture-only/no-real-execution TUI acceptance policy after
+  MG368K.
+- Recorded that MG368I-R3 manual proof was not collected and must not be
+  faked: `manual_verification_performed=false`.
+- Accepted Codex self-drive full fixture flow as sufficient for fixture-only
+  YOLO validation while preserving that it is not human proof and not
+  production execution.
+- Used self-drive evidence under `.agent/tmp/operator-tui/mg368l-self-drive/`
+  with `self_drive_completed_full_fixture_flow=true`,
+  `yolo_fixture_only=true`, `raw_input_persisted=false` and
+  `token_printed=false`.
+- Kept all real execution, branch/PR creation, queue/worker loop, run forever,
+  live Hermes, MCP, auto-merge, release/tag and asset upload flags false.
+- Recommended next milestone: MG369A-YOLO Fixture Single-Step Experiment.
+
 ## 2026-07-06 Mega Goal 368K Ratatui UX YOLO Bilingual
 
 - Added a simplified Ratatui operator guide for fixture-safe dry runs with one

@@ -816,6 +816,52 @@ MG368K writes:
 The MG368K report schema is
 `skybridge.operator_tui_ux_yolo_report.v1`.
 
+## MG368L Fixture-only YOLO Acceptance
+
+MG368L clarifies acceptance after MG368K. MG368I-R3 was repeatedly blocked by
+missing Jerry manual TUI evidence. For fixture-only/no-real-execution TUI
+validation, Codex self-drive evidence is now sufficient.
+
+Accepted fixture-only gate:
+
+```text
+Codex self-drive full fixture flow
+```
+
+Self-drive validation command:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --yolo-fixture-only `
+  --self-drive-dry-run `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/mg368l-self-drive
+```
+
+Manual TUI evidence is optional when all of these are true:
+
+- `--yolo-fixture-only` is active;
+- the action sequence is fixture-safe/no-real-execution;
+- self-drive records `self_drive_completed_full_fixture_flow=true`;
+- safety flags show no real task execution, no TUI branch/PR creation, no
+  queue/worker loop, no run forever, no live Hermes, no MCP, no auto-merge and
+  no release/tag/assets.
+
+Manual TUI evidence remains mandatory for any real execution or production
+mutation. Fixture-only YOLO does not authorize real task execution, TUI-created
+branches or PRs, queue runners, worker loops, run forever, live Hermes, MCP,
+auto-merge, releases, tags or asset uploads.
+
+If no manual evidence exists, docs must say
+`manual_verification_performed=false`. Self-drive evidence is not human proof,
+and fixture-only YOLO is not production execution.
+
+The MG368L policy note is
+`docs/operator/MG368L_SELF_DRIVE_YOLO_ACCEPTANCE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -865,10 +911,9 @@ controller or unattended executor.
 ## Future Phases
 
 - MG368I-R3 Ratatui Manual Dry Run with Simplified Guide and Fixture-only YOLO:
-  use the MG368K guide, bilingual UI, self-drive evidence and confirmation
-  diagnostics to rerun the dry-run sequence with lower manual paste burden.
-- MG369A/B Manual Single-step Hosted-dev Experiment: perform the first real
-  manual single-step hosted-dev experiment only after a passing MG368I dry run
-  is recorded.
+  superseded for fixture-only acceptance by MG368L self-drive YOLO policy.
+- MG369A-YOLO Fixture Single-Step Experiment or MG369A Self-Drive Single-Step
+  Experiment: continue only under a separate explicit goal. Any future real
+  execution still requires explicit human authorization.
 
 `token_printed=false`

@@ -164,13 +164,20 @@ boundary: no MG369, no real task execution, no TUI-created branch/PR, no
 queue/worker loop, no run forever, no live Hermes, no MCP, no auto-merge, no
 release/tag/assets and `token_printed=false`.
 
+MG368L updates the fixture-only acceptance policy. MG368I-R3 manual proof was
+not collected and is superseded as a blocker for fixture-only validation. For
+fixture-only/no-real-execution TUI validation, Codex self-drive full fixture
+flow is sufficient. Manual TUI evidence is optional at this stage and must be
+reported as `manual_verification_performed=false` when absent. This is not
+human-operated validation, not production execution and not authorization for
+real task execution or TUI-created branches/PRs.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368I-R3 Ratatui Manual Dry Run with Simplified Guide and Fixture-only
-   YOLO.
-2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I-R3
-   dry run is recorded.
+1. MG369A-YOLO Fixture Single-Step Experiment.
+2. MG369A Self-Drive Single-Step Experiment.
+3. Any future real execution requires explicit human authorization.
 
 ## Read-Only Audit
 

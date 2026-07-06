@@ -168,6 +168,17 @@ forever, call live Hermes or MCP, auto-merge, create release/tag/assets or
 print tokens. The next milestone is MG368I-R3 with the simplified guide and
 fixture-only YOLO path.
 
+MG368L supersedes MG368I-R3 manual proof as a blocker for fixture-only
+acceptance. The accepted fixture-only gate is Codex self-drive full fixture
+flow with `self_drive_completed_full_fixture_flow=true`,
+`yolo_fixture_only=true`, `raw_input_persisted=false` and
+`token_printed=false`. Manual TUI evidence is optional only for the
+fixture-only/no-real-execution stage and must be reported as
+`manual_verification_performed=false` when absent. This is not a claim that
+human-operated TUI validation passed, and it does not authorize real
+execution, TUI-created branch/PR creation, queue/worker loops, live Hermes,
+MCP, auto-merge, releases, tags or assets.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -238,11 +249,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG368K, continue TUI readiness before reattempting MG369:
+After MG368L, continue only under a new explicit goal:
 
-1. Run MG368I-R3 using the MG368K simplified guide, bilingual UI and
-   fixture-only YOLO artifacts.
-2. MG369A/B Manual Single-step Hosted-dev Experiment only after a passing
-   manual dry run is recorded.
+1. MG369A-YOLO Fixture Single-Step Experiment.
+2. MG369A Self-Drive Single-Step Experiment.
+3. Any real execution path requires explicit human authorization.
 
 `token_printed=false`
