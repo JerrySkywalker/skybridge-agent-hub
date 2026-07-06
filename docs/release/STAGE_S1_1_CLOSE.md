@@ -207,10 +207,17 @@ branch/PR creation, real execution, worker loops or queue runners:
 `gh_pr_create_called=false`, `github_api_called=false` and
 `token_printed=false`.
 
+MG370A is the first real docs-only PR creation milestone under explicit human
+authorization. It allows exactly one Codex-controller docs-only branch and one
+draft PR, PR #302, while preserving `TUI-created branch=false`,
+`TUI-created PR=false`, `real_task_execution_enabled=false`, worker/queue loops
+disabled, auto-merge disabled and release/tag/assets disabled.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG370A Manual Authorization Gate for First Real Docs-only PR Creation.
+1. MG370B Review Gate for Codex-controller Docs-only PR Creation if MG370A
+   passes.
 2. Any future real execution requires explicit human authorization.
 3. Any TUI-created real branch or PR requires a later separate milestone after
    MG370A.

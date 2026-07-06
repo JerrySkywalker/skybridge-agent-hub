@@ -1,5 +1,27 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 370A First Real Docs-only PR Creation
+
+- Started the first real docs-only PR creation milestone under explicit Jerry
+  authorization.
+- Limited scope to one Codex-controller branch and one draft PR:
+  `codex/mg370a-first-real-docs-only-pr`.
+- Opened draft PR #302:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`.
+- Kept the TUI outside the branch/PR creation path:
+  `TUI-created branch=false` and `TUI-created PR=false`.
+- Preserved `real_task_execution_enabled=false`,
+  `real_branch_creation_enabled_by_TUI=false`,
+  `real_PR_creation_enabled_by_TUI=false`, `task_created=false`,
+  `task_claimed=false`, `execution_started=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+  `token_printed=false`.
+- Final CI status, merge status and post-merge cloud parity are pending the
+  single authorized draft PR lifecycle.
+
 ## 2026-07-06 Mega Goal 369D-YOLO Docs-only PR Simulation Review Gate
 
 - Reviewed MG369C-YOLO controlled docs-only PR simulation evidence from
