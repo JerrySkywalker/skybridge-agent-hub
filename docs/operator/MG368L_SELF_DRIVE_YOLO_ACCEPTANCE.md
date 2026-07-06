@@ -136,8 +136,10 @@ Recommended next milestone:
 
 - `MG369A-YOLO Fixture Single-Step Experiment` was later run as a
   fixture-only self-drive report.
-- Next recommended gate after a passing MG369A-YOLO report:
-  `MG369B-YOLO Fixture Experiment Review Gate`.
+- `MG369B-YOLO Fixture Experiment Review Gate` later reviewed the MG369A-YOLO
+  fixture-only pass and froze the no-real-execution boundary.
+- Next recommended gate after MG369B-YOLO:
+  `MG369C-YOLO Controlled Docs-only PR Creation Simulation`.
 
 Any future real execution requires a separate goal with explicit human
 authorization.
