@@ -358,14 +358,22 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG371B0, continue only under a new explicit goal:
+After MG371B0, the first MG371B attempt correctly blocked because the safely
+gated TUI real provider path was not implemented. MG371B1 inserts that support
+milestone before retrying MG371B.
 
-1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
-   MG371B0 passes.
-2. Any real execution path requires explicit human authorization.
-3. Any TUI-created real branch or PR requires the exact MG371B authorization
+1. MG371B1 Safely Gated TUI Real Docs PR Provider Implementation: implement
+   the real provider boundary, support probe and gates while keeping
+   `TUI_created_branch=false`, `TUI_created_PR=false`,
+   `real_provider_called=false`, `git_push_called=false`,
+   `gh_pr_create_called=false`, `github_api_called=false` and
+   `token_printed=false`.
+2. Retry MG371B First TUI-created Docs-only PR under Explicit Authorization
+   only if MG371B1 passes.
+3. Any real execution path requires explicit human authorization.
+4. Any TUI-created real branch or PR requires the exact MG371B authorization
    phrase before branch or PR creation.
-4. Operator TUI polish may continue before MG371B only with all mutation
+5. Operator TUI polish may continue before MG371B only with all mutation
    disabled.
 
 `token_printed=false`

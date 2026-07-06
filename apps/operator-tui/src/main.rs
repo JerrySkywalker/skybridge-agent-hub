@@ -4,6 +4,7 @@ mod candidate;
 mod collect;
 mod commands;
 mod docs_pr_capability;
+mod docs_pr_real_provider;
 mod input_ux;
 mod interactive;
 mod manual_reliability;
@@ -45,6 +46,19 @@ fn main() -> anyhow::Result<()> {
     }
     if cli.simulate_docs_pr {
         let report = ux_yolo::run_mg369c_docs_pr_simulation(&mut app, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if cli.stage_tui_docs_pr_real_provider {
+        let options = docs_pr_real_provider::Mg371b1Options {
+            output_dir,
+            support_probe: cli.probe_real_docs_pr_provider_support,
+            allow_real_provider: cli.allow_real_docs_pr_provider,
+            authorization_phrase: cli.real_docs_pr_authorization_phrase.clone(),
+            branch_name: cli.docs_pr_branch_name.clone(),
+            changed_files: cli.docs_pr_changed_files.clone(),
+        };
+        let report = docs_pr_real_provider::run_mg371b1_real_provider_implementation(&options)?;
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
     }

@@ -307,9 +307,35 @@ MG371B0 did not create a real TUI branch or PR.
 
 MG371B0 does not authorize MG371B.
 
+## MG371B1 Follow-up
+
+The first MG371B attempt after MG371B0 correctly blocked before any real TUI
+branch or PR because MG371B0 did not implement a callable, safely gated real
+provider path. The blocked evidence recorded:
+
+- `safely_gated_tui_real_provider_path_not_implemented`
+- `mg371b0_real_provider_request_blocks_before_provider_call`
+- `real_mutation_disabled_by_default`
+- `mg371b0_does_not_authorize_real_provider`
+- `TUI-created branch=false`
+- `TUI-created PR=false`
+- `provider_call_count=0`
+- `git_push_called=false`
+- `gh_pr_create_called=false`
+- `github_api_called=false`
+- `token_printed=false`
+
+MG371B1 is inserted after MG371B0 to implement the missing real provider
+support boundary while keeping real mutation disabled by default.
+
+MG371B1 is not MG371B. It must not create a real TUI branch or PR. It only
+adds the provider boundary, support probe, explicit real-provider gate,
+authorization gate, allowlist gate, branch-policy gate and clean synced main
+preflight gate.
+
 ## Next Recommendation
 
-If MG371B0 passes, recommend:
+If MG371B1 passes, retry:
 
 `MG371B First TUI-created Docs-only PR under Explicit Authorization`
 

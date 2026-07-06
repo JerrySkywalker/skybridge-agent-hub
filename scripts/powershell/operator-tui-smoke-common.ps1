@@ -16,6 +16,7 @@ $OperatorTuiManualReliabilityOutputDir = ".agent/tmp/operator-tui/manual-reliabi
 $OperatorTuiUxYoloOutputDir = ".agent/tmp/operator-tui/ux-yolo"
 $OperatorTuiMg369cOutputDir = ".agent/tmp/operator-tui/mg369c-yolo"
 $OperatorTuiMg371b0OutputDir = ".agent/tmp/operator-tui/mg371b0-capability-staging"
+$OperatorTuiMg371b1OutputDir = ".agent/tmp/operator-tui/mg371b1-real-provider-implementation"
 $OperatorTuiMg371bFutureAuthorizationPhrase = "I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR"
 
 function Invoke-OperatorTuiCargoCheck {
@@ -781,6 +782,139 @@ function Invoke-OperatorTuiMg371b0CapabilityStaging(
   }
 }
 
+function Invoke-OperatorTuiMg371b1RealProviderImplementation(
+  [ValidateSet("support-probe", "default-block", "authorization-required", "allowlist-invalid", "branch-invalid", "no-real-pr", "no-real-execution")]
+  [string]$Scenario = "support-probe",
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiMg371b1OutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiMg371b1Artifacts -OutputDir $OutputDir }
+
+  $args = @(
+    "--local-cloud",
+    "--operator-guide",
+    "--stage-tui-docs-pr-real-provider",
+    "--lang",
+    "zh-CN",
+    "--runtime-timeout-ms",
+    "120000",
+    "--output-dir",
+    $OutputDir
+  )
+
+  switch ($Scenario) {
+    "support-probe" {
+      $args += @(
+        "--probe-real-docs-pr-provider-support",
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase
+      )
+    }
+    "default-block" {
+      $args += @(
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase
+      )
+    }
+    "authorization-required" {
+      $args += @(
+        "--allow-real-docs-pr-provider",
+        "--authorization-phrase",
+        "INTENTIONAL_MG371B1_AUTHORIZATION_MISMATCH"
+      )
+    }
+    "allowlist-invalid" {
+      $args += @(
+        "--allow-real-docs-pr-provider",
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase,
+        "--docs-pr-changed-file",
+        "docs/operator/MG371B_FIRST_TUI_CREATED_DOCS_ONLY_PR.md",
+        "--docs-pr-changed-file",
+        "apps/operator-tui/src/main.rs"
+      )
+    }
+    "branch-invalid" {
+      $args += @(
+        "--allow-real-docs-pr-provider",
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase,
+        "--docs-pr-branch-name",
+        "tui/mg371b docs-only-pr bad"
+      )
+    }
+    "no-real-pr" {
+      $args += @(
+        "--probe-real-docs-pr-provider-support",
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase
+      )
+    }
+    "no-real-execution" {
+      $args += @(
+        "--probe-real-docs-pr-provider-support",
+        "--authorization-phrase",
+        $OperatorTuiMg371bFutureAuthorizationPhrase
+      )
+    }
+  }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- @args | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI MG371B1 real provider implementation failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/mg371b1-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/mg371b1-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/mg371b1-report.md"
+  $supportPath = Join-Path $RepoRoot "$OutputDir/mg371b1-provider-support-probe.json"
+  $defaultBlockPath = Join-Path $RepoRoot "$OutputDir/mg371b1-default-block-report.json"
+  $authorizationBlockPath = Join-Path $RepoRoot "$OutputDir/mg371b1-authorization-block-report.json"
+  $allowlistBlockPath = Join-Path $RepoRoot "$OutputDir/mg371b1-allowlist-block-report.json"
+  $branchBlockPath = Join-Path $RepoRoot "$OutputDir/mg371b1-branch-policy-block-report.json"
+  $preflightPath = Join-Path $RepoRoot "$OutputDir/mg371b1-preflight-report.json"
+  $safetyPath = Join-Path $RepoRoot "$OutputDir/mg371b1-safety-report.json"
+  $historyPath = Join-Path $RepoRoot "$OutputDir/mg371b1-action-history.json"
+  $indexPath = Join-Path $RepoRoot "$OutputDir/mg371b1-artifact-index.json"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $supportPath, $defaultBlockPath, $authorizationBlockPath, $allowlistBlockPath, $branchBlockPath, $preflightPath, $safetyPath, $historyPath, $indexPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI MG371B1 artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  Assert-NoUnsafeText $reportMarkdown
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $support = Get-Content -Raw -LiteralPath $supportPath | ConvertFrom-Json
+  $defaultBlock = Get-Content -Raw -LiteralPath $defaultBlockPath | ConvertFrom-Json
+  $authorizationBlock = Get-Content -Raw -LiteralPath $authorizationBlockPath | ConvertFrom-Json
+  $allowlistBlock = Get-Content -Raw -LiteralPath $allowlistBlockPath | ConvertFrom-Json
+  $branchBlock = Get-Content -Raw -LiteralPath $branchBlockPath | ConvertFrom-Json
+  $preflight = Get-Content -Raw -LiteralPath $preflightPath | ConvertFrom-Json
+  $safety = Get-Content -Raw -LiteralPath $safetyPath | ConvertFrom-Json
+  $history = Get-Content -Raw -LiteralPath $historyPath | ConvertFrom-Json
+  $index = Get-Content -Raw -LiteralPath $indexPath | ConvertFrom-Json
+
+  Assert-OperatorTuiMg371b1Shape -State $state -Report $report -Support $support -DefaultBlock $defaultBlock -AuthorizationBlock $authorizationBlock -AllowlistBlock $allowlistBlock -BranchBlock $branchBlock -Preflight $preflight -Safety $safety -History $history -Index $index
+  Assert-OperatorTuiMg371b1NoRealPr -Report $report -Support $support -Safety $safety
+  Assert-OperatorTuiMg371b1NoRealExecution -Report $report -Safety $safety
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state = $state
+    report = $report
+    support = $support
+    default_block = $defaultBlock
+    authorization_block = $authorizationBlock
+    allowlist_block = $allowlistBlock
+    branch_block = $branchBlock
+    preflight = $preflight
+    safety = $safety
+    history = $history
+    index = $index
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -798,6 +932,17 @@ function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCa
 }
 
 function Clear-OperatorTuiMg371b0Artifacts([string]$OutputDir = $OperatorTuiMg371b0OutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
+  }
+}
+
+function Clear-OperatorTuiMg371b1Artifacts([string]$OutputDir = $OperatorTuiMg371b1OutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
   if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -1677,6 +1822,131 @@ function Assert-OperatorTuiMg371b0NoRealExecution($Report, $Safety) {
   }
   Assert-False $Report.real_mutation_enabled "mg371b0_report.real_mutation_enabled"
   Assert-False $Safety.real_mutation_enabled "mg371b0_safety.real_mutation_enabled"
+  Assert-TokenPrintedFalse $Report
+  Assert-TokenPrintedFalse $Safety
+}
+
+function Assert-OperatorTuiMg371b1Shape($State, $Report, $Support, $DefaultBlock, $AuthorizationBlock, $AllowlistBlock, $BranchBlock, $Preflight, $Safety, $History, $Index) {
+  if ($State.schema -ne "skybridge.operator_tui_mg371b1_state.v1") {
+    throw "Unexpected MG371B1 state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_mg371b1_real_docs_pr_provider_implementation.v1") {
+    throw "Unexpected MG371B1 report schema."
+  }
+  if ($Report.mode -ne "mg371b1-real-provider-implementation") {
+    throw "Unexpected MG371B1 report mode."
+  }
+  if ($Support.schema -ne "skybridge.operator_tui_mg371b1_provider_support_probe.v1") {
+    throw "Unexpected MG371B1 support probe schema."
+  }
+  if ($DefaultBlock.schema -ne "skybridge.operator_tui_mg371b1_default_block.v1") {
+    throw "Unexpected MG371B1 default block schema."
+  }
+  if ($AuthorizationBlock.schema -ne "skybridge.operator_tui_mg371b1_authorization_block.v1") {
+    throw "Unexpected MG371B1 authorization block schema."
+  }
+  if ($AllowlistBlock.schema -ne "skybridge.operator_tui_mg371b1_allowlist_block.v1") {
+    throw "Unexpected MG371B1 allowlist block schema."
+  }
+  if ($BranchBlock.schema -ne "skybridge.operator_tui_mg371b1_branch_policy_block.v1") {
+    throw "Unexpected MG371B1 branch block schema."
+  }
+  if ($Preflight.schema -ne "skybridge.operator_tui_mg371b1_preflight.v1") {
+    throw "Unexpected MG371B1 preflight schema."
+  }
+  if ($Safety.schema -ne "skybridge.operator_tui_mg371b1_safety_report.v1") {
+    throw "Unexpected MG371B1 safety schema."
+  }
+  if ($History.schema -ne "skybridge.operator_tui_mg371b1_action_history.v1") {
+    throw "Unexpected MG371B1 action history schema."
+  }
+  if ($Index.schema -ne "skybridge.operator_tui_mg371b1_artifact_index.v1") {
+    throw "Unexpected MG371B1 artifact index schema."
+  }
+
+  Assert-True $Report.implementation_added "mg371b1 implementation_added"
+  Assert-True $Report.runtime_behavior_changed "mg371b1 runtime_behavior_changed"
+  Assert-True $Report.real_provider_path_implemented "mg371b1 real_provider_path_implemented"
+  Assert-True $Report.real_provider_disabled_by_default "mg371b1 real_provider_disabled_by_default"
+  Assert-True $Report.real_provider_requires_explicit_flag "mg371b1 real_provider_requires_explicit_flag"
+  Assert-True $Report.real_provider_requires_exact_authorization "mg371b1 real_provider_requires_exact_authorization"
+  Assert-True $Report.real_provider_requires_allowlist "mg371b1 real_provider_requires_allowlist"
+  Assert-True $Report.real_provider_requires_branch_policy "mg371b1 real_provider_requires_branch_policy"
+  Assert-True $Report.real_provider_requires_clean_synced_main "mg371b1 real_provider_requires_clean_synced_main"
+  Assert-True $Report.support_probe_passed "mg371b1 support_probe_passed"
+  Assert-True $Report.fake_provider_still_available "mg371b1 fake_provider_still_available"
+  Assert-False $Report.real_provider_called "mg371b1 real_provider_called"
+  Assert-False $Report.real_provider_mutation_executed "mg371b1 real_provider_mutation_executed"
+  Assert-False $Report.real_mutation_enabled "mg371b1 real_mutation_enabled"
+  Assert-False $Report.authorization_phrase_used_for_real_mutation "mg371b1 authorization_phrase_used_for_real_mutation"
+  Assert-True $Report.branch_policy_enforced "mg371b1 branch_policy_enforced"
+  Assert-True $Report.allowlist_enforced "mg371b1 allowlist_enforced"
+  Assert-True $Report.pr_policy_enforced "mg371b1 pr_policy_enforced"
+
+  Assert-True $Support.real_provider_path_implemented "support real_provider_path_implemented"
+  Assert-True $Support.real_provider_disabled_by_default "support real_provider_disabled_by_default"
+  Assert-True $Support.real_provider_requires_explicit_flag "support real_provider_requires_explicit_flag"
+  Assert-True $Support.real_provider_requires_exact_authorization "support real_provider_requires_exact_authorization"
+  Assert-True $Support.real_provider_requires_allowlist "support real_provider_requires_allowlist"
+  Assert-True $Support.real_provider_requires_branch_policy "support real_provider_requires_branch_policy"
+  Assert-True $Support.real_provider_requires_clean_synced_main "support real_provider_requires_clean_synced_main"
+  Assert-True $Support.support_probe_passed "support support_probe_passed"
+  Assert-False $Support.real_provider_called "support real_provider_called"
+  if ([int]$Support.provider_call_count -ne 0) { throw "MG371B1 support provider_call_count should be 0." }
+  if (@($Index.artifacts).Count -lt 12) { throw "MG371B1 artifact index incomplete." }
+
+  foreach ($artifact in @($Support, $DefaultBlock, $AuthorizationBlock, $AllowlistBlock, $BranchBlock, $Preflight, $Safety, $History, $Index)) {
+    Assert-TokenPrintedFalse $artifact
+  }
+  Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiMg371b1NoRealPr($Report, $Support, $Safety) {
+  foreach ($name in @(
+    "TUI_created_branch",
+    "TUI_created_PR",
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called",
+    "real_provider_called",
+    "real_provider_mutation_executed",
+    "real_mutation_enabled"
+  )) {
+    Assert-False $Report.$name "mg371b1_report.$name"
+    Assert-False $Safety.$name "mg371b1_safety.$name"
+  }
+
+  foreach ($name in @(
+    "git_push_called",
+    "gh_pr_create_called",
+    "github_api_called",
+    "real_provider_called"
+  )) {
+    Assert-False $Support.$name "mg371b1_support.$name"
+  }
+  if ([int]$Support.provider_call_count -ne 0) { throw "MG371B1 provider_call_count should be 0." }
+}
+
+function Assert-OperatorTuiMg371b1NoRealExecution($Report, $Safety) {
+  foreach ($name in @(
+    "real_task_execution_enabled",
+    "task_created",
+    "task_claimed",
+    "execution_started",
+    "worker_loop_started",
+    "queue_runner_started",
+    "run_forever_started",
+    "hermes_live_called",
+    "mcp_run_called",
+    "auto_merge_enabled",
+    "release_created",
+    "tag_created",
+    "asset_uploaded",
+    "raw_input_persisted"
+  )) {
+    Assert-False $Report.$name "mg371b1_report.$name"
+    Assert-False $Safety.$name "mg371b1_safety.$name"
+  }
   Assert-TokenPrintedFalse $Report
   Assert-TokenPrintedFalse $Safety
 }

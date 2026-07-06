@@ -274,8 +274,19 @@ the future MG371B phrase as active real-mutation authorization, does not enable
 real task execution, and does not authorize worker loops, queue runners, run
 forever, auto-merge, release, tag or asset upload.
 
-MG371B must require Jerry to provide the exact MG371B authorization phrase
-before any TUI-created branch or PR:
+The first MG371B attempt after MG371B0 correctly blocked before creating any
+TUI branch or PR because the safely gated real provider path had not yet been
+implemented. MG371B1 is therefore inserted as a real-provider implementation
+milestone. MG371B1 must keep real mutation disabled by default and must not
+create a real TUI branch or PR.
+
+MG371B1 adds the missing support boundary and support probe for a future MG371B
+retry. It requires an explicit real-provider flag, the exact MG371B phrase,
+allowlist pass, branch-policy pass, clean synced main preflight and one
+branch/one draft PR policy before any future real mutation.
+
+After MG371B1 passes, MG371B must still require Jerry to provide the exact
+MG371B authorization phrase before any TUI-created branch or PR:
 
 `I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR`
 
