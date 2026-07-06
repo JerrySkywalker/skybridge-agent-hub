@@ -155,11 +155,21 @@ evidence. MG368J does not reattempt MG368I, start MG369A, create a TUI branch
 or PR, execute tasks, start queues or workers, call live Hermes or MCP,
 auto-merge, create releases/tags/assets or print tokens.
 
+MG368K follows the blocked MG368I-R2 manual operation. It adds a simplified
+operator guide, English/zh-CN UI support with `L` toggle, fixture-only YOLO
+confirmation bypass for no-real-execution dry-run actions, a Codex self-drive
+dry-run harness and confirmation-buffer/paste diagnostics. It writes
+`.agent/tmp/operator-tui/ux-yolo/` artifacts and keeps the same safety
+boundary: no MG369, no real task execution, no TUI-created branch/PR, no
+queue/worker loop, no run forever, no live Hermes, no MCP, no auto-merge, no
+release/tag/assets and `token_printed=false`.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG368I-R2 Ratatui Manual Dry Run Reattempt using the MG368J guide.
-2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I-R2
+1. MG368I-R3 Ratatui Manual Dry Run with Simplified Guide and Fixture-only
+   YOLO.
+2. MG369A/B Manual Single-step Hosted-dev Experiment after a passing MG368I-R3
    dry run is recorded.
 
 ## Read-Only Audit

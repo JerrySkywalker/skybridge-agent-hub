@@ -1,5 +1,27 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 368K Ratatui UX YOLO Bilingual
+
+- Added a simplified Ratatui operator guide for fixture-safe dry runs with one
+  current step, next action, command status, safe-to-continue state, primary
+  key, expected result, blocker, compact hints and footer safety flags.
+- Added English and zh-CN UI selection plus the normal-mode `L` language
+  toggle. Exact confirmation strings remain untranslated.
+- Added `--yolo-fixture-only` for no-real-execution dry-run actions and
+  `--self-drive-dry-run` for deterministic Codex-driven guide validation.
+- Added confirmation-buffer and paste diagnostics for empty-open buffers,
+  hotkey leakage prevention, Ctrl+U/Esc clearing, sanitized mismatch evidence
+  and duplicate-paste detection.
+- Added UX YOLO artifacts under `.agent/tmp/operator-tui/ux-yolo/` and smoke
+  coverage for simplified guide, bilingual UI, fixture-only YOLO, self-drive,
+  confirmation buffer and no-real-execution safety.
+- Kept MG368K as a TUI usability and self-debug milestone only: no MG369 run,
+  no real task execution, no TUI-created branch or PR, no queue runner, no
+  worker loop, no run forever, no live Hermes, no MCP, no auto-merge, no
+  release/tag/assets and `token_printed=false`.
+- Recommended next milestone: MG368I-R3 Ratatui Manual Dry Run with Simplified
+  Guide and Fixture-only YOLO.
+
 ## 2026-07-05 Mega Goal 368I Ratatui Manual Dry Run
 
 - Recorded Jerry's human-operated Ratatui dry run under

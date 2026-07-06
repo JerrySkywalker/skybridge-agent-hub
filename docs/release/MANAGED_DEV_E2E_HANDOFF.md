@@ -157,6 +157,17 @@ machine-readable tab/layout evidence under
 MG368I, does not start MG369A, does not create a TUI branch/PR and does not
 enable real execution. The next milestone remains MG368I-R2 before MG369A.
 
+MG368K follows the blocked MG368I-R2 manual operation and simplifies the
+Ratatui operator experience before another human dry run. It adds
+`--operator-guide`, `--lang en`, `--lang zh-CN`, the normal-mode `L` language
+toggle, `--yolo-fixture-only` and `--self-drive-dry-run`. The self-drive
+harness only runs in fixture-only mode and writes
+`.agent/tmp/operator-tui/ux-yolo/` evidence. MG368K does not perform MG369,
+execute real tasks, create TUI branches or PRs, start queue/worker loops, run
+forever, call live Hermes or MCP, auto-merge, create release/tag/assets or
+print tokens. The next milestone is MG368I-R3 with the simplified guide and
+fixture-only YOLO path.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -227,9 +238,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG368I, continue TUI readiness before reattempting MG369:
+After MG368K, continue TUI readiness before reattempting MG369:
 
-1. Run MG368I-R2 using the MG368J manual guide and reliability artifacts.
+1. Run MG368I-R3 using the MG368K simplified guide, bilingual UI and
+   fixture-only YOLO artifacts.
 2. MG369A/B Manual Single-step Hosted-dev Experiment only after a passing
    manual dry run is recorded.
 

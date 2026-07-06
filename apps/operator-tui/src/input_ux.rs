@@ -111,6 +111,7 @@ pub struct ConfirmationMismatchReport {
     pub contains_cr_lf_tab: bool,
     pub contains_non_ascii: bool,
     pub looks_truncated: bool,
+    pub likely_duplicate_paste: bool,
     pub retry_guidance_visible: bool,
     pub confirmation_normalized: bool,
     pub normalization_reason: String,
@@ -214,6 +215,10 @@ pub fn confirmation_dialog_lines(view_model: &ViewModel) -> Vec<String> {
         format!(
             "looks_truncated: {}",
             view_model.confirmation_looks_truncated
+        ),
+        format!(
+            "likely_duplicate_paste: {}",
+            view_model.confirmation_likely_duplicate_paste
         ),
         format!(
             "confirmation_normalized: {}",
@@ -538,6 +543,7 @@ fn confirmation_mismatch_report(app: &App) -> ConfirmationMismatchReport {
         contains_cr_lf_tab: diagnostics.contains_cr_lf_tab,
         contains_non_ascii: diagnostics.contains_non_ascii,
         looks_truncated: diagnostics.looks_truncated,
+        likely_duplicate_paste: diagnostics.likely_duplicate_paste,
         retry_guidance_visible: !diagnostics.retry_guidance.is_empty(),
         confirmation_normalized: diagnostics.confirmation_normalized,
         normalization_reason: diagnostics.normalization_reason.clone(),

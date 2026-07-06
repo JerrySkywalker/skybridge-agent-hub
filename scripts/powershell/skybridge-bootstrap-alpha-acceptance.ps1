@@ -279,6 +279,12 @@ $requiredScripts = @{
   operator_tui_manual_reliability_guide_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-guide.ps1"
   operator_tui_manual_reliability_tabs_recorded_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-tabs-recorded.ps1"
   operator_tui_manual_reliability_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-manual-reliability-no-real-execution.ps1"
+  operator_tui_ux_simplified_guide_smoke = "scripts/powershell/smoke-operator-tui-ux-simplified-guide.ps1"
+  operator_tui_ux_bilingual_smoke = "scripts/powershell/smoke-operator-tui-ux-bilingual.ps1"
+  operator_tui_ux_yolo_fixture_only_smoke = "scripts/powershell/smoke-operator-tui-ux-yolo-fixture-only.ps1"
+  operator_tui_ux_self_drive_smoke = "scripts/powershell/smoke-operator-tui-ux-self-drive.ps1"
+  operator_tui_ux_confirmation_buffer_smoke = "scripts/powershell/smoke-operator-tui-ux-confirmation-buffer.ps1"
+  operator_tui_ux_no_real_execution_smoke = "scripts/powershell/smoke-operator-tui-ux-no-real-execution.ps1"
 }
 
 $componentPaths = @{
@@ -608,7 +614,13 @@ $requiredPackageScripts = @(
   "smoke:operator-tui-manual-reliability-timeout-guidance",
   "smoke:operator-tui-manual-reliability-guide",
   "smoke:operator-tui-manual-reliability-tabs-recorded",
-  "smoke:operator-tui-manual-reliability-no-real-execution"
+  "smoke:operator-tui-manual-reliability-no-real-execution",
+  "smoke:operator-tui-ux-simplified-guide",
+  "smoke:operator-tui-ux-bilingual",
+  "smoke:operator-tui-ux-yolo-fixture-only",
+  "smoke:operator-tui-ux-self-drive",
+  "smoke:operator-tui-ux-confirmation-buffer",
+  "smoke:operator-tui-ux-no-real-execution"
 )
 $packageScriptResults = foreach ($scriptName in $requiredPackageScripts) {
   [pscustomobject]@{
