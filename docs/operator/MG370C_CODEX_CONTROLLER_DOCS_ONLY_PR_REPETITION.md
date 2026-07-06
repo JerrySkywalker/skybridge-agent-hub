@@ -55,14 +55,13 @@ The PR lifecycle authorization string for this milestone is:
   passed locally before draft PR creation; final PR allowlist is recorded in
   the goal report
 - CI status:
-  pending final PR CI on the branch revision that includes the PR metadata
-  update
+  passed
 - review gate status:
-  draft PR first; ready and merge are allowed only after CI success
+  draft PR first; marked ready after CI success
 - merge status:
-  pending final PR CI, ready transition and merge
+  merged at `a1cd4070c82b0058cc8cb0a9c34f7f00442ca7e8`
 - cloud parity after deploy:
-  pending post-merge deploy verification if Deploy Cloud runs
+  ok
 
 This branch and PR are created by Codex controller. They are not created by the
 TUI and do not enable TUI-created branch or PR behavior.
@@ -104,12 +103,12 @@ The report schema is
 
 ## Conclusion
 
-Conclusion: pass after the second Codex-controller docs-only PR is created,
+Conclusion: pass. The second Codex-controller docs-only PR was created,
 CI-passed, marked ready, merged and verified in cloud under this goal
 authorization.
 
-If it passes, MG370C proves Codex-controller docs-only PR creation is
-repeatable across at least two real docs-only PRs.
+MG370C proves Codex-controller docs-only PR creation is repeatable across at
+least two real docs-only PRs when reviewed with MG370A.
 
 This does not authorize TUI-created real PRs.
 
@@ -123,7 +122,7 @@ This does not authorize non-docs changes.
 
 ## Next Recommendation
 
-If MG370C passes, proceed to
+Proceed to
 `MG370D Review Gate for Codex-controller Docs-only PR Repeatability`.
 
 Do not proceed directly to TUI-created PRs.

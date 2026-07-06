@@ -259,6 +259,16 @@ or non-docs changes. Evidence artifacts are under
 `.agent/tmp/operator-tui/mg370c-real-docs-pr-repeat/` with schema
 `skybridge.operator_tui_mg370c_real_docs_only_pr_repetition.v1`.
 
+MG370D reviews MG370A PR #302 and MG370C PR #304 together and records
+`Codex-controller docs-only PR repeatability: pass`. The pass is bounded to
+Codex-controller docs-only PRs only. It does not authorize TUI-created real
+branches or PRs, real task execution, worker loops, queue runners, run forever,
+auto-merge, release, tag, asset upload or non-docs changes. Review artifacts
+are under `.agent/tmp/operator-tui/mg370d-review/` with schema
+`skybridge.operator_tui_mg370d_codex_controller_docs_pr_repeatability_review_gate.v1`.
+The next recommended milestone is MG371A TUI-created Docs-only PR
+Authorization Design Gate.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -329,12 +339,14 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG370C, continue only under a new explicit goal:
+After MG370D, continue only under a new explicit goal:
 
 1. MG370D Review Gate for Codex-controller Docs-only PR Repeatability if
    MG370C passes.
-2. Any real execution path requires explicit human authorization.
-3. Any TUI-created real branch or PR requires a separate later milestone after
-   MG370C and the repeatability review gate.
+2. MG371A TUI-created Docs-only PR Authorization Design Gate after MG370D
+   passes.
+3. Any real execution path requires explicit human authorization.
+4. Any TUI-created real branch or PR requires a separate later milestone after
+   MG370D.
 
 `token_printed=false`

@@ -230,14 +230,21 @@ and one draft PR while preserving `TUI-created branch=false`,
 disabled, auto-merge disabled, release/tag/assets disabled and non-docs changes
 unauthorized.
 
+MG370D reviews MG370A and MG370C as two successful real docs-only PRs created
+by Codex controller. It records `Codex-controller docs-only PR repeatability:
+pass`, bounded only to Codex-controller docs-only PRs. It does not authorize
+TUI-created real branches or PRs, real task execution, worker loops, queue
+runners, run forever, auto-merge, release, tag, asset upload or non-docs
+changes.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG370D Review Gate for Codex-controller Docs-only PR Repeatability if
-   MG370C passes.
-2. Any future real execution requires explicit human authorization.
-3. Any TUI-created real branch or PR requires a later separate milestone after
-   MG370C and the repeatability review gate.
+1. MG371A TUI-created Docs-only PR Authorization Design Gate.
+2. Operator TUI polish before any TUI-created PR, with all mutation disabled.
+3. Any future real execution requires explicit human authorization.
+4. Any TUI-created real branch or PR requires a later separate milestone after
+   MG370D.
 
 ## Read-Only Audit
 

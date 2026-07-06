@@ -1091,6 +1091,43 @@ MCP, auto-merge, release, tag, asset upload or non-docs changes.
 The MG370C report is
 `docs/operator/MG370C_CODEX_CONTROLLER_DOCS_ONLY_PR_REPETITION.md`.
 
+## MG370D Codex-controller Docs-only PR Repeatability Review Gate
+
+MG370D reviews MG370A PR #302 and MG370C PR #304 as two successful real
+docs-only PRs created by Codex controller. It freezes
+`Codex-controller docs-only PR repeatability: pass` after MG370C merged at
+`a1cd4070c82b0058cc8cb0a9c34f7f00442ca7e8`, deployed successfully and verified
+with cloud parity ok.
+
+MG370D does not add runtime behavior and does not authorize the TUI to create a
+real branch or PR. It also does not authorize real task execution, worker loop,
+queue runner, run forever, auto-merge, release, tag, asset upload or non-docs
+changes.
+
+Review-gate artifacts are written under
+`.agent/tmp/operator-tui/mg370d-review/`:
+
+- `mg370d-review-report.json`
+- `mg370d-review-report.md`
+- `mg370d-safety-freeze.json`
+- `mg370d-next-stage-options.json`
+- `mg370d-repeatability-summary.json`
+
+MG370D records
+`skybridge.operator_tui_mg370d_codex_controller_docs_pr_repeatability_review_gate.v1`,
+`codex_controller_docs_pr_repeatability_result=pass`,
+`codex_controller_docs_pr_count=2`, `real_execution_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+`queue_runner_authorized=false` and `token_printed=false`.
+
+The recommended next milestone is
+`MG371A TUI-created Docs-only PR Authorization Design Gate`, because
+TUI-created real branch/PR behavior requires a separate authorization design
+gate before implementation or activation.
+
+The review gate report is
+`docs/operator/MG370D_CODEX_CONTROLLER_DOCS_PR_REPEATABILITY_REVIEW_GATE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1162,6 +1199,9 @@ controller or unattended executor.
 - MG370C Codex-controller Docs-only PR Repetition: authorized for one second
   docs-only branch and one draft PR by Codex controller. It does not authorize
   TUI-created real PRs or real task execution.
+- MG370D Review Gate for Codex-controller Docs-only PR Repeatability: freezes
+  two Codex-controller docs-only PRs as repeatable. It recommends MG371A as a
+  design gate before any TUI-created real branch or PR.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

@@ -141,6 +141,16 @@ MG370C keeps `TUI-created branch=false`, `TUI-created PR=false`,
 If MG370C passes, the next review gate is
 `MG370D Review Gate for Codex-controller Docs-only PR Repeatability`.
 
+## MG370D Follow-up
+
+MG370D reviews MG370A and MG370C together as two successful real docs-only PRs
+created by Codex controller. It freezes repeatability as a Codex-controller
+docs-only result only, not a TUI-created branch/PR authorization and not real
+task execution authorization.
+
+If MG370D passes, the next recommended milestone is
+`MG371A TUI-created Docs-only PR Authorization Design Gate`.
+
 ## Required Gates Before TUI-created Branch/PR
 
 Before any TUI-created real branch or PR:
@@ -158,6 +168,10 @@ Before any TUI-created real branch or PR:
 - no worker loop
 - no queue runner
 - no run forever
+- no live Hermes
+- no MCP
+- no arbitrary shell
+- no secrets
 - audit artifacts required
 - cloud parity verification after merge/deploy
 
