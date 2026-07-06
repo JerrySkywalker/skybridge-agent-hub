@@ -1078,7 +1078,8 @@ MG370C is explicitly authorized for exactly one second Codex-controller branch
 and exactly one draft PR:
 
 - branch: `codex/mg370c-codex-controller-docs-pr-repeat`
-- PR: pending Codex-controller draft PR creation
+- PR: `#304`
+- PR URL: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/304`
 - PR title: `MG370C Codex-controller Docs-only PR Repetition`
 - actor: Codex controller
 - scope: docs-only allowlist

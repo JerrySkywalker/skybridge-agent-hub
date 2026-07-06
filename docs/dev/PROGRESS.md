@@ -6,6 +6,8 @@
   authorization for Codex controller only.
 - Limited scope to one second Codex-controller branch and one draft PR:
   `codex/mg370c-codex-controller-docs-pr-repeat`.
+- Opened draft PR #304:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/304`.
 - Kept the TUI outside the branch/PR creation path:
   `TUI-created branch=false` and `TUI-created PR=false`.
 - Preserved `real_task_execution_enabled=false`,

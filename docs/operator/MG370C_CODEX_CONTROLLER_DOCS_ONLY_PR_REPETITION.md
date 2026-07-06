@@ -39,9 +39,9 @@ The PR lifecycle authorization string for this milestone is:
 - branch name:
   `codex/mg370c-codex-controller-docs-pr-repeat`
 - PR number:
-  pending draft PR creation by Codex controller
+  `#304`
 - PR URL:
-  pending draft PR creation by Codex controller
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/304`
 - PR title:
   `MG370C Codex-controller Docs-only PR Repetition`
 - changed files:
