@@ -176,6 +176,21 @@ This command is still fixture-only. It does not perform MG369, execute a real
 task, create a TUI branch/PR, start a queue runner or worker loop, call live
 Hermes/MCP, auto-merge, create release/tag/assets or print tokens.
 
+## MG368L Self-Drive YOLO Supersession
+
+MG368I first run remains partial pass / blocked. MG368I-R3 manual proof was
+not collected, and `.agent/tmp/operator-tui/mg368i-r3-manual/` was absent at
+the MG368L policy decision.
+
+MG368L supersedes manual proof as a blocker for fixture-only self-drive
+validation. For fixture-only/no-real-execution TUI validation, Codex
+self-drive full fixture flow evidence is sufficient and Jerry manual TUI
+verification is optional. If no manual evidence exists, report
+`manual_verification_performed=false`.
+
+This is not a claim that human-operated TUI UX is fully validated. The accepted
+result is `self-drive YOLO validation pass`, not human-operated manual pass.
+
 ## Safety Flags
 
 - TUI-created branch=false
