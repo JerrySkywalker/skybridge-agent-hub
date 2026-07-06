@@ -237,14 +237,23 @@ TUI-created real branches or PRs, real task execution, worker loops, queue
 runners, run forever, auto-merge, release, tag, asset upload or non-docs
 changes.
 
+MG371A is the TUI-created docs-only PR authorization design gate. It defines
+the exact future MG371B authorization phrase, branch naming pattern,
+docs-only allowlist, one-branch/one-draft-PR limits, CI/review/merge gates,
+abort/rollback policy and audit artifact contract. It remains design-only and
+does not create a TUI branch or PR, enable runtime behavior, authorize real
+execution, start worker/queue loops, run forever, auto-merge, release, tag or
+upload assets.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG371A TUI-created Docs-only PR Authorization Design Gate.
+1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
+   MG371A passes.
 2. Operator TUI polish before any TUI-created PR, with all mutation disabled.
 3. Any future real execution requires explicit human authorization.
-4. Any TUI-created real branch or PR requires a later separate milestone after
-   MG370D.
+4. Any TUI-created real branch or PR requires the exact MG371B authorization
+   phrase before branch or PR creation.
 
 ## Read-Only Audit
 

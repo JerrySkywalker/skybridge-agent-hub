@@ -269,6 +269,14 @@ are under `.agent/tmp/operator-tui/mg370d-review/` with schema
 The next recommended milestone is MG371A TUI-created Docs-only PR
 Authorization Design Gate.
 
+MG371A defines that design gate. It records the exact future MG371B
+authorization phrase, the TUI branch pattern, the docs-only changed-files
+allowlist, one-branch and one-draft-PR limits, draft PR policy,
+abort/rollback behavior and audit artifact requirements. MG371A remains
+design-only: no TUI-created branch, no TUI-created PR, no real execution, no
+runtime behavior change, no worker loop, no queue runner, no run forever, no
+auto-merge, no release/tag/assets and `token_printed=false`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -339,14 +347,14 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG370D, continue only under a new explicit goal:
+After MG371A, continue only under a new explicit goal:
 
-1. MG370D Review Gate for Codex-controller Docs-only PR Repeatability if
-   MG370C passes.
-2. MG371A TUI-created Docs-only PR Authorization Design Gate after MG370D
-   passes.
-3. Any real execution path requires explicit human authorization.
-4. Any TUI-created real branch or PR requires a separate later milestone after
-   MG370D.
+1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
+   MG371A passes.
+2. Any real execution path requires explicit human authorization.
+3. Any TUI-created real branch or PR requires the exact MG371B authorization
+   phrase before branch or PR creation.
+4. Operator TUI polish may continue before MG371B only with all mutation
+   disabled.
 
 `token_printed=false`

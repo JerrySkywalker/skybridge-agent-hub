@@ -140,6 +140,20 @@ Two Codex-controller docs-only PRs are repeatable, but TUI-created real
 branch/PR requires a separate authorization design gate before implementation
 or activation.
 
+## MG371A Follow-up
+
+MG371A is the authorization design gate for a future first TUI-created
+docs-only branch and draft PR. It must remain documentation-only and must not
+implement or enable TUI-created branch/PR behavior.
+
+If MG371A passes, the next recommended milestone is
+`MG371B First TUI-created Docs-only PR under Explicit Authorization`.
+MG371B must require the exact authorization phrase:
+
+`I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR`
+
+Without that exact phrase, the TUI must not create a real branch or PR.
+
 ## Required Gates Before TUI-created Branch/PR
 
 Before any TUI-created real branch or PR:
