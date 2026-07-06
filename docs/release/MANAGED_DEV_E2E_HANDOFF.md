@@ -236,6 +236,19 @@ auto-merge, release, tag or asset upload. The branch is
 PR #302:
 `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`.
 
+MG370B reviews MG370A and records
+`MG370A Codex-controller docs-only PR creation: pass`. It confirms PR #302 was
+created by Codex controller, not TUI, passed the docs-only allowlist, passed CI,
+merged, completed post-merge workflows, deployed successfully and verified cloud
+parity ok. MG370B freezes `TUI-created branch=false`, `TUI-created PR=false`,
+`real_task_execution_enabled=false`, `real_execution_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+`queue_runner_authorized=false`, `auto_merge_enabled=false`,
+`release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+`token_printed=false`. Review artifacts are under
+`.agent/tmp/operator-tui/mg370b-review/` with schema
+`skybridge.operator_tui_mg370b_codex_controller_docs_pr_review_gate.v1`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -306,12 +319,11 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG370A, continue only under a new explicit goal:
+After MG370B, continue only under a new explicit goal:
 
-1. MG370B Review Gate for Codex-controller Docs-only PR Creation if MG370A
-   passes.
+1. MG370C Codex-controller Docs-only PR Repetition if MG370B passes.
 2. Any real execution path requires explicit human authorization.
 3. Any TUI-created real branch or PR requires a separate later milestone after
-   MG370A.
+   MG370B and a repeatability gate.
 
 `token_printed=false`

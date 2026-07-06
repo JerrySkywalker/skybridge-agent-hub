@@ -213,14 +213,23 @@ draft PR, PR #302, while preserving `TUI-created branch=false`,
 `TUI-created PR=false`, `real_task_execution_enabled=false`, worker/queue loops
 disabled, auto-merge disabled and release/tag/assets disabled.
 
+MG370B reviews MG370A and freezes the result as
+`MG370A Codex-controller docs-only PR creation: pass`. It confirms PR #302 was
+created by Codex controller rather than TUI, docs-only allowlist passed, CI
+passed, the PR merged, post-merge workflows passed, Deploy Cloud succeeded and
+cloud parity was ok. It keeps `real_execution_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+`queue_runner_authorized=false`, `auto_merge_enabled=false`,
+`release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+`token_printed=false`.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG370B Review Gate for Codex-controller Docs-only PR Creation if MG370A
-   passes.
+1. MG370C Codex-controller Docs-only PR Repetition if MG370B passes.
 2. Any future real execution requires explicit human authorization.
 3. Any TUI-created real branch or PR requires a later separate milestone after
-   MG370A.
+   MG370B and a repeatability gate.
 
 ## Read-Only Audit
 

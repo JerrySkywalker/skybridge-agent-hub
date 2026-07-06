@@ -124,4 +124,18 @@ If MG370A passes, proceed to
 
 Do not proceed directly to TUI-created PRs.
 
+## MG370B Follow-up
+
+MG370B reviews this result as
+`MG370A Codex-controller docs-only PR creation: pass`.
+
+The review freezes that this milestone proves one authorized
+Codex-controller docs-only PR only. It does not authorize TUI-created real
+branches or PRs, real task execution, worker loop, queue runner, run forever,
+auto-merge, release, tag, asset upload or non-docs changes.
+
+MG370B recommends
+`MG370C Codex-controller Docs-only PR Repetition` before any TUI-created branch
+or PR behavior.
+
 `token_printed=false`
