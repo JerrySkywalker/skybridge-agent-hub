@@ -1128,6 +1128,48 @@ gate before implementation or activation.
 The review gate report is
 `docs/operator/MG370D_CODEX_CONTROLLER_DOCS_PR_REPEATABILITY_REVIEW_GATE.md`.
 
+## MG371A TUI-created Docs-only PR Authorization Design Gate
+
+MG371A defines the authorization design for a future first TUI-created
+docs-only branch and draft PR. It is documentation/policy only and does not
+implement or enable TUI-created branch/PR behavior.
+
+MG371A records the exact future MG371B authorization phrase:
+
+```text
+I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR
+```
+
+Without that exact phrase, the TUI must not create a real branch or PR.
+
+MG371A defines the future TUI branch pattern:
+
+```text
+tui/mg371b-docs-only-pr-<utc-date>-<short-id>
+```
+
+It also defines the first future docs-only allowlist, one-branch and
+one-draft-PR limits, draft-only PR policy, abort/rollback policy, required
+audit artifacts and hard forbidden actions. The future TUI must not merge,
+enable auto-merge, create release/tag/assets, execute tasks, claim tasks, run a
+worker loop, run a queue runner, run forever, call live Hermes, call MCP, use
+arbitrary shell or expose secrets.
+
+MG371A records
+`skybridge.operator_tui_mg371a_tui_created_docs_pr_authorization_design_gate.v1`,
+`design_only=true`, `runtime_behavior_changed=false`,
+`tui_created_branch=false`, `tui_created_pr=false`,
+`real_execution_authorized=false`, `worker_loop_authorized=false`,
+`queue_runner_authorized=false`, `run_forever_authorized=false`,
+`auto_merge_authorized=false`, `release_tag_asset_authorized=false` and
+`token_printed=false`.
+
+Design-gate artifacts are written under
+`.agent/tmp/operator-tui/mg371a-design-gate/`.
+
+The MG371A report is
+`docs/operator/MG371A_TUI_CREATED_DOCS_ONLY_PR_AUTHORIZATION_DESIGN_GATE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1202,6 +1244,9 @@ controller or unattended executor.
 - MG370D Review Gate for Codex-controller Docs-only PR Repeatability: freezes
   two Codex-controller docs-only PRs as repeatable. It recommends MG371A as a
   design gate before any TUI-created real branch or PR.
+- MG371A TUI-created Docs-only PR Authorization Design Gate: defines the exact
+  future MG371B authorization phrase, branch policy, allowlist, PR policy,
+  abort policy and audit artifacts. It does not create a branch or PR.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

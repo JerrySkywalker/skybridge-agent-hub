@@ -1,5 +1,27 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 371A TUI-created Docs-only PR Authorization Design Gate
+
+- Created the design-only authorization gate for a future first TUI-created
+  docs-only branch and draft PR.
+- Defined the exact future MG371B authorization phrase:
+  `I_UNDERSTAND_AUTHORIZE_MG371B_FIRST_TUI_CREATED_DOCS_ONLY_BRANCH_AND_DRAFT_PR`.
+- Defined the future branch naming pattern,
+  `tui/mg371b-docs-only-pr-<utc-date>-<short-id>`, the docs-only changed-files
+  allowlist, one-branch/one-draft-PR limits, draft PR policy, abort/rollback
+  policy and required audit artifacts.
+- Preserved `design_only=true`, `runtime_behavior_changed=false`,
+  `tui_created_branch=false`, `tui_created_pr=false`,
+  `real_execution_authorized=false`, `worker_loop_authorized=false`,
+  `queue_runner_authorized=false`, `run_forever_authorized=false`,
+  `auto_merge_authorized=false`, `release_tag_asset_authorized=false` and
+  `token_printed=false`.
+- Wrote sanitized design artifacts under
+  `.agent/tmp/operator-tui/mg371a-design-gate/` using
+  `skybridge.operator_tui_mg371a_tui_created_docs_pr_authorization_design_gate.v1`.
+- Recommended next milestone:
+  MG371B First TUI-created Docs-only PR under Explicit Authorization.
+
 ## 2026-07-06 Mega Goal 370D Codex-controller Docs-only PR Repeatability Review Gate
 
 - Reviewed MG370A PR #302 and MG370C PR #304 as two real docs-only PRs created
