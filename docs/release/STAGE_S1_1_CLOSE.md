@@ -267,15 +267,20 @@ enable real execution, does not start worker or queue loops, does not run
 forever, does not call live Hermes or MCP, does not enable auto-merge, does not
 create release/tag/assets and does not print tokens.
 
-Recommended options for the next stage remain independent and require explicit
-authorization:
+MG372A starts the product-verifiable MVP demo cut and freezes MG371B /
+TUI-created PR work for now. The new next-stage options are:
 
-1. Retry MG371B First TUI-created Docs-only PR under Explicit Authorization if
-   MG371B1 passes.
-2. Operator TUI polish before any TUI-created PR, with all mutation disabled.
-3. Any future real execution requires explicit human authorization.
-4. Any TUI-created real branch or PR requires the exact MG371B authorization
-   phrase before branch or PR creation.
+1. MG372A SkyBridge MVP Demo Spine: one local command creates an isolated demo
+   server/database, demo project, demo goal, demo task and demo worker, then
+   completes exactly one safe task with PollOnce semantics and sanitized
+   reports.
+2. MG372B Controller-created Draft PR Demo: build on the MVP spine with a
+   controller-created draft PR demo. This is not TUI-created PR behavior.
+3. MG371B / TUI-created real branch and PR work remains frozen until a future
+   explicit goal reopens it.
+4. Any future real execution requires explicit human authorization.
+5. Any TUI-created real branch or PR requires a separate future authorization
+   gate before branch or PR creation.
 
 ## Read-Only Audit
 
