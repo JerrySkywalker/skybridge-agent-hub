@@ -134,8 +134,10 @@ human-operated manual pass
 
 Recommended next milestone:
 
-- `MG369A-YOLO Fixture Single-Step Experiment`
-- or `MG369A Self-Drive Single-Step Experiment`
+- `MG369A-YOLO Fixture Single-Step Experiment` was later run as a
+  fixture-only self-drive report.
+- Next recommended gate after a passing MG369A-YOLO report:
+  `MG369B-YOLO Fixture Experiment Review Gate`.
 
 Any future real execution requires a separate goal with explicit human
 authorization.

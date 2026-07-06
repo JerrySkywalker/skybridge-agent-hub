@@ -1,5 +1,27 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 369A-YOLO Fixture Single-Step TUI Experiment
+
+- Ran the first MG369-class fixture-only single-step TUI experiment with the
+  simplified guide, `--yolo-fixture-only`, Codex self-drive and
+  `--runtime-timeout-ms 120000`.
+- Wrote sanitized evidence under `.agent/tmp/operator-tui/mg369a-yolo/`,
+  including `mg369a-yolo-report.json`, `mg369a-yolo-report.md`,
+  `mg369a-action-history.json`, `mg369a-safety-report.json` and
+  `mg369a-artifact-index.json`.
+- Recorded `self_drive_used=true`, `yolo_fixture_only=true`,
+  `manual_verification_performed=false`,
+  `does_not_claim_human_validation=true`, `raw_input_persisted=false` and
+  `token_printed=false`.
+- Verified the candidate fixture flow, bounded single-step preview,
+  start-one fixture action, safe pause fixture and abort preview fixture.
+- Kept all real execution, TUI branch/PR creation, task creation/claim,
+  queue/worker loop, run forever, live Hermes, MCP, auto-merge,
+  release/tag and asset-upload flags false.
+- Documented the result as a fixture-only self-drive pass, not real execution
+  and not human-operated validation.
+- Recommended next milestone: MG369B-YOLO Fixture Experiment Review Gate.
+
 ## 2026-07-06 Mega Goal 368L Self-Drive YOLO Acceptance Policy
 
 - Clarified the fixture-only/no-real-execution TUI acceptance policy after
