@@ -1,5 +1,31 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372A SkyBridge MVP Demo Spine
+
+- Added `scripts/powershell/skybridge-mvp-demo.ps1` with `local-safe`,
+  `status` and `report` modes.
+- The `local-safe` mode can start a bounded local SkyBridge server with an
+  isolated SQLite database, create the demo project `skybridge-mvp-demo`,
+  create the demo goal `mg372a-local-safe-demo`, create the demo task
+  `mg372a-local-safe-task-001`, register the demo worker
+  `mg372a-local-demo-worker`, claim/start/complete exactly one task and write
+  sanitized reports.
+- Added MVP demo artifacts under `.agent/tmp/skybridge-mvp-demo/` using schema
+  `skybridge.mvp_demo.local_safe.v1`.
+- Added smokes:
+  `smoke:skybridge-mvp-demo-local-safe`,
+  `smoke:skybridge-mvp-demo-report`,
+  `smoke:skybridge-mvp-demo-no-pr` and
+  `smoke:skybridge-mvp-demo-no-codex`.
+- Preserved `codex_called=false`, `pr_created=false`,
+  `branch_created=false`, `worker_loop_started=false`,
+  `queue_runner_started=false`, `run_forever_started=false`,
+  `hermes_live_called=false`, `mcp_run_called=false`,
+  `auto_merge_enabled=false`, `release_created=false`,
+  `tag_created=false`, `asset_uploaded=false` and `token_printed=false`.
+- Strategic reset: MG371B / TUI-created PR work is frozen for now. The next
+  recommended product milestone is MG372B Controller-created Draft PR Demo.
+
 ## 2026-07-06 Mega Goal 371B0 TUI-created Docs-only PR Capability Staging
 
 - Implemented the staged TUI docs-only PR capability path behind

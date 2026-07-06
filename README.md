@@ -199,6 +199,21 @@ corepack pnpm install
 corepack pnpm check
 ```
 
+Run the local MVP demo:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode local-safe `
+  -UseTempDatabase `
+  -Json
+```
+
+The demo starts an isolated local server/database, creates a demo
+project/goal/task, registers a local demo worker, completes one safe task with
+PollOnce semantics and writes reports under `.agent/tmp/skybridge-mvp-demo/`.
+It does not call Codex, create branches or PRs, start worker loops, deploy, tag
+or upload assets. See [docs/product/SKYBRIDGE_MVP_DEMO.md](docs/product/SKYBRIDGE_MVP_DEMO.md).
+
 Start the local server and web dashboard:
 
 ```powershell
