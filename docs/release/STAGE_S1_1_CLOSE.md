@@ -245,11 +245,22 @@ does not create a TUI branch or PR, enable runtime behavior, authorize real
 execution, start worker/queue loops, run forever, auto-merge, release, tag or
 upload assets.
 
+MG371B0 stages the TUI-created docs-only PR capability behind
+disabled-by-default real-mutation gates. It adds the TUI state machine,
+branch-policy validator, future MG371B allowlist validator, draft PR metadata
+policy, fake provider, blocked real-provider request path, abort policy
+evidence and MG371B0 artifacts. It is not MG371B: the TUI does not create a
+real branch or PR, does not run `git push`, does not run `gh pr create`, does
+not call the GitHub API, does not enable real execution, does not start worker
+or queue loops, does not run forever, does not call live Hermes or MCP, does
+not enable auto-merge, does not create release/tag/assets and does not print
+tokens.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
 1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
-   MG371A passes.
+   MG371B0 passes.
 2. Operator TUI polish before any TUI-created PR, with all mutation disabled.
 3. Any future real execution requires explicit human authorization.
 4. Any TUI-created real branch or PR requires the exact MG371B authorization

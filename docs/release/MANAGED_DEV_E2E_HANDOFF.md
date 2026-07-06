@@ -277,6 +277,17 @@ design-only: no TUI-created branch, no TUI-created PR, no real execution, no
 runtime behavior change, no worker loop, no queue runner, no run forever, no
 auto-merge, no release/tag/assets and `token_printed=false`.
 
+MG371B0 stages the TUI-created docs-only PR capability before MG371B. It adds
+the TUI state machine, branch policy validation, future MG371B allowlist
+validation, draft PR metadata policy, fake-provider boundary, blocked
+real-provider request path, abort policy evidence and local artifacts under
+`.agent/tmp/operator-tui/mg371b0-capability-staging/`. The fake provider is
+default and writes simulated metadata only. MG371B0 proves no real TUI branch
+or PR is created, no `git push`, `gh pr create` or GitHub API call is made by
+the TUI, and no real execution, worker loop, queue runner, run forever, live
+Hermes, MCP, auto-merge, release, tag or asset upload is enabled.
+`token_printed=false`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -347,10 +358,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG371A, continue only under a new explicit goal:
+After MG371B0, continue only under a new explicit goal:
 
 1. MG371B First TUI-created Docs-only PR under Explicit Authorization if
-   MG371A passes.
+   MG371B0 passes.
 2. Any real execution path requires explicit human authorization.
 3. Any TUI-created real branch or PR requires the exact MG371B authorization
    phrase before branch or PR creation.

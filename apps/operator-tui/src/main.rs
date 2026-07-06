@@ -3,6 +3,7 @@ mod app;
 mod candidate;
 mod collect;
 mod commands;
+mod docs_pr_capability;
 mod input_ux;
 mod interactive;
 mod manual_reliability;
@@ -44,6 +45,26 @@ fn main() -> anyhow::Result<()> {
     }
     if cli.simulate_docs_pr {
         let report = ux_yolo::run_mg369c_docs_pr_simulation(&mut app, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if cli.stage_tui_docs_pr_capability {
+        if !cli.yolo_fixture_only {
+            anyhow::bail!("--stage-tui-docs-pr-capability requires --yolo-fixture-only");
+        }
+        if !cli.self_drive_dry_run {
+            anyhow::bail!("--stage-tui-docs-pr-capability requires --self-drive-dry-run");
+        }
+        let options = docs_pr_capability::Mg371b0Options {
+            output_dir,
+            scenario: cli.docs_pr_capability_scenario,
+            fake_provider_requested: cli.fake_docs_pr_provider,
+            real_provider_requested: cli.request_real_docs_pr_provider,
+            authorization_phrase: cli.docs_pr_authorization_phrase.clone(),
+            branch_name: cli.docs_pr_branch_name.clone(),
+            changed_files: cli.docs_pr_changed_files.clone(),
+        };
+        let report = docs_pr_capability::run_mg371b0_capability_staging(&options)?;
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
     }

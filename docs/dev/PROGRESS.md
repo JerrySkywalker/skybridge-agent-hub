@@ -1,5 +1,34 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 371B0 TUI-created Docs-only PR Capability Staging
+
+- Implemented the staged TUI docs-only PR capability path behind
+  disabled-by-default real-mutation gates.
+- Added the MG371B0 state machine, branch policy validation, MG371A future
+  allowlist validation, draft PR metadata policy, provider boundary, abort
+  policy documentation and artifact writer under
+  `.agent/tmp/operator-tui/mg371b0-capability-staging/`.
+- Kept the fake provider as the MG371B0 default. It records simulated branch
+  and draft PR metadata only and never calls `git push`, `gh pr create` or the
+  GitHub API.
+- Added a blocked real-provider request path proving the future MG371B
+  authorization phrase is inert fixture/policy data in MG371B0:
+  `future_authorization_phrase_used_for_real_mutation=false` and
+  `real_mutation_authorized=false`.
+- Added smokes for capability staging, unauthorized real mutation blocked,
+  allowlist enforcement, branch policy enforcement, no real PR and no real
+  execution.
+- Preserved `TUI_created_branch=false`, `TUI_created_PR=false`,
+  `git_push_called=false`, `gh_pr_create_called=false`,
+  `github_api_called=false`, `real_task_execution_enabled=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false`,
+  `raw_input_persisted=false` and `token_printed=false`.
+- MG371B0 does not authorize MG371B. The next recommendation remains
+  MG371B First TUI-created Docs-only PR under Explicit Authorization only if
+  MG371B0 passes.
+
 ## 2026-07-06 Mega Goal 371A TUI-created Docs-only PR Authorization Design Gate
 
 - Created the design-only authorization gate for a future first TUI-created
