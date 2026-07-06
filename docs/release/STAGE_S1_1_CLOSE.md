@@ -223,13 +223,21 @@ cloud parity was ok. It keeps `real_execution_authorized=false`,
 `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
 `token_printed=false`.
 
+MG370C is the second real docs-only PR creation milestone under explicit human
+authorization. It allows exactly one second Codex-controller docs-only branch
+and one draft PR while preserving `TUI-created branch=false`,
+`TUI-created PR=false`, `real_task_execution_enabled=false`, worker/queue loops
+disabled, auto-merge disabled, release/tag/assets disabled and non-docs changes
+unauthorized.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG370C Codex-controller Docs-only PR Repetition if MG370B passes.
+1. MG370D Review Gate for Codex-controller Docs-only PR Repeatability if
+   MG370C passes.
 2. Any future real execution requires explicit human authorization.
 3. Any TUI-created real branch or PR requires a later separate milestone after
-   MG370B and a repeatability gate.
+   MG370C and the repeatability review gate.
 
 ## Read-Only Audit
 
