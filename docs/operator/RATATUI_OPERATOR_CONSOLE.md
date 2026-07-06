@@ -727,6 +727,95 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
   --output-dir .agent/tmp/operator-tui/manual-reliability
 ```
 
+## MG368K Scope
+
+MG368K repairs the operator experience before another manual dry run. It keeps
+the MG368J reliability safety boundary, but adds a simpler guided path, a
+bilingual interface layer, fixture-only YOLO testing and a deterministic
+Codex self-drive harness.
+
+The simplified guide is enabled with `--operator-guide` or `--simple-guide`.
+It shows one operator step at a time instead of the full tabbed surface:
+current step, next action, command status, safe-to-continue state, one primary
+key, expected result, current blocker, compact hints and footer safety flags.
+The full tab layout remains available when guide mode is not requested.
+
+Language support is available with:
+
+```powershell
+--lang en
+--lang zh-CN
+```
+
+In normal interactive mode, `L` toggles the visible UI language. Status labels,
+guide steps, action labels, confirmation/reason dialog labels, running-guard
+messages, timeout guidance, mismatch diagnostics, footer help, safety status
+and tiny-layout warnings are translated. Exact confirmation strings are not
+translated.
+
+Fixture-only YOLO mode is enabled with `--yolo-fixture-only`. It bypasses exact
+confirmation entry only for fixture-safe/no-real-execution TUI dry-run actions:
+generate candidate fixture, validate candidate, review fixture metadata,
+append fixture metadata, preview bounded action, start one fixture-safe goal,
+safe pause fixture with a canned reason and abort preview fixture with a canned
+reason. It does not enable real task execution, TUI-created branch/PR creation,
+the queue runner, worker loop, run forever, live Hermes, MCP, auto-merge,
+release/tag or asset upload.
+
+Codex can exercise the full guide flow without Jerry pasting long
+confirmations:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --operator-guide `
+  --yolo-fixture-only `
+  --self-drive-dry-run `
+  --output-dir .agent/tmp/operator-tui/ux-yolo
+```
+
+`--self-drive-dry-run` is rejected unless `--yolo-fixture-only` is present.
+The harness records step history, language toggles, confirmation bypass
+evidence, running-guard evidence and no-real-execution safety flags, then exits
+deterministically.
+
+Recommended manual command after MG368K, before retrying a real exact
+confirmation dry run:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --yolo-fixture-only `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/ux-yolo
+```
+
+For English UI, replace `--lang zh-CN` with `--lang en`.
+
+MG368K also hardens confirmation input behavior. Confirmation buffers start
+empty when opened, action hotkeys are not inserted into confirmation text,
+Ctrl+U resets the buffer to length `0`, Esc cancels and clears the buffer,
+successful submit clears the buffer, mismatches keep sanitized diagnostics
+without raw input, and duplicate-paste diagnostics set
+`likely_duplicate_paste=true`. Bracketed paste is enabled when supported by the
+terminal backend.
+
+MG368K writes:
+
+- `.agent/tmp/operator-tui/ux-yolo/ux-yolo-state.json`
+- `.agent/tmp/operator-tui/ux-yolo/ux-yolo-report.json`
+- `.agent/tmp/operator-tui/ux-yolo/ux-yolo-report.md`
+- `.agent/tmp/operator-tui/ux-yolo/self-drive-report.json`
+- `.agent/tmp/operator-tui/ux-yolo/bilingual-report.json`
+- `.agent/tmp/operator-tui/ux-yolo/confirmation-buffer-report.json`
+- `.agent/tmp/operator-tui/ux-yolo/yolo-safety-report.json`
+- `.agent/tmp/operator-tui/ux-yolo/simplified-guide-snapshot.txt`
+- `.agent/tmp/operator-tui/ux-yolo/simplified-guide-zh-snapshot.txt`
+
+The MG368K report schema is
+`skybridge.operator_tui_ux_yolo_report.v1`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -752,6 +841,9 @@ fixture-safe paths. The safety boundary remains:
 - no MG369 docs-only PR creation in MG368E;
 - no MG369 retry in MG368F;
 - no MG368I reattempt or MG369A start in MG368J;
+- no real execution, TUI branch/PR creation, queue/worker loop, live Hermes,
+  MCP, auto-merge, release/tag/assets or exact-confirmation bypass outside
+  fixture-only mode in MG368K;
 - no start all;
 - no worker loop;
 - no queue runner;
@@ -772,9 +864,9 @@ controller or unattended executor.
 
 ## Future Phases
 
-- MG368I-R2 Ratatui Manual Dry Run Reattempt: use the MG368J guide and
-  reliability evidence paths to rerun the dry-run sequence and prove the
-  repaired confirmation, running-guard, timeout and tab/layout behavior.
+- MG368I-R3 Ratatui Manual Dry Run with Simplified Guide and Fixture-only YOLO:
+  use the MG368K guide, bilingual UI, self-drive evidence and confirmation
+  diagnostics to rerun the dry-run sequence with lower manual paste burden.
 - MG369A/B Manual Single-step Hosted-dev Experiment: perform the first real
   manual single-step hosted-dev experiment only after a passing MG368I dry run
   is recorded.

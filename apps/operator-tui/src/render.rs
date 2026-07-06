@@ -12,6 +12,7 @@ use crate::{
     input_ux,
     model::{timeline_steps, OperatorState},
     ui_layout::{self, OperatorLayoutMode},
+    ux_yolo,
     view_model::ViewModel,
 };
 
@@ -27,11 +28,15 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     let view_model = &app.view_model;
     let area = frame.area();
     if view_model.input_mode == "confirmation" {
-        draw_confirmation_dialog(frame, area, view_model);
+        draw_confirmation_dialog(frame, area, app);
         return;
     }
     if view_model.input_mode == "reason" {
-        draw_reason_dialog(frame, area, view_model);
+        draw_reason_dialog(frame, area, app);
+        return;
+    }
+    if app.operator_guide {
+        draw_operator_guide(frame, area, app);
         return;
     }
     match OperatorLayoutMode::detect(area) {
@@ -41,20 +46,71 @@ pub fn draw(frame: &mut Frame<'_>, app: &App) {
     }
 }
 
-fn draw_confirmation_dialog(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
-    let paragraph = Paragraph::new(input_ux::confirmation_dialog_lines(view_model).join("\n"))
+fn draw_confirmation_dialog(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let lines = if app.language == ux_yolo::Language::En {
+        input_ux::confirmation_dialog_lines(&app.view_model)
+    } else {
+        ux_yolo::confirmation_dialog_lines(&app.view_model, app.language)
+    };
+    let paragraph = Paragraph::new(lines.join("\n"))
         .block(panel_block("Confirmation Required"))
         .style(Style::default().fg(Color::Yellow))
         .wrap(Wrap { trim: true });
     frame.render_widget(paragraph, centered_rect(area, 82, 62));
 }
 
-fn draw_reason_dialog(frame: &mut Frame<'_>, area: Rect, view_model: &ViewModel) {
-    let paragraph = Paragraph::new(input_ux::reason_dialog_lines(view_model).join("\n"))
+fn draw_reason_dialog(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let lines = if app.language == ux_yolo::Language::En {
+        input_ux::reason_dialog_lines(&app.view_model)
+    } else {
+        ux_yolo::reason_dialog_lines(&app.view_model, app.language)
+    };
+    let paragraph = Paragraph::new(lines.join("\n"))
         .block(panel_block("Reason Required"))
         .style(Style::default().fg(Color::Cyan))
         .wrap(Wrap { trim: true });
     frame.render_widget(paragraph, centered_rect(area, 82, 62));
+}
+
+fn draw_operator_guide(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(6),
+        ])
+        .split(area);
+    let lines = ux_yolo::simplified_guide_lines(app, app.language);
+    let status = Paragraph::new(lines.iter().take(1).cloned().collect::<Vec<_>>().join("\n"))
+        .block(panel_block("Status"))
+        .wrap(Wrap { trim: true });
+    let guide = Paragraph::new(
+        lines
+            .iter()
+            .skip(2)
+            .take(8)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .block(panel_block("Operator Guide"))
+    .style(Style::default().fg(Color::Cyan))
+    .wrap(Wrap { trim: true });
+    let footer = Paragraph::new(
+        lines
+            .iter()
+            .skip(11)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .block(panel_block("Action Hints / Safety"))
+    .style(Style::default().fg(Color::Green))
+    .wrap(Wrap { trim: true });
+    frame.render_widget(status, chunks[0]);
+    frame.render_widget(guide, chunks[1]);
+    frame.render_widget(footer, chunks[2]);
 }
 
 fn draw_full_layout(frame: &mut Frame<'_>, area: Rect, app: &App) {

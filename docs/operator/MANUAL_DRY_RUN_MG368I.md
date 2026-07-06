@@ -152,6 +152,30 @@ cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
   --output-dir .agent/tmp/operator-tui/manual-reliability
 ```
 
+## MG368K Follow-Up UX Repair
+
+MG368I-R2 remained blocked during manual operation after MG368J. MG368K was
+added to reduce the manual confirmation and paste burden before another human
+reattempt. It adds a simplified operator guide, Chinese/English UI support, a
+fixture-only YOLO mode for no-real-execution dry runs, a Codex self-drive
+harness and confirmation-buffer/paste diagnostics.
+
+Recommended command for the next manual preparation pass:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --yolo-fixture-only `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/ux-yolo
+```
+
+This command is still fixture-only. It does not perform MG369, execute a real
+task, create a TUI branch/PR, start a queue runner or worker loop, call live
+Hermes/MCP, auto-merge, create release/tag/assets or print tokens.
+
 ## Safety Flags
 
 - TUI-created branch=false

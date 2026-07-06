@@ -11,6 +11,7 @@ mod render;
 mod runtime;
 mod single_step;
 mod ui_layout;
+mod ux_yolo;
 mod view_model;
 
 use std::{io, time::Duration};
@@ -18,7 +19,7 @@ use std::{io, time::Duration};
 use anyhow::Context;
 use app::{parse_cli, App};
 use crossterm::{
-    event::{self, Event},
+    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -28,6 +29,23 @@ fn main() -> anyhow::Result<()> {
     let cli = parse_cli(std::env::args().skip(1))?;
     let output_dir = cli.artifact_output_dir();
     let mut app = App::new(cli.state_mode, &output_dir);
+    app.language = cli.language;
+    app.operator_guide = cli.operator_guide;
+    app.yolo_fixture_only = cli.yolo_fixture_only;
+    app.sync_view_model();
+    if cli.self_drive_dry_run && !cli.yolo_fixture_only {
+        anyhow::bail!("--self-drive-dry-run requires --yolo-fixture-only");
+    }
+    if cli.ux_yolo_scenario.is_some() || cli.self_drive_dry_run {
+        let scenario = if cli.self_drive_dry_run {
+            ux_yolo::UxYoloScenario::SelfDrive
+        } else {
+            cli.ux_yolo_scenario
+        };
+        let report = ux_yolo::run_ux_yolo_smoke(&mut app, scenario, &output_dir)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     if cli.input_ux_scenario.is_some() {
         let report = input_ux::run_input_ux_smoke(&mut app, cli.input_ux_scenario, &output_dir)?;
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -50,6 +68,15 @@ fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&report)?);
             return Ok(());
         }
+    }
+    if cli.operator_guide && (cli.json || cli.snapshot || cli.write_report) {
+        let report = ux_yolo::run_ux_yolo_smoke(
+            &mut app,
+            ux_yolo::UxYoloScenario::SimplifiedGuide,
+            &output_dir,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
     }
     if cli.layout_scenario.is_some() {
         let report = ui_layout::run_layout_smoke(&mut app, cli.layout_scenario, &output_dir)?;
@@ -119,6 +146,7 @@ fn run_interactive(
     if !no_alt_screen {
         execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
     }
+    execute!(stdout, EnableBracketedPaste).context("failed to enable bracketed paste")?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("failed to initialize terminal")?;
@@ -127,6 +155,8 @@ fn run_interactive(
     let result = run_loop(app, &mut terminal, &output_dir, &mut command_runtime);
 
     disable_raw_mode().context("failed to disable terminal raw mode")?;
+    execute!(terminal.backend_mut(), DisableBracketedPaste)
+        .context("failed to disable bracketed paste")?;
     if !no_alt_screen {
         execute!(terminal.backend_mut(), LeaveAlternateScreen)
             .context("failed to leave alternate screen")?;
@@ -162,12 +192,18 @@ fn run_loop(
         terminal.draw(|frame| render::draw(frame, app))?;
 
         if event::poll(Duration::from_millis(250))? {
-            if let Event::Key(key) = event::read()? {
-                if interactive::handle_key_event(app, key, output_dir, command_runtime)?
-                    == interactive::InteractiveControl::Quit
-                {
-                    break;
+            match event::read()? {
+                Event::Key(key) => {
+                    if interactive::handle_key_event(app, key, output_dir, command_runtime)?
+                        == interactive::InteractiveControl::Quit
+                    {
+                        break;
+                    }
                 }
+                Event::Paste(value) => {
+                    interactive::handle_paste_event(app, &value, output_dir, command_runtime)?;
+                }
+                _ => {}
             }
         }
     }

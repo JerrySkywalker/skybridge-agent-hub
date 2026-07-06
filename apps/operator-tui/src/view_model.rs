@@ -33,6 +33,7 @@ pub struct ViewModel {
     pub confirmation_contains_cr_lf_tab: bool,
     pub confirmation_contains_non_ascii: bool,
     pub confirmation_looks_truncated: bool,
+    pub confirmation_likely_duplicate_paste: bool,
     pub confirmation_retry_guidance: String,
     pub confirmation_normalized: bool,
     pub confirmation_normalization_reason: String,
@@ -105,6 +106,7 @@ impl ViewModel {
             confirmation_contains_cr_lf_tab: false,
             confirmation_contains_non_ascii: false,
             confirmation_looks_truncated: false,
+            confirmation_likely_duplicate_paste: false,
             confirmation_retry_guidance: String::new(),
             confirmation_normalized: false,
             confirmation_normalization_reason: "none".to_string(),
@@ -180,6 +182,7 @@ impl ViewModel {
         self.confirmation_contains_cr_lf_tab = diagnostics.contains_cr_lf_tab;
         self.confirmation_contains_non_ascii = diagnostics.contains_non_ascii;
         self.confirmation_looks_truncated = diagnostics.looks_truncated;
+        self.confirmation_likely_duplicate_paste = diagnostics.likely_duplicate_paste;
         self.confirmation_retry_guidance = diagnostics.retry_guidance.clone();
         self.confirmation_normalized = diagnostics.confirmation_normalized;
         self.confirmation_normalization_reason = diagnostics.normalization_reason.clone();

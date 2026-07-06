@@ -13,6 +13,7 @@ $OperatorTuiRuntimeOutputDir = ".agent/tmp/operator-tui/runtime-refactor"
 $OperatorTuiLayoutOutputDir = ".agent/tmp/operator-tui/layout"
 $OperatorTuiInputUxOutputDir = ".agent/tmp/operator-tui/input-ux"
 $OperatorTuiManualReliabilityOutputDir = ".agent/tmp/operator-tui/manual-reliability"
+$OperatorTuiUxYoloOutputDir = ".agent/tmp/operator-tui/ux-yolo"
 
 function Invoke-OperatorTuiCargoCheck {
   $cargo = Get-Command cargo -ErrorAction SilentlyContinue
@@ -530,6 +531,91 @@ function Invoke-OperatorTuiManualReliabilitySmoke(
   }
 }
 
+function Invoke-OperatorTuiUxYoloSmoke(
+  [string]$Name,
+  [ValidateSet("simplified-guide", "bilingual", "yolo-fixture-only", "self-drive", "confirmation-buffer", "no-real-execution")]
+  [string]$Scenario,
+  [switch]$Reset,
+  [string]$OutputDir = $OperatorTuiUxYoloOutputDir
+) {
+  Invoke-OperatorTuiCargoCheck
+  if ($Reset) { Clear-OperatorTuiUxYoloArtifacts -OutputDir $OutputDir }
+
+  $args = @(
+    "--ux-yolo-smoke",
+    $Scenario,
+    "--yolo-fixture-only",
+    "--output-dir",
+    $OutputDir
+  )
+  if ($Scenario -eq "bilingual") {
+    $args += @("--lang", "en")
+  }
+
+  & cargo run --quiet --manifest-path apps/operator-tui/Cargo.toml -- @args | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "operator TUI UX YOLO smoke failed: $Scenario" }
+
+  $statePath = Join-Path $RepoRoot "$OutputDir/ux-yolo-state.json"
+  $reportPath = Join-Path $RepoRoot "$OutputDir/ux-yolo-report.json"
+  $reportMarkdownPath = Join-Path $RepoRoot "$OutputDir/ux-yolo-report.md"
+  $selfDrivePath = Join-Path $RepoRoot "$OutputDir/self-drive-report.json"
+  $bilingualPath = Join-Path $RepoRoot "$OutputDir/bilingual-report.json"
+  $confirmationPath = Join-Path $RepoRoot "$OutputDir/confirmation-buffer-report.json"
+  $safetyPath = Join-Path $RepoRoot "$OutputDir/yolo-safety-report.json"
+  $snapshotPath = Join-Path $RepoRoot "$OutputDir/simplified-guide-snapshot.txt"
+  $zhSnapshotPath = Join-Path $RepoRoot "$OutputDir/simplified-guide-zh-snapshot.txt"
+
+  foreach ($path in @($statePath, $reportPath, $reportMarkdownPath, $selfDrivePath, $bilingualPath, $confirmationPath, $safetyPath, $snapshotPath, $zhSnapshotPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing operator TUI UX YOLO artifact: $path" }
+  }
+
+  $reportMarkdown = Get-Content -Raw -LiteralPath $reportMarkdownPath
+  $snapshot = Get-Content -Raw -LiteralPath $snapshotPath
+  $zhSnapshot = Get-Content -Raw -LiteralPath $zhSnapshotPath
+  foreach ($text in @($reportMarkdown, $snapshot, $zhSnapshot)) {
+    Assert-NoUnsafeText $text
+  }
+
+  $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  $selfDrive = Get-Content -Raw -LiteralPath $selfDrivePath | ConvertFrom-Json
+  $bilingual = Get-Content -Raw -LiteralPath $bilingualPath | ConvertFrom-Json
+  $confirmation = Get-Content -Raw -LiteralPath $confirmationPath | ConvertFrom-Json
+  $safety = Get-Content -Raw -LiteralPath $safetyPath | ConvertFrom-Json
+
+  Assert-OperatorTuiUxYoloShape `
+    -State $state `
+    -Report $report `
+    -SelfDrive $selfDrive `
+    -Bilingual $bilingual `
+    -Confirmation $confirmation `
+    -Safety $safety `
+    -Snapshot $snapshot `
+    -ZhSnapshot $zhSnapshot
+  Assert-OperatorTuiUxYoloNoRealExecution -Report $report -Safety $safety
+
+  [pscustomobject]@{
+    output_dir = $OutputDir
+    state_path = $statePath
+    report_path = $reportPath
+    report_markdown_path = $reportMarkdownPath
+    self_drive_path = $selfDrivePath
+    bilingual_path = $bilingualPath
+    confirmation_path = $confirmationPath
+    safety_path = $safetyPath
+    snapshot_path = $snapshotPath
+    zh_snapshot_path = $zhSnapshotPath
+    state = $state
+    report = $report
+    self_drive = $selfDrive
+    bilingual = $bilingual
+    confirmation = $confirmation
+    safety = $safety
+    snapshot = $snapshot
+    zh_snapshot = $zhSnapshot
+  }
+}
+
 function Clear-OperatorTuiCandidateArtifacts([string]$OutputDir = $OperatorTuiCandidateOutputDir) {
   $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
   $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
@@ -617,6 +703,18 @@ function Clear-OperatorTuiManualReliabilityArtifacts([string]$OutputDir = $Opera
 
   if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to remove non-temp operator TUI manual reliability artifact path: $operatorDir"
+  }
+  if (Test-Path -LiteralPath $operatorDir) {
+    Remove-Item -LiteralPath $operatorDir -Recurse -Force
+  }
+}
+
+function Clear-OperatorTuiUxYoloArtifacts([string]$OutputDir = $OperatorTuiUxYoloOutputDir) {
+  $tmpRoot = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".agent/tmp"))
+  $operatorDir = [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))
+
+  if (-not $operatorDir.StartsWith($tmpRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove non-temp operator TUI UX YOLO artifact path: $operatorDir"
   }
   if (Test-Path -LiteralPath $operatorDir) {
     Remove-Item -LiteralPath $operatorDir -Recurse -Force
@@ -1011,6 +1109,128 @@ function Assert-OperatorTuiManualReliabilityNoRealExecution($Report) {
   Assert-False $Report.tag_created "tag_created"
   Assert-False $Report.asset_uploaded "asset_uploaded"
   Assert-TokenPrintedFalse $Report
+}
+
+function Assert-OperatorTuiUxYoloShape($State, $Report, $SelfDrive, $Bilingual, $Confirmation, $Safety, [string]$Snapshot, [string]$ZhSnapshot) {
+  if ($State.schema -ne "skybridge.operator_tui_ux_yolo_state.v1") {
+    throw "Unexpected operator TUI UX YOLO state schema."
+  }
+  if ($Report.schema -ne "skybridge.operator_tui_ux_yolo_report.v1") {
+    throw "Unexpected operator TUI UX YOLO report schema."
+  }
+  if ($Report.mode -ne "ux-yolo") { throw "UX YOLO report mode mismatch." }
+  if ($SelfDrive.schema -ne "skybridge.operator_tui_self_drive_report.v1") {
+    throw "Unexpected self-drive report schema."
+  }
+  if ($Bilingual.schema -ne "skybridge.operator_tui_bilingual_report.v1") {
+    throw "Unexpected bilingual report schema."
+  }
+  if ($Confirmation.schema -ne "skybridge.operator_tui_confirmation_buffer_report.v1") {
+    throw "Unexpected confirmation buffer report schema."
+  }
+  if ($Safety.schema -ne "skybridge.operator_tui_yolo_safety_report.v1") {
+    throw "Unexpected YOLO safety report schema."
+  }
+
+  Assert-True $Report.simplified_guide_available "simplified_guide_available"
+  Assert-True $Report.simplified_guide_default_for_manual_dry_run "simplified_guide_default_for_manual_dry_run"
+  Assert-True $Report.bilingual_ui_available "bilingual_ui_available"
+  Assert-True $Report.language_toggle_available "language_toggle_available"
+  Assert-True $Report.zh_cn_translations_available "zh_cn_translations_available"
+  Assert-True $Report.exact_confirmations_untranslated "exact_confirmations_untranslated"
+  Assert-True $Report.yolo_fixture_only_available "yolo_fixture_only_available"
+  Assert-True $Report.yolo_skips_exact_confirmations_only_in_fixture_mode "yolo_skips_exact_confirmations_only_in_fixture_mode"
+  Assert-True $Report.yolo_real_execution_blocked "yolo_real_execution_blocked"
+  Assert-True $Report.yolo_branch_pr_blocked "yolo_branch_pr_blocked"
+  Assert-True $Report.yolo_queue_worker_blocked "yolo_queue_worker_blocked"
+  Assert-True $Report.self_drive_available "self_drive_available"
+  Assert-True $Report.self_drive_requires_fixture_only "self_drive_requires_fixture_only"
+  Assert-True $Report.confirmation_buffer_starts_empty "confirmation_buffer_starts_empty"
+  Assert-True $Report.action_hotkey_not_inserted_into_confirmation "action_hotkey_not_inserted_into_confirmation"
+  Assert-True $Report.duplicate_paste_detection_available "duplicate_paste_detection_available"
+  Assert-False $Report.raw_input_persisted "raw_input_persisted"
+  Assert-False $Report.token_printed "ux yolo token_printed"
+  Assert-False $State.token_printed "ux yolo state token_printed"
+  Assert-False $SelfDrive.token_printed "self-drive token_printed"
+  Assert-False $Bilingual.token_printed "bilingual token_printed"
+  Assert-False $Confirmation.token_printed "confirmation buffer token_printed"
+  Assert-False $Safety.token_printed "yolo safety token_printed"
+
+  $languages = @($Report.available_languages | ForEach-Object { [string]$_ })
+  foreach ($language in @("en", "zh-CN")) {
+    if ($languages -notcontains $language) { throw "Missing language: $language" }
+  }
+
+  foreach ($exactConfirmation in @(
+    $OperatorTuiReviewConfirmation,
+    $OperatorTuiAppendConfirmation,
+    $OperatorTuiStartConfirmation,
+    $OperatorTuiPauseConfirmation,
+    $OperatorTuiAbortConfirmation
+  )) {
+    if ($ZhSnapshot -notmatch [regex]::Escape($exactConfirmation)) {
+      throw "zh-CN simplified guide translated or omitted exact confirmation: $exactConfirmation"
+    }
+  }
+
+  foreach ($needle in @("Current step", "Next action", "Command status", "Safe to continue", "Expected result", "token_printed=false")) {
+    if ($Snapshot -notmatch [regex]::Escape($needle)) { throw "Simplified guide snapshot missing: $needle" }
+  }
+  foreach ($needle in @("当前步骤", "下一步", "命令状态", "可以继续", "预期结果", "不会真实执行", "token_printed=false")) {
+    if ($ZhSnapshot -notmatch [regex]::Escape($needle)) { throw "zh-CN simplified guide snapshot missing: $needle" }
+  }
+
+  Assert-True $Bilingual.bilingual_ui_available "bilingual bilingual_ui_available"
+  Assert-True $Bilingual.language_toggle_available "bilingual language_toggle_available"
+  Assert-True $Bilingual.zh_cn_translations_available "bilingual zh_cn_translations_available"
+  Assert-True $Bilingual.exact_confirmations_untranslated "bilingual exact_confirmations_untranslated"
+  Assert-True $SelfDrive.self_drive_available "self_drive_available"
+  Assert-True $SelfDrive.self_drive_requires_fixture_only "self_drive_requires_fixture_only"
+  Assert-True $SelfDrive.used_same_action_routing "used_same_action_routing"
+  Assert-True $SelfDrive.waited_for_commands_to_finish "waited_for_commands_to_finish"
+  Assert-True $SelfDrive.running_guard_evidence_recorded "running_guard_evidence_recorded"
+  Assert-True $SelfDrive.no_real_execution_safety_flags_recorded "no_real_execution_safety_flags_recorded"
+  Assert-True $Confirmation.confirmation_buffer_starts_empty "confirmation_buffer_starts_empty"
+  Assert-True $Confirmation.action_hotkey_not_inserted_into_confirmation "action_hotkey_not_inserted_into_confirmation"
+  Assert-True $Confirmation.ctrl_u_resets_length_zero "ctrl_u_resets_length_zero"
+  Assert-True $Confirmation.esc_cancels_and_clears_buffer "esc_cancels_and_clears_buffer"
+  Assert-True $Confirmation.successful_submit_clears_buffer "successful_submit_clears_buffer"
+  Assert-True $Confirmation.mismatch_preserves_diagnostics "mismatch_preserves_diagnostics"
+  Assert-True $Confirmation.paste_exact_once_has_expected_length "paste_exact_once_has_expected_length"
+  Assert-True $Confirmation.duplicate_paste_detection_available "duplicate_paste_detection_available"
+  Assert-True $Confirmation.likely_duplicate_paste "likely_duplicate_paste"
+  Assert-False $Confirmation.raw_input_persisted "confirmation raw_input_persisted"
+}
+
+function Assert-OperatorTuiUxYoloNoRealExecution($Report, $Safety) {
+  foreach ($name in @(
+    "real_task_execution_enabled",
+    "real_branch_creation_enabled",
+    "real_pr_creation_enabled",
+    "task_created",
+    "task_claimed",
+    "execution_started",
+    "worker_loop_started",
+    "queue_runner_started",
+    "run_forever_started",
+    "hermes_live_called",
+    "mcp_run_called",
+    "auto_merge_enabled",
+    "release_created",
+    "tag_created",
+    "asset_uploaded"
+  )) {
+    Assert-False $Report.$name "ux_yolo_report.$name"
+    Assert-False $Safety.$name "yolo_safety.$name"
+  }
+  Assert-True $Report.yolo_real_execution_blocked "report yolo_real_execution_blocked"
+  Assert-True $Report.yolo_branch_pr_blocked "report yolo_branch_pr_blocked"
+  Assert-True $Report.yolo_queue_worker_blocked "report yolo_queue_worker_blocked"
+  Assert-True $Safety.yolo_real_execution_blocked "safety yolo_real_execution_blocked"
+  Assert-True $Safety.yolo_branch_pr_blocked "safety yolo_branch_pr_blocked"
+  Assert-True $Safety.yolo_queue_worker_blocked "safety yolo_queue_worker_blocked"
+  Assert-TokenPrintedFalse $Report
+  Assert-TokenPrintedFalse $Safety
 }
 
 function Assert-OperatorTuiPanels($Panels, [string]$SnapshotText) {

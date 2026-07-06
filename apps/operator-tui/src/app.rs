@@ -26,6 +26,7 @@ use crate::{
         DEFAULT_SINGLE_STEP_OUTPUT_DIR,
     },
     ui_layout::{LayoutSmokeScenario, DEFAULT_LAYOUT_OUTPUT_DIR},
+    ux_yolo::{Language, UxYoloScenario, DEFAULT_UX_YOLO_OUTPUT_DIR},
     view_model::ViewModel,
 };
 
@@ -55,6 +56,11 @@ pub struct Cli {
     pub input_ux_scenario: InputUxSmokeScenario,
     pub manual_reliability_scenario: ManualReliabilityScenario,
     pub manual_dry_run_guide: bool,
+    pub operator_guide: bool,
+    pub language: Language,
+    pub yolo_fixture_only: bool,
+    pub self_drive_dry_run: bool,
+    pub ux_yolo_scenario: UxYoloScenario,
 }
 
 impl Default for Cli {
@@ -84,6 +90,11 @@ impl Default for Cli {
             input_ux_scenario: InputUxSmokeScenario::None,
             manual_reliability_scenario: ManualReliabilityScenario::None,
             manual_dry_run_guide: false,
+            operator_guide: false,
+            language: Language::En,
+            yolo_fixture_only: false,
+            self_drive_dry_run: false,
+            ux_yolo_scenario: UxYoloScenario::None,
         }
     }
 }
@@ -96,6 +107,10 @@ impl Cli {
 
         if self.runtime_scenario.is_some() {
             return PathBuf::from(DEFAULT_RUNTIME_REFACTOR_OUTPUT_DIR);
+        }
+
+        if self.ux_yolo_scenario.is_some() || self.self_drive_dry_run || self.operator_guide {
+            return PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
         }
 
         if self.input_ux_scenario.is_some() {
@@ -128,6 +143,10 @@ pub struct App {
     pub interactive: InteractiveState,
     pub view_model: ViewModel,
     pub manual_dry_run_guide: bool,
+    pub operator_guide: bool,
+    pub language: Language,
+    pub language_toggled: bool,
+    pub yolo_fixture_only: bool,
 }
 
 impl App {
@@ -145,6 +164,10 @@ impl App {
             state_mode,
             interactive: InteractiveState::default(),
             manual_dry_run_guide: false,
+            operator_guide: false,
+            language: Language::En,
+            language_toggled: false,
+            yolo_fixture_only: false,
         }
     }
 
@@ -191,6 +214,12 @@ impl App {
         self.view_model.sync_state(&self.state);
         self.view_model.sync_interactive(&self.interactive);
         self.view_model.manual_dry_run_guide_visible = self.manual_dry_run_guide;
+    }
+
+    pub fn toggle_language(&mut self) {
+        self.language = self.language.toggle();
+        self.language_toggled = true;
+        self.sync_view_model();
     }
 
     pub fn report(&self, interactive_started: bool) -> OperatorReport {
@@ -418,6 +447,37 @@ pub fn parse_cli(args: impl IntoIterator<Item = String>) -> anyhow::Result<Cli> 
                     cli.output_dir = PathBuf::from(MANUAL_RELIABILITY_OUTPUT_DIR);
                 }
             }
+            "--operator-guide" | "--simple-guide" => {
+                cli.operator_guide = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
+                }
+            }
+            "--lang" => {
+                let value = iter.next().context("--lang requires a following value")?;
+                cli.language = Language::from_str(&value)?;
+            }
+            "--yolo-fixture-only" => {
+                cli.yolo_fixture_only = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
+                }
+            }
+            "--self-drive-dry-run" | "--operator-self-drive" => {
+                cli.self_drive_dry_run = true;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
+                }
+            }
+            "--ux-yolo-smoke" => {
+                let value = iter
+                    .next()
+                    .context("--ux-yolo-smoke requires a following value")?;
+                cli.ux_yolo_scenario = UxYoloScenario::from_str(&value)?;
+                if !cli.output_dir_provided {
+                    cli.output_dir = PathBuf::from(DEFAULT_UX_YOLO_OUTPUT_DIR);
+                }
+            }
             "--output-dir" => {
                 let value = iter
                     .next()
@@ -480,6 +540,16 @@ Flags:\n\
   --manual-dry-run-guide\n\
                          Open the MG368I reattempt guide/checklist surface and\n\
                          write artifacts without auto-executing any guide step\n\
+  --operator-guide, --simple-guide\n\
+                         Open the simplified MG368K operator guide surface\n\
+  --lang <en|zh-CN>      Select UI language; default en\n\
+  --yolo-fixture-only    Fixture-only no-real-execution YOLO dry-run mode\n\
+  --self-drive-dry-run, --operator-self-drive\n\
+                         Deterministically exercise the fixture-only guide flow;\n\
+                         requires --yolo-fixture-only\n\
+  --ux-yolo-smoke <s>    Run MG368K simplified-guide, bilingual,\n\
+                         yolo-fixture-only, self-drive, confirmation-buffer,\n\
+                         or no-real-execution simulation\n\
   --snapshot             Render non-interactive snapshot artifacts\n\
   --json                 Print report JSON to stdout\n\
   --write-report         Write report artifacts under --output-dir\n\

@@ -60,7 +60,9 @@ pub struct InteractiveState {
     pub selected_action_index: usize,
     pub input_mode: String,
     pub pending_action: String,
+    #[serde(skip)]
     pub input_buffer: String,
+    #[serde(skip)]
     pub pending_reason: String,
     pub input_feedback: String,
     pub retry_available: bool,
@@ -114,6 +116,7 @@ pub struct ConfirmationDiagnostics {
     pub contains_cr_lf_tab: bool,
     pub contains_non_ascii: bool,
     pub looks_truncated: bool,
+    pub likely_duplicate_paste: bool,
     pub retry_guidance: String,
     pub confirmation_normalized: bool,
     pub normalization_reason: String,
@@ -273,6 +276,7 @@ impl ConfirmationDiagnostics {
             contains_cr_lf_tab: false,
             contains_non_ascii: false,
             looks_truncated: false,
+            likely_duplicate_paste: false,
             retry_guidance:
                 "type or paste the exact confirmation; press Ctrl+U to clear or Esc to cancel"
                     .to_string(),
@@ -311,10 +315,16 @@ impl ConfirmationDiagnostics {
         let contains_non_ascii = !actual.is_ascii();
         let looks_truncated =
             actual_chars.len() < expected_chars.len() && expected.starts_with(actual);
+        let likely_duplicate_paste = looks_like_duplicate_paste(expected, actual);
         let normalization_reason = if confirmation_normalized {
             "trimmed_single_trailing_cr_or_lf_from_terminal_paste"
         } else {
             "none"
+        };
+        let retry_guidance = if likely_duplicate_paste {
+            "likely duplicate paste detected; press Ctrl+U once, paste the exact confirmation once, then press Enter".to_string()
+        } else {
+            "clear with Ctrl+U, paste the full exact confirmation, then press Enter; wait for completed/blocked/timed_out before starting another action".to_string()
         };
 
         Self {
@@ -327,7 +337,8 @@ impl ConfirmationDiagnostics {
             contains_cr_lf_tab,
             contains_non_ascii,
             looks_truncated,
-            retry_guidance: "clear with Ctrl+U, paste the full exact confirmation, then press Enter; wait for completed/blocked/timed_out before starting another action".to_string(),
+            likely_duplicate_paste,
+            retry_guidance,
             confirmation_normalized,
             normalization_reason: normalization_reason.to_string(),
             raw_input_persisted: false,
@@ -387,6 +398,32 @@ pub fn handle_key_event(
     runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<InteractiveControl> {
     handle_key_with_modifiers(app, key.code, key.modifiers, output_dir, runtime)
+}
+
+pub fn handle_paste_event(
+    app: &mut App,
+    value: &str,
+    output_dir: &Path,
+    _runtime: &mut OperatorRuntime,
+) -> anyhow::Result<InteractiveControl> {
+    match app.interactive.input_mode.as_str() {
+        "confirmation" => {
+            app.interactive.paste_friendly_input_observed = true;
+            app.interactive.input_buffer.push_str(value);
+            update_confirmation_metrics(app);
+            app.sync_view_model();
+            write_interactive_artifacts(output_dir, app)?;
+        }
+        "reason" => {
+            app.interactive.paste_friendly_input_observed = true;
+            app.interactive.input_buffer.push_str(value);
+            update_reason_preview(app);
+            app.sync_view_model();
+            write_interactive_artifacts(output_dir, app)?;
+        }
+        _ => {}
+    }
+    Ok(InteractiveControl::Continue)
 }
 
 fn handle_key_with_modifiers(
@@ -548,6 +585,10 @@ fn handle_normal_key(
             app.view_model.toggle_help();
             Ok(InteractiveControl::Continue)
         }
+        KeyCode::Char('l') | KeyCode::Char('L') => {
+            app.toggle_language();
+            Ok(InteractiveControl::Continue)
+        }
         KeyCode::Up => {
             if app.interactive.selected_action_index == 0 {
                 app.interactive.selected_action_index = Action::all().len() - 1;
@@ -625,8 +666,12 @@ fn handle_confirmation_key(
         }
         KeyCode::Char(value) => {
             app.interactive.paste_friendly_input_observed = true;
-            app.interactive.input_buffer.push(value);
-            update_confirmation_metrics(app);
+            if !modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+            {
+                app.interactive.input_buffer.push(value);
+                update_confirmation_metrics(app);
+            }
         }
         _ => {}
     }
@@ -690,8 +735,12 @@ fn handle_reason_key(
         }
         KeyCode::Char(value) => {
             app.interactive.paste_friendly_input_observed = true;
-            app.interactive.input_buffer.push(value);
-            update_reason_preview(app);
+            if !modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER)
+            {
+                app.interactive.input_buffer.push(value);
+                update_reason_preview(app);
+            }
         }
         _ => {}
     }
@@ -721,6 +770,17 @@ fn begin_or_dispatch(
         write_interactive_artifacts(output_dir, app)?;
         return Ok(InteractiveControl::Continue);
     }
+    if app.yolo_fixture_only && yolo_fixture_action_allowed(action) {
+        dispatch_action_async(
+            app,
+            action,
+            output_dir,
+            "",
+            yolo_canned_reason(action),
+            runtime,
+        )?;
+        return Ok(InteractiveControl::Continue);
+    }
     if reason_required(action) {
         app.interactive.begin_reason(action);
         write_interactive_artifacts(output_dir, app)?;
@@ -744,23 +804,32 @@ fn dispatch_action_async(
     runtime: &mut OperatorRuntime,
 ) -> anyhow::Result<()> {
     if let Some(expected) = confirmation_for(action) {
-        let check = check_confirmation(expected, confirmation);
-        app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
-        app.interactive.last_required_confirmation = expected.to_string();
-        app.interactive.last_confirmation_input_length = confirmation.chars().count();
-        app.interactive.last_confirmation_matched = check.accepted;
-        if !check.accepted {
-            app.interactive.exact_confirmation_mismatch_rejected = true;
-            app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
-            app.interactive.retry_available = true;
-            app.interactive.record(InteractiveLastAction::blocked(
-                action,
-                "exact_confirmation_mismatch",
-                vec!["exact_confirmation_mismatch".to_string()],
-            ));
-            app.sync_view_model();
-            write_interactive_artifacts(output_dir, app)?;
-            return Ok(());
+        if app.yolo_fixture_only && yolo_fixture_action_allowed(action) {
+            app.interactive.last_confirmation_diagnostics =
+                ConfirmationDiagnostics::from_input(expected, "", false);
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = 0;
+            app.interactive.last_confirmation_matched = true;
+            app.interactive.input_feedback = "yolo_fixture_only_confirmation_bypassed".to_string();
+        } else {
+            let check = check_confirmation(expected, confirmation);
+            app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = confirmation.chars().count();
+            app.interactive.last_confirmation_matched = check.accepted;
+            if !check.accepted {
+                app.interactive.exact_confirmation_mismatch_rejected = true;
+                app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
+                app.interactive.retry_available = true;
+                app.interactive.record(InteractiveLastAction::blocked(
+                    action,
+                    "exact_confirmation_mismatch",
+                    vec!["exact_confirmation_mismatch".to_string()],
+                ));
+                app.sync_view_model();
+                write_interactive_artifacts(output_dir, app)?;
+                return Ok(());
+            }
         }
     }
 
@@ -789,8 +858,12 @@ fn dispatch_action_async(
             command,
         } => {
             app.view_model.command_started(command_id, command.label());
-            let mut last =
-                InteractiveLastAction::allowed(action, "command_enqueued_nonblocking", Vec::new());
+            let result = if app.yolo_fixture_only && confirmation_for(action).is_some() {
+                "yolo_fixture_confirmation_bypassed_command_enqueued"
+            } else {
+                "command_enqueued_nonblocking"
+            };
+            let mut last = InteractiveLastAction::allowed(action, result, Vec::new());
             last.status = CommandStatus::Queued.as_str().to_string();
             last.reason_required = reason_required(action);
             last.reason_provided = !sanitized_reason.is_empty();
@@ -875,7 +948,7 @@ fn action_for_command(command: OperatorCommand) -> Action {
     }
 }
 
-fn dispatch_action_sync(
+pub(crate) fn dispatch_action_sync(
     app: &mut App,
     action: Action,
     output_dir: &Path,
@@ -883,22 +956,31 @@ fn dispatch_action_sync(
     reason: &str,
 ) -> anyhow::Result<()> {
     if let Some(expected) = confirmation_for(action) {
-        let check = check_confirmation(expected, confirmation);
-        app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
-        app.interactive.last_required_confirmation = expected.to_string();
-        app.interactive.last_confirmation_input_length = confirmation.chars().count();
-        app.interactive.last_confirmation_matched = check.accepted;
-        if !check.accepted {
-            app.interactive.exact_confirmation_mismatch_rejected = true;
-            app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
-            app.interactive.retry_available = true;
-            app.interactive.record(InteractiveLastAction::blocked(
-                action,
-                "exact_confirmation_mismatch",
-                vec!["exact_confirmation_mismatch".to_string()],
-            ));
-            write_interactive_artifacts(output_dir, app)?;
-            return Ok(());
+        if app.yolo_fixture_only && yolo_fixture_action_allowed(action) {
+            app.interactive.last_confirmation_diagnostics =
+                ConfirmationDiagnostics::from_input(expected, "", false);
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = 0;
+            app.interactive.last_confirmation_matched = true;
+            app.interactive.input_feedback = "yolo_fixture_only_confirmation_bypassed".to_string();
+        } else {
+            let check = check_confirmation(expected, confirmation);
+            app.interactive.last_confirmation_diagnostics = check.diagnostics.clone();
+            app.interactive.last_required_confirmation = expected.to_string();
+            app.interactive.last_confirmation_input_length = confirmation.chars().count();
+            app.interactive.last_confirmation_matched = check.accepted;
+            if !check.accepted {
+                app.interactive.exact_confirmation_mismatch_rejected = true;
+                app.interactive.input_feedback = "exact_confirmation_mismatch: lengths/index/hidden-character diagnostics recorded; clear with Ctrl+U and retry exact confirmation".to_string();
+                app.interactive.retry_available = true;
+                app.interactive.record(InteractiveLastAction::blocked(
+                    action,
+                    "exact_confirmation_mismatch",
+                    vec!["exact_confirmation_mismatch".to_string()],
+                ));
+                write_interactive_artifacts(output_dir, app)?;
+                return Ok(());
+            }
         }
     }
 
@@ -1018,8 +1100,12 @@ fn dispatch_action_sync(
         Action::Quit => interactive_artifact_paths(output_dir),
     };
 
-    let mut last =
-        InteractiveLastAction::allowed(action, "action_dispatched_fixture_safe", artifact_paths);
+    let result = if app.yolo_fixture_only && confirmation_for(action).is_some() {
+        "yolo_fixture_confirmation_bypassed_action_dispatched_fixture_safe"
+    } else {
+        "action_dispatched_fixture_safe"
+    };
+    let mut last = InteractiveLastAction::allowed(action, result, artifact_paths);
     last.reason_required = reason_required(action);
     last.reason_provided = !sanitized_reason.is_empty();
     last.reason_sanitized = reason_sanitized;
@@ -1197,6 +1283,42 @@ fn check_confirmation(expected: &str, actual: &str) -> ConfirmationCheck {
         accepted: false,
         diagnostics: ConfirmationDiagnostics::from_input(expected, actual, false),
     }
+}
+
+pub(crate) fn yolo_fixture_action_allowed(action: Action) -> bool {
+    matches!(
+        action,
+        Action::GenerateCandidateFixture
+            | Action::ValidateCandidate
+            | Action::ReviewCandidate
+            | Action::AppendCandidate
+            | Action::PreviewBoundedAction
+            | Action::StartOneGoal
+            | Action::SafePause
+            | Action::AbortTerminate
+    )
+}
+
+fn yolo_canned_reason(action: Action) -> &'static str {
+    match action {
+        Action::SafePause => "fixture-only yolo safe pause",
+        Action::AbortTerminate => "fixture-only yolo abort preview",
+        _ => "",
+    }
+}
+
+fn looks_like_duplicate_paste(expected: &str, actual: &str) -> bool {
+    if expected.is_empty() || actual.is_empty() || !actual.starts_with(expected) {
+        return false;
+    }
+    let repeated = format!("{expected}{expected}");
+    if actual == repeated {
+        return true;
+    }
+    actual
+        .get(expected.len()..)
+        .map(|tail| tail.contains(expected))
+        .unwrap_or(false)
 }
 
 fn trim_single_trailing_cr_lf(value: &str) -> &str {
