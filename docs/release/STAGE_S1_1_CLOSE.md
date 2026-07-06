@@ -197,11 +197,23 @@ TUI self-drive path records `docs_only_pr_simulation_used=true`,
 `raw_input_persisted=false` and `token_printed=false`. It is not real execution
 and not human-operated validation.
 
+MG369D-YOLO reviews the MG369C-YOLO docs-only PR simulation and freezes it as a
+metadata-only simulation pass. It does not authorize real PR creation, TUI
+branch/PR creation, real execution, worker loops or queue runners:
+`real_pr_creation_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `real_execution_authorized=false`,
+`worker_loop_authorized=false`, `queue_runner_authorized=false`,
+`TUI_created_branch=false`, `TUI_created_PR=false`, `git_push_called=false`,
+`gh_pr_create_called=false`, `github_api_called=false` and
+`token_printed=false`.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG369D-YOLO Docs-only PR Simulation Review Gate.
+1. MG370A Manual Authorization Gate for First Real Docs-only PR Creation.
 2. Any future real execution requires explicit human authorization.
+3. Any TUI-created real branch or PR requires a later separate milestone after
+   MG370A.
 
 ## Read-Only Audit
 

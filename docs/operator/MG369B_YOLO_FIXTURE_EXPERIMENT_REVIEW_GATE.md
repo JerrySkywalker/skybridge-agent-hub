@@ -148,4 +148,17 @@ MG369C does not authorize real execution, TUI-created real branches or PRs,
 worker loops or queue runners. The next recommended milestone after an MG369C
 pass is `MG369D-YOLO Docs-only PR Simulation Review Gate`.
 
+## MG369D Follow-up
+
+MG369D-YOLO reviewed the MG369C metadata-only docs PR simulation and froze it
+as a simulation pass. It preserves `real_pr_creation_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `real_execution_authorized=false`,
+`worker_loop_authorized=false`, `queue_runner_authorized=false` and
+`token_printed=false`.
+
+The next recommended milestone after MG369D is `MG370A Manual Authorization
+Gate for First Real Docs-only PR Creation`. MG370A must require explicit human
+authorization before any real PR creation, and the first real docs-only PR
+should be created by Codex controller, not TUI.
+
 `token_printed=false`

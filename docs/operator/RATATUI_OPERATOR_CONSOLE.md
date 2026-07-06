@@ -978,6 +978,43 @@ The report records `docs_only_pr_simulation_used=true`,
 The simulation report is
 `docs/operator/MG369C_YOLO_DOCS_ONLY_PR_SIMULATION.md`.
 
+## MG369D-YOLO Docs-only PR Simulation Review Gate
+
+MG369D-YOLO reviews the MG369C-YOLO metadata-only docs PR simulation and
+freezes what it proves. The result is a simulation pass only: no real branch,
+no real PR, no real execution and no human-operated validation.
+
+Review-gate artifacts are written under
+`.agent/tmp/operator-tui/mg369d-yolo-review/`:
+
+- `mg369d-review-report.json`
+- `mg369d-review-report.md`
+- `mg369d-safety-freeze.json`
+- `mg369d-next-stage-gates.json`
+
+MG369D-YOLO records
+`skybridge.operator_tui_mg369d_yolo_docs_pr_simulation_review_gate.v1`,
+`docs_pr_simulation_result=pass`, `real_pr_creation_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `real_execution_authorized=false`,
+`worker_loop_authorized=false`, `queue_runner_authorized=false` and
+`token_printed=false`.
+
+The frozen boundary keeps `TUI_created_branch=false`, `TUI_created_PR=false`,
+`git_push_called=false`, `gh_pr_create_called=false`,
+`github_api_called=false`, `real_task_execution_enabled=false`,
+`queue_runner_started=false`, `worker_loop_started=false`,
+`auto_merge_enabled=false`, `release_created=false`, `tag_created=false` and
+`asset_uploaded=false`.
+
+MG369D-YOLO recommends `MG370A Manual Authorization Gate for First Real
+Docs-only PR Creation`. MG370A must require explicit human authorization before
+real PR creation, allow only one docs-only branch and one draft PR, use Codex
+controller rather than the TUI, keep auto-merge/release/tag/assets disabled and
+verify cloud parity after any authorized merge/deploy.
+
+The review gate report is
+`docs/operator/MG369D_YOLO_DOCS_ONLY_PR_SIMULATION_REVIEW_GATE.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1036,8 +1073,10 @@ controller or unattended executor.
 - MG369C-YOLO Controlled Docs-only PR Creation Simulation: passed as a
   metadata-only self-drive simulation. It did not create a real branch or PR
   from the TUI and did not enable real execution.
-- MG369D-YOLO Docs-only PR Simulation Review Gate: recommended next if MG369C
-  passes. Any future real execution still requires explicit human
-  authorization.
+- MG369D-YOLO Docs-only PR Simulation Review Gate: freezes MG369C as a
+  metadata-only simulation pass and recommends MG370A as the next explicit
+  human authorization gate for one real docs-only draft PR created by Codex
+  controller, not TUI.
+- Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

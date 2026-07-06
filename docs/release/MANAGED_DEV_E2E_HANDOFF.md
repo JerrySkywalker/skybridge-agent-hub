@@ -213,6 +213,19 @@ release/tag/assets. Evidence is under `.agent/tmp/operator-tui/mg369c-yolo/`
 with schema `skybridge.operator_tui_mg369c_yolo_docs_pr_simulation.v1`.
 `token_printed=false`.
 
+MG369D-YOLO reviews and freezes the MG369C-YOLO docs-only PR simulation
+evidence. It records the controlled docs-only PR creation simulation as pass,
+but only as a metadata-only simulation: not real PR creation, not real branch
+creation, not real execution and not human-operated validation. The review
+keeps `real_pr_creation_authorized=false`,
+`tui_real_branch_pr_authorized=false`, `real_execution_authorized=false`,
+`worker_loop_authorized=false`, `queue_runner_authorized=false`,
+`TUI_created_branch=false`, `TUI_created_PR=false`, `git_push_called=false`,
+`gh_pr_create_called=false`, `github_api_called=false` and
+`token_printed=false`. Review artifacts are under
+`.agent/tmp/operator-tui/mg369d-yolo-review/` with schema
+`skybridge.operator_tui_mg369d_yolo_docs_pr_simulation_review_gate.v1`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -283,9 +296,11 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG369C-YOLO, continue only under a new explicit goal:
+After MG369D-YOLO, continue only under a new explicit goal:
 
-1. MG369D-YOLO Docs-only PR Simulation Review Gate.
+1. MG370A Manual Authorization Gate for First Real Docs-only PR Creation.
 2. Any real execution path requires explicit human authorization.
+3. Any TUI-created real branch or PR requires a separate later milestone after
+   MG370A.
 
 `token_printed=false`
