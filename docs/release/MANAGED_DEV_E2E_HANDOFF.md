@@ -226,6 +226,14 @@ keeps `real_pr_creation_authorized=false`,
 `.agent/tmp/operator-tui/mg369d-yolo-review/` with schema
 `skybridge.operator_tui_mg369d_yolo_docs_pr_simulation_review_gate.v1`.
 
+MG370A is the first real docs-only PR creation milestone after MG369D. It is
+explicitly authorized for exactly one Codex-controller docs-only branch and one
+draft PR. This does not authorize TUI-created real branches or PRs, real task
+execution, worker loops, queue runners, run forever, live Hermes, MCP,
+auto-merge, release, tag or asset upload. The branch is
+`codex/mg370a-first-real-docs-only-pr`; the report is
+`docs/operator/MG370A_FIRST_REAL_DOCS_ONLY_PR_CREATION.md`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -296,9 +304,10 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG369D-YOLO, continue only under a new explicit goal:
+After MG370A, continue only under a new explicit goal:
 
-1. MG370A Manual Authorization Gate for First Real Docs-only PR Creation.
+1. MG370B Review Gate for Codex-controller Docs-only PR Creation if MG370A
+   passes.
 2. Any real execution path requires explicit human authorization.
 3. Any TUI-created real branch or PR requires a separate later milestone after
    MG370A.

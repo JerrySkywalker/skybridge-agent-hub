@@ -135,6 +135,17 @@ separate milestone after MG370A with these gates:
 - audit artifacts required
 - cloud parity verification after merge/deploy
 
+## MG370A Follow-up
+
+MG370A is the first real docs-only PR creation milestone after this review gate.
+It is explicitly authorized for one Codex-controller branch and one draft PR.
+The TUI remains outside the branch/PR creation path:
+`TUI-created branch=false` and `TUI-created PR=false`.
+
+MG370A does not authorize real task execution, TUI-created real PRs, worker
+loops, queue runners, run forever, live Hermes, MCP, auto-merge, release, tag
+or asset upload.
+
 ## Review Artifacts
 
 The review artifacts use schema

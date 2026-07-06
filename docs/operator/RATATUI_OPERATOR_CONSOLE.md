@@ -1015,6 +1015,24 @@ verify cloud parity after any authorized merge/deploy.
 The review gate report is
 `docs/operator/MG369D_YOLO_DOCS_ONLY_PR_SIMULATION_REVIEW_GATE.md`.
 
+## MG370A Real Docs-only PR by Codex Controller
+
+MG370A is the first real docs-only PR creation milestone after the MG369D
+simulation review gate. It is explicitly authorized for exactly one
+Codex-controller branch and exactly one draft PR:
+
+- branch: `codex/mg370a-first-real-docs-only-pr`
+- PR title: `MG370A First Real Docs-only PR Creation by Codex Controller`
+- actor: Codex controller
+- scope: docs-only allowlist
+
+MG370A does not authorize the TUI to create a real branch or PR. It does not
+enable real task execution, queue runner, worker loop, run forever, live Hermes,
+MCP, auto-merge, release, tag or asset upload.
+
+The MG370A report is
+`docs/operator/MG370A_FIRST_REAL_DOCS_ONLY_PR_CREATION.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1077,6 +1095,9 @@ controller or unattended executor.
   metadata-only simulation pass and recommends MG370A as the next explicit
   human authorization gate for one real docs-only draft PR created by Codex
   controller, not TUI.
+- MG370A First Real Docs-only PR Creation by Codex Controller: explicitly
+  authorized for one docs-only branch and one draft PR by Codex controller.
+  It does not authorize TUI-created real PRs or real task execution.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`
