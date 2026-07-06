@@ -232,7 +232,9 @@ draft PR. This does not authorize TUI-created real branches or PRs, real task
 execution, worker loops, queue runners, run forever, live Hermes, MCP,
 auto-merge, release, tag or asset upload. The branch is
 `codex/mg370a-first-real-docs-only-pr`; the report is
-`docs/operator/MG370A_FIRST_REAL_DOCS_ONLY_PR_CREATION.md`.
+`docs/operator/MG370A_FIRST_REAL_DOCS_ONLY_PR_CREATION.md`. The draft PR is
+PR #302:
+`https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`.
 
 ## Stage S1.1 Close
 

@@ -1022,6 +1022,7 @@ simulation review gate. It is explicitly authorized for exactly one
 Codex-controller branch and exactly one draft PR:
 
 - branch: `codex/mg370a-first-real-docs-only-pr`
+- PR: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`
 - PR title: `MG370A First Real Docs-only PR Creation by Codex Controller`
 - actor: Codex controller
 - scope: docs-only allowlist

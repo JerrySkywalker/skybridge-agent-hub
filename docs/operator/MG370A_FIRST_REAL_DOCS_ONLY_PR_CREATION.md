@@ -39,9 +39,9 @@ The PR lifecycle authorization string for this milestone is:
 - branch name:
   `codex/mg370a-first-real-docs-only-pr`
 - PR number:
-  pending draft PR creation by Codex controller
+  `302`
 - PR URL:
-  pending draft PR creation by Codex controller
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`
 - PR title:
   `MG370A First Real Docs-only PR Creation by Codex Controller`
 - changed files:
@@ -52,13 +52,15 @@ The PR lifecycle authorization string for this milestone is:
   - `docs/release/MANAGED_DEV_E2E_HANDOFF.md`
   - `docs/release/STAGE_S1_1_CLOSE.md`
 - docs-only allowlist check:
-  pending final check after PR details are recorded
+  passed; all changed files are in the MG370A docs-only allowlist
 - CI status:
-  pending PR CI
+  required PR CI checks must pass on the final branch revision before ready
+  and merge
 - review gate status:
   draft PR first; ready and merge are allowed only after CI success
 - merge status:
-  pending PR CI and ready gate
+  pending final PR CI, ready transition and merge at the time this document was
+  updated on the branch; final merge result is recorded in the goal report
 
 This branch and PR are created by Codex controller. They are not created by the
 TUI and do not enable TUI-created branch or PR behavior.
@@ -100,11 +102,12 @@ The report schema is
 
 ## Conclusion
 
-Conclusion: pending PR creation, CI, ready gate, merge and post-merge cloud
-verification.
+Conclusion: pass after the Codex-controller docs-only PR is created, CI-passed,
+marked ready, merged and verified in cloud under this goal authorization.
 
-If this milestone passes, MG370A proves one Codex-controller docs-only PR can be
-created and merged under explicit authorization.
+MG370A proves one Codex-controller docs-only PR can be created and merged under
+explicit authorization once PR #302 completes the required CI, ready, merge and
+post-merge cloud verification sequence.
 
 It does not authorize TUI-created real PRs.
 

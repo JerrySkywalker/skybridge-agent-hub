@@ -6,6 +6,8 @@
   authorization.
 - Limited scope to one Codex-controller branch and one draft PR:
   `codex/mg370a-first-real-docs-only-pr`.
+- Opened draft PR #302:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/302`.
 - Kept the TUI outside the branch/PR creation path:
   `TUI-created branch=false` and `TUI-created PR=false`.
 - Preserved `real_task_execution_enabled=false`,
@@ -17,8 +19,8 @@
   `mcp_run_called=false`, `auto_merge_enabled=false`,
   `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
   `token_printed=false`.
-- PR number, CI status, merge status and post-merge cloud parity are pending
-  the single authorized draft PR lifecycle.
+- Final CI status, merge status and post-merge cloud parity are pending the
+  single authorized draft PR lifecycle.
 
 ## 2026-07-06 Mega Goal 369D-YOLO Docs-only PR Simulation Review Gate
 

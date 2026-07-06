@@ -209,9 +209,9 @@ branch/PR creation, real execution, worker loops or queue runners:
 
 MG370A is the first real docs-only PR creation milestone under explicit human
 authorization. It allows exactly one Codex-controller docs-only branch and one
-draft PR, while preserving `TUI-created branch=false`, `TUI-created PR=false`,
-`real_task_execution_enabled=false`, worker/queue loops disabled, auto-merge
-disabled and release/tag/assets disabled.
+draft PR, PR #302, while preserving `TUI-created branch=false`,
+`TUI-created PR=false`, `real_task_execution_enabled=false`, worker/queue loops
+disabled, auto-merge disabled and release/tag/assets disabled.
 
 Recommended options for the next stage remain independent and require explicit
 authorization:
