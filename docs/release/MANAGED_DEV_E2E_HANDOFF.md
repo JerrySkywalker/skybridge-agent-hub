@@ -201,6 +201,18 @@ review artifacts are under `.agent/tmp/operator-tui/mg369b-yolo-review/`.
 The next recommended milestone is MG369C-YOLO Controlled Docs-only PR Creation
 Simulation. Do not proceed directly to real execution.
 
+MG369C-YOLO executes that recommendation as a metadata-only TUI simulation. It
+adds `--simulate-docs-pr` to the self-drive fixture-only path and records a
+simulated docs-only PR lifecycle from `not_started` through
+`completed_simulation`. The simulated changed file is docs-only:
+`docs/operator/MG369C_YOLO_DOCS_ONLY_PR_SIMULATION.md`. The TUI does not create
+that file during simulation, does not create a real branch or PR, does not run
+`git push`, does not run `gh pr create`, does not call the GitHub API, does not
+start execution, does not start queue/worker loops and does not create
+release/tag/assets. Evidence is under `.agent/tmp/operator-tui/mg369c-yolo/`
+with schema `skybridge.operator_tui_mg369c_yolo_docs_pr_simulation.v1`.
+`token_printed=false`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -271,9 +283,9 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG369B-YOLO, continue only under a new explicit goal:
+After MG369C-YOLO, continue only under a new explicit goal:
 
-1. MG369C-YOLO Controlled Docs-only PR Creation Simulation.
+1. MG369D-YOLO Docs-only PR Simulation Review Gate.
 2. Any real execution path requires explicit human authorization.
 
 `token_printed=false`
