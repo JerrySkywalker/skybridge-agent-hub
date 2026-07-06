@@ -172,12 +172,20 @@ reported as `manual_verification_performed=false` when absent. This is not
 human-operated validation, not production execution and not authorization for
 real task execution or TUI-created branches/PRs.
 
+MG369A-YOLO records the first MG369-class fixture-only single-step TUI
+experiment under that policy. Codex self-drive exercised the candidate flow,
+bounded single-step preview, start-one fixture action, safe pause fixture and
+abort preview fixture. The result is a fixture-only self-drive pass only: not
+real execution, not human-operated validation, no TUI-created real branch or
+PR, no task creation/claim, no execution start, no queue/worker loop, no run
+forever, no live Hermes or MCP, no auto-merge, no release/tag/assets and
+`token_printed=false`.
+
 Recommended options for the next stage remain independent and require explicit
 authorization:
 
-1. MG369A-YOLO Fixture Single-Step Experiment.
-2. MG369A Self-Drive Single-Step Experiment.
-3. Any future real execution requires explicit human authorization.
+1. MG369B-YOLO Fixture Experiment Review Gate.
+2. Any future real execution requires explicit human authorization.
 
 ## Read-Only Audit
 

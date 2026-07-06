@@ -179,6 +179,19 @@ human-operated TUI validation passed, and it does not authorize real
 execution, TUI-created branch/PR creation, queue/worker loops, live Hermes,
 MCP, auto-merge, releases, tags or assets.
 
+MG369A-YOLO is the first fixture-only single-step TUI experiment after the
+MG368L policy update. It used Codex self-drive, `--yolo-fixture-only`, the
+simplified guide and a `120000` ms timeout to exercise candidate generation,
+candidate validation, fixture metadata review/append, bounded single-step
+preview, start-one fixture, safe pause fixture and abort preview fixture.
+Evidence is under `.agent/tmp/operator-tui/mg369a-yolo/`, with the report
+schema `skybridge.operator_tui_mg369a_yolo_report.v1`. The result is a
+fixture-only self-drive pass, not real execution and not human-operated
+validation. The TUI did not create a real branch or PR, did not create or claim
+tasks, did not start execution, did not start queue/worker loops, did not run
+forever, did not call live Hermes or MCP, did not auto-merge and did not create
+release/tag/assets. `token_printed=false`.
+
 ## Stage S1.1 Close
 
 MG367 closes Stage S1.1 as a roadmap-freeze milestone. The stage close records
@@ -249,10 +262,9 @@ tasks, worker state, or provider state.
 
 ## Recommended Next Milestones
 
-After MG368L, continue only under a new explicit goal:
+After MG369A-YOLO, continue only under a new explicit goal:
 
-1. MG369A-YOLO Fixture Single-Step Experiment.
-2. MG369A Self-Drive Single-Step Experiment.
-3. Any real execution path requires explicit human authorization.
+1. MG369B-YOLO Fixture Experiment Review Gate.
+2. Any real execution path requires explicit human authorization.
 
 `token_printed=false`

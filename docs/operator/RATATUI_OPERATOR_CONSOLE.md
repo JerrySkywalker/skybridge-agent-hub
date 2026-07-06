@@ -862,6 +862,39 @@ and fixture-only YOLO is not production execution.
 The MG368L policy note is
 `docs/operator/MG368L_SELF_DRIVE_YOLO_ACCEPTANCE.md`.
 
+## MG369A-YOLO Fixture Single-Step Experiment
+
+MG369A-YOLO is the first MG369-class fixture-only single-step TUI experiment
+under the MG368L self-drive acceptance policy. It uses the simplified guide,
+fixture-only YOLO mode and Codex self-drive harness to exercise the candidate
+flow, bounded single-step preview, start-one fixture action, safe pause fixture
+and abort preview fixture without enabling real execution.
+
+Experiment command:
+
+```powershell
+cargo run --manifest-path apps/operator-tui/Cargo.toml -- `
+  --local-cloud `
+  --operator-guide `
+  --yolo-fixture-only `
+  --self-drive-dry-run `
+  --lang zh-CN `
+  --runtime-timeout-ms 120000 `
+  --output-dir .agent/tmp/operator-tui/mg369a-yolo
+```
+
+MG369A-YOLO writes sanitized fixture-only artifacts under
+`.agent/tmp/operator-tui/mg369a-yolo/`, including
+`mg369a-yolo-report.json`, `mg369a-yolo-report.md`,
+`mg369a-action-history.json`, `mg369a-safety-report.json` and
+`mg369a-artifact-index.json`.
+
+The experiment report is
+`docs/operator/MG369A_YOLO_FIXTURE_SINGLE_STEP_EXPERIMENT.md`.
+
+MG369A-YOLO does not claim human-operated validation passed, does not perform
+real execution and does not allow the TUI to create a real branch or PR.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -912,8 +945,11 @@ controller or unattended executor.
 
 - MG368I-R3 Ratatui Manual Dry Run with Simplified Guide and Fixture-only YOLO:
   superseded for fixture-only acceptance by MG368L self-drive YOLO policy.
-- MG369A-YOLO Fixture Single-Step Experiment or MG369A Self-Drive Single-Step
-  Experiment: continue only under a separate explicit goal. Any future real
-  execution still requires explicit human authorization.
+- MG369A-YOLO Fixture Single-Step Experiment: passed as a fixture-only
+  self-drive report. It was not real execution and not human-operated
+  validation.
+- MG369B-YOLO Fixture Experiment Review Gate: continue only under a separate
+  explicit goal. Any future real execution still requires explicit human
+  authorization.
 
 `token_printed=false`
