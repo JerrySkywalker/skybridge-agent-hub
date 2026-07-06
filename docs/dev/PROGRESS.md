@@ -1,5 +1,26 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 370D Codex-controller Docs-only PR Repeatability Review Gate
+
+- Reviewed MG370A PR #302 and MG370C PR #304 as two real docs-only PRs created
+  by Codex controller.
+- Recorded `Codex-controller docs-only PR repeatability: pass`.
+- Froze the result as Codex-controller docs-only repeatability only. It does
+  not authorize TUI-created real branches or PRs, real task execution, worker
+  loops, queue runners, run forever, auto-merge, release, tag, asset upload or
+  non-docs changes.
+- Preserved `TUI-created branch=false`, `TUI-created PR=false`,
+  `real_task_execution_enabled=false`, `real_execution_authorized=false`,
+  `tui_real_branch_pr_authorized=false`, `worker_loop_authorized=false`,
+  `queue_runner_authorized=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+  `token_printed=false`.
+- Wrote sanitized review artifacts under
+  `.agent/tmp/operator-tui/mg370d-review/` using
+  `skybridge.operator_tui_mg370d_codex_controller_docs_pr_repeatability_review_gate.v1`.
+- Recommended next milestone:
+  MG371A TUI-created Docs-only PR Authorization Design Gate.
+
 ## 2026-07-06 Mega Goal 370C Codex-controller Docs-only PR Repetition
 
 - Started the second real docs-only PR creation milestone under explicit Jerry
