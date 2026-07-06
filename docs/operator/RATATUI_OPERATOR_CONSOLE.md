@@ -1068,6 +1068,29 @@ be proven before any TUI-created branch or PR behavior.
 The review gate report is
 `docs/operator/MG370B_CODEX_CONTROLLER_DOCS_ONLY_PR_REVIEW_GATE.md`.
 
+## MG370C Codex-controller Docs-only PR Repetition
+
+MG370C repeats the Codex-controller docs-only PR process to prove it is
+repeatable across at least two real docs-only PRs before any TUI-created branch
+or PR behavior is considered.
+
+MG370C is explicitly authorized for exactly one second Codex-controller branch
+and exactly one draft PR:
+
+- branch: `codex/mg370c-codex-controller-docs-pr-repeat`
+- PR: `#304`
+- PR URL: `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/304`
+- PR title: `MG370C Codex-controller Docs-only PR Repetition`
+- actor: Codex controller
+- scope: docs-only allowlist
+
+MG370C does not authorize the TUI to create a real branch or PR. It does not
+enable real task execution, queue runner, worker loop, run forever, live Hermes,
+MCP, auto-merge, release, tag, asset upload or non-docs changes.
+
+The MG370C report is
+`docs/operator/MG370C_CODEX_CONTROLLER_DOCS_ONLY_PR_REPETITION.md`.
+
 ## Safety Policy
 
 MG368A and MG368B are read-only. MG368C is candidate review/append only.
@@ -1136,6 +1159,9 @@ controller or unattended executor.
 - MG370B Review Gate for Codex-controller Docs-only PR Creation: freezes MG370A
   as pass and recommends proving repeatability with MG370C before any
   TUI-created branch or PR behavior.
+- MG370C Codex-controller Docs-only PR Repetition: authorized for one second
+  docs-only branch and one draft PR by Codex controller. It does not authorize
+  TUI-created real PRs or real task execution.
 - Any future real execution still requires explicit human authorization.
 
 `token_printed=false`

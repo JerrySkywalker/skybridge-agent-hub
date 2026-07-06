@@ -126,6 +126,21 @@ Recommended next milestone:
 Reason:
 Repeatability should be proven before allowing TUI-created branch/PR behavior.
 
+## MG370C Follow-up
+
+MG370C is the authorized repetition of the Codex-controller docs-only PR
+process. It is limited to one second real docs-only branch and one draft PR
+created by Codex controller, not TUI.
+
+MG370C keeps `TUI-created branch=false`, `TUI-created PR=false`,
+`real_task_execution_enabled=false`, `worker_loop_started=false`,
+`queue_runner_started=false`, `run_forever_started=false`,
+`auto_merge_enabled=false`, `release_created=false`, `tag_created=false`,
+`asset_uploaded=false` and `token_printed=false`.
+
+If MG370C passes, the next review gate is
+`MG370D Review Gate for Codex-controller Docs-only PR Repeatability`.
+
 ## Required Gates Before TUI-created Branch/PR
 
 Before any TUI-created real branch or PR:

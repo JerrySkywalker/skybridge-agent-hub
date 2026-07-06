@@ -1,5 +1,30 @@
 # Progress Log
 
+## 2026-07-06 Mega Goal 370C Codex-controller Docs-only PR Repetition
+
+- Started the second real docs-only PR creation milestone under explicit Jerry
+  authorization for Codex controller only.
+- Limited scope to one second Codex-controller branch and one draft PR:
+  `codex/mg370c-codex-controller-docs-pr-repeat`.
+- Opened draft PR #304:
+  `https://github.com/JerrySkywalker/skybridge-agent-hub/pull/304`.
+- Kept the TUI outside the branch/PR creation path:
+  `TUI-created branch=false` and `TUI-created PR=false`.
+- Preserved `real_task_execution_enabled=false`,
+  `real_branch_creation_enabled_by_TUI=false`,
+  `real_PR_creation_enabled_by_TUI=false`, `task_created=false`,
+  `task_claimed=false`, `execution_started=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false` and
+  `token_printed=false`.
+- Wrote sanitized local evidence under
+  `.agent/tmp/operator-tui/mg370c-real-docs-pr-repeat/` using
+  `skybridge.operator_tui_mg370c_real_docs_only_pr_repetition.v1`.
+- Recommended next milestone if MG370C passes:
+  MG370D Review Gate for Codex-controller Docs-only PR Repeatability.
+
 ## 2026-07-06 Mega Goal 370B Codex-controller Docs-only PR Review Gate
 
 - Reviewed MG370A evidence for PR #302:
