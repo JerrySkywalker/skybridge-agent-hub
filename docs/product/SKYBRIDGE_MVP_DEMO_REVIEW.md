@@ -181,6 +181,21 @@ Purpose:
 
 Do not skip directly to repeated PR creation.
 
+MG372D implements this proposal as a local-diff-only demo. It adds
+`codex-local-diff-preview` for CI-safe policy checks and an exact-confirmed
+`codex-local-diff` apply mode that calls Codex once in an isolated copied
+workspace, writes `codex-local-diff.patch` and stops before commit, push or PR
+creation.
+
+If MG372D passes, the next milestone should be:
+
+```text
+MG372E2 Codex-generated Draft PR Demo
+```
+
+MG372E2 should remain controller-created, not TUI-created, and should not
+proceed to repeated PR creation.
+
 ## Demo PR #311 Handling
 
 Recommendation:

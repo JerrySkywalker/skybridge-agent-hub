@@ -1,5 +1,40 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372D Codex-generated Local Diff Demo
+
+- Extended `scripts/powershell/skybridge-mvp-demo.ps1` with
+  `codex-local-diff-preview`, `codex-local-diff`,
+  `codex-local-diff-status` and `codex-local-diff-report` modes.
+- Preview mode writes artifacts under
+  `.agent/tmp/skybridge-mvp-codex-diff/` without calling Codex, creating a
+  workspace, creating a PR, pushing a branch or committing.
+- Apply mode requires the exact confirmation phrase
+  `I_UNDERSTAND_AUTHORIZE_MG372D_CALL_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO`,
+  a clean synced `main`, Git and Codex availability, MG372C baseline ancestry
+  and an unused isolated workspace path before calling Codex.
+- The apply path uses an archive-copied isolated workspace under
+  `.agent/tmp/skybridge-mvp-codex-diff/workspace/`, asks Codex to modify only
+  `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`, enforces that allowlist,
+  writes `codex-local-diff.patch` and a review summary, and stops before
+  commit, push or PR creation.
+- Added `docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md`.
+- Added smokes:
+  `smoke:skybridge-mvp-demo-codex-local-diff-preview`,
+  `smoke:skybridge-mvp-demo-codex-local-diff-policy`,
+  `smoke:skybridge-mvp-demo-codex-local-diff-no-pr`,
+  `smoke:skybridge-mvp-demo-codex-local-diff-no-push` and
+  `smoke:skybridge-mvp-demo-codex-local-diff-no-codex-preview`.
+- Preserved `pr_created=false`, `branch_pushed=false`,
+  `commit_created=false`, `demo_pr_311_modified=false`,
+  `tui_created_branch=false`, `tui_created_pr=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false`,
+  `raw_output_exported=false` and `token_printed=false`.
+- Recommended next milestone if MG372D passes:
+  MG372E2 Codex-generated Draft PR Demo.
+
 ## 2026-07-07 Mega Goal 372C MVP Demo Review and Decision Gate
 
 - Added `docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md` as the review and decision

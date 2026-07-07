@@ -231,6 +231,19 @@ The MVP demo review recommends continuing in this repository and adding a
 Codex-generated local diff demo next. See
 [docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md](docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md).
 
+Preview the Codex-generated local diff demo without calling Codex:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode codex-local-diff-preview `
+  -Json
+```
+
+After explicit authorization, the Codex local diff demo calls Codex once in an
+isolated copied workspace, writes `codex-local-diff.patch` and stops before
+commit, push or PR creation. See
+[docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
+
 Start the local server and web dashboard:
 
 ```powershell
