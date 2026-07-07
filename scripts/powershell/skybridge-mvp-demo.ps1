@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report")]
+  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report")]
   [string]$Mode = "local-safe",
   [switch]$UseTempDatabase,
   [string]$ApiBase = "http://127.0.0.1:8787",
@@ -33,6 +33,13 @@ $ControllerBaselineCommit = "c69f97cf4a3eeda0999877b83884513fba4f3bdc"
 $ControllerDemoFile = "docs/product/MG372B_CONTROLLER_DRAFT_PR_DEMO_ARTIFACT.md"
 $ControllerCommitMessage = "docs(demo): add MG372B controller draft PR artifact"
 $ControllerPrTitle = "MG372B Demo: Controller-created Draft PR"
+$CodexDiffSchema = "skybridge.mvp_demo.codex_local_diff.v1"
+$CodexDiffOutputDir = ".agent/tmp/skybridge-mvp-codex-diff"
+$CodexDiffGoalId = "mg372d-codex-local-diff-demo"
+$CodexDiffTaskId = "mg372d-codex-local-diff-task-001"
+$CodexDiffWorkerId = "mg372d-codex-local-diff-worker"
+$CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D_CALL_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO"
+$CodexDiffDemoFile = "docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
 $Artifacts = @(
   "mvp-demo-report.json",
   "mvp-demo-report.md",
@@ -58,9 +65,28 @@ $ControllerArtifacts = @(
   "mvp-pr-demo-safety.json",
   "mvp-pr-demo-artifact-index.json"
 )
+$CodexDiffArtifacts = @(
+  "codex-local-diff-report.json",
+  "codex-local-diff-report.md",
+  "codex-local-diff-state.json",
+  "codex-local-diff-task.json",
+  "codex-local-diff-worker.json",
+  "codex-local-diff-preflight.json",
+  "codex-local-diff-prompt.md",
+  "codex-local-diff-last-message.md",
+  "codex-local-diff-changed-files.json",
+  "codex-local-diff-allowlist-check.json",
+  "codex-local-diff-review-summary.md",
+  "codex-local-diff.patch",
+  "codex-local-diff-safety.json",
+  "codex-local-diff-artifact-index.json"
+)
 
 if ($Mode -like "controller-draft-pr*" -and -not $PSBoundParameters.ContainsKey("OutputDir")) {
   $OutputDir = $ControllerOutputDir
+}
+if ($Mode -like "codex-local-diff*" -and -not $PSBoundParameters.ContainsKey("OutputDir")) {
+  $OutputDir = $CodexDiffOutputDir
 }
 
 function ConvertTo-DemoJson {
@@ -1418,6 +1444,816 @@ function Invoke-ControllerDraftPrDemo {
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
 }
 
+function Get-CodexDiffArtifactPaths {
+  param([string]$ResolvedOutputDir)
+  [pscustomobject]@{
+    report_json = Join-Path $ResolvedOutputDir "codex-local-diff-report.json"
+    report_md = Join-Path $ResolvedOutputDir "codex-local-diff-report.md"
+    state = Join-Path $ResolvedOutputDir "codex-local-diff-state.json"
+    task = Join-Path $ResolvedOutputDir "codex-local-diff-task.json"
+    worker = Join-Path $ResolvedOutputDir "codex-local-diff-worker.json"
+    preflight = Join-Path $ResolvedOutputDir "codex-local-diff-preflight.json"
+    prompt = Join-Path $ResolvedOutputDir "codex-local-diff-prompt.md"
+    last_message = Join-Path $ResolvedOutputDir "codex-local-diff-last-message.md"
+    changed_files = Join-Path $ResolvedOutputDir "codex-local-diff-changed-files.json"
+    allowlist = Join-Path $ResolvedOutputDir "codex-local-diff-allowlist-check.json"
+    review_summary = Join-Path $ResolvedOutputDir "codex-local-diff-review-summary.md"
+    patch = Join-Path $ResolvedOutputDir "codex-local-diff.patch"
+    safety = Join-Path $ResolvedOutputDir "codex-local-diff-safety.json"
+    index = Join-Path $ResolvedOutputDir "codex-local-diff-artifact-index.json"
+    workspace = Join-Path $ResolvedOutputDir "workspace"
+    archive = Join-Path $ResolvedOutputDir "workspace.zip"
+    codex_jsonl = Join-Path $ResolvedOutputDir "codex-local-diff-codex.jsonl"
+  }
+}
+
+function New-CodexDiffSafetyFlags {
+  [ordered]@{
+    codex_called = $false
+    codex_call_count = 0
+    pr_created = $false
+    branch_pushed = $false
+    commit_created = $false
+    demo_pr_311_modified = $false
+    tui_created_branch = $false
+    tui_created_pr = $false
+    worker_loop_started = $false
+    queue_runner_started = $false
+    run_forever_started = $false
+    hermes_live_called = $false
+    mcp_run_called = $false
+    auto_merge_enabled = $false
+    release_created = $false
+    tag_created = $false
+    asset_uploaded = $false
+    raw_input_persisted = $false
+    raw_output_exported = $false
+    token_printed = $false
+  }
+}
+
+function Test-CodexDiffAllowlist {
+  param([string[]]$ChangedFiles)
+  $allowed = @($CodexDiffDemoFile)
+  $unexpected = @($ChangedFiles | Where-Object { $_ -notin $allowed })
+  [pscustomobject]@{
+    allowed_files = $allowed
+    changed_files = @($ChangedFiles)
+    unexpected_files = @($unexpected)
+    docs_only_allowlist_passed = (@($ChangedFiles).Count -gt 0 -and @($unexpected).Count -eq 0)
+    token_printed = $false
+  }
+}
+
+function New-CodexDiffTaskPayload {
+  [ordered]@{
+    task_id = $CodexDiffTaskId
+    project_id = $ProjectId
+    goal_id = $CodexDiffGoalId
+    title = "MG372D Codex-generated local diff demo task"
+    body = "Call Codex once in an isolated copied workspace, generate one docs-only local diff, and write sanitized review artifacts."
+    prompt_summary = "MG372D fixed Codex local diff demo. Safe summary only."
+    risk = "low"
+    source = "custom"
+    task_type = "codex-local-diff-demo"
+    allowed_paths = @($CodexDiffDemoFile, ".agent/tmp/skybridge-mvp-codex-diff/**")
+    blocked_paths = @(".env", "secrets/**", ".github/**", "apps/**", "packages/**", "deploy/**", "Dockerfile", "package.json", ".git/**")
+    validation = @("one Codex call", "one isolated workspace", "docs-only allowlist", "diff.patch written", "no PR", "no push", "no commit", "token_printed=false")
+    required_capabilities = @("powershell", "git", "codex", "codex-local-diff-demo")
+    planner_metadata = @{
+      adapter = "skybridge-mvp-demo"
+      decision = "continue"
+      reason = "mg372d_codex_generated_local_diff_demo"
+      task_type = "codex-local-diff-demo"
+      expected_outputs = @($CodexDiffDemoFile, ".agent/tmp/skybridge-mvp-codex-diff/**")
+      codex_called = $true
+      codex_call_count = 1
+      pr_created = $false
+      branch_pushed = $false
+      commit_created = $false
+      tui_created_branch = $false
+      tui_created_pr = $false
+      worker_loop_started = $false
+      queue_runner_started = $false
+      run_forever_started = $false
+      token_printed = $false
+    }
+  }
+}
+
+function New-CodexDiffPrompt {
+  param(
+    [string]$BaselineCommit,
+    [string]$TaskIdValue
+  )
+  @"
+You are running the SkyBridge MG372D local Codex diff demo inside an isolated copied workspace.
+
+Create exactly one docs-only artifact file:
+
+$CodexDiffDemoFile
+
+The file content must include:
+
+- generated_by=Codex
+- source milestone=MG372D
+- baseline commit=$BaselineCommit
+- task_id=$TaskIdValue
+- what the demo proves
+- safety boundaries
+- token_printed=false
+
+Strict boundaries:
+
+- modify only $CodexDiffDemoFile
+- do not run git add
+- do not run git commit
+- do not run git push
+- do not run gh pr create
+- do not create or modify any PR
+- do not read or print secrets
+- do not modify app, server, workflow, package, Docker, runtime or production files
+- do not write tokens, environment dumps, raw stdout/stderr, raw prompts or secrets
+
+Finish after writing the file. Keep the response concise.
+"@
+}
+
+function Resolve-CodexDiffCommand {
+  $command = Get-Command "codex" -ErrorAction SilentlyContinue
+  if (-not $command) { throw "Codex CLI was not found on PATH." }
+  $extension = [System.IO.Path]::GetExtension($command.Source)
+  if ($extension -ieq ".ps1") {
+    return [pscustomobject]@{
+      file_path = "pwsh"
+      argument_prefix = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $command.Source)
+      display_command = "codex"
+      resolved_path = $command.Source
+      powershell_shim = $true
+      token_printed = $false
+    }
+  }
+  [pscustomobject]@{
+    file_path = $command.Source
+    argument_prefix = @()
+    display_command = "codex"
+    resolved_path = $command.Source
+    powershell_shim = $false
+    token_printed = $false
+  }
+}
+
+function Invoke-CodexDiffProcess {
+  param(
+    [Parameter(Mandatory = $true)]$CommandSpec,
+    [Parameter(Mandatory = $true)][string]$WorkspacePath,
+    [Parameter(Mandatory = $true)][string]$PromptPath,
+    [Parameter(Mandatory = $true)][string]$LastMessagePath,
+    [Parameter(Mandatory = $true)][string]$LogPath,
+    [int]$TimeoutMinutes = 15
+  )
+  $errPath = "$LogPath.err"
+  $arguments = @($CommandSpec.argument_prefix) + @("exec", "--sandbox", "workspace-write", "--json", "--output-last-message", $LastMessagePath, "-")
+  $startParams = @{
+    FilePath = [string]$CommandSpec.file_path
+    ArgumentList = $arguments
+    WorkingDirectory = $WorkspacePath
+    NoNewWindow = $true
+    PassThru = $true
+    RedirectStandardInput = $PromptPath
+    RedirectStandardOutput = $LogPath
+    RedirectStandardError = $errPath
+  }
+  $process = Start-Process @startParams
+  $timeoutMs = [Math]::Max(1, $TimeoutMinutes) * 60 * 1000
+  if (-not $process.WaitForExit($timeoutMs)) {
+    try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    return [pscustomobject]@{ ok = $false; exit_code = 124; timed_out = $true; log_path = $LogPath; error_log_path = $errPath; token_printed = $false }
+  }
+  [pscustomobject]@{ ok = ($process.ExitCode -eq 0); exit_code = $process.ExitCode; timed_out = $false; log_path = $LogPath; error_log_path = $errPath; token_printed = $false }
+}
+
+function New-CodexDiffWorkspace {
+  param(
+    [string]$WorkspacePath,
+    [string]$ArchivePath,
+    [string]$CommitSha
+  )
+  if (Test-Path -LiteralPath $WorkspacePath) { throw "Existing MG372D workspace blocks apply." }
+  New-Item -ItemType Directory -Force -Path $WorkspacePath | Out-Null
+  Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("archive", "--format=zip", "--output", $ArchivePath, $CommitSha) | Out-Null
+  Expand-Archive -LiteralPath $ArchivePath -DestinationPath $WorkspacePath -Force
+}
+
+function Get-CodexDiffChangedFiles {
+  param([string]$WorkspacePath)
+  $trackedRaw = Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("ls-tree", "-r", "--name-only", "HEAD") -CaptureOutput
+  $tracked = @($trackedRaw -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim().Replace("\", "/") })
+  $trackedSet = New-Object 'System.Collections.Generic.HashSet[string]'
+  foreach ($path in $tracked) { [void]$trackedSet.Add($path) }
+
+  $changed = [System.Collections.Generic.List[string]]::new()
+  foreach ($path in $tracked) {
+    $rootPath = Join-Path (Get-Location) $path
+    $workspaceFile = Join-Path $WorkspacePath ($path -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $workspaceFile -PathType Leaf)) {
+      $changed.Add($path) | Out-Null
+      continue
+    }
+    if ((Test-Path -LiteralPath $rootPath -PathType Leaf)) {
+      $rootHash = (Get-FileHash -LiteralPath $rootPath -Algorithm SHA256).Hash
+      $workspaceHash = (Get-FileHash -LiteralPath $workspaceFile -Algorithm SHA256).Hash
+      if ($rootHash -ne $workspaceHash) { $changed.Add($path) | Out-Null }
+    }
+  }
+
+  $workspaceRoot = (Resolve-Path -LiteralPath $WorkspacePath).Path
+  $workspaceFiles = @(Get-ChildItem -LiteralPath $workspaceRoot -Recurse -Force -File | ForEach-Object {
+    $relative = [System.IO.Path]::GetRelativePath($workspaceRoot, $_.FullName).Replace("\", "/")
+    $relative
+  })
+  foreach ($path in $workspaceFiles) {
+    if (-not $trackedSet.Contains($path)) { $changed.Add($path) | Out-Null }
+  }
+  @($changed | Sort-Object -Unique)
+}
+
+function Write-CodexDiffPatch {
+  param(
+    [string]$WorkspacePath,
+    [string]$PatchPath
+  )
+  $workspaceFile = Join-Path $WorkspacePath ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+  if (-not (Test-Path -LiteralPath $workspaceFile -PathType Leaf)) {
+    "" | Set-Content -LiteralPath $PatchPath -Encoding UTF8
+    return
+  }
+  $emptyFile = Join-Path (Split-Path -Parent $PatchPath) "codex-local-diff-empty-file.tmp"
+  "" | Set-Content -LiteralPath $emptyFile -Encoding UTF8 -NoNewline
+  try {
+    $diff = Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("diff", "--no-index", "--no-ext-diff", "--text", "--label", "a/$CodexDiffDemoFile", "--label", "b/$CodexDiffDemoFile", "--", $emptyFile, $workspaceFile) -CaptureOutput -AllowFailure
+    if ([string]::IsNullOrWhiteSpace($diff)) { $diff = "" }
+    $diff | Set-Content -LiteralPath $PatchPath -Encoding UTF8
+  } finally {
+    Remove-Item -LiteralPath $emptyFile -Force -ErrorAction SilentlyContinue
+  }
+}
+
+function Write-CodexDiffArtifacts {
+  param(
+    [string]$ResolvedOutputDir,
+    $Report,
+    $State,
+    $TaskArtifact,
+    $WorkerArtifact,
+    $Preflight,
+    $ChangedFiles,
+    $Allowlist,
+    $Safety
+  )
+  $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
+  foreach ($file in @($paths.prompt, $paths.last_message, $paths.review_summary, $paths.patch)) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { "" | Set-Content -LiteralPath $file -Encoding UTF8 }
+  }
+  Write-DemoJsonFile -Path $paths.state -Value $State
+  Write-DemoJsonFile -Path $paths.task -Value $TaskArtifact
+  Write-DemoJsonFile -Path $paths.worker -Value $WorkerArtifact
+  Write-DemoJsonFile -Path $paths.preflight -Value $Preflight
+  Write-DemoJsonFile -Path $paths.changed_files -Value $ChangedFiles
+  Write-DemoJsonFile -Path $paths.allowlist -Value $Allowlist
+  Write-DemoJsonFile -Path $paths.safety -Value $Safety
+  Write-DemoJsonFile -Path $paths.report_json -Value $Report
+  $relativeOutput = $OutputDir.Replace("\", "/")
+  $index = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.artifact_index.v1"
+    generated_at = $Report.generated_at
+    artifact_dir = $relativeOutput
+    artifacts = @($CodexDiffArtifacts)
+    report_json_path = $Report.report_json_path
+    report_markdown_path = $Report.report_markdown_path
+    diff_patch_path = $Report.diff_patch_path
+    review_summary_path = $Report.review_summary_path
+    token_printed = $false
+  }
+  Write-DemoJsonFile -Path $paths.index -Value $index
+
+  $markdown = @(
+    "# SkyBridge MVP Codex Local Diff Demo",
+    "",
+    "- result: $($Report.demo_result)",
+    "- validation_status: $($Report.validation_status)",
+    "- project_id: $($Report.project_id)",
+    "- goal_id: $($Report.goal_id)",
+    "- task_id: $($Report.task_id)",
+    "- worker_id: $($Report.worker_id)",
+    "- codex_called: $($Report.codex_called)",
+    "- codex_call_count: $($Report.codex_call_count)",
+    "- codex_exit_code: $($Report.codex_exit_code)",
+    "- isolated_workspace_used: $($Report.isolated_workspace_used)",
+    "- workspace_path: $($Report.workspace_path)",
+    "- changed_files: $(@($Report.changed_files) -join ', ')",
+    "- docs_only_allowlist_passed: $($Report.docs_only_allowlist_passed)",
+    "- diff_patch_path: $($Report.diff_patch_path)",
+    "- review_summary_path: $($Report.review_summary_path)",
+    "- artifact_file_path: $($Report.artifact_file_path)",
+    "- main_worktree_clean_after: $($Report.main_worktree_clean_after)",
+    "- task_created: $($Report.task_created)",
+    "- worker_registered: $($Report.worker_registered)",
+    "- task_claimed: $($Report.task_claimed)",
+    "- task_started: $($Report.task_started)",
+    "- task_completed: $($Report.task_completed)",
+    "- fixture_mode: $($Report.fixture_mode)",
+    "- real_worker_execution: $($Report.real_worker_execution)",
+    "- pr_created: false",
+    "- branch_pushed: false",
+    "- commit_created: $($Report.commit_created)",
+    "- demo_pr_311_modified: false",
+    "- worker_loop_started: false",
+    "- queue_runner_started: false",
+    "- run_forever_started: false",
+    "- hermes_live_called: false",
+    "- mcp_run_called: false",
+    "- auto_merge_enabled: false",
+    "- release_created: false",
+    "- tag_created: false",
+    "- asset_uploaded: false",
+    "- raw_output_exported: false",
+    "- token_printed: false",
+    "",
+    "Artifacts are written under `$relativeOutput`."
+  )
+  $markdown | Set-Content -LiteralPath $paths.report_md -Encoding UTF8
+}
+
+function New-CodexDiffReport {
+  param(
+    [string]$GeneratedAt,
+    [string]$BaselineCommit,
+    [string]$ImplementationCommit,
+    [string]$WorkspacePath
+  )
+  $relativeOutput = $OutputDir.Replace("\", "/")
+  [ordered]@{
+    schema = $CodexDiffSchema
+    generated_at = $GeneratedAt
+    mode = "codex-local-diff"
+    baseline_commit = $BaselineCommit
+    implementation_commit = $ImplementationCommit
+    project_id = $ProjectId
+    goal_id = $CodexDiffGoalId
+    task_id = $CodexDiffTaskId
+    worker_id = $CodexDiffWorkerId
+    task_created = $false
+    worker_registered = $false
+    task_claimed = $false
+    task_started = $false
+    task_completed = $false
+    task_failed = $false
+    task_blocked = $false
+    validation_status = "not_run"
+    would_call_codex = $true
+    would_create_isolated_workspace = $true
+    would_generate_diff = $true
+    codex_called = $false
+    codex_call_count = 0
+    codex_exit_code = $null
+    isolated_workspace_used = $false
+    workspace_path = $WorkspacePath.Replace("\", "/")
+    main_worktree_clean_after = $false
+    changed_files = @()
+    docs_only_allowlist_passed = $false
+    diff_patch_path = "$relativeOutput/codex-local-diff.patch"
+    review_summary_path = "$relativeOutput/codex-local-diff-review-summary.md"
+    artifact_file_path = "$relativeOutput/workspace/$CodexDiffDemoFile"
+    artifact_report_written = $true
+    artifacts_written = $true
+    report_markdown_path = "$relativeOutput/codex-local-diff-report.md"
+    report_json_path = "$relativeOutput/codex-local-diff-report.json"
+    demo_result = "blocked"
+    fixture_mode = $false
+    real_worker_execution = $false
+    pr_created = $false
+    branch_pushed = $false
+    commit_created = $false
+    demo_pr_311_modified = $false
+    tui_created_branch = $false
+    tui_created_pr = $false
+    worker_loop_started = $false
+    queue_runner_started = $false
+    run_forever_started = $false
+    hermes_live_called = $false
+    mcp_run_called = $false
+    auto_merge_enabled = $false
+    release_created = $false
+    tag_created = $false
+    asset_uploaded = $false
+    raw_input_persisted = $false
+    raw_output_exported = $false
+    token_printed = $false
+    blockers = @()
+    warnings = @()
+  }
+}
+
+function Invoke-CodexLocalDiffDemo {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
+  $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $resolvedOutputDir
+  $generatedAt = Get-DemoUtcNow
+  $implementationCommit = Get-DemoGitText -Arguments @("rev-parse", "HEAD")
+  $baselineCommit = $implementationCommit
+  $workspacePath = $paths.workspace
+  $plannedChangedFiles = @($CodexDiffDemoFile)
+  $isPreview = ($Mode -eq "codex-local-diff-preview" -or -not $Apply)
+  $blockers = [System.Collections.Generic.List[string]]::new()
+  $warnings = [System.Collections.Generic.List[string]]::new()
+  $serverInfo = $null
+  $taskCreated = $false
+  $workerRegistered = $false
+  $taskClaimed = $false
+  $taskStarted = $false
+  $taskCompleted = $false
+  $taskFailed = $false
+  $taskBlocked = $false
+  $finalTask = $null
+  $finalWorker = $null
+  $codexExitCode = $null
+  $codexCalled = $false
+  $codexCallCount = 0
+  $workspaceUsed = $false
+  $changedFiles = @()
+  $validationStatus = "not_run"
+  $demoResult = "blocked"
+  $commitCreated = $false
+
+  $prompt = New-CodexDiffPrompt -BaselineCommit $baselineCommit -TaskIdValue $CodexDiffTaskId
+  $prompt | Set-Content -LiteralPath $paths.prompt -Encoding UTF8
+  $allowlist = Test-CodexDiffAllowlist -ChangedFiles $plannedChangedFiles
+  $report = New-CodexDiffReport -GeneratedAt $generatedAt -BaselineCommit $baselineCommit -ImplementationCommit $implementationCommit -WorkspacePath $workspacePath
+  $report.docs_only_allowlist_passed = [bool]$allowlist.docs_only_allowlist_passed
+  $report.changed_files = @($plannedChangedFiles)
+
+  $preflight = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.preflight.v1"
+    generated_at = $generatedAt
+    mode = "codex-local-diff"
+    preview = [bool]$isPreview
+    apply = [bool]$Apply
+    git_available = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    codex_available = [bool](Get-Command codex -ErrorAction SilentlyContinue)
+    repo_clean = $false
+    current_branch = ""
+    current_branch_is_main = $false
+    main_synced_with_origin = $false
+    contains_mg372c_baseline = $false
+    confirmation_text_matched = ($ConfirmationText -eq $CodexDiffConfirmationText)
+    workspace_path = $workspacePath.Replace("\", "/")
+    no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+    preflight_passed = $false
+    blockers = @()
+    token_printed = $false
+  }
+  $changedFilesArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.changed_files.v1"
+    generated_at = $generatedAt
+    changed_files = @($plannedChangedFiles)
+    token_printed = $false
+  }
+  $state = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.state.v1"
+    generated_at = $generatedAt
+    mode = "codex-local-diff"
+    preview = [bool]$isPreview
+    apply = [bool]$Apply
+    output_dir = $OutputDir.Replace("\", "/")
+    project_id = $ProjectId
+    goal_id = $CodexDiffGoalId
+    task_id = $CodexDiffTaskId
+    worker_id = $CodexDiffWorkerId
+    workspace_path = $workspacePath.Replace("\", "/")
+    workspace_kind = "archive-copy"
+    token_printed = $false
+  }
+  $taskArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.task.v1"
+    generated_at = $generatedAt
+    task_payload = New-CodexDiffTaskPayload
+    final_task = $null
+    task_created = $false
+    task_claimed = $false
+    task_started = $false
+    task_completed = $false
+    task_failed = $false
+    token_printed = $false
+  }
+  $workerArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.worker.v1"
+    generated_at = $generatedAt
+    worker_id = $CodexDiffWorkerId
+    worker_registered = $false
+    final_worker = $null
+    capabilities = @("powershell", "git", "codex", "codex-local-diff-demo")
+    token_printed = $false
+  }
+  $safety = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.safety.v1"
+    generated_at = $generatedAt
+    mode = "codex-local-diff"
+    safety_flags = New-CodexDiffSafetyFlags
+    token_printed = $false
+  }
+
+  try {
+    $preflight.repo_clean = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
+    $preflight.current_branch = Get-DemoGitText -Arguments @("branch", "--show-current") -AllowFailure
+    $preflight.current_branch_is_main = ([string]$preflight.current_branch -eq "main")
+    $localHead = Get-DemoGitText -Arguments @("rev-parse", "HEAD") -AllowFailure
+    $originHead = Get-DemoGitText -Arguments @("rev-parse", "origin/main") -AllowFailure
+    $preflight.main_synced_with_origin = (-not [string]::IsNullOrWhiteSpace($localHead) -and $localHead -eq $originHead)
+    $mergeBaseExit = Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("merge-base", "--is-ancestor", "5b3a7bc04db080d1e41380ac0705d75aef788012", "HEAD") -AllowFailure
+    $preflight.contains_mg372c_baseline = ([int]$mergeBaseExit -eq 0)
+
+    if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
+    if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed") | Out-Null }
+    if (-not $isPreview -and -not $preflight.codex_available) { $blockers.Add("codex_unavailable") | Out-Null }
+    if (-not $isPreview -and -not $preflight.confirmation_text_matched) { $blockers.Add("confirmation_text_mismatch") | Out-Null }
+    if (-not $isPreview -and -not $preflight.repo_clean) { $blockers.Add("repo_not_clean") | Out-Null }
+    if (-not $isPreview -and -not $preflight.current_branch_is_main) { $blockers.Add("not_on_main") | Out-Null }
+    if (-not $isPreview -and -not $preflight.main_synced_with_origin) { $blockers.Add("main_not_synced_with_origin") | Out-Null }
+    if (-not $isPreview -and -not $preflight.contains_mg372c_baseline) { $blockers.Add("mg372c_baseline_missing") | Out-Null }
+    if (-not $isPreview -and -not $preflight.no_existing_workspace) { $blockers.Add("existing_codex_diff_workspace") | Out-Null }
+
+    $preflight.blockers = @($blockers)
+    $preflight.preflight_passed = (@($blockers).Count -eq 0)
+    $report.blockers = @($blockers)
+    $report.warnings = @($warnings)
+
+    if ($isPreview) {
+      $validationStatus = if (@($blockers | Where-Object { $_ -in @("docs_only_allowlist_failed", "git_unavailable") }).Count -eq 0) { "preview_passed" } else { "preview_blocked" }
+      $demoResult = if ($validationStatus -eq "preview_passed") { "pass" } else { "blocked" }
+      $report.validation_status = $validationStatus
+      $report.demo_result = $demoResult
+      $report.main_worktree_clean_after = $preflight.repo_clean
+      Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -Safety $safety
+      if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+      return
+    }
+
+    Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -Safety $safety
+    if (-not $preflight.preflight_passed) { throw "MG372D Codex local diff preflight failed." }
+
+    $script:ResolvedApiBase = $ApiBase
+    if ($UseTempDatabase) { $StartServer = $true }
+    if ($StartServer) { $serverInfo = Start-DemoServer -ResolvedOutputDir $resolvedOutputDir }
+    Wait-DemoServerHealth | Out-Null
+
+    $existingProject = Invoke-DemoApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" -AllowNotFound
+    if (-not $existingProject) {
+      Invoke-DemoApi -Method POST -Path "/v1/projects" -Body @{ project_id = $ProjectId; name = $ProjectId } | Out-Null
+    }
+    $existingGoal = Invoke-DemoApi -Method GET -Path "/v1/goals/$([uri]::EscapeDataString($CodexDiffGoalId))" -AllowNotFound
+    if (-not $existingGoal) {
+      Invoke-DemoApi -Method POST -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/goals" -Body @{
+        goal_id = $CodexDiffGoalId
+        title = "MG372D Codex Local Diff Demo"
+        summary = "Prove one Codex-generated docs-only local diff without PR, push or commit."
+        source = "mg372d-mvp-demo"
+        risk = "low"
+        status = "ready"
+        acceptance_criteria = @("One Codex call writes one allowlisted docs artifact in an isolated workspace.")
+        evidence_requirements = @("MG372D local diff JSON, Markdown, patch and review summary are written.")
+      } | Out-Null
+    }
+    Invoke-DemoApi -Method POST -Path "/v1/tasks" -Body (New-CodexDiffTaskPayload) | Out-Null
+    $taskCreated = $true
+    Invoke-DemoApi -Method POST -Path "/v1/workers/register" -Body @{
+      worker_id = $CodexDiffWorkerId
+      name = "MG372D Codex local diff demo worker"
+      provider = "codex-local-diff-demo"
+      capabilities = @("powershell", "git", "codex", "codex-local-diff-demo")
+      labels = @("mg372d", "codex-local-diff", "poll-once")
+      enabled = $true
+      auth_mode = "none"
+      api_base = $script:ResolvedApiBase
+      allow_remote_server = $false
+    } | Out-Null
+    $workerRegistered = $true
+    Invoke-DemoApi -Method POST -Path "/v1/workers/$([uri]::EscapeDataString($CodexDiffWorkerId))/heartbeat" -Body @{
+      status_note = "mg372d Codex local diff demo ready"
+      load = 0
+      seen_at = Get-DemoUtcNow
+    } | Out-Null
+    Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDiffTaskId))/claim" -Body @{ worker_id = $CodexDiffWorkerId } | Out-Null
+    $taskClaimed = $true
+    Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDiffTaskId))/start" -Body @{ worker_id = $CodexDiffWorkerId } | Out-Null
+    $taskStarted = $true
+
+    New-CodexDiffWorkspace -WorkspacePath $workspacePath -ArchivePath $paths.archive -CommitSha $implementationCommit
+    $workspaceUsed = $true
+    $codexCommand = Resolve-CodexDiffCommand
+    $codexCalled = $true
+    $codexCallCount = 1
+    $safety.safety_flags.codex_called = $true
+    $safety.safety_flags.codex_call_count = 1
+    $codex = Invoke-CodexDiffProcess -CommandSpec $codexCommand -WorkspacePath $workspacePath -PromptPath $paths.prompt -LastMessagePath $paths.last_message -LogPath $paths.codex_jsonl
+    $codexExitCode = $codex.exit_code
+
+    $changedFiles = @(Get-CodexDiffChangedFiles -WorkspacePath $workspacePath)
+    $allowlist = Test-CodexDiffAllowlist -ChangedFiles $changedFiles
+    $changedFilesArtifact = [ordered]@{
+      schema = "skybridge.mvp_demo.codex_local_diff.changed_files.v1"
+      generated_at = Get-DemoUtcNow
+      changed_files = @($changedFiles)
+      token_printed = $false
+    }
+    Write-CodexDiffPatch -WorkspacePath $workspacePath -PatchPath $paths.patch
+    $workspaceGitDir = Join-Path $workspacePath ".git"
+    $commitCreated = [bool](Test-Path -LiteralPath $workspaceGitDir)
+    $artifactFile = Join-Path $workspacePath ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+
+    if (-not $codex.ok) { $blockers.Add("codex_exec_failed") | Out-Null }
+    if (-not (Test-Path -LiteralPath $artifactFile -PathType Leaf)) { $blockers.Add("artifact_file_missing") | Out-Null }
+    if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed_after_codex") | Out-Null }
+    if ($commitCreated) { $blockers.Add("workspace_git_directory_created") | Out-Null }
+
+    if (@($blockers).Count -eq 0) {
+      $review = @(
+        "# MG372D Codex Local Diff Review Summary",
+        "",
+        "- demo_result: pass",
+        "- codex_called: true",
+        "- codex_call_count: 1",
+        "- codex_exit_code: $codexExitCode",
+        "- changed_files: $(@($changedFiles) -join ', ')",
+        "- docs_only_allowlist_passed: true",
+        "- diff_patch_path: $($OutputDir.Replace('\', '/'))/codex-local-diff.patch",
+        "- pr_created: false",
+        "- branch_pushed: false",
+        "- commit_created: false",
+        "- token_printed: false"
+      )
+      $review | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
+      $complete = Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDiffTaskId))/complete" -Body @{
+        worker_id = $CodexDiffWorkerId
+        summary = "MG372D Codex local diff demo generated one docs-only local diff and no PR, push or commit."
+        result_url = ".agent/tmp/skybridge-mvp-codex-diff/codex-local-diff-report.md"
+        evidence_summary = @{
+          schema = "skybridge.mvp_demo.codex_local_diff.task_evidence.v1"
+          project_id = $ProjectId
+          goal_id = $CodexDiffGoalId
+          task_id = $CodexDiffTaskId
+          worker_id = $CodexDiffWorkerId
+          codex_called = $true
+          codex_call_count = 1
+          codex_exit_code = $codexExitCode
+          changed_files = @($changedFiles)
+          docs_only_allowlist_passed = $true
+          pr_created = $false
+          branch_pushed = $false
+          commit_created = $false
+          token_printed = $false
+          created_at = Get-DemoUtcNow
+        }
+      }
+      $taskCompleted = $true
+      $finalTask = $complete.task
+      $finalTask = (Invoke-DemoApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDiffTaskId))").task
+      $finalWorker = (Invoke-DemoApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($CodexDiffWorkerId))").worker
+      $validationStatus = "passed"
+      $demoResult = "pass"
+    } else {
+      $validationStatus = "failed"
+      $demoResult = "blocked"
+      $taskBlocked = $true
+      $taskFailed = $true
+      $review = @(
+        "# MG372D Codex Local Diff Review Summary",
+        "",
+        "- demo_result: blocked",
+        "- codex_called: $codexCalled",
+        "- codex_call_count: $codexCallCount",
+        "- codex_exit_code: $codexExitCode",
+        "- changed_files: $(@($changedFiles) -join ', ')",
+        "- docs_only_allowlist_passed: $($allowlist.docs_only_allowlist_passed)",
+        "- blockers: $(@($blockers) -join ', ')",
+        "- pr_created: false",
+        "- branch_pushed: false",
+        "- token_printed: false"
+      )
+      $review | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
+    }
+  } catch {
+    if (@($blockers).Count -lt 1) { $blockers.Add("codex_local_diff_demo_failed") | Out-Null }
+    $validationStatus = "failed"
+    $demoResult = if ($codexCalled -or $workspaceUsed) { "partial" } else { "blocked" }
+    if ($taskStarted -and -not $taskCompleted) { $taskBlocked = $true }
+    $taskFailed = $true
+    $safeMessage = ($_.Exception.Message -replace "(?i)(authorization|bearer|token|secret|cookie|password)\s*[:=]\s*\S+", '$1=<redacted>')
+    $safeMessage = ($safeMessage -replace 'https?://\S+', "<redacted-url>").Trim()
+    if ($safeMessage.Length -gt 180) { $safeMessage = $safeMessage.Substring(0, 180) }
+    $warnings.Add($safeMessage) | Out-Null
+    if (-not (Test-Path -LiteralPath $paths.review_summary -PathType Leaf)) {
+      @("# MG372D Codex Local Diff Review Summary", "", "- demo_result: $demoResult", "- blockers: $(@($blockers) -join ', ')", "- token_printed: false") | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
+    }
+  } finally {
+    if ($serverInfo) { Stop-DemoServer -ServerInfo $serverInfo }
+  }
+
+  $mainCleanAfter = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
+  $safety.safety_flags.commit_created = [bool]$commitCreated
+  $report.generated_at = Get-DemoUtcNow
+  $report.task_created = [bool]$taskCreated
+  $report.worker_registered = [bool]$workerRegistered
+  $report.task_claimed = [bool]$taskClaimed
+  $report.task_started = [bool]$taskStarted
+  $report.task_completed = [bool]$taskCompleted
+  $report.task_failed = [bool]$taskFailed
+  $report.task_blocked = [bool]$taskBlocked
+  $report.validation_status = $validationStatus
+  $report.codex_called = [bool]$codexCalled
+  $report.codex_call_count = [int]$codexCallCount
+  $report.codex_exit_code = $codexExitCode
+  $report.isolated_workspace_used = [bool]$workspaceUsed
+  $report.workspace_path = $workspacePath.Replace("\", "/")
+  $report.main_worktree_clean_after = [bool]$mainCleanAfter
+  $report.changed_files = @($changedFiles)
+  $report.docs_only_allowlist_passed = [bool]$allowlist.docs_only_allowlist_passed
+  $report.artifact_file_path = "$($OutputDir.Replace('\', '/'))/workspace/$CodexDiffDemoFile"
+  $report.demo_result = $demoResult
+  $report.real_worker_execution = [bool]($taskClaimed -and $taskStarted -and $taskCompleted)
+  $report.commit_created = [bool]$commitCreated
+  $report.blockers = @($blockers)
+  $report.warnings = @($warnings)
+
+  $state.generated_at = $report.generated_at
+  $state.codex_called = [bool]$codexCalled
+  $state.codex_call_count = [int]$codexCallCount
+  $state.codex_exit_code = $codexExitCode
+  $state.changed_files = @($changedFiles)
+  $taskArtifact.generated_at = $report.generated_at
+  $taskArtifact.final_task = $finalTask
+  $taskArtifact.task_created = [bool]$taskCreated
+  $taskArtifact.task_claimed = [bool]$taskClaimed
+  $taskArtifact.task_started = [bool]$taskStarted
+  $taskArtifact.task_completed = [bool]$taskCompleted
+  $taskArtifact.task_failed = [bool]$taskFailed
+  $workerArtifact.generated_at = $report.generated_at
+  $workerArtifact.worker_registered = [bool]$workerRegistered
+  $workerArtifact.final_worker = $finalWorker
+  $preflight.blockers = @($blockers)
+  if (-not $isPreview) { $preflight.preflight_passed = (@($blockers | Where-Object { $_ -in @("git_unavailable", "codex_unavailable", "confirmation_text_mismatch", "repo_not_clean", "not_on_main", "main_not_synced_with_origin", "mg372c_baseline_missing", "existing_codex_diff_workspace") }).Count -eq 0) }
+  $changedFilesArtifact.generated_at = $report.generated_at
+  $changedFilesArtifact.changed_files = @($changedFiles)
+  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -Safety $safety
+  if ($OpenReport) { Invoke-Item -LiteralPath $paths.report_md }
+  if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+}
+
+function Show-CodexLocalDiffStatus {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  $reportPath = Join-Path $resolvedOutputDir "codex-local-diff-report.json"
+  if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+    $result = [pscustomobject]@{ ok = $false; mode = "codex-local-diff-status"; report_found = $false; report_json_path = $reportPath; token_printed = $false }
+  } else {
+    $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+    $result = [pscustomobject]@{
+      ok = $true
+      mode = "codex-local-diff-status"
+      report_found = $true
+      report_json_path = $reportPath
+      report_markdown_path = (Join-Path $resolvedOutputDir "codex-local-diff-report.md")
+      demo_result = $report.demo_result
+      validation_status = $report.validation_status
+      codex_called = $report.codex_called
+      changed_files = @($report.changed_files)
+      token_printed = $false
+    }
+  }
+  if ($Json) { $result | ConvertTo-Json -Depth 10 -Compress } else { $result | Format-List }
+}
+
+function Show-CodexLocalDiffReport {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  $reportJson = Join-Path $resolvedOutputDir "codex-local-diff-report.json"
+  $reportMd = Join-Path $resolvedOutputDir "codex-local-diff-report.md"
+  if (-not (Test-Path -LiteralPath $reportJson -PathType Leaf)) {
+    $result = [pscustomobject]@{ ok = $false; mode = "codex-local-diff-report"; report_found = $false; report_json_path = $reportJson; report_markdown_path = $reportMd; token_printed = $false }
+  } else {
+    $report = Get-Content -Raw -LiteralPath $reportJson | ConvertFrom-Json
+    $result = [pscustomobject]@{
+      ok = $true
+      mode = "codex-local-diff-report"
+      report_found = $true
+      report_json_path = $reportJson
+      report_markdown_path = $reportMd
+      summary = "result=$($report.demo_result) codex_called=$($report.codex_called) changed_files=$(@($report.changed_files) -join ',')"
+      token_printed = $false
+    }
+  }
+  if ($OpenReport -and (Test-Path -LiteralPath $reportMd -PathType Leaf)) { Invoke-Item -LiteralPath $reportMd }
+  if ($Json) { $result | ConvertTo-Json -Depth 10 -Compress } else { $result | Format-List }
+}
+
 function Show-ControllerDraftPrStatus {
   $resolvedOutputDir = Resolve-DemoPath $OutputDir
   $reportPath = Join-Path $resolvedOutputDir "mvp-pr-demo-report.json"
@@ -1473,6 +2309,12 @@ if ($Mode -eq "local-safe") {
   Show-ControllerDraftPrStatus
 } elseif ($Mode -eq "controller-draft-pr-report") {
   Show-ControllerDraftPrReport
+} elseif ($Mode -eq "codex-local-diff-status") {
+  Show-CodexLocalDiffStatus
+} elseif ($Mode -eq "codex-local-diff-report") {
+  Show-CodexLocalDiffReport
+} elseif ($Mode -like "codex-local-diff*") {
+  Invoke-CodexLocalDiffDemo
 } else {
   Invoke-ControllerDraftPrDemo
 }
