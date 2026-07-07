@@ -246,6 +246,21 @@ clean the stale local Codex diff worktree under `.agent/tmp` and stops before
 commit, push or PR creation. See
 [docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
 
+Preview the Codex-generated draft PR demo without creating a branch, commit,
+push or PR:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode codex-diff-draft-pr-preview `
+  -Json
+```
+
+After explicit authorization, the Codex draft PR demo packages the validated
+MG372D2R local docs diff into one controller-created draft PR, without calling
+Codex again and without touching Demo PR #311. The demo PR remains draft/open
+for Jerry review. See
+[docs/product/SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md](docs/product/SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md).
+
 Start the local server and web dashboard:
 
 ```powershell

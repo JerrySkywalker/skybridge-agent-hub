@@ -1,5 +1,38 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372E2 Codex-generated Draft PR Demo
+
+- Extended `scripts/powershell/skybridge-mvp-demo.ps1` with
+  `codex-diff-draft-pr-preview`, `codex-diff-draft-pr`,
+  `codex-diff-draft-pr-status` and `codex-diff-draft-pr-report` modes.
+- The preview path validates the retained MG372D2R source report, patch and
+  artifact while creating no branch, commit, push or PR.
+- The apply path requires clean synced `main`, Git/GitHub CLI auth, draft/open
+  Demo PR #311, passing source artifact validation, no existing MG372E2 demo
+  branch/PR and the exact confirmation phrase
+  `I_UNDERSTAND_AUTHORIZE_MG372E2_CREATE_ONE_CODEX_GENERATED_DOCS_ONLY_DRAFT_PR_DEMO`.
+- The apply path copies only
+  `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md` from the retained
+  MG372D2R worktree, commits it once, pushes exactly one
+  `demo/mg372e2-codex-draft-pr-<utc-date>-<short-id>` branch and opens one
+  draft PR titled `MG372E2 Demo: Codex-generated Draft PR`.
+- Added `docs/product/SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md`.
+- Added smokes:
+  `smoke:skybridge-mvp-demo-codex-diff-draft-pr-preview`,
+  `smoke:skybridge-mvp-demo-codex-diff-draft-pr-policy`,
+  `smoke:skybridge-mvp-demo-codex-diff-draft-pr-no-pr`,
+  `smoke:skybridge-mvp-demo-codex-diff-draft-pr-no-codex` and
+  `smoke:skybridge-mvp-demo-codex-diff-draft-pr-source-validation`.
+- Preserved `codex_called_in_mg372e2=false`, `demo_pr_311_modified=false`,
+  `tui_created_branch=false`, `tui_created_pr=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false`,
+  `raw_output_exported=false` and `token_printed=false`.
+- Recommended next milestone after the demo draft PR remains open:
+  MG372F MVP End-to-End Review Gate.
+
 ## 2026-07-07 Mega Goal 372D2R Codex Local Diff Workspace Cleanup and Rerun Gate
 
 - Recorded the MG372D2 post-merge rerun as blocked before Codex execution:

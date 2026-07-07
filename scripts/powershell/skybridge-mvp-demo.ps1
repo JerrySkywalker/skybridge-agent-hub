@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture", "codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file", "codex-local-diff-cleanup-safety")]
+  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture", "codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file", "codex-local-diff-cleanup-safety", "codex-diff-draft-pr", "codex-diff-draft-pr-preview", "codex-diff-draft-pr-status", "codex-diff-draft-pr-report")]
   [string]$Mode = "local-safe",
   [switch]$UseTempDatabase,
   [string]$ApiBase = "http://127.0.0.1:8787",
@@ -16,7 +16,10 @@ param(
   [string]$CodexSandbox = "workspace-write",
   [bool]$KeepCodexWorktree = $true,
   [switch]$CleanExistingCodexWorktree,
-  [switch]$ArchiveExistingCodexWorktree
+  [switch]$ArchiveExistingCodexWorktree,
+  [string]$SourceReportPath = ".agent/tmp/skybridge-mvp-codex-diff/codex-local-diff-report.json",
+  [string]$SourcePatchPath = ".agent/tmp/skybridge-mvp-codex-diff/codex-local-diff.patch",
+  [string]$SourceArtifactPath = ".agent/tmp/skybridge-mvp-codex-diff/worktree/docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,6 +48,15 @@ $CodexDiffTaskId = "mg372d-codex-local-diff-task-001"
 $CodexDiffWorkerId = "mg372d2r-codex-local-diff-worker"
 $CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D2R_CLEAN_STALE_CODEX_DIFF_WORKTREE_AND_RERUN_CODEX_ONCE"
 $CodexDiffDemoFile = "docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
+$CodexDraftPrSchema = "skybridge.mvp_demo.codex_generated_draft_pr.v1"
+$CodexDraftPrOutputDir = ".agent/tmp/skybridge-mvp-codex-draft-pr"
+$CodexDraftPrGoalId = "mg372e2-codex-generated-draft-pr-demo"
+$CodexDraftPrTaskId = "mg372e2-codex-generated-draft-pr-task-001"
+$CodexDraftPrWorkerId = "mg372e2-codex-draft-pr-worker"
+$CodexDraftPrConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372E2_CREATE_ONE_CODEX_GENERATED_DOCS_ONLY_DRAFT_PR_DEMO"
+$CodexDraftPrCommitMessage = "docs(demo): add MG372E2 Codex-generated draft PR artifact"
+$CodexDraftPrTitle = "MG372E2 Demo: Codex-generated Draft PR"
+$CodexDraftPrImplementationBaseline = "59454cca78febc679de713b1c347b1352e84a039"
 $Artifacts = @(
   "mvp-demo-report.json",
   "mvp-demo-report.md",
@@ -96,12 +108,30 @@ $CodexDiffArtifacts = @(
   "codex-local-diff-cleanup-safety.json",
   "codex-local-diff-artifact-index.json"
 )
+$CodexDraftPrArtifacts = @(
+  "codex-draft-pr-report.json",
+  "codex-draft-pr-report.md",
+  "codex-draft-pr-state.json",
+  "codex-draft-pr-task.json",
+  "codex-draft-pr-worker.json",
+  "codex-draft-pr-preflight.json",
+  "codex-draft-pr-source-diff-validation.json",
+  "codex-draft-pr-branch-plan.json",
+  "codex-draft-pr-allowlist-check.json",
+  "codex-draft-pr-pr-metadata.json",
+  "codex-draft-pr-provider-report.json",
+  "codex-draft-pr-safety.json",
+  "codex-draft-pr-artifact-index.json"
+)
 
 if ($Mode -like "controller-draft-pr*" -and -not $PSBoundParameters.ContainsKey("OutputDir")) {
   $OutputDir = $ControllerOutputDir
 }
 if ($Mode -like "codex-local-diff*" -and -not $PSBoundParameters.ContainsKey("OutputDir")) {
   $OutputDir = $CodexDiffOutputDir
+}
+if ($Mode -like "codex-diff-draft-pr*" -and -not $PSBoundParameters.ContainsKey("OutputDir")) {
+  $OutputDir = $CodexDraftPrOutputDir
 }
 
 function ConvertTo-DemoJson {
@@ -1457,6 +1487,945 @@ function Invoke-ControllerDraftPrDemo {
   Write-ControllerArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -BranchPlan $branchPlan -Allowlist $allowlist -PrMetadata $prMetadata -Provider $provider -Safety $safety
   if ($OpenReport) { Invoke-Item -LiteralPath (Join-Path $resolvedOutputDir "mvp-pr-demo-report.md") }
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+}
+
+function Get-CodexDraftPrArtifactPaths {
+  param([string]$ResolvedOutputDir)
+  [pscustomobject]@{
+    report_json = Join-Path $ResolvedOutputDir "codex-draft-pr-report.json"
+    report_md = Join-Path $ResolvedOutputDir "codex-draft-pr-report.md"
+    state = Join-Path $ResolvedOutputDir "codex-draft-pr-state.json"
+    task = Join-Path $ResolvedOutputDir "codex-draft-pr-task.json"
+    worker = Join-Path $ResolvedOutputDir "codex-draft-pr-worker.json"
+    preflight = Join-Path $ResolvedOutputDir "codex-draft-pr-preflight.json"
+    source_validation = Join-Path $ResolvedOutputDir "codex-draft-pr-source-diff-validation.json"
+    branch_plan = Join-Path $ResolvedOutputDir "codex-draft-pr-branch-plan.json"
+    allowlist = Join-Path $ResolvedOutputDir "codex-draft-pr-allowlist-check.json"
+    pr_metadata = Join-Path $ResolvedOutputDir "codex-draft-pr-pr-metadata.json"
+    provider = Join-Path $ResolvedOutputDir "codex-draft-pr-provider-report.json"
+    safety = Join-Path $ResolvedOutputDir "codex-draft-pr-safety.json"
+    index = Join-Path $ResolvedOutputDir "codex-draft-pr-artifact-index.json"
+    pr_body = Join-Path $ResolvedOutputDir "codex-draft-pr-body.md"
+  }
+}
+
+function New-CodexDraftPrSafetyFlags {
+  [ordered]@{
+    codex_called_in_mg372e2 = $false
+    pr_created = $false
+    branch_pushed = $false
+    commit_created = $false
+    demo_pr_311_modified = $false
+    tui_created_branch = $false
+    tui_created_pr = $false
+    worker_loop_started = $false
+    queue_runner_started = $false
+    run_forever_started = $false
+    hermes_live_called = $false
+    mcp_run_called = $false
+    auto_merge_enabled = $false
+    release_created = $false
+    tag_created = $false
+    asset_uploaded = $false
+    raw_input_persisted = $false
+    raw_output_exported = $false
+    token_printed = $false
+  }
+}
+
+function Get-CodexDraftPrBranchName {
+  $date = (Get-Date).ToUniversalTime().ToString("yyyyMMdd")
+  $short = Get-DemoGitText -Arguments @("rev-parse", "--short=7", "HEAD")
+  return "demo/mg372e2-codex-draft-pr-$date-$short"
+}
+
+function Test-CodexDraftPrBranchPolicy {
+  param([string]$BranchName)
+  $checks = [ordered]@{
+    prefix_demo = $BranchName.StartsWith("demo/")
+    milestone_mg372e2 = ($BranchName -match "(^|/)mg372e2-")
+    no_spaces = ($BranchName -notmatch "\s")
+    no_shell_metacharacters = ($BranchName -match "^[A-Za-z0-9/_-]+$")
+    under_80_characters = ($BranchName.Length -lt 80)
+    pattern_matched = ($BranchName -match "^demo/mg372e2-codex-draft-pr-[0-9]{8}-[A-Za-z0-9]{7}$")
+  }
+  $passed = $true
+  foreach ($property in $checks.GetEnumerator()) {
+    if (-not [bool]$property.Value) { $passed = $false }
+  }
+  [pscustomobject]@{
+    branch_name = $BranchName
+    branch_policy_passed = $passed
+    checks = $checks
+    token_printed = $false
+  }
+}
+
+function Test-CodexDraftPrAllowlist {
+  param([string[]]$ChangedFiles)
+  $allowed = @($CodexDiffDemoFile)
+  $unexpected = @($ChangedFiles | Where-Object { $_ -notin $allowed })
+  [pscustomobject]@{
+    allowed_files = $allowed
+    changed_files = @($ChangedFiles)
+    unexpected_files = @($unexpected)
+    docs_only_allowlist_passed = (@($ChangedFiles).Count -gt 0 -and @($unexpected).Count -eq 0)
+    token_printed = $false
+  }
+}
+
+function Get-CodexDraftPrChangedFiles {
+  Get-ControllerChangedFiles
+}
+
+function Test-CodexDraftPrSourceArtifacts {
+  param(
+    [string]$ReportPath,
+    [string]$PatchPath,
+    [string]$ArtifactPath
+  )
+  $resolvedReport = Resolve-DemoPath $ReportPath
+  $resolvedPatch = Resolve-DemoPath $PatchPath
+  $resolvedArtifact = Resolve-DemoPath $ArtifactPath
+  $blockers = [System.Collections.Generic.List[string]]::new()
+  $source = $null
+  $patchSize = 0
+  $artifactSize = 0
+  $patchContainsArtifact = $false
+
+  try {
+    if (-not (Test-Path -LiteralPath $resolvedReport -PathType Leaf)) {
+      $blockers.Add("source_report_missing") | Out-Null
+    } else {
+      $source = Get-Content -Raw -LiteralPath $resolvedReport | ConvertFrom-Json
+    }
+  } catch {
+    $blockers.Add("source_report_invalid_json") | Out-Null
+  }
+
+  if ($null -ne $source) {
+    $changed = @($source.changed_files | ForEach-Object { [string]$_ })
+    if ([string]$source.demo_result -ne "pass") { $blockers.Add("source_demo_result_not_pass") | Out-Null }
+    if (-not [bool]$source.codex_called) { $blockers.Add("source_codex_not_called") | Out-Null }
+    if ([int]$source.codex_call_count -ne 1) { $blockers.Add("source_codex_call_count_not_one") | Out-Null }
+    if ([int]$source.codex_exit_code -ne 0) { $blockers.Add("source_codex_exit_code_nonzero") | Out-Null }
+    if (@($changed).Count -ne 1 -or [string]$changed[0] -ne $CodexDiffDemoFile) { $blockers.Add("source_changed_files_mismatch") | Out-Null }
+    if (-not [bool]$source.docs_only_allowlist_passed) { $blockers.Add("source_docs_only_allowlist_failed") | Out-Null }
+    if (-not [bool]$source.diff_patch_non_empty) { $blockers.Add("source_diff_patch_empty") | Out-Null }
+    if ([bool]$source.pr_created) { $blockers.Add("source_pr_created") | Out-Null }
+    if ([bool]$source.branch_pushed) { $blockers.Add("source_branch_pushed") | Out-Null }
+    if ([bool]$source.commit_created) { $blockers.Add("source_commit_created") | Out-Null }
+    if ([bool]$source.token_printed) { $blockers.Add("source_token_printed") | Out-Null }
+  }
+
+  if (-not (Test-Path -LiteralPath $resolvedPatch -PathType Leaf)) {
+    $blockers.Add("source_patch_missing") | Out-Null
+  } else {
+    $patchItem = Get-Item -LiteralPath $resolvedPatch
+    $patchSize = [int64]$patchItem.Length
+    if ($patchSize -le 0) { $blockers.Add("source_patch_empty_file") | Out-Null }
+    $patchContainsArtifact = [bool](Select-String -LiteralPath $resolvedPatch -Pattern ([regex]::Escape($CodexDiffDemoFile)) -Quiet)
+    if (-not $patchContainsArtifact) { $blockers.Add("source_patch_missing_artifact_path") | Out-Null }
+  }
+
+  if (-not (Test-Path -LiteralPath $resolvedArtifact -PathType Leaf)) {
+    $blockers.Add("source_artifact_missing") | Out-Null
+  } else {
+    $artifactItem = Get-Item -LiteralPath $resolvedArtifact
+    $artifactSize = [int64]$artifactItem.Length
+    if ($artifactSize -le 0) { $blockers.Add("source_artifact_empty") | Out-Null }
+  }
+
+  [pscustomobject]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.source_validation.v1"
+    generated_at = Get-DemoUtcNow
+    source_report_path = $ReportPath.Replace("\", "/")
+    source_patch_path = $PatchPath.Replace("\", "/")
+    source_artifact_path = $ArtifactPath.Replace("\", "/")
+    source_report_exists = [bool](Test-Path -LiteralPath $resolvedReport -PathType Leaf)
+    source_patch_exists = [bool](Test-Path -LiteralPath $resolvedPatch -PathType Leaf)
+    source_artifact_exists = [bool](Test-Path -LiteralPath $resolvedArtifact -PathType Leaf)
+    source_patch_size_bytes = [int64]$patchSize
+    source_artifact_size_bytes = [int64]$artifactSize
+    source_patch_contains_artifact_path = [bool]$patchContainsArtifact
+    source_demo_result = if ($null -ne $source) { [string]$source.demo_result } else { "" }
+    source_codex_called = if ($null -ne $source) { [bool]$source.codex_called } else { $false }
+    source_codex_call_count = if ($null -ne $source) { [int]$source.codex_call_count } else { 0 }
+    source_codex_exit_code = if ($null -ne $source -and $null -ne $source.codex_exit_code) { [int]$source.codex_exit_code } else { $null }
+    source_changed_files = if ($null -ne $source) { @($source.changed_files | ForEach-Object { [string]$_ }) } else { @() }
+    source_docs_only_allowlist_passed = if ($null -ne $source) { [bool]$source.docs_only_allowlist_passed } else { $false }
+    source_diff_patch_non_empty = if ($null -ne $source) { [bool]$source.diff_patch_non_empty } else { $false }
+    source_pr_created = if ($null -ne $source) { [bool]$source.pr_created } else { $false }
+    source_branch_pushed = if ($null -ne $source) { [bool]$source.branch_pushed } else { $false }
+    source_commit_created = if ($null -ne $source) { [bool]$source.commit_created } else { $false }
+    source_token_printed = if ($null -ne $source) { [bool]$source.token_printed } else { $false }
+    source_validation_passed = (@($blockers).Count -eq 0)
+    blockers = @($blockers)
+    token_printed = $false
+  }
+}
+
+function New-CodexDraftPrTaskPayload {
+  [ordered]@{
+    task_id = $CodexDraftPrTaskId
+    project_id = $ProjectId
+    goal_id = $CodexDraftPrGoalId
+    title = "MG372E2 Codex-generated draft PR demo task"
+    body = "Package the already validated MG372D2R Codex local docs diff into one controller-created draft PR."
+    prompt_summary = "MG372E2 packages validated MG372D2R local diff. No Codex call in MG372E2."
+    risk = "low"
+    source = "custom"
+    task_type = "codex-generated-draft-pr-demo"
+    allowed_paths = @($CodexDiffDemoFile, ".agent/tmp/skybridge-mvp-codex-draft-pr/**")
+    blocked_paths = @(".env", "secrets/**", ".github/**", "apps/**", "packages/**", "deploy/**", "Dockerfile", "package.json", ".git/**")
+    validation = @("validated MG372D2R source diff", "one controller-created branch", "one controller-created commit", "one draft PR", "token_printed=false")
+    required_capabilities = @("powershell", "git", "gh", "codex-diff-draft-pr-demo")
+    planner_metadata = @{
+      adapter = "skybridge-mvp-demo"
+      decision = "continue"
+      reason = "mg372e2_codex_generated_draft_pr_demo"
+      task_type = "codex-generated-draft-pr-demo"
+      expected_outputs = @($CodexDiffDemoFile, ".agent/tmp/skybridge-mvp-codex-draft-pr/**")
+      source_milestone = "MG372D2R"
+      codex_called_in_mg372e2 = $false
+      tui_created_branch = $false
+      tui_created_pr = $false
+      worker_loop_started = $false
+      queue_runner_started = $false
+      run_forever_started = $false
+      token_printed = $false
+    }
+  }
+}
+
+function New-CodexDraftPrReport {
+  param(
+    [string]$GeneratedAt,
+    [string]$BaselineCommit,
+    [string]$ImplementationCommit,
+    [string]$BranchName,
+    [string[]]$ChangedFiles
+  )
+  $relativeOutput = $OutputDir.Replace("\", "/")
+  [ordered]@{
+    schema = $CodexDraftPrSchema
+    generated_at = $GeneratedAt
+    mode = "codex-diff-draft-pr"
+    baseline_commit = $BaselineCommit
+    implementation_commit = $ImplementationCommit
+    source_milestone = "MG372D2R"
+    source_report_path = $SourceReportPath.Replace("\", "/")
+    source_patch_path = $SourcePatchPath.Replace("\", "/")
+    source_artifact_path = $SourceArtifactPath.Replace("\", "/")
+    source_codex_called = $true
+    source_codex_call_count = 1
+    source_codex_exit_code = 0
+    source_diff_patch_non_empty = $false
+    source_docs_only_allowlist_passed = $false
+    project_id = $ProjectId
+    goal_id = $CodexDraftPrGoalId
+    task_id = $CodexDraftPrTaskId
+    worker_id = $CodexDraftPrWorkerId
+    task_created = $false
+    worker_registered = $false
+    task_claimed = $false
+    task_started = $false
+    task_completed = $false
+    task_failed = $false
+    task_blocked = $false
+    validation_status = "not_run"
+    controller_created_branch = $false
+    controller_created_commit = $false
+    controller_created_draft_pr = $false
+    would_validate_source_codex_diff = $true
+    would_create_branch = $true
+    would_create_commit = $true
+    would_push_branch = $true
+    would_create_draft_pr = $true
+    branch_name = $BranchName
+    commit_sha = ""
+    pr_number = $null
+    pr_url = ""
+    draft_pr = $true
+    demo_pr_left_open = $false
+    demo_pr_marked_ready = $false
+    demo_pr_merged = $false
+    docs_only_allowlist_passed = $false
+    branch_policy_passed = $false
+    changed_files = @($ChangedFiles)
+    server_task_pr_evidence_recorded = $false
+    artifact_report_written = $true
+    report_markdown_path = "$relativeOutput/codex-draft-pr-report.md"
+    report_json_path = "$relativeOutput/codex-draft-pr-report.json"
+    demo_result = "blocked"
+    fixture_mode = $false
+    real_worker_execution = $false
+    codex_called_in_mg372e2 = $false
+    pr_created = $false
+    branch_pushed = $false
+    commit_created = $false
+    demo_pr_311_modified = $false
+    tui_created_branch = $false
+    tui_created_pr = $false
+    worker_loop_started = $false
+    queue_runner_started = $false
+    run_forever_started = $false
+    hermes_live_called = $false
+    mcp_run_called = $false
+    auto_merge_enabled = $false
+    release_created = $false
+    tag_created = $false
+    asset_uploaded = $false
+    raw_input_persisted = $false
+    raw_output_exported = $false
+    token_printed = $false
+    blockers = @()
+    warnings = @()
+  }
+}
+
+function Write-CodexDraftPrArtifacts {
+  param(
+    [string]$ResolvedOutputDir,
+    $Report,
+    $State,
+    $TaskArtifact,
+    $WorkerArtifact,
+    $Preflight,
+    $SourceValidation,
+    $BranchPlan,
+    $Allowlist,
+    $PrMetadata,
+    $Provider,
+    $Safety
+  )
+  $paths = Get-CodexDraftPrArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
+  Write-DemoJsonFile -Path $paths.state -Value $State
+  Write-DemoJsonFile -Path $paths.task -Value $TaskArtifact
+  Write-DemoJsonFile -Path $paths.worker -Value $WorkerArtifact
+  Write-DemoJsonFile -Path $paths.preflight -Value $Preflight
+  Write-DemoJsonFile -Path $paths.source_validation -Value $SourceValidation
+  Write-DemoJsonFile -Path $paths.branch_plan -Value $BranchPlan
+  Write-DemoJsonFile -Path $paths.allowlist -Value $Allowlist
+  Write-DemoJsonFile -Path $paths.pr_metadata -Value $PrMetadata
+  Write-DemoJsonFile -Path $paths.provider -Value $Provider
+  Write-DemoJsonFile -Path $paths.safety -Value $Safety
+  Write-DemoJsonFile -Path $paths.report_json -Value $Report
+  $relativeOutput = $OutputDir.Replace("\", "/")
+  $index = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.artifact_index.v1"
+    generated_at = $Report.generated_at
+    artifact_dir = $relativeOutput
+    artifacts = @($CodexDraftPrArtifacts)
+    report_json_path = $Report.report_json_path
+    report_markdown_path = $Report.report_markdown_path
+    source_validation_path = "$relativeOutput/codex-draft-pr-source-diff-validation.json"
+    token_printed = $false
+  }
+  Write-DemoJsonFile -Path $paths.index -Value $index
+
+  $markdown = @(
+    "# SkyBridge MVP Codex-generated Draft PR Demo",
+    "",
+    "- result: $($Report.demo_result)",
+    "- validation_status: $($Report.validation_status)",
+    "- source_milestone: MG372D2R",
+    "- source_report_path: $($Report.source_report_path)",
+    "- source_patch_path: $($Report.source_patch_path)",
+    "- source_artifact_path: $($Report.source_artifact_path)",
+    "- source_codex_called: $($Report.source_codex_called)",
+    "- source_codex_call_count: $($Report.source_codex_call_count)",
+    "- source_diff_patch_non_empty: $($Report.source_diff_patch_non_empty)",
+    "- project_id: $($Report.project_id)",
+    "- goal_id: $($Report.goal_id)",
+    "- task_id: $($Report.task_id)",
+    "- worker_id: $($Report.worker_id)",
+    "- branch_name: $($Report.branch_name)",
+    "- commit_sha: $($Report.commit_sha)",
+    "- pr_number: $($Report.pr_number)",
+    "- pr_url: $($Report.pr_url)",
+    "- draft_pr: $($Report.draft_pr)",
+    "- demo_pr_left_open: $($Report.demo_pr_left_open)",
+    "- demo_pr_marked_ready: false",
+    "- demo_pr_merged: false",
+    "- docs_only_allowlist_passed: $($Report.docs_only_allowlist_passed)",
+    "- branch_policy_passed: $($Report.branch_policy_passed)",
+    "- task_created: $($Report.task_created)",
+    "- worker_registered: $($Report.worker_registered)",
+    "- task_claimed: $($Report.task_claimed)",
+    "- task_started: $($Report.task_started)",
+    "- task_completed: $($Report.task_completed)",
+    "- server_task_pr_evidence_recorded: $($Report.server_task_pr_evidence_recorded)",
+    "- fixture_mode: false",
+    "- real_worker_execution: $($Report.real_worker_execution)",
+    "- codex_called_in_mg372e2: false",
+    "- pr_created: $($Report.pr_created)",
+    "- branch_pushed: $($Report.branch_pushed)",
+    "- commit_created: $($Report.commit_created)",
+    "- demo_pr_311_modified: false",
+    "- tui_created_branch: false",
+    "- tui_created_pr: false",
+    "- worker_loop_started: false",
+    "- queue_runner_started: false",
+    "- run_forever_started: false",
+    "- hermes_live_called: false",
+    "- mcp_run_called: false",
+    "- auto_merge_enabled: false",
+    "- release_created: false",
+    "- tag_created: false",
+    "- asset_uploaded: false",
+    "- raw_output_exported: false",
+    "- token_printed: false",
+    "",
+    "Artifacts are written under `$relativeOutput`."
+  )
+  $markdown | Set-Content -LiteralPath $paths.report_md -Encoding UTF8
+}
+
+function Invoke-CodexDiffDraftPrDemo {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
+  $generatedAt = Get-DemoUtcNow
+  $implementationCommit = Get-DemoGitText -Arguments @("rev-parse", "HEAD")
+  $baselineCommit = $CodexDraftPrImplementationBaseline
+  $branchName = Get-CodexDraftPrBranchName
+  $plannedChangedFiles = @($CodexDiffDemoFile)
+  $isPreview = ($Mode -eq "codex-diff-draft-pr-preview" -or -not $Apply)
+  $blockers = [System.Collections.Generic.List[string]]::new()
+  $warnings = [System.Collections.Generic.List[string]]::new()
+  $providerCallCount = 0
+  $gitPushCalled = $false
+  $ghPrCreateCalled = $false
+  $githubApiCalled = $false
+  $serverInfo = $null
+  $currentBranchBefore = ""
+  $branchCreated = $false
+  $demoCommitCreated = $false
+  $branchPushed = $false
+  $prCreated = $false
+  $taskCreated = $false
+  $workerRegistered = $false
+  $taskClaimed = $false
+  $taskStarted = $false
+  $taskCompleted = $false
+  $taskFailed = $false
+  $taskBlocked = $false
+  $serverTaskEvidenceRecorded = $false
+  $finalTask = $null
+  $finalWorker = $null
+  $commitSha = ""
+  $prNumber = $null
+  $prUrl = ""
+  $draftPr = $false
+  $demoResult = "blocked"
+  $validationStatus = "not_run"
+
+  $branchPolicy = Test-CodexDraftPrBranchPolicy -BranchName $branchName
+  $allowlist = Test-CodexDraftPrAllowlist -ChangedFiles $plannedChangedFiles
+  $sourceValidation = Test-CodexDraftPrSourceArtifacts -ReportPath $SourceReportPath -PatchPath $SourcePatchPath -ArtifactPath $SourceArtifactPath
+  $report = New-CodexDraftPrReport -GeneratedAt $generatedAt -BaselineCommit $baselineCommit -ImplementationCommit $implementationCommit -BranchName $branchName -ChangedFiles $plannedChangedFiles
+  $report.branch_policy_passed = [bool]$branchPolicy.branch_policy_passed
+  $report.docs_only_allowlist_passed = [bool]$allowlist.docs_only_allowlist_passed
+  $report.source_codex_called = [bool]$sourceValidation.source_codex_called
+  $report.source_codex_call_count = [int]$sourceValidation.source_codex_call_count
+  $report.source_codex_exit_code = $sourceValidation.source_codex_exit_code
+  $report.source_diff_patch_non_empty = [bool]$sourceValidation.source_diff_patch_non_empty
+  $report.source_docs_only_allowlist_passed = [bool]$sourceValidation.source_docs_only_allowlist_passed
+
+  $preflight = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.preflight.v1"
+    generated_at = $generatedAt
+    mode = "codex-diff-draft-pr"
+    preview = [bool]$isPreview
+    apply = [bool]$Apply
+    git_available = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    gh_available = [bool](Get-Command gh -ErrorAction SilentlyContinue)
+    gh_auth_available = $false
+    repo_clean = $false
+    current_branch = ""
+    current_branch_is_main = $false
+    main_synced_with_origin = $false
+    implementation_commit = $implementationCommit
+    implementation_commit_on_main = $false
+    contains_mg372d2r_baseline = $false
+    demo_pr_311_exists = $false
+    demo_pr_311_open = $false
+    demo_pr_311_draft = $false
+    no_existing_demo_branch = $false
+    no_existing_demo_pr = $false
+    confirmation_text_matched = ($ConfirmationText -eq $CodexDraftPrConfirmationText)
+    source_validation_passed = [bool]$sourceValidation.source_validation_passed
+    preflight_passed = $false
+    blockers = @()
+    token_printed = $false
+  }
+  $branchPlan = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.branch_plan.v1"
+    generated_at = $generatedAt
+    branch_name = $branchName
+    branch_policy = $branchPolicy
+    branch_policy_passed = [bool]$branchPolicy.branch_policy_passed
+    branch_name_recorded_before_mutation = $true
+    one_branch_max = $true
+    token_printed = $false
+  }
+  $prMetadata = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.pr_metadata.v1"
+    generated_at = $generatedAt
+    title = $CodexDraftPrTitle
+    draft = $true
+    pr_number = $null
+    pr_url = ""
+    demo_pr_left_open = $false
+    demo_pr_marked_ready = $false
+    demo_pr_merged = $false
+    auto_merge_enabled = $false
+    token_printed = $false
+  }
+  $provider = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.provider_report.v1"
+    generated_at = $generatedAt
+    provider = "controller-git-gh"
+    preview = [bool]$isPreview
+    provider_call_count = 0
+    git_push_called = $false
+    gh_pr_create_called = $false
+    github_api_called = $false
+    codex_called = $false
+    controller_created_branch = $false
+    controller_created_commit = $false
+    controller_created_draft_pr = $false
+    token_printed = $false
+  }
+  $safety = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.safety.v1"
+    generated_at = $generatedAt
+    mode = "codex-diff-draft-pr"
+    safety_flags = New-CodexDraftPrSafetyFlags
+    raw_secrets_included = $false
+    raw_logs_included = $false
+    raw_stdout_included = $false
+    raw_stderr_included = $false
+    raw_prompt_included = $false
+    token_printed = $false
+  }
+
+  try {
+    $currentBranchBefore = Get-DemoGitText -Arguments @("branch", "--show-current")
+    $preflight.current_branch = $currentBranchBefore
+    $preflight.current_branch_is_main = ($currentBranchBefore -eq "main")
+    $preflight.repo_clean = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain")))
+    Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("fetch", "origin", "main", "--prune") | Out-Null
+    $head = Get-DemoGitText -Arguments @("rev-parse", "HEAD")
+    $originMain = Get-DemoGitText -Arguments @("rev-parse", "origin/main")
+    $preflight.main_synced_with_origin = ($head -eq $originMain)
+    $preflight.implementation_commit_on_main = ($preflight.current_branch_is_main -and $preflight.main_synced_with_origin)
+    $mergeBaseExit = Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("merge-base", "--is-ancestor", $CodexDraftPrImplementationBaseline, "HEAD") -AllowFailure
+    $preflight.contains_mg372d2r_baseline = ([int]$mergeBaseExit -eq 0)
+    $ghAuthExit = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("auth", "status") -AllowFailure
+    $preflight.gh_auth_available = ([int]$ghAuthExit -eq 0)
+    if ($preflight.gh_available) {
+      $pr311Raw = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "view", "311", "--json", "number,state,isDraft,autoMergeRequest") -CaptureOutput -AllowFailure
+      if (-not [string]::IsNullOrWhiteSpace($pr311Raw)) {
+        $pr311 = $pr311Raw | ConvertFrom-Json
+        $preflight.demo_pr_311_exists = ([int]$pr311.number -eq 311)
+        $preflight.demo_pr_311_open = ([string]$pr311.state -eq "OPEN")
+        $preflight.demo_pr_311_draft = [bool]$pr311.isDraft
+      }
+    }
+    $localExactBranch = Get-DemoGitText -Arguments @("rev-parse", "--verify", "--quiet", $branchName) -AllowFailure
+    $remoteExactBranch = Get-DemoGitText -Arguments @("ls-remote", "--heads", "origin", $branchName) -AllowFailure
+    $localAnyBranch = Get-DemoGitText -Arguments @("branch", "--list", "demo/mg372e2-codex-draft-pr-*") -AllowFailure
+    $remoteAnyBranch = Get-DemoGitText -Arguments @("ls-remote", "--heads", "origin", "demo/mg372e2-codex-draft-pr-*") -AllowFailure
+    $preflight.no_existing_demo_branch = ([string]::IsNullOrWhiteSpace($localExactBranch) -and [string]::IsNullOrWhiteSpace($remoteExactBranch) -and [string]::IsNullOrWhiteSpace($localAnyBranch) -and [string]::IsNullOrWhiteSpace($remoteAnyBranch))
+    $existingPrRaw = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "list", "--state", "all", "--search", "MG372E2 Demo: Codex-generated Draft PR in:title", "--json", "number,url,state,isDraft,headRefName") -CaptureOutput -AllowFailure
+    $existingPr = @()
+    if (-not [string]::IsNullOrWhiteSpace($existingPrRaw)) { $existingPr = @($existingPrRaw | ConvertFrom-Json) }
+    $preflight.no_existing_demo_pr = (@($existingPr).Count -eq 0)
+
+    if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
+    if (-not $preflight.gh_available) { $blockers.Add("gh_unavailable") | Out-Null }
+    if (-not $preflight.gh_auth_available) { $blockers.Add("gh_auth_unavailable") | Out-Null }
+    if (-not $branchPolicy.branch_policy_passed) { $blockers.Add("branch_policy_failed") | Out-Null }
+    if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed") | Out-Null }
+    if (-not $sourceValidation.source_validation_passed) {
+      foreach ($sourceBlocker in @($sourceValidation.blockers)) { $blockers.Add([string]$sourceBlocker) | Out-Null }
+    }
+    if (-not $isPreview -and -not $preflight.confirmation_text_matched) { $blockers.Add("confirmation_text_mismatch") | Out-Null }
+    if (-not $isPreview -and -not $preflight.repo_clean) { $blockers.Add("repo_not_clean") | Out-Null }
+    if (-not $isPreview -and -not $preflight.current_branch_is_main) { $blockers.Add("not_on_main") | Out-Null }
+    if (-not $isPreview -and -not $preflight.main_synced_with_origin) { $blockers.Add("main_not_synced_with_origin") | Out-Null }
+    if (-not $isPreview -and -not $preflight.implementation_commit_on_main) { $blockers.Add("implementation_commit_not_on_synced_main") | Out-Null }
+    if (-not $isPreview -and -not $preflight.contains_mg372d2r_baseline) { $blockers.Add("mg372d2r_baseline_missing") | Out-Null }
+    if (-not $isPreview -and -not $preflight.demo_pr_311_exists) { $blockers.Add("demo_pr_311_missing") | Out-Null }
+    if (-not $isPreview -and -not $preflight.demo_pr_311_open) { $blockers.Add("demo_pr_311_not_open") | Out-Null }
+    if (-not $isPreview -and -not $preflight.demo_pr_311_draft) { $blockers.Add("demo_pr_311_not_draft") | Out-Null }
+    if (-not $isPreview -and -not $preflight.no_existing_demo_branch) { $blockers.Add("existing_mg372e2_demo_branch") | Out-Null }
+    if (-not $isPreview -and -not $preflight.no_existing_demo_pr) { $blockers.Add("existing_mg372e2_demo_pr") | Out-Null }
+
+    $preflight.blockers = @($blockers)
+    $preflight.preflight_passed = (@($blockers).Count -eq 0)
+    $report.blockers = @($blockers)
+    $report.warnings = @($warnings)
+
+    $state = [ordered]@{
+      schema = "skybridge.mvp_demo.codex_generated_draft_pr.state.v1"
+      generated_at = $generatedAt
+      mode = "codex-diff-draft-pr"
+      preview = [bool]$isPreview
+      apply = [bool]$Apply
+      output_dir = $OutputDir.Replace("\", "/")
+      project_id = $ProjectId
+      goal_id = $CodexDraftPrGoalId
+      task_id = $CodexDraftPrTaskId
+      worker_id = $CodexDraftPrWorkerId
+      branch_name = $branchName
+      token_printed = $false
+    }
+    $taskArtifact = [ordered]@{
+      schema = "skybridge.mvp_demo.codex_generated_draft_pr.task.v1"
+      generated_at = $generatedAt
+      task_payload = New-CodexDraftPrTaskPayload
+      final_task = $null
+      task_created = $false
+      task_claimed = $false
+      task_started = $false
+      task_completed = $false
+      task_failed = $false
+      token_printed = $false
+    }
+    $workerArtifact = [ordered]@{
+      schema = "skybridge.mvp_demo.codex_generated_draft_pr.worker.v1"
+      generated_at = $generatedAt
+      worker_id = $CodexDraftPrWorkerId
+      worker_registered = $false
+      final_worker = $null
+      capabilities = @("powershell", "git", "gh", "codex-diff-draft-pr-demo")
+      token_printed = $false
+    }
+
+    if ($isPreview) {
+      $report.validation_status = if (@($blockers | Where-Object { $_ -in @("branch_policy_failed", "docs_only_allowlist_failed", "git_unavailable", "gh_unavailable", "gh_auth_unavailable") }).Count -eq 0 -and [bool]$sourceValidation.source_validation_passed) { "preview_passed" } else { "preview_blocked" }
+      $report.demo_result = if ($report.validation_status -eq "preview_passed") { "pass" } else { "blocked" }
+      Write-CodexDraftPrArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -SourceValidation $sourceValidation -BranchPlan $branchPlan -Allowlist $allowlist -PrMetadata $prMetadata -Provider $provider -Safety $safety
+      if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+      return
+    }
+
+    Write-CodexDraftPrArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -SourceValidation $sourceValidation -BranchPlan $branchPlan -Allowlist $allowlist -PrMetadata $prMetadata -Provider $provider -Safety $safety
+    if (-not $preflight.preflight_passed) { throw "MG372E2 Codex-generated draft PR preflight failed." }
+
+    $script:ResolvedApiBase = $ApiBase
+    if ($UseTempDatabase) { $StartServer = $true }
+    if ($StartServer) { $serverInfo = Start-DemoServer -ResolvedOutputDir $resolvedOutputDir }
+    Wait-DemoServerHealth | Out-Null
+
+    $existingProject = Invoke-DemoApi -Method GET -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))" -AllowNotFound
+    if (-not $existingProject) {
+      Invoke-DemoApi -Method POST -Path "/v1/projects" -Body @{ project_id = $ProjectId; name = $ProjectId } | Out-Null
+    }
+    $existingGoal = Invoke-DemoApi -Method GET -Path "/v1/goals/$([uri]::EscapeDataString($CodexDraftPrGoalId))" -AllowNotFound
+    if (-not $existingGoal) {
+      Invoke-DemoApi -Method POST -Path "/v1/projects/$([uri]::EscapeDataString($ProjectId))/goals" -Body @{
+        goal_id = $CodexDraftPrGoalId
+        title = "MG372E2 Codex-generated Draft PR Demo"
+        summary = "Package the validated MG372D2R local Codex docs diff into one controller-created draft PR."
+        source = "mg372e2-mvp-demo"
+        risk = "low"
+        status = "ready"
+        acceptance_criteria = @("One controller-created demo branch, commit and draft PR are created from the validated source diff.")
+        evidence_requirements = @("MG372E2 draft PR demo JSON and Markdown reports are written.")
+      } | Out-Null
+    }
+    Invoke-DemoApi -Method POST -Path "/v1/tasks" -Body (New-CodexDraftPrTaskPayload) | Out-Null
+    $taskCreated = $true
+    Invoke-DemoApi -Method POST -Path "/v1/workers/register" -Body @{
+      worker_id = $CodexDraftPrWorkerId
+      name = "MG372E2 Codex draft PR demo worker"
+      provider = "controller-demo"
+      capabilities = @("powershell", "git", "gh", "codex-diff-draft-pr-demo")
+      labels = @("mg372e2", "controller-created", "codex-diff", "draft-pr", "poll-once")
+      enabled = $true
+      auth_mode = "none"
+      api_base = $script:ResolvedApiBase
+      allow_remote_server = $false
+    } | Out-Null
+    $workerRegistered = $true
+    Invoke-DemoApi -Method POST -Path "/v1/workers/$([uri]::EscapeDataString($CodexDraftPrWorkerId))/heartbeat" -Body @{
+      status_note = "mg372e2 codex diff draft PR demo ready"
+      load = 0
+      seen_at = Get-DemoUtcNow
+    } | Out-Null
+    Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDraftPrTaskId))/claim" -Body @{ worker_id = $CodexDraftPrWorkerId } | Out-Null
+    $taskClaimed = $true
+    Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDraftPrTaskId))/start" -Body @{ worker_id = $CodexDraftPrWorkerId } | Out-Null
+    $taskStarted = $true
+
+    Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("switch", "-c", $branchName) | Out-Null
+    $branchCreated = $true
+    $targetPath = Join-Path (Get-Location) ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+    $targetDir = Split-Path -Parent $targetPath
+    if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) { New-Item -ItemType Directory -Force -Path $targetDir | Out-Null }
+    Copy-Item -LiteralPath (Resolve-DemoPath $SourceArtifactPath) -Destination $targetPath -Force
+    $actualChangedFiles = @(Get-CodexDraftPrChangedFiles)
+    $allowlist = Test-CodexDraftPrAllowlist -ChangedFiles $actualChangedFiles
+    if (-not $allowlist.docs_only_allowlist_passed) {
+      $blockers.Add("docs_only_allowlist_failed_after_copy") | Out-Null
+      throw "MG372E2 demo changed files failed allowlist."
+    }
+    Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("add", "--", $CodexDiffDemoFile) | Out-Null
+    Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("commit", "-m", $CodexDraftPrCommitMessage) | Out-Null
+    $demoCommitCreated = $true
+    $commitSha = Get-DemoGitText -Arguments @("rev-parse", "HEAD")
+    Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("push", "--set-upstream", "origin", $branchName) | Out-Null
+    $gitPushCalled = $true
+    $branchPushed = $true
+    $providerCallCount += 1
+
+    $paths = Get-CodexDraftPrArtifactPaths -ResolvedOutputDir $resolvedOutputDir
+    $body = @(
+      "## MG372E2 Codex-generated Draft PR Demo",
+      "",
+      "- demo_result=pass",
+      "- source_milestone=MG372D2R",
+      "- source_codex_called=true",
+      "- source_codex_call_count=1",
+      "- source_diff_patch_non_empty=true",
+      "- controller_created_branch=true",
+      "- controller_created_commit=true",
+      "- controller_created_draft_pr=true",
+      "- draft=true",
+      "- task_created=true",
+      "- worker_registered=true",
+      "- task_claimed=true",
+      "- task_started=true",
+      "- task_completed=true",
+      "- docs_only_allowlist_passed=true",
+      "- branch_policy_passed=true",
+      "- codex_called_in_mg372e2=false",
+      "- tui_created_branch=false",
+      "- tui_created_pr=false",
+      "- auto_merge_enabled=false",
+      "- release_created=false",
+      "- tag_created=false",
+      "- asset_uploaded=false",
+      "- token_printed=false",
+      "- artifacts path: .agent/tmp/skybridge-mvp-codex-draft-pr/",
+      "",
+      "This PR is intentionally draft-only and must remain open for Jerry review."
+    )
+    $body | Set-Content -LiteralPath $paths.pr_body -Encoding UTF8
+    $prUrl = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "create", "--draft", "--base", "main", "--head", $branchName, "--title", $CodexDraftPrTitle, "--body-file", $paths.pr_body) -CaptureOutput
+    $ghPrCreateCalled = $true
+    $githubApiCalled = $true
+    $providerCallCount += 1
+    $prCreated = $true
+    $prViewRaw = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "view", $prUrl, "--json", "number,url,isDraft,state,autoMergeRequest,files") -CaptureOutput
+    $githubApiCalled = $true
+    $providerCallCount += 1
+    $prView = $prViewRaw | ConvertFrom-Json
+    $prNumber = [int]$prView.number
+    $prUrl = [string]$prView.url
+    $draftPr = [bool]$prView.isDraft
+    $actualPrFiles = @($prView.files | ForEach-Object { [string]$_.path })
+    $allowlist = Test-CodexDraftPrAllowlist -ChangedFiles $actualPrFiles
+    if (-not $draftPr) {
+      $blockers.Add("demo_pr_not_draft") | Out-Null
+      throw "MG372E2 demo PR was not draft."
+    }
+    if ($null -ne $prView.autoMergeRequest) {
+      $blockers.Add("demo_pr_auto_merge_enabled") | Out-Null
+      throw "MG372E2 demo PR auto-merge was enabled."
+    }
+    if (-not $allowlist.docs_only_allowlist_passed) {
+      $blockers.Add("demo_pr_allowlist_failed") | Out-Null
+      throw "MG372E2 demo PR changed files failed allowlist."
+    }
+
+    $complete = Invoke-DemoApi -Method POST -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDraftPrTaskId))/complete" -Body @{
+      worker_id = $CodexDraftPrWorkerId
+      summary = "MG372E2 controller-created draft PR demo created one docs-only draft PR from validated MG372D2R Codex local diff and left it open for review."
+      result_url = $prUrl
+      evidence_summary = @{
+        schema = "skybridge.mvp_demo.codex_generated_draft_pr.task_evidence.v1"
+        project_id = $ProjectId
+        goal_id = $CodexDraftPrGoalId
+        task_id = $CodexDraftPrTaskId
+        worker_id = $CodexDraftPrWorkerId
+        source_milestone = "MG372D2R"
+        branch_name = $branchName
+        commit_sha = $commitSha
+        pr_number = $prNumber
+        pr_url = $prUrl
+        draft_pr = $true
+        docs_only_allowlist_passed = $true
+        branch_policy_passed = $true
+        codex_called_in_mg372e2 = $false
+        source_codex_called = $true
+        source_codex_call_count = 1
+        tui_created_branch = $false
+        tui_created_pr = $false
+        token_printed = $false
+        created_at = Get-DemoUtcNow
+      }
+    }
+    $taskCompleted = $true
+    $serverTaskEvidenceRecorded = $true
+    $finalTask = $complete.task
+    $finalTask = (Invoke-DemoApi -Method GET -Path "/v1/tasks/$([uri]::EscapeDataString($CodexDraftPrTaskId))").task
+    $finalWorker = (Invoke-DemoApi -Method GET -Path "/v1/workers/$([uri]::EscapeDataString($CodexDraftPrWorkerId))").worker
+    $validationStatus = "passed"
+    $demoResult = "pass"
+  } catch {
+    if (@($blockers).Count -lt 1) { $blockers.Add("codex_generated_draft_pr_demo_failed") | Out-Null }
+    $validationStatus = "failed"
+    $demoResult = if ($branchCreated -or $prCreated) { "partial" } else { "blocked" }
+    if ($taskStarted -and -not $taskCompleted) { $taskBlocked = $true }
+    if (-not $prCreated) { $taskFailed = $true }
+    $safeMessage = ($_.Exception.Message -replace "(?i)(authorization|bearer|token|secret|cookie|password)\s*[:=]\s*\S+", '$1=<redacted>')
+    $safeMessage = ($safeMessage -replace 'https?://\S+', "<redacted-url>").Trim()
+    if ($safeMessage.Length -gt 180) { $safeMessage = $safeMessage.Substring(0, 180) }
+    $warnings.Add($safeMessage) | Out-Null
+  } finally {
+    if ($serverInfo) { Stop-DemoServer -ServerInfo $serverInfo }
+    if ($branchCreated -and -not [string]::IsNullOrWhiteSpace($currentBranchBefore)) {
+      $dirty = Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure
+      if ([string]::IsNullOrWhiteSpace($dirty)) {
+        Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("switch", $currentBranchBefore) -AllowFailure | Out-Null
+      }
+    }
+  }
+
+  $provider.provider_call_count = $providerCallCount
+  $provider.git_push_called = [bool]$gitPushCalled
+  $provider.gh_pr_create_called = [bool]$ghPrCreateCalled
+  $provider.github_api_called = [bool]$githubApiCalled
+  $provider.controller_created_branch = [bool]$branchCreated
+  $provider.controller_created_commit = [bool]$demoCommitCreated
+  $provider.controller_created_draft_pr = [bool]$prCreated
+  $prMetadata.pr_number = $prNumber
+  $prMetadata.pr_url = $prUrl
+  $prMetadata.demo_pr_left_open = [bool]$prCreated
+  $report.generated_at = Get-DemoUtcNow
+  $report.task_created = [bool]$taskCreated
+  $report.worker_registered = [bool]$workerRegistered
+  $report.task_claimed = [bool]$taskClaimed
+  $report.task_started = [bool]$taskStarted
+  $report.task_completed = [bool]$taskCompleted
+  $report.task_failed = [bool]$taskFailed
+  $report.task_blocked = [bool]$taskBlocked
+  $report.validation_status = $validationStatus
+  $report.controller_created_branch = [bool]$branchCreated
+  $report.controller_created_commit = [bool]$demoCommitCreated
+  $report.controller_created_draft_pr = [bool]$prCreated
+  $report.pr_created = [bool]$prCreated
+  $report.branch_pushed = [bool]$branchPushed
+  $report.commit_created = [bool]$demoCommitCreated
+  $report.commit_sha = $commitSha
+  $report.pr_number = $prNumber
+  $report.pr_url = $prUrl
+  $report.draft_pr = if ($prCreated) { [bool]$draftPr } else { $true }
+  $report.demo_pr_left_open = [bool]$prCreated
+  $report.demo_pr_marked_ready = $false
+  $report.demo_pr_merged = $false
+  $report.docs_only_allowlist_passed = [bool]$allowlist.docs_only_allowlist_passed
+  $report.branch_policy_passed = [bool]$branchPolicy.branch_policy_passed
+  $report.changed_files = @($allowlist.changed_files)
+  $report.server_task_pr_evidence_recorded = [bool]$serverTaskEvidenceRecorded
+  $report.demo_result = $demoResult
+  $report.real_worker_execution = [bool]($taskClaimed -and $taskStarted -and $taskCompleted)
+  $report.blockers = @($blockers)
+  $report.warnings = @($warnings)
+
+  $state = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.state.v1"
+    generated_at = $report.generated_at
+    mode = "codex-diff-draft-pr"
+    preview = [bool]$isPreview
+    apply = [bool]$Apply
+    output_dir = $OutputDir.Replace("\", "/")
+    project_id = $ProjectId
+    goal_id = $CodexDraftPrGoalId
+    task_id = $CodexDraftPrTaskId
+    worker_id = $CodexDraftPrWorkerId
+    branch_name = $branchName
+    commit_sha = $commitSha
+    pr_number = $prNumber
+    pr_url = $prUrl
+    token_printed = $false
+  }
+  $taskArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.task.v1"
+    generated_at = $report.generated_at
+    task_payload = New-CodexDraftPrTaskPayload
+    final_task = $finalTask
+    task_created = [bool]$taskCreated
+    task_claimed = [bool]$taskClaimed
+    task_started = [bool]$taskStarted
+    task_completed = [bool]$taskCompleted
+    task_failed = [bool]$taskFailed
+    token_printed = $false
+  }
+  $workerArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_generated_draft_pr.worker.v1"
+    generated_at = $report.generated_at
+    worker_id = $CodexDraftPrWorkerId
+    worker_registered = [bool]$workerRegistered
+    final_worker = $finalWorker
+    capabilities = @("powershell", "git", "gh", "codex-diff-draft-pr-demo")
+    token_printed = $false
+  }
+  $preflight.blockers = @($blockers)
+  $preflight.preflight_passed = ($validationStatus -eq "passed")
+  $allowlist = Test-CodexDraftPrAllowlist -ChangedFiles @($report.changed_files)
+  Write-CodexDraftPrArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -SourceValidation $sourceValidation -BranchPlan $branchPlan -Allowlist $allowlist -PrMetadata $prMetadata -Provider $provider -Safety $safety
+  if ($OpenReport) { Invoke-Item -LiteralPath (Join-Path $resolvedOutputDir "codex-draft-pr-report.md") }
+  if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+}
+
+function Show-CodexDiffDraftPrStatus {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  $reportPath = Join-Path $resolvedOutputDir "codex-draft-pr-report.json"
+  if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+    $result = [pscustomobject]@{ ok = $false; mode = "codex-diff-draft-pr-status"; report_found = $false; report_json_path = $reportPath; token_printed = $false }
+  } else {
+    $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+    $result = [pscustomobject]@{
+      ok = $true
+      mode = "codex-diff-draft-pr-status"
+      report_found = $true
+      report_json_path = $reportPath
+      report_markdown_path = (Join-Path $resolvedOutputDir "codex-draft-pr-report.md")
+      demo_result = $report.demo_result
+      validation_status = $report.validation_status
+      controller_created_draft_pr = $report.controller_created_draft_pr
+      pr_url = $report.pr_url
+      token_printed = $false
+    }
+  }
+  if ($Json) { $result | ConvertTo-Json -Depth 10 -Compress } else { $result | Format-List }
+}
+
+function Show-CodexDiffDraftPrReport {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  $reportJson = Join-Path $resolvedOutputDir "codex-draft-pr-report.json"
+  $reportMd = Join-Path $resolvedOutputDir "codex-draft-pr-report.md"
+  if (-not (Test-Path -LiteralPath $reportJson -PathType Leaf)) {
+    $result = [pscustomobject]@{ ok = $false; mode = "codex-diff-draft-pr-report"; report_found = $false; report_json_path = $reportJson; report_markdown_path = $reportMd; token_printed = $false }
+  } else {
+    $report = Get-Content -Raw -LiteralPath $reportJson | ConvertFrom-Json
+    $result = [pscustomobject]@{
+      ok = $true
+      mode = "codex-diff-draft-pr-report"
+      report_found = $true
+      report_json_path = $reportJson
+      report_markdown_path = $reportMd
+      summary = "result=$($report.demo_result) draft_pr=$($report.draft_pr) pr=$($report.pr_url)"
+      token_printed = $false
+    }
+  }
+  if ($OpenReport -and (Test-Path -LiteralPath $reportMd -PathType Leaf)) { Invoke-Item -LiteralPath $reportMd }
+  if ($Json) { $result | ConvertTo-Json -Depth 10 -Compress } else { $result | Format-List }
 }
 
 function Get-CodexDiffArtifactPaths {
@@ -3509,6 +4478,10 @@ if ($Mode -eq "local-safe") {
   Show-ControllerDraftPrStatus
 } elseif ($Mode -eq "controller-draft-pr-report") {
   Show-ControllerDraftPrReport
+} elseif ($Mode -eq "codex-diff-draft-pr-status") {
+  Show-CodexDiffDraftPrStatus
+} elseif ($Mode -eq "codex-diff-draft-pr-report") {
+  Show-CodexDiffDraftPrReport
 } elseif ($Mode -eq "codex-local-diff-status") {
   Show-CodexLocalDiffStatus
 } elseif ($Mode -eq "codex-local-diff-report") {
@@ -3519,6 +4492,8 @@ if ($Mode -eq "local-safe") {
   Invoke-CodexLocalDiffCollectorFixture
 } elseif ($Mode -in @("codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file")) {
   Invoke-CodexLocalDiffMockFixture
+} elseif ($Mode -like "codex-diff-draft-pr*") {
+  Invoke-CodexDiffDraftPrDemo
 } elseif ($Mode -like "codex-local-diff*") {
   Invoke-CodexLocalDiffDemo
 } else {

@@ -207,6 +207,17 @@ MG372E2 Codex-generated Draft PR Demo
 MG372E2 should remain controller-created, not TUI-created, and should not
 proceed to repeated PR creation.
 
+MG372E2 implements that next step as `codex-diff-draft-pr-preview`,
+`codex-diff-draft-pr`, `codex-diff-draft-pr-status` and
+`codex-diff-draft-pr-report`. It validates the retained MG372D2R source
+artifacts, does not call Codex again, creates one controller-owned docs-only
+branch/commit/draft PR after exact confirmation and leaves the demo PR
+draft/open for Jerry review. The next review gate after a successful demo PR is:
+
+```text
+MG372F MVP End-to-End Review Gate
+```
+
 ## Demo PR #311 Handling
 
 Recommendation:
