@@ -255,3 +255,5 @@ MG372E2 Codex-generated Draft PR Demo
 
 MG372E2 should take the validated local docs-only diff and create one
 controller-created draft PR. It should still not use TUI-created PR behavior.
+MG372E2 packages the retained MG372D2R artifacts without calling Codex again;
+see [SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md](SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md).

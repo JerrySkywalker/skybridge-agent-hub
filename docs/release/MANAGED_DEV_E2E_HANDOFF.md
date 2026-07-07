@@ -390,13 +390,16 @@ PR demo while keeping TUI-created PR behavior frozen.
 7. MG372D2R Codex Local Diff Workspace Cleanup and Rerun Gate: add the explicit
    stale-worktree cleanup gate, cleanup report artifacts and cleanup
    mock-rerun smokes. Demo PR #311 remains untouched.
-8. MG372E2 Codex-generated Draft PR Demo: if MG372D2R passes, take the
-   validated local docs-only diff and create one controller-created draft PR.
-   Keep this controller-created, not TUI-created.
-9. MG371B / TUI-created real branch and PR work remains frozen until a future
+8. MG372E2 Codex-generated Draft PR Demo: take the validated MG372D2R local
+   docs-only diff and create one controller-created branch, commit and draft
+   PR after exact confirmation. It does not call Codex again, does not modify
+   Demo PR #311 and remains controller-created, not TUI-created.
+9. MG372F MVP End-to-End Review Gate: review the full MVP chain before adding
+   repeated controlled Codex PR generation or broader UX.
+10. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-9. Any real execution path still requires explicit human authorization.
-10. Operator TUI polish may continue only with all mutation disabled unless a
+11. Any real execution path still requires explicit human authorization.
+12. Operator TUI polish may continue only with all mutation disabled unless a
    future goal explicitly changes that boundary.
 
 `token_printed=false`

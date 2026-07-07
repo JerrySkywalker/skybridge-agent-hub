@@ -83,14 +83,30 @@ registered. MG372D2R adds an explicit stale-worktree cleanup gate, cleanup
 artifacts and cleanup-plus-mock-rerun smokes. The active blocker is stale
 local worktree cleanup, not Codex CLI availability.
 
+MG372E2 Codex-generated draft PR mode adds the packaging slice after a
+validated MG372D2R run:
+
+- It validates the retained MG372D2R report, patch and artifact.
+- It does not call Codex again.
+- It creates one controller-owned docs-only branch and commit after exact
+  confirmation.
+- It opens one controller-created draft PR and leaves it draft/open for Jerry
+  review.
+- It records `codex_called_in_mg372e2=false`,
+  `demo_pr_311_modified=false`, `tui_created_pr=false`,
+  `auto_merge_enabled=false` and `token_printed=false`.
+
 ## What It Does Not Prove
 
 - MG372A local-safe mode and MG372B controller draft PR mode do not call Codex.
 - MG372D calls Codex once, but only for a local docs-only diff.
+- MG372E2 packages that validated local diff and does not call Codex again.
 - MG372A local-safe mode does not create a GitHub branch or PR.
 - MG372B controller draft PR mode creates only one controller-created docs-only
   draft PR under exact confirmation.
 - MG372D does not create a GitHub branch or PR.
+- MG372E2 creates only one controller-created draft PR under exact
+  confirmation.
 - It does not use TUI-created PR behavior.
 - It does not start a worker loop, queue runner or run-forever process.
 - It does not call live Hermes or MCP.
@@ -170,6 +186,36 @@ MG372D2 additionally writes `codex-local-diff-execution-diagnostics.json` and
 
 See [SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
 
+## Codex Draft PR Demo
+
+Preview policy and source artifact validation without branch, commit, push or
+PR mutation:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode codex-diff-draft-pr-preview `
+  -Json
+```
+
+After MG372E2 is merged, run the authorized apply command exactly once:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
+  -Mode codex-diff-draft-pr `
+  -UseTempDatabase `
+  -Apply `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372E2_CREATE_ONE_CODEX_GENERATED_DOCS_ONLY_DRAFT_PR_DEMO `
+  -Json
+```
+
+The apply command copies the validated MG372D2R artifact into a
+`demo/mg372e2-codex-draft-pr-<utc-date>-<short-id>` branch, commits it and
+opens one draft PR titled `MG372E2 Demo: Codex-generated Draft PR`. The demo PR
+changes only `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md` and remains
+draft/open.
+
+See [SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md](SKYBRIDGE_MVP_CODEX_DRAFT_PR_DEMO.md).
+
 ## Artifacts
 
 Artifacts are written under:
@@ -242,14 +288,14 @@ Phase 2:
 
 ## Next Step
 
-Recommended next milestone after MG372D2R passes:
+Recommended next milestone after MG372E2 passes:
 
 ```text
-MG372E2 Codex-generated Draft PR Demo
+MG372F MVP End-to-End Review Gate
 ```
 
-MG371B and TUI-created PR execution mode remain frozen for now. MG372E2 should
-take the validated local docs-only diff and create a controller-created draft
-PR, still not TUI-created.
+MG371B and TUI-created PR execution mode remain frozen for now. MG372F should
+review the full MVP chain before repeated controlled Codex PR generation is
+expanded.
 
 `token_printed=false`
