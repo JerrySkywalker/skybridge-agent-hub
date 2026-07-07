@@ -148,9 +148,9 @@ The demo preserves:
 Recommended next milestone:
 
 ```text
-MG372C MVP Demo Review and Decision Gate
+MG372D Codex-generated Local Diff Demo
 ```
 
-MG372C should decide whether the MVP demo is good enough to keep building,
-whether to add Codex-generated diff next, or whether to cut a smaller
-skybridge-lite prototype.
+MG372C reviewed the MVP demo line and recommends continuing in this repository
+while keeping MG371B / TUI-created PR work frozen. MG372D should add one
+Codex-generated docs-only local diff demo and stop before PR creation.

@@ -1,5 +1,24 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372C MVP Demo Review and Decision Gate
+
+- Added `docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md` as the review and decision
+  gate for the MG372A/MG372B MVP demo line.
+- Recorded the review decision as Option A: continue the current repository,
+  do not rewrite from scratch, freeze MG371B / TUI-created PR work and run
+  MG372D Codex-generated Local Diff Demo next.
+- Added read-only review artifacts under
+  `.agent/tmp/skybridge-mvp-demo-review/` with schema
+  `skybridge.mvp_demo.review_gate.v1`.
+- Added `smoke:skybridge-mvp-demo-review`, which writes the review artifacts,
+  verifies the decision is recorded, verifies `rewrite_recommended=false`,
+  verifies PR #311 remains draft/open for human review and records
+  `branch_created=false`, `pr_created=false`, `codex_called=false` and
+  `token_printed=false`.
+- Preserved the freeze list: MG371B TUI-created PR, worker loop / run forever,
+  auto-merge, Hermes live, MCP, remote execution, multi-agent orchestration,
+  release/tag/assets and dashboard polish beyond showing MVP status.
+
 ## 2026-07-07 Mega Goal 372B Controller-created Draft PR Demo
 
 - Extended `scripts/powershell/skybridge-mvp-demo.ps1` with
