@@ -53,6 +53,19 @@ file smokes and a shorter deterministic prompt. It still requires a
 Codex-created target artifact and a non-empty Git-generated patch before the
 demo can pass.
 
+MG372D2 implementation merged, but its post-merge rerun blocked before Codex
+was called because a stale registered local worktree already existed at:
+
+```text
+.agent/tmp/skybridge-mvp-codex-diff/worktree/
+```
+
+The Codex CLI was available and its version was detected, so the active blocker
+became stale local worktree cleanup, not Codex availability. MG372D2R adds an
+explicit cleanup gate that can remove only that stale `.agent/tmp` worktree
+after the exact authorization phrase is provided, records before/after
+worktree lists and then reruns the normal Codex local-diff apply flow once.
+
 ## Why It Does Not Create PR
 
 MG372B already proved a controller-created draft PR demo. MG372D proves the
@@ -91,21 +104,24 @@ Expected preview fields:
 - `would_use_git_index_collector=true`
 - `would_generate_non_empty_patch=true`
 - `would_run_codex_doctor=true`
+- `would_clean_existing_worktree=true` when a stale worktree is present
+- `cleanup_requested=false`
 - `pr_created=false`
 - `branch_pushed=false`
 - `token_printed=false`
 
 ## Apply
 
-After the MG372D2 timeout-diagnostics implementation PR is merged and `main` is
-synced, run the authorized apply command exactly once:
+After the MG372D2R cleanup-gate implementation PR is merged and `main` is
+synced, run the authorized cleanup and apply command exactly once:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Mode codex-local-diff `
   -UseTempDatabase `
   -Apply `
-  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D2_RERUN_CODEX_ONCE_FOR_LOCAL_ARTIFACT_PRODUCTION_DEMO `
+  -CleanExistingCodexWorktree `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D2R_CLEAN_STALE_CODEX_DIFF_WORKTREE_AND_RERUN_CODEX_ONCE `
   -CodexTimeoutSeconds 900 `
   -Json
 ```
@@ -118,11 +134,15 @@ The apply command requires:
 - Git available
 - Codex CLI available
 - exact confirmation text
-- no existing MG372D2 worktree
+- no existing MG372D2R worktree, or explicit cleanup of the stale registered
+  `.agent/tmp/skybridge-mvp-codex-diff/worktree` path
 - docs-only allowlist pass
 
-MG372D2 pass criteria:
+MG372D2R pass criteria:
 
+- stale worktree cleaned or verified absent
+- `cleanup_requested=true`
+- `cleanup_completed=true` when the stale worktree is present
 - changed files exactly equal
   `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`
 - `codex_available=true`
@@ -165,12 +185,17 @@ Important files:
 - `codex-local-diff-collector-diagnostics.json`
 - `codex-local-diff-execution-diagnostics.json`
 - `codex-local-diff-failure-classification.json`
+- `codex-local-diff-cleanup-report.json`
+- `codex-local-diff-cleanup-report.md`
+- `codex-local-diff-worktree-list-before.txt`
+- `codex-local-diff-worktree-list-after.txt`
+- `codex-local-diff-cleanup-safety.json`
 - `codex-local-diff-artifact-index.json`
 
 The JSON report schema is:
 
 ```text
-skybridge.mvp_demo.codex_local_diff.v3
+skybridge.mvp_demo.codex_local_diff.v4
 ```
 
 ## Inspect The Diff
@@ -220,9 +245,9 @@ the artifact directory and are not included in the JSON or Markdown report.
 
 ## Next Step Recommendation
 
-Demo PR #311 remains untouched by MG372D2.
+Demo PR #311 remains untouched by MG372D2R.
 
-If MG372D2 passes, the next milestone should be:
+If MG372D2R passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

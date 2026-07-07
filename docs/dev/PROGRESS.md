@@ -1,5 +1,37 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372D2R Codex Local Diff Workspace Cleanup and Rerun Gate
+
+- Recorded the MG372D2 post-merge rerun as blocked before Codex execution:
+  a stale registered worktree existed at
+  `.agent/tmp/skybridge-mvp-codex-diff/worktree`, so `codex_called=false`,
+  `pr_created=false`, `branch_pushed=false`, `commit_created=false`,
+  `demo_pr_311_modified=false` and `token_printed=false`.
+- Kept the MG372D2 execution diagnostics as the baseline: Codex CLI was
+  available, version detection worked and the active blocker was stale local
+  worktree cleanup rather than Codex availability.
+- Updated `scripts/powershell/skybridge-mvp-demo.ps1` to schema
+  `skybridge.mvp_demo.codex_local_diff.v4` with
+  `rerun_milestone=MG372D2R`.
+- Added the explicit `-CleanExistingCodexWorktree` cleanup gate with the exact
+  confirmation phrase
+  `I_UNDERSTAND_AUTHORIZE_MG372D2R_CLEAN_STALE_CODEX_DIFF_WORKTREE_AND_RERUN_CODEX_ONCE`.
+- Added cleanup artifacts:
+  `codex-local-diff-cleanup-report.json`,
+  `codex-local-diff-cleanup-report.md`,
+  `codex-local-diff-worktree-list-before.txt`,
+  `codex-local-diff-worktree-list-after.txt` and
+  `codex-local-diff-cleanup-safety.json`.
+- Added CI-safe cleanup smokes:
+  `smoke:skybridge-mvp-demo-codex-local-diff-stale-worktree-detect`,
+  `smoke:skybridge-mvp-demo-codex-local-diff-cleanup-safety` and
+  `smoke:skybridge-mvp-demo-codex-local-diff-cleanup-mock-rerun`.
+- Preserved the demo boundary: no PR, no branch push, no commit, no TUI-created
+  PR, no worker loop, no queue runner, no run forever, no Hermes live, no MCP,
+  no auto-merge, no release/tag/assets and `token_printed=false`.
+- Recommended next milestone only if MG372D2R passes:
+  MG372E2 Codex-generated Draft PR Demo.
+
 ## 2026-07-07 Mega Goal 372D2 Codex Local Diff Execution Timeout and Artifact Production Gate
 
 - Recorded the MG372D1 post-merge rerun as blocked after the collector fix:

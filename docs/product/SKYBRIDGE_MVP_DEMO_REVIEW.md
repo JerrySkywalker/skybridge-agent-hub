@@ -195,7 +195,10 @@ problem: Codex timed out and did not create the target artifact.
 
 MG372D2 adds Codex doctor checks, explicit timeout diagnostics, failure
 classification, mock success/timeout/disallowed-file smokes and a shorter
-deterministic prompt. If MG372D2 passes, the next milestone should be:
+deterministic prompt. MG372D2 implementation merged, but its post-merge rerun
+blocked before Codex because the previous Codex local-diff worktree was still
+registered. MG372D2R adds an explicit stale-worktree cleanup gate and rerun
+authorization. If MG372D2R passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

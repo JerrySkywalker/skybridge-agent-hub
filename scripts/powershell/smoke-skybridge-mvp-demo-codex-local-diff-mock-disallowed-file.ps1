@@ -24,7 +24,7 @@ $result = Invoke-JsonScript "skybridge-mvp-demo.ps1" @(
 )
 
 try {
-  if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v3") { throw "Unexpected schema." }
+  if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v4") { throw "Unexpected schema." }
   if ([string]$result.demo_result -ne "blocked") { throw "Disallowed-file fixture must block." }
   Assert-True $result.fixture_mode "fixture_mode"
   Assert-True $result.codex_called "codex_called"

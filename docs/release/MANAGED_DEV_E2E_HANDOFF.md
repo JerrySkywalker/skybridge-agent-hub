@@ -385,10 +385,15 @@ PR demo while keeping TUI-created PR behavior frozen.
 6. MG372D2 Codex Local Diff Execution Timeout and Artifact Production Gate:
    add Codex doctor checks, timeout diagnostics, failure classification, mock
    success/timeout/disallowed-file smokes and a minimal deterministic prompt.
-7. MG372E2 Codex-generated Draft PR Demo: if MG372D2 passes, take the
+   The post-merge rerun blocked before Codex because a stale registered
+   `.agent/tmp/skybridge-mvp-codex-diff/worktree` remained.
+7. MG372D2R Codex Local Diff Workspace Cleanup and Rerun Gate: add the explicit
+   stale-worktree cleanup gate, cleanup report artifacts and cleanup
+   mock-rerun smokes. Demo PR #311 remains untouched.
+8. MG372E2 Codex-generated Draft PR Demo: if MG372D2R passes, take the
    validated local docs-only diff and create one controller-created draft PR.
    Keep this controller-created, not TUI-created.
-8. MG371B / TUI-created real branch and PR work remains frozen until a future
+9. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
 9. Any real execution path still requires explicit human authorization.
 10. Operator TUI polish may continue only with all mutation disabled unless a
