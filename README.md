@@ -241,7 +241,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
 
 After explicit authorization, the Codex local diff demo calls Codex once in an
 isolated Git worktree, writes a non-empty `codex-local-diff.patch` through a
-Git-index collector and stops before commit, push or PR creation. See
+Git-index collector, records Codex doctor/timeout diagnostics and stops before
+commit, push or PR creation. See
 [docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](docs/product/SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
 
 Start the local server and web dashboard:

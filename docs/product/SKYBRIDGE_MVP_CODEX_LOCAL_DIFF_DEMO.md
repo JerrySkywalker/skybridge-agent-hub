@@ -41,6 +41,18 @@ a Git-generated patch. It does not compare raw file hashes against the Windows
 working tree. The demo still does not push or commit; `commit_created=false`
 means the isolated worktree HEAD remains at the baseline commit.
 
+MG372D1 implementation merged, but the post-merge rerun blocked because Codex
+timed out and did not produce the target artifact. The collector was no
+longer the primary blocker: the worktree was clean before Codex, the
+Git-index collector was active and the main worktree remained clean.
+
+MG372D2 makes that execution failure diagnosable and easier to avoid. It adds
+a Codex doctor, explicit timeout seconds, local-only stdout/stderr log paths,
+execution diagnostics, failure classification, mock success/timeout/disallowed
+file smokes and a shorter deterministic prompt. It still requires a
+Codex-created target artifact and a non-empty Git-generated patch before the
+demo can pass.
+
 ## Why It Does Not Create PR
 
 MG372B already proved a controller-created draft PR demo. MG372D proves the
@@ -78,13 +90,14 @@ Expected preview fields:
 - `workspace_setup_method=git_worktree`
 - `would_use_git_index_collector=true`
 - `would_generate_non_empty_patch=true`
+- `would_run_codex_doctor=true`
 - `pr_created=false`
 - `branch_pushed=false`
 - `token_printed=false`
 
 ## Apply
 
-After the MG372D1 collector-fix implementation PR is merged and `main` is
+After the MG372D2 timeout-diagnostics implementation PR is merged and `main` is
 synced, run the authorized apply command exactly once:
 
 ```powershell
@@ -92,7 +105,8 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Mode codex-local-diff `
   -UseTempDatabase `
   -Apply `
-  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D1_RERUN_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D2_RERUN_CODEX_ONCE_FOR_LOCAL_ARTIFACT_PRODUCTION_DEMO `
+  -CodexTimeoutSeconds 900 `
   -Json
 ```
 
@@ -104,18 +118,22 @@ The apply command requires:
 - Git available
 - Codex CLI available
 - exact confirmation text
-- no existing MG372D1 worktree
+- no existing MG372D2 worktree
 - docs-only allowlist pass
 
-MG372D1 pass criteria:
+MG372D2 pass criteria:
 
 - changed files exactly equal
   `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`
+- `codex_available=true`
+- `codex_called=true`
+- `codex_call_count=1`
 - `docs_only_allowlist_passed=true`
 - `diff.patch` exists, is non-empty and mentions the artifact path
 - `workspace_clean_before_codex=true`
 - `git_index_collector_used=true`
 - `hash_comparison_used=false`
+- `target_artifact_exists=true`
 - `main_worktree_clean_after=true`
 - `pr_created=false`
 - `branch_pushed=false`
@@ -136,6 +154,8 @@ Important files:
 - `codex-local-diff-report.json`
 - `codex-local-diff-report.md`
 - `codex-local-diff-prompt.md`
+- `codex-local-diff-stdout.log`
+- `codex-local-diff-stderr.log`
 - `codex-local-diff-last-message.md`
 - `codex-local-diff-changed-files.json`
 - `codex-local-diff-allowlist-check.json`
@@ -143,12 +163,14 @@ Important files:
 - `codex-local-diff.patch`
 - `codex-local-diff-safety.json`
 - `codex-local-diff-collector-diagnostics.json`
+- `codex-local-diff-execution-diagnostics.json`
+- `codex-local-diff-failure-classification.json`
 - `codex-local-diff-artifact-index.json`
 
 The JSON report schema is:
 
 ```text
-skybridge.mvp_demo.codex_local_diff.v2
+skybridge.mvp_demo.codex_local_diff.v3
 ```
 
 ## Inspect The Diff
@@ -198,7 +220,9 @@ the artifact directory and are not included in the JSON or Markdown report.
 
 ## Next Step Recommendation
 
-If MG372D1 passes, the next milestone should be:
+Demo PR #311 remains untouched by MG372D2.
+
+If MG372D2 passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

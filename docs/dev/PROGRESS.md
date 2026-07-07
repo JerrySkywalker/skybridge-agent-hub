@@ -1,5 +1,46 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372D2 Codex Local Diff Execution Timeout and Artifact Production Gate
+
+- Recorded the MG372D1 post-merge rerun as blocked after the collector fix:
+  Codex was called exactly once, timed out with exit code `124`, changed no
+  files and did not create `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`.
+- Kept the MG372D1 collector fix as the baseline: `workspace_setup_method=git_worktree`,
+  `workspace_clean_before_codex=true`, `git_index_collector_used=true`,
+  `hash_comparison_used=false` and `main_worktree_clean_after=true`.
+- Updated `scripts/powershell/skybridge-mvp-demo.ps1` to schema
+  `skybridge.mvp_demo.codex_local_diff.v3` with
+  `rerun_milestone=MG372D2`.
+- Added Codex doctor and execution diagnostics fields for command/version,
+  timeout seconds, start/end timestamps, duration, stdout/stderr paths,
+  timeout state, process-killed state and safe failure signal booleans.
+- Added failure classification for `codex_cli_unavailable`,
+  `codex_exec_timeout_no_artifact`, `codex_exec_timeout_with_artifact`,
+  nonzero exits, transport/auth/usage/network signals, target-missing,
+  disallowed-file and empty-patch cases.
+- Replaced the broad prompt with a minimal deterministic file-creation prompt
+  for the single allowed docs artifact.
+- Added `-CodexTimeoutSeconds`, `-CodexSandbox` and `-KeepCodexWorktree`
+  parameters. MG372D2 does not synthesize fallback success after Codex fails.
+- Added local-only artifacts `codex-local-diff-stdout.log`,
+  `codex-local-diff-stderr.log`,
+  `codex-local-diff-execution-diagnostics.json` and
+  `codex-local-diff-failure-classification.json`.
+- Added CI-safe mock smokes:
+  `smoke:skybridge-mvp-demo-codex-local-diff-timeout-classification`,
+  `smoke:skybridge-mvp-demo-codex-local-diff-mock-success` and
+  `smoke:skybridge-mvp-demo-codex-local-diff-mock-disallowed-file`.
+- Preserved `pr_created=false`, `branch_pushed=false`,
+  `commit_created=false`, `demo_pr_311_modified=false`,
+  `tui_created_branch=false`, `tui_created_pr=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false`,
+  `raw_output_exported=false` and `token_printed=false`.
+- Recommended next milestone only if MG372D2 passes:
+  MG372E2 Codex-generated Draft PR Demo.
+
 ## 2026-07-07 Mega Goal 372D1 Codex Local Diff Collector Fix and Rerun Gate
 
 - Recorded the MG372D post-merge demo as blocked: Codex was called exactly
