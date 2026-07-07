@@ -227,6 +227,10 @@ draft PR for inspection. It remains controller-created, not TUI-created, and
 does not mark ready or merge the demo PR. See
 [docs/product/SKYBRIDGE_MVP_DRAFT_PR_DEMO.md](docs/product/SKYBRIDGE_MVP_DRAFT_PR_DEMO.md).
 
+The MVP demo review recommends continuing in this repository and adding a
+Codex-generated local diff demo next. See
+[docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md](docs/product/SKYBRIDGE_MVP_DEMO_REVIEW.md).
+
 Start the local server and web dashboard:
 
 ```powershell

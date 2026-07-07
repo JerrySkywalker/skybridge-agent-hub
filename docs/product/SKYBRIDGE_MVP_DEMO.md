@@ -99,6 +99,14 @@ must remain draft/open for inspection.
 
 See [SKYBRIDGE_MVP_DRAFT_PR_DEMO.md](SKYBRIDGE_MVP_DRAFT_PR_DEMO.md).
 
+## Review Gate
+
+MG372C reviews the MG372A/MG372B MVP demo line and recommends continuing in
+this repository. The review keeps MG371B / TUI-created PR work frozen and
+selects MG372D Codex-generated Local Diff Demo as the next step.
+
+See [SKYBRIDGE_MVP_DEMO_REVIEW.md](SKYBRIDGE_MVP_DEMO_REVIEW.md).
+
 ## Artifacts
 
 Artifacts are written under:
@@ -173,11 +181,11 @@ Phase 2:
 Recommended next milestone:
 
 ```text
-MG372C MVP Demo Review and Decision Gate
+MG372D Codex-generated Local Diff Demo
 ```
 
-MG371B and TUI-created PR execution mode remain frozen for now. MG372C should
-decide whether to keep building on this MVP demo, add Codex-generated diff
-next, or cut a smaller skybridge-lite prototype.
+MG371B and TUI-created PR execution mode remain frozen for now. MG372D should
+use the existing MVP spine, call Codex once, generate a docs-only local diff in
+an isolated workspace or temporary branch, and stop before PR creation.
 
 `token_printed=false`

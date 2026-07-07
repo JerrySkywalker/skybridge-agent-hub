@@ -371,13 +371,17 @@ PR demo while keeping TUI-created PR behavior frozen.
    and exact-confirmed apply modes for one controller-created docs-only branch
    and one draft PR. It is not TUI-created PR behavior, does not call Codex,
    does not mark the demo PR ready and does not merge the demo PR.
-3. MG372C MVP Demo Review and Decision Gate: review whether the MVP demo is
-   good enough to keep building, whether to add Codex-generated diff next, or
-   whether to cut a smaller skybridge-lite prototype.
-4. MG371B / TUI-created real branch and PR work remains frozen until a future
+3. MG372C MVP Demo Review and Decision Gate: records the MVP demo line as
+   pass, recommends continuing in the current repository, rejects a rewrite for
+   now and keeps MG371B / TUI-created PR work frozen.
+4. MG372D Codex-generated Local Diff Demo: use the existing MVP demo spine,
+   call Codex once, generate a docs-only local diff in an isolated workspace or
+   temporary branch, write `diff.patch` and a review summary, and stop before
+   PR creation.
+5. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-5. Any real execution path still requires explicit human authorization.
-6. Operator TUI polish may continue only with all mutation disabled unless a
+6. Any real execution path still requires explicit human authorization.
+7. Operator TUI polish may continue only with all mutation disabled unless a
    future goal explicitly changes that boundary.
 
 `token_printed=false`
