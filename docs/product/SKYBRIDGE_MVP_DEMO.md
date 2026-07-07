@@ -77,6 +77,12 @@ target artifact. MG372D2 keeps the fixed collector and hardens execution:
   `commit_created=false`, `demo_pr_311_modified=false` and
   `token_printed=false`.
 
+MG372D2 implementation merged, but its post-merge rerun blocked before Codex
+because the previous `.agent/tmp/skybridge-mvp-codex-diff/worktree` was still
+registered. MG372D2R adds an explicit stale-worktree cleanup gate, cleanup
+artifacts and cleanup-plus-mock-rerun smokes. The active blocker is stale
+local worktree cleanup, not Codex CLI availability.
+
 ## What It Does Not Prove
 
 - MG372A local-safe mode and MG372B controller draft PR mode do not call Codex.
@@ -138,14 +144,15 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Json
 ```
 
-After MG372D2 is merged, run the authorized apply command exactly once:
+After MG372D2R is merged, run the authorized cleanup and apply command exactly once:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Mode codex-local-diff `
   -UseTempDatabase `
   -Apply `
-  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D2_RERUN_CODEX_ONCE_FOR_LOCAL_ARTIFACT_PRODUCTION_DEMO `
+  -CleanExistingCodexWorktree `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D2R_CLEAN_STALE_CODEX_DIFF_WORKTREE_AND_RERUN_CODEX_ONCE `
   -CodexTimeoutSeconds 900 `
   -Json
 ```
@@ -155,7 +162,11 @@ The apply command calls Codex once in an isolated Git worktree, allows only
 non-empty `codex-local-diff.patch` and stops before commit, push or PR
 creation. MG372D1 also writes `codex-local-diff-collector-diagnostics.json`.
 MG372D2 additionally writes `codex-local-diff-execution-diagnostics.json` and
-`codex-local-diff-failure-classification.json`.
+`codex-local-diff-failure-classification.json`. MG372D2R additionally writes
+`codex-local-diff-cleanup-report.json`,
+`codex-local-diff-worktree-list-before.txt`,
+`codex-local-diff-worktree-list-after.txt` and
+`codex-local-diff-cleanup-safety.json`.
 
 See [SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
 
@@ -231,7 +242,7 @@ Phase 2:
 
 ## Next Step
 
-Recommended next milestone after MG372D2 passes:
+Recommended next milestone after MG372D2R passes:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

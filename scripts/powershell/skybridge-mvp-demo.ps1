@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture", "codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file")]
+  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture", "codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file", "codex-local-diff-cleanup-safety")]
   [string]$Mode = "local-safe",
   [switch]$UseTempDatabase,
   [string]$ApiBase = "http://127.0.0.1:8787",
@@ -14,7 +14,9 @@ param(
   [string]$ConfirmationText = "",
   [int]$CodexTimeoutSeconds = 900,
   [string]$CodexSandbox = "workspace-write",
-  [bool]$KeepCodexWorktree = $true
+  [bool]$KeepCodexWorktree = $true,
+  [switch]$CleanExistingCodexWorktree,
+  [switch]$ArchiveExistingCodexWorktree
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,12 +38,12 @@ $ControllerBaselineCommit = "c69f97cf4a3eeda0999877b83884513fba4f3bdc"
 $ControllerDemoFile = "docs/product/MG372B_CONTROLLER_DRAFT_PR_DEMO_ARTIFACT.md"
 $ControllerCommitMessage = "docs(demo): add MG372B controller draft PR artifact"
 $ControllerPrTitle = "MG372B Demo: Controller-created Draft PR"
-$CodexDiffSchema = "skybridge.mvp_demo.codex_local_diff.v3"
+$CodexDiffSchema = "skybridge.mvp_demo.codex_local_diff.v4"
 $CodexDiffOutputDir = ".agent/tmp/skybridge-mvp-codex-diff"
-$CodexDiffGoalId = "mg372d2-codex-local-diff-timeout-gate"
+$CodexDiffGoalId = "mg372d2r-codex-local-diff-worktree-cleanup-rerun"
 $CodexDiffTaskId = "mg372d-codex-local-diff-task-001"
-$CodexDiffWorkerId = "mg372d2-codex-local-diff-worker"
-$CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D2_RERUN_CODEX_ONCE_FOR_LOCAL_ARTIFACT_PRODUCTION_DEMO"
+$CodexDiffWorkerId = "mg372d2r-codex-local-diff-worker"
+$CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D2R_CLEAN_STALE_CODEX_DIFF_WORKTREE_AND_RERUN_CODEX_ONCE"
 $CodexDiffDemoFile = "docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
 $Artifacts = @(
   "mvp-demo-report.json",
@@ -87,6 +89,11 @@ $CodexDiffArtifacts = @(
   "codex-local-diff-collector-diagnostics.json",
   "codex-local-diff-execution-diagnostics.json",
   "codex-local-diff-failure-classification.json",
+  "codex-local-diff-cleanup-report.json",
+  "codex-local-diff-cleanup-report.md",
+  "codex-local-diff-worktree-list-before.txt",
+  "codex-local-diff-worktree-list-after.txt",
+  "codex-local-diff-cleanup-safety.json",
   "codex-local-diff-artifact-index.json"
 )
 
@@ -1473,6 +1480,11 @@ function Get-CodexDiffArtifactPaths {
     collector_diagnostics = Join-Path $ResolvedOutputDir "codex-local-diff-collector-diagnostics.json"
     execution_diagnostics = Join-Path $ResolvedOutputDir "codex-local-diff-execution-diagnostics.json"
     failure_classification = Join-Path $ResolvedOutputDir "codex-local-diff-failure-classification.json"
+    cleanup_report_json = Join-Path $ResolvedOutputDir "codex-local-diff-cleanup-report.json"
+    cleanup_report_md = Join-Path $ResolvedOutputDir "codex-local-diff-cleanup-report.md"
+    worktree_list_before = Join-Path $ResolvedOutputDir "codex-local-diff-worktree-list-before.txt"
+    worktree_list_after = Join-Path $ResolvedOutputDir "codex-local-diff-worktree-list-after.txt"
+    cleanup_safety = Join-Path $ResolvedOutputDir "codex-local-diff-cleanup-safety.json"
     index = Join-Path $ResolvedOutputDir "codex-local-diff-artifact-index.json"
     workspace = Join-Path $ResolvedOutputDir "worktree"
     codex_jsonl = Join-Path $ResolvedOutputDir "codex-local-diff-codex.jsonl"
@@ -1565,7 +1577,7 @@ $CodexDiffDemoFile
 Write 8 to 20 lines of Markdown.
 Include these exact fields:
 generated_by=Codex
-source_milestone=MG372D2
+source_milestone=MG372D2R
 baseline_commit=$BaselineCommit
 task_id=$TaskIdValue
 token_printed=false
@@ -1852,6 +1864,232 @@ function New-CodexDiffCollectorDiagnostics {
   }
 }
 
+function Get-CodexDiffFullPath {
+  param([string]$Path)
+  [System.IO.Path]::GetFullPath((Resolve-DemoPath $Path)).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+}
+
+function Test-CodexDiffPathStartsWith {
+  param(
+    [string]$Path,
+    [string]$Parent
+  )
+  $fullPath = Get-CodexDiffFullPath -Path $Path
+  $fullParent = Get-CodexDiffFullPath -Path $Parent
+  return ($fullPath.Equals($fullParent, [System.StringComparison]::OrdinalIgnoreCase) -or
+    $fullPath.StartsWith($fullParent + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase))
+}
+
+function Get-CodexDiffWorktreeListText {
+  Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("worktree", "list", "--porcelain") -CaptureOutput -AllowFailure
+}
+
+function Get-CodexDiffWorktreeRecords {
+  param([string]$WorktreeListText)
+  $records = [System.Collections.Generic.List[object]]::new()
+  $current = $null
+  foreach ($line in @($WorktreeListText -split "`r?`n")) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      if ($null -ne $current) {
+        $records.Add([pscustomobject]$current) | Out-Null
+        $current = $null
+      }
+      continue
+    }
+    if ($line -like "worktree *") {
+      if ($null -ne $current) { $records.Add([pscustomobject]$current) | Out-Null }
+      $current = [ordered]@{ worktree = $line.Substring(9).Trim(); HEAD = ""; branch = ""; detached = $false }
+    } elseif ($null -ne $current -and $line -like "HEAD *") {
+      $current.HEAD = $line.Substring(5).Trim()
+    } elseif ($null -ne $current -and $line -like "branch *") {
+      $current.branch = $line.Substring(7).Trim()
+    } elseif ($null -ne $current -and $line -eq "detached") {
+      $current.detached = $true
+    }
+  }
+  if ($null -ne $current) { $records.Add([pscustomobject]$current) | Out-Null }
+  @($records)
+}
+
+function Find-CodexDiffRegisteredWorktree {
+  param(
+    [string]$WorktreePath,
+    [string]$WorktreeListText
+  )
+  $target = Get-CodexDiffFullPath -Path $WorktreePath
+  foreach ($record in @(Get-CodexDiffWorktreeRecords -WorktreeListText $WorktreeListText)) {
+    $candidate = Get-CodexDiffFullPath -Path ([string]$record.worktree)
+    if ($candidate.Equals($target, [System.StringComparison]::OrdinalIgnoreCase)) { return $record }
+  }
+  return $null
+}
+
+function New-CodexDiffCleanupArtifacts {
+  param(
+    [string]$GeneratedAt,
+    [string]$ResolvedOutputDir,
+    [string]$WorkspacePath,
+    [bool]$Requested,
+    [string]$BeforeText = "",
+    [string]$AfterText = "",
+    [string]$Method = "not_requested",
+    [bool]$Completed = $false,
+    [string[]]$Blockers = @()
+  )
+  $repoRoot = Get-CodexDiffFullPath -Path "."
+  $defaultAllowedRoot = Get-CodexDiffFullPath -Path ".agent/tmp/skybridge-mvp-codex-diff"
+  $defaultExactWorktree = Get-CodexDiffFullPath -Path ".agent/tmp/skybridge-mvp-codex-diff/worktree"
+  $target = Get-CodexDiffFullPath -Path $WorkspacePath
+  $root = [System.IO.Path]::GetPathRoot($target).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+  $registered = Find-CodexDiffRegisteredWorktree -WorktreePath $WorkspacePath -WorktreeListText $BeforeText
+  $pathUnderAgentTmp = Test-CodexDiffPathStartsWith -Path $WorkspacePath -Parent $defaultAllowedRoot
+  $pathExactMatch = $target.Equals($defaultExactWorktree, [System.StringComparison]::OrdinalIgnoreCase)
+  $isRepoRoot = $target.Equals($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)
+  $isRoot = $target.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar).Equals($root, [System.StringComparison]::OrdinalIgnoreCase)
+  $isParentOfRepo = $repoRoot.StartsWith($target + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)
+  $safety = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.cleanup_safety.v1"
+    generated_at = $GeneratedAt
+    workspace_path = $target.Replace("\", "/")
+    default_allowed_root = $defaultAllowedRoot.Replace("\", "/")
+    default_exact_worktree = $defaultExactWorktree.Replace("\", "/")
+    path_under_agent_tmp = [bool]$pathUnderAgentTmp
+    path_exact_match = [bool]$pathExactMatch
+    path_is_repo_root = [bool]$isRepoRoot
+    path_is_root = [bool]$isRoot
+    path_is_parent_of_repo = [bool]$isParentOfRepo
+    path_registered_worktree = [bool]($null -ne $registered)
+    main_worktree_path = $repoRoot.Replace("\", "/")
+    token_printed = $false
+  }
+  $report = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.cleanup_report.v1"
+    generated_at = $GeneratedAt
+    cleanup_requested = [bool]$Requested
+    cleanup_authorization_phrase_matched = ($ConfirmationText -eq $CodexDiffConfirmationText)
+    stale_worktree_detected = [bool](Test-Path -LiteralPath $WorkspacePath)
+    stale_worktree_path = $target.Replace("\", "/")
+    stale_worktree_registered = [bool]($null -ne $registered)
+    stale_worktree_commit = if ($null -ne $registered) { [string]$registered.HEAD } else { $null }
+    path_under_agent_tmp = [bool]$pathUnderAgentTmp
+    path_exact_match = [bool]$pathExactMatch
+    main_worktree_clean_before_cleanup = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
+    cleanup_method = $Method
+    cleanup_completed = [bool]$Completed
+    cleanup_blockers = @($Blockers)
+    token_printed = $false
+  }
+  [pscustomobject]@{ report = $report; safety = $safety }
+}
+
+function Write-CodexDiffCleanupFiles {
+  param(
+    [string]$ResolvedOutputDir,
+    $CleanupReport,
+    $CleanupSafety,
+    [string]$BeforeText,
+    [string]$AfterText
+  )
+  $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
+  if ($null -eq $CleanupReport -or $null -eq $CleanupSafety) {
+    $generatedAt = Get-DemoUtcNow
+    $items = New-CodexDiffCleanupArtifacts -GeneratedAt $generatedAt -ResolvedOutputDir $ResolvedOutputDir -WorkspacePath $paths.workspace -Requested $false -BeforeText $BeforeText -AfterText $AfterText
+    $CleanupReport = $items.report
+    $CleanupSafety = $items.safety
+  }
+  Write-DemoJsonFile -Path $paths.cleanup_report_json -Value $CleanupReport
+  Write-DemoJsonFile -Path $paths.cleanup_safety -Value $CleanupSafety
+  if ($null -eq $BeforeText) { $BeforeText = "" }
+  if ($null -eq $AfterText) { $AfterText = $BeforeText }
+  $BeforeText | Set-Content -LiteralPath $paths.worktree_list_before -Encoding UTF8
+  $AfterText | Set-Content -LiteralPath $paths.worktree_list_after -Encoding UTF8
+  $markdown = @(
+    "# MG372D2R Codex Local Diff Cleanup Report",
+    "",
+    "- cleanup_requested: $($CleanupReport.cleanup_requested)",
+    "- cleanup_authorization_phrase_matched: $($CleanupReport.cleanup_authorization_phrase_matched)",
+    "- stale_worktree_detected: $($CleanupReport.stale_worktree_detected)",
+    "- stale_worktree_registered: $($CleanupReport.stale_worktree_registered)",
+    "- stale_worktree_commit: $($CleanupReport.stale_worktree_commit)",
+    "- stale_worktree_path: $($CleanupReport.stale_worktree_path)",
+    "- path_under_agent_tmp: $($CleanupReport.path_under_agent_tmp)",
+    "- path_exact_match: $($CleanupReport.path_exact_match)",
+    "- main_worktree_clean_before_cleanup: $($CleanupReport.main_worktree_clean_before_cleanup)",
+    "- cleanup_method: $($CleanupReport.cleanup_method)",
+    "- cleanup_completed: $($CleanupReport.cleanup_completed)",
+    "- cleanup_blockers: $(@($CleanupReport.cleanup_blockers) -join ', ')",
+    "- token_printed: false"
+  )
+  $markdown | Set-Content -LiteralPath $paths.cleanup_report_md -Encoding UTF8
+}
+
+function Invoke-CodexDiffStaleWorktreeCleanup {
+  param(
+    [string]$ResolvedOutputDir,
+    [string]$WorkspacePath,
+    [bool]$Requested,
+    [bool]$AllowFixturePath = $false
+  )
+  $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
+  $beforeText = Get-CodexDiffWorktreeListText
+  $blockers = [System.Collections.Generic.List[string]]::new()
+  $method = if ($Requested) { if ($ArchiveExistingCodexWorktree) { "archive_requested_git_worktree_remove_force" } else { "git_worktree_remove_force" } } else { "not_requested" }
+  $cleanupCompleted = $false
+  $items = New-CodexDiffCleanupArtifacts -GeneratedAt (Get-DemoUtcNow) -ResolvedOutputDir $ResolvedOutputDir -WorkspacePath $WorkspacePath -Requested $Requested -BeforeText $beforeText -Method $method
+  $report = $items.report
+  $safety = $items.safety
+  $initialStaleDetected = [bool]$report.stale_worktree_detected
+  $initialStaleRegistered = [bool]$report.stale_worktree_registered
+  $initialStaleCommit = $report.stale_worktree_commit
+
+  if (-not $Requested) {
+    $afterText = $beforeText
+    Write-CodexDiffCleanupFiles -ResolvedOutputDir $ResolvedOutputDir -CleanupReport $report -CleanupSafety $safety -BeforeText $beforeText -AfterText $afterText
+    return [pscustomobject]@{ report = $report; safety = $safety; before = $beforeText; after = $afterText }
+  }
+
+  if (-not $report.cleanup_authorization_phrase_matched) { $blockers.Add("cleanup_authorization_phrase_mismatch") | Out-Null }
+  if (-not $report.main_worktree_clean_before_cleanup) { $blockers.Add("main_worktree_not_clean_before_cleanup") | Out-Null }
+  if (-not $safety.path_under_agent_tmp) { $blockers.Add("cleanup_path_outside_agent_tmp") | Out-Null }
+  if ($safety.path_is_repo_root) { $blockers.Add("cleanup_path_is_repo_root") | Out-Null }
+  if ($safety.path_is_root) { $blockers.Add("cleanup_path_is_root") | Out-Null }
+  if ($safety.path_is_parent_of_repo) { $blockers.Add("cleanup_path_is_parent_of_repo") | Out-Null }
+  if (-not $AllowFixturePath -and -not $safety.path_exact_match) { $blockers.Add("cleanup_path_not_exact_default_worktree") | Out-Null }
+  if ($report.stale_worktree_detected -and -not $report.stale_worktree_registered) { $blockers.Add("stale_worktree_not_registered") | Out-Null }
+
+  if (@($blockers).Count -eq 0) {
+    if (-not $report.stale_worktree_detected) {
+      $method = "verified_absent"
+      $cleanupCompleted = $true
+    } else {
+      Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("worktree", "remove", "--force", $WorkspacePath) | Out-Null
+      $afterRemove = Get-CodexDiffWorktreeListText
+      if (Find-CodexDiffRegisteredWorktree -WorktreePath $WorkspacePath -WorktreeListText $afterRemove) {
+        $blockers.Add("stale_worktree_still_registered_after_remove") | Out-Null
+      }
+      if (Test-Path -LiteralPath $WorkspacePath) {
+        if ($safety.path_under_agent_tmp -and (-not $safety.path_is_repo_root) -and (-not $safety.path_is_root) -and (-not $safety.path_is_parent_of_repo)) {
+          Remove-Item -LiteralPath $WorkspacePath -Recurse -Force
+        } else {
+          $blockers.Add("stale_worktree_directory_left_in_unsafe_path") | Out-Null
+        }
+      }
+      if (Test-Path -LiteralPath $WorkspacePath) { $blockers.Add("stale_worktree_directory_still_exists_after_cleanup") | Out-Null }
+      $cleanupCompleted = (@($blockers).Count -eq 0)
+    }
+  }
+
+  $afterText = Get-CodexDiffWorktreeListText
+  $items = New-CodexDiffCleanupArtifacts -GeneratedAt (Get-DemoUtcNow) -ResolvedOutputDir $ResolvedOutputDir -WorkspacePath $WorkspacePath -Requested $Requested -BeforeText $beforeText -AfterText $afterText -Method $method -Completed $cleanupCompleted -Blockers @($blockers)
+  $report = $items.report
+  $safety = $items.safety
+  $report.stale_worktree_detected = $initialStaleDetected
+  $report.stale_worktree_registered = $initialStaleRegistered
+  $report.stale_worktree_commit = $initialStaleCommit
+  Write-CodexDiffCleanupFiles -ResolvedOutputDir $ResolvedOutputDir -CleanupReport $report -CleanupSafety $safety -BeforeText $beforeText -AfterText $afterText
+  [pscustomobject]@{ report = $report; safety = $safety; before = $beforeText; after = $afterText }
+}
+
 function Write-CodexDiffArtifacts {
   param(
     [string]$ResolvedOutputDir,
@@ -1865,6 +2103,8 @@ function Write-CodexDiffArtifacts {
     $CollectorDiagnostics,
     $ExecutionDiagnostics,
     $FailureClassification,
+    $CleanupReport,
+    $CleanupSafety,
     $Safety
   )
   $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
@@ -1895,6 +2135,17 @@ function Write-CodexDiffArtifacts {
   Write-DemoJsonFile -Path $paths.collector_diagnostics -Value $CollectorDiagnostics
   Write-DemoJsonFile -Path $paths.execution_diagnostics -Value $ExecutionDiagnostics
   Write-DemoJsonFile -Path $paths.failure_classification -Value $FailureClassification
+  if ($null -eq $CleanupReport -or $null -eq $CleanupSafety) {
+    $beforeText = Get-CodexDiffWorktreeListText
+    $cleanupItems = New-CodexDiffCleanupArtifacts -GeneratedAt $Report.generated_at -ResolvedOutputDir $ResolvedOutputDir -WorkspacePath $paths.workspace -Requested $false -BeforeText $beforeText -AfterText $beforeText
+    $CleanupReport = $cleanupItems.report
+    $CleanupSafety = $cleanupItems.safety
+    Write-CodexDiffCleanupFiles -ResolvedOutputDir $ResolvedOutputDir -CleanupReport $CleanupReport -CleanupSafety $CleanupSafety -BeforeText $beforeText -AfterText $beforeText
+  } else {
+    $beforeText = if (Test-Path -LiteralPath $paths.worktree_list_before -PathType Leaf) { Get-Content -Raw -LiteralPath $paths.worktree_list_before } else { "" }
+    $afterText = if (Test-Path -LiteralPath $paths.worktree_list_after -PathType Leaf) { Get-Content -Raw -LiteralPath $paths.worktree_list_after } else { $beforeText }
+    Write-CodexDiffCleanupFiles -ResolvedOutputDir $ResolvedOutputDir -CleanupReport $CleanupReport -CleanupSafety $CleanupSafety -BeforeText $beforeText -AfterText $afterText
+  }
   Write-DemoJsonFile -Path $paths.safety -Value $Safety
   Write-DemoJsonFile -Path $paths.report_json -Value $Report
   $relativeOutput = $OutputDir.Replace("\", "/")
@@ -1910,6 +2161,8 @@ function Write-CodexDiffArtifacts {
     collector_diagnostics_path = "$relativeOutput/codex-local-diff-collector-diagnostics.json"
     execution_diagnostics_path = "$relativeOutput/codex-local-diff-execution-diagnostics.json"
     failure_classification_path = "$relativeOutput/codex-local-diff-failure-classification.json"
+    cleanup_report_path = "$relativeOutput/codex-local-diff-cleanup-report.json"
+    cleanup_safety_path = "$relativeOutput/codex-local-diff-cleanup-safety.json"
     token_printed = $false
   }
   Write-DemoJsonFile -Path $paths.index -Value $index
@@ -1923,6 +2176,10 @@ function Write-CodexDiffArtifacts {
     "- goal_id: $($Report.goal_id)",
     "- task_id: $($Report.task_id)",
     "- worker_id: $($Report.worker_id)",
+    "- cleanup_requested: $($Report.cleanup_requested)",
+    "- cleanup_completed: $($Report.cleanup_completed)",
+    "- stale_worktree_detected: $($Report.stale_worktree_detected)",
+    "- stale_worktree_cleaned: $($Report.stale_worktree_cleaned)",
     "- codex_called: $($Report.codex_called)",
     "- codex_call_count: $($Report.codex_call_count)",
     "- codex_exit_code: $($Report.codex_exit_code)",
@@ -1985,13 +2242,17 @@ function New-CodexDiffReport {
     schema = $CodexDiffSchema
     generated_at = $GeneratedAt
     mode = "codex-local-diff"
-    rerun_milestone = "MG372D2"
+    rerun_milestone = "MG372D2R"
     baseline_commit = $BaselineCommit
     implementation_commit = $ImplementationCommit
     project_id = $ProjectId
     goal_id = $CodexDiffGoalId
     task_id = $CodexDiffTaskId
     worker_id = $CodexDiffWorkerId
+    cleanup_requested = $false
+    cleanup_completed = $false
+    stale_worktree_detected = $false
+    stale_worktree_cleaned = $false
     task_created = $false
     worker_registered = $false
     task_claimed = $false
@@ -2006,6 +2267,7 @@ function New-CodexDiffReport {
     would_use_git_index_collector = $true
     would_generate_non_empty_patch = $true
     would_run_codex_doctor = $true
+    would_clean_existing_worktree = $false
     codex_available = $false
     codex_called = $false
     codex_call_count = 0
@@ -2125,6 +2387,10 @@ function Invoke-CodexLocalDiffDemo {
     main_synced_with_origin = $false
     contains_mg372d_baseline = $false
     confirmation_text_matched = ($ConfirmationText -eq $CodexDiffConfirmationText)
+    cleanup_requested = $false
+    cleanup_authorization_phrase_matched = ($ConfirmationText -eq $CodexDiffConfirmationText)
+    would_clean_existing_worktree = $false
+    cleanup_completed = $false
     workspace_path = $workspacePath.Replace("\", "/")
     workspace_setup_method = "git_worktree"
     git_index_collector_used = $true
@@ -2187,6 +2453,8 @@ function Invoke-CodexLocalDiffDemo {
   }
   $collectorDiagnostics = New-CodexDiffCollectorDiagnostics -GeneratedAt $generatedAt -BaselineCommit $baselineCommit -WorkspacePath $workspacePath -PatchPath $paths.patch
   $executionDiagnostics = New-CodexDiffExecutionDiagnostics -GeneratedAt $generatedAt -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message -TimeoutSeconds $CodexTimeoutSeconds
+  $cleanupReport = $null
+  $cleanupSafety = $null
   $failureClassification = [ordered]@{
     schema = "skybridge.mvp_demo.codex_local_diff.failure_classification.v1"
     generated_at = $generatedAt
@@ -2227,6 +2495,29 @@ function Invoke-CodexLocalDiffDemo {
     }
     $codexAvailable = [bool]$preflight.codex_available
 
+    $preflight.would_clean_existing_worktree = [bool](Test-Path -LiteralPath $workspacePath)
+    if (-not $isPreview -and $CleanExistingCodexWorktree) {
+      $preflight.cleanup_requested = $true
+      $cleanup = Invoke-CodexDiffStaleWorktreeCleanup -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $workspacePath -Requested $true
+      $cleanupReport = $cleanup.report
+      $cleanupSafety = $cleanup.safety
+      $preflight.cleanup_completed = [bool]$cleanupReport.cleanup_completed
+      $preflight.no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+      if (-not $cleanupReport.cleanup_completed) {
+        $blockers.Add("stale_worktree_cleanup_failed") | Out-Null
+        foreach ($cleanupBlocker in @($cleanupReport.cleanup_blockers)) {
+          if (-not [string]::IsNullOrWhiteSpace([string]$cleanupBlocker)) {
+            $blockers.Add([string]$cleanupBlocker) | Out-Null
+          }
+        }
+      }
+    } else {
+      $cleanup = Invoke-CodexDiffStaleWorktreeCleanup -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $workspacePath -Requested $false
+      $cleanupReport = $cleanup.report
+      $cleanupSafety = $cleanup.safety
+      $preflight.no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+    }
+
     if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
     if (-not $preflight.output_dir_writable) { $blockers.Add("output_dir_not_writable") | Out-Null }
     if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed") | Out-Null }
@@ -2250,12 +2541,22 @@ function Invoke-CodexLocalDiffDemo {
       $report.demo_result = $demoResult
       $report.codex_available = [bool]$preflight.codex_available
       $report.main_worktree_clean_after = $preflight.repo_clean
-      Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
+      $report.cleanup_requested = $false
+      $report.cleanup_completed = $false
+      $report.stale_worktree_detected = [bool]$cleanupReport.stale_worktree_detected
+      $report.stale_worktree_cleaned = $false
+      $report.would_clean_existing_worktree = [bool]$preflight.would_clean_existing_worktree
+      Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -CleanupReport $cleanupReport -CleanupSafety $cleanupSafety -Safety $safety
       if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
       return
     }
 
-    Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
+    $report.cleanup_requested = [bool]$preflight.cleanup_requested
+    $report.cleanup_completed = [bool]$preflight.cleanup_completed
+    $report.stale_worktree_detected = [bool]$cleanupReport.stale_worktree_detected
+    $report.stale_worktree_cleaned = [bool]($cleanupReport.cleanup_completed -and $cleanupReport.stale_worktree_detected)
+    $report.would_clean_existing_worktree = [bool]$preflight.would_clean_existing_worktree
+    Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -CleanupReport $cleanupReport -CleanupSafety $cleanupSafety -Safety $safety
     if (-not $preflight.preflight_passed) { throw "MG372D Codex local diff preflight failed." }
 
     $script:ResolvedApiBase = $ApiBase
@@ -2500,6 +2801,11 @@ function Invoke-CodexLocalDiffDemo {
   $report.codex_stdout_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-stdout.log"
   $report.codex_stderr_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-stderr.log"
   $report.codex_last_message_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-last-message.md"
+  $report.cleanup_requested = [bool]$preflight.cleanup_requested
+  $report.cleanup_completed = [bool]$preflight.cleanup_completed
+  $report.stale_worktree_detected = [bool]($cleanupReport -and $cleanupReport.stale_worktree_detected)
+  $report.stale_worktree_cleaned = [bool]($cleanupReport -and $cleanupReport.cleanup_completed -and $cleanupReport.stale_worktree_detected)
+  $report.would_clean_existing_worktree = [bool]$preflight.would_clean_existing_worktree
   $report.isolated_workspace_used = [bool]$workspaceUsed
   $report.workspace_setup_method = "git_worktree"
   $report.workspace_path = $workspacePath.Replace("\", "/")
@@ -2548,7 +2854,7 @@ function Invoke-CodexLocalDiffDemo {
   $failureClassification.generated_at = $report.generated_at
   $failureClassification.codex_failure_class = $codexFailureClass
   $failureClassification.blockers = @($blockers)
-  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
+  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -CleanupReport $cleanupReport -CleanupSafety $cleanupSafety -Safety $safety
   if ($OpenReport) { Invoke-Item -LiteralPath $paths.report_md }
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
 }
@@ -2667,7 +2973,7 @@ function Invoke-CodexLocalDiffCollectorFixture {
         "# MG372D Codex Local Diff Artifact",
         "",
         "generated_by=synthetic-smoke",
-        "source_milestone=MG372D2",
+        "source_milestone=MG372D2R",
         "baseline commit=$implementationCommit",
         "task_id=$CodexDiffTaskId",
         "token_printed=false"
@@ -2782,7 +3088,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent `$target) | Out-Nu
   "# MG372D Codex Local Diff Artifact",
   "",
   "generated_by=Codex",
-  "source_milestone=MG372D2",
+  "source_milestone=MG372D2R",
   "task_id=mg372d-codex-local-diff-task-001",
   "token_printed=false",
   "- proves: mock Codex artifact production path",
@@ -2836,6 +3142,8 @@ function Invoke-CodexLocalDiffMockFixture {
   $executionDiagnostics = New-CodexDiffExecutionDiagnostics -GeneratedAt $generatedAt -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message -TimeoutSeconds $(if ($fixtureKind -eq "timeout") { 1 } else { 30 }) -Command "mock-codex exec"
   $executionDiagnostics.codex_available = $true
   $executionDiagnostics.codex_version = "mock-codex"
+  $cleanupReport = $null
+  $cleanupSafety = $null
   $preflight = [ordered]@{
     schema = "skybridge.mvp_demo.codex_local_diff.preflight.v1"
     generated_at = $generatedAt
@@ -2855,6 +3163,10 @@ function Invoke-CodexLocalDiffMockFixture {
     main_synced_with_origin = $false
     contains_mg372d_baseline = $false
     confirmation_text_matched = $false
+    cleanup_requested = $false
+    cleanup_authorization_phrase_matched = ($ConfirmationText -eq $CodexDiffConfirmationText)
+    would_clean_existing_worktree = $false
+    cleanup_completed = $false
     workspace_path = $workspacePath.Replace("\", "/")
     workspace_setup_method = "git_worktree"
     git_index_collector_used = $true
@@ -2911,6 +3223,28 @@ function Invoke-CodexLocalDiffMockFixture {
 
   try {
     if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
+    $preflight.would_clean_existing_worktree = [bool](Test-Path -LiteralPath $workspacePath)
+    if ($CleanExistingCodexWorktree) {
+      $preflight.cleanup_requested = $true
+      $cleanup = Invoke-CodexDiffStaleWorktreeCleanup -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $workspacePath -Requested $true -AllowFixturePath $true
+      $cleanupReport = $cleanup.report
+      $cleanupSafety = $cleanup.safety
+      $preflight.cleanup_completed = [bool]$cleanupReport.cleanup_completed
+      $preflight.no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+      if (-not $cleanupReport.cleanup_completed) {
+        $blockers.Add("stale_worktree_cleanup_failed") | Out-Null
+        foreach ($cleanupBlocker in @($cleanupReport.cleanup_blockers)) {
+          if (-not [string]::IsNullOrWhiteSpace([string]$cleanupBlocker)) {
+            $blockers.Add([string]$cleanupBlocker) | Out-Null
+          }
+        }
+      }
+    } else {
+      $cleanup = Invoke-CodexDiffStaleWorktreeCleanup -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $workspacePath -Requested $false -AllowFixturePath $true
+      $cleanupReport = $cleanup.report
+      $cleanupSafety = $cleanup.safety
+      $preflight.no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+    }
     if (-not $preflight.no_existing_workspace) { $blockers.Add("existing_codex_diff_workspace") | Out-Null }
     if (@($blockers).Count -eq 0) {
       New-CodexDiffWorkspace -WorkspacePath $workspacePath -CommitSha $implementationCommit
@@ -2993,6 +3327,11 @@ function Invoke-CodexLocalDiffMockFixture {
   $report.codex_timeout_seconds = [int]$executionDiagnostics.codex_timeout_seconds
   $report.codex_duration_ms = $codexDurationMs
   $report.codex_failure_class = $codexFailureClass
+  $report.cleanup_requested = [bool]$preflight.cleanup_requested
+  $report.cleanup_completed = [bool]$preflight.cleanup_completed
+  $report.stale_worktree_detected = [bool]($cleanupReport -and $cleanupReport.stale_worktree_detected)
+  $report.stale_worktree_cleaned = [bool]($cleanupReport -and $cleanupReport.cleanup_completed -and $cleanupReport.stale_worktree_detected)
+  $report.would_clean_existing_worktree = [bool]$preflight.would_clean_existing_worktree
   $report.isolated_workspace_used = $true
   $report.workspace_clean_before_codex = [bool]$collectorDiagnostics.workspace_clean_before_codex
   $report.main_worktree_clean_after = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
@@ -3028,8 +3367,46 @@ function Invoke-CodexLocalDiffMockFixture {
     "- token_printed: false"
   )
   $review | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
-  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
+  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -CleanupReport $cleanupReport -CleanupSafety $cleanupSafety -Safety $safety
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+}
+
+function Invoke-CodexLocalDiffCleanupSafetyFixture {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
+  $generatedAt = Get-DemoUtcNow
+  $repoRoot = Get-CodexDiffFullPath -Path "."
+  $outsidePath = Get-CodexDiffFullPath -Path ".agent/tmp/skybridge-mvp-codex-diff-cleanup-outside/worktree"
+  $safeFixturePath = Get-CodexDiffFullPath -Path (Join-Path $OutputDir "worktree")
+  $beforeText = Get-CodexDiffWorktreeListText
+  $outside = New-CodexDiffCleanupArtifacts -GeneratedAt $generatedAt -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $outsidePath -Requested $true -BeforeText $beforeText
+  $root = New-CodexDiffCleanupArtifacts -GeneratedAt $generatedAt -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $repoRoot -Requested $true -BeforeText $beforeText
+  $missingAuth = New-CodexDiffCleanupArtifacts -GeneratedAt $generatedAt -ResolvedOutputDir $resolvedOutputDir -WorkspacePath $safeFixturePath -Requested $true -BeforeText $beforeText
+
+  $outsideRejected = -not [bool]$outside.safety.path_under_agent_tmp
+  $repoRootRejected = [bool]$root.safety.path_is_repo_root
+  $confirmationRequired = -not [bool]$missingAuth.report.cleanup_authorization_phrase_matched
+  $result = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.cleanup_safety_fixture.v1"
+    generated_at = $generatedAt
+    mode = "codex-local-diff-cleanup-safety"
+    outside_agent_tmp_rejected = [bool]$outsideRejected
+    repo_root_rejected = [bool]$repoRootRejected
+    confirmation_required = [bool]$confirmationRequired
+    codex_called = $false
+    pr_created = $false
+    branch_pushed = $false
+    commit_created = $false
+    token_printed = $false
+    demo_result = if ($outsideRejected -and $repoRootRejected -and $confirmationRequired) { "pass" } else { "blocked" }
+    blockers = @()
+  }
+  if ($result.demo_result -ne "pass") { $result.blockers = @("cleanup_safety_fixture_failed") }
+  Write-DemoJsonFile -Path (Join-Path $resolvedOutputDir "codex-local-diff-cleanup-safety-fixture-report.json") -Value $result
+  Write-DemoJsonFile -Path (Join-Path $resolvedOutputDir "codex-local-diff-cleanup-safety-outside.json") -Value $outside.safety
+  Write-DemoJsonFile -Path (Join-Path $resolvedOutputDir "codex-local-diff-cleanup-safety-repo-root.json") -Value $root.safety
+  Write-DemoJsonFile -Path (Join-Path $resolvedOutputDir "codex-local-diff-cleanup-safety-auth.json") -Value $missingAuth.report
+  if ($Json) { $result | ConvertTo-Json -Depth 30 -Compress } else { $result | Format-List }
 }
 
 function Show-CodexLocalDiffStatus {
@@ -3136,6 +3513,8 @@ if ($Mode -eq "local-safe") {
   Show-CodexLocalDiffStatus
 } elseif ($Mode -eq "codex-local-diff-report") {
   Show-CodexLocalDiffReport
+} elseif ($Mode -eq "codex-local-diff-cleanup-safety") {
+  Invoke-CodexLocalDiffCleanupSafetyFixture
 } elseif ($Mode -in @("codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture")) {
   Invoke-CodexLocalDiffCollectorFixture
 } elseif ($Mode -in @("codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file")) {
