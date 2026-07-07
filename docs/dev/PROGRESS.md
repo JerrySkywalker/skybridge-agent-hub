@@ -1,5 +1,43 @@
 # Progress Log
 
+## 2026-07-07 Mega Goal 372D1 Codex Local Diff Collector Fix and Rerun Gate
+
+- Recorded the MG372D post-merge demo as blocked: Codex was called exactly
+  once and exited `0`, but the archive-copied workspace collector reported 55
+  changed files and wrote an empty `diff.patch`.
+- Root cause: the copied/archive workspace collector compared raw file hashes
+  against the Windows working tree and drifted from Git blob/index semantics,
+  likely because of line-ending normalization.
+- Updated `scripts/powershell/skybridge-mvp-demo.ps1` so
+  `codex-local-diff` uses an isolated detached Git worktree under
+  `.agent/tmp/skybridge-mvp-codex-diff/worktree/`.
+- Replaced raw hash comparison with Git-index collection:
+  `git status --porcelain=v1`, Git diff name-only output and Git-generated
+  patch output.
+- Added schema `skybridge.mvp_demo.codex_local_diff.v2` with
+  `rerun_milestone=MG372D1`, `workspace_setup_method=git_worktree`,
+  `git_index_collector_used=true`, `hash_comparison_used=false`,
+  `workspace_clean_before_codex`, `diff_patch_non_empty` and
+  `target_artifact_exists`.
+- Added `codex-local-diff-collector-diagnostics.json` to the artifact set.
+- Updated the apply confirmation to
+  `I_UNDERSTAND_AUTHORIZE_MG372D1_RERUN_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO`.
+- Added CI-safe collector smokes:
+  `smoke:skybridge-mvp-demo-codex-local-diff-worktree-clean` and
+  `smoke:skybridge-mvp-demo-codex-local-diff-synthetic-patch`.
+- Updated the policy smoke so a synthetic non-allowlisted edit is blocked by
+  the production collector.
+- Preserved `pr_created=false`, `branch_pushed=false`,
+  `commit_created=false`, `demo_pr_311_modified=false`,
+  `tui_created_branch=false`, `tui_created_pr=false`,
+  `worker_loop_started=false`, `queue_runner_started=false`,
+  `run_forever_started=false`, `hermes_live_called=false`,
+  `mcp_run_called=false`, `auto_merge_enabled=false`,
+  `release_created=false`, `tag_created=false`, `asset_uploaded=false`,
+  `raw_output_exported=false` and `token_printed=false`.
+- Recommended next milestone only if MG372D1 passes:
+  MG372E2 Codex-generated Draft PR Demo.
+
 ## 2026-07-07 Mega Goal 372D Codex-generated Local Diff Demo
 
 - Extended `scripts/powershell/skybridge-mvp-demo.ps1` with

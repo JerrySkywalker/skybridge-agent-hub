@@ -282,17 +282,20 @@ controller-created draft PR demo. The new next-stage options are:
 3. MG372C MVP Demo Review and Decision Gate: records the MVP demo line as
    pass, recommends continuing in the current repository, rejects a rewrite for
    now and keeps MG371B / TUI-created PR work frozen.
-4. MG372D Codex-generated Local Diff Demo: use the existing MVP demo spine,
-   call Codex once, generate a docs-only local diff in an isolated copied
-   workspace, write `codex-local-diff.patch` and a review summary, and stop
-   before commit, push or PR creation.
-5. MG372E2 Codex-generated Draft PR Demo: if MG372D passes, take the validated
-   local docs-only diff and create one controller-created draft PR. Keep this
-   controller-created, not TUI-created.
-6. MG371B / TUI-created real branch and PR work remains frozen until a future
+4. MG372D Codex-generated Local Diff Demo: implementation merged, but the
+   first demo run blocked because the archive-copied workspace collector
+   drifted from Git blob/index semantics, reported unrelated line-ending/hash
+   changes and wrote an empty patch.
+5. MG372D1 Codex Local Diff Collector Fix and Rerun Gate: use a detached Git
+   worktree, Git-index-based changed-file collection, collector diagnostics
+   and a non-empty patch requirement before calling the local diff demo pass.
+6. MG372E2 Codex-generated Draft PR Demo: if MG372D1 passes, take the
+   validated local docs-only diff and create one controller-created draft PR.
+   Keep this controller-created, not TUI-created.
+7. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-7. Any future real execution requires explicit human authorization.
-8. Any TUI-created real branch or PR requires a separate future authorization
+8. Any future real execution requires explicit human authorization.
+9. Any TUI-created real branch or PR requires a separate future authorization
    gate before branch or PR creation.
 
 ## Read-Only Audit

@@ -183,11 +183,14 @@ Do not skip directly to repeated PR creation.
 
 MG372D implements this proposal as a local-diff-only demo. It adds
 `codex-local-diff-preview` for CI-safe policy checks and an exact-confirmed
-`codex-local-diff` apply mode that calls Codex once in an isolated copied
-workspace, writes `codex-local-diff.patch` and stops before commit, push or PR
-creation.
+`codex-local-diff` apply mode that calls Codex once and stops before commit,
+push or PR creation. The first MG372D demo run blocked because the
+archive-copied workspace collector drifted from Git blob/index semantics and
+reported unrelated line-ending/hash differences.
 
-If MG372D passes, the next milestone should be:
+MG372D1 fixes that blocker by using a detached Git worktree, Git-index-based
+changed-file collection, collector diagnostics and a non-empty patch
+requirement. If MG372D1 passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo
