@@ -2038,9 +2038,14 @@ function Invoke-CodexDiffDraftPrDemo {
     $localAnyBranch = Get-DemoGitText -Arguments @("branch", "--list", "demo/mg372e2-codex-draft-pr-*") -AllowFailure
     $remoteAnyBranch = Get-DemoGitText -Arguments @("ls-remote", "--heads", "origin", "demo/mg372e2-codex-draft-pr-*") -AllowFailure
     $preflight.no_existing_demo_branch = ([string]::IsNullOrWhiteSpace($localExactBranch) -and [string]::IsNullOrWhiteSpace($remoteExactBranch) -and [string]::IsNullOrWhiteSpace($localAnyBranch) -and [string]::IsNullOrWhiteSpace($remoteAnyBranch))
-    $existingPrRaw = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "list", "--state", "all", "--search", "MG372E2 Demo: Codex-generated Draft PR in:title", "--json", "number,url,state,isDraft,headRefName") -CaptureOutput -AllowFailure
+    $existingPrRaw = Invoke-DemoExternalQuiet -FilePath "gh" -Arguments @("pr", "list", "--state", "all", "--limit", "100", "--json", "number,title,url,state,isDraft,headRefName") -CaptureOutput -AllowFailure
     $existingPr = @()
-    if (-not [string]::IsNullOrWhiteSpace($existingPrRaw)) { $existingPr = @($existingPrRaw | ConvertFrom-Json) }
+    if (-not [string]::IsNullOrWhiteSpace($existingPrRaw)) {
+      $existingPr = @($existingPrRaw | ConvertFrom-Json | Where-Object {
+        ([string]$_.headRefName -like "demo/mg372e2-codex-draft-pr-*") -or
+        ([string]$_.title).StartsWith($CodexDraftPrTitle)
+      })
+    }
     $preflight.no_existing_demo_pr = (@($existingPr).Count -eq 0)
 
     if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
