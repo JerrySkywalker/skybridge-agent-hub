@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture")]
+  [ValidateSet("local-safe", "status", "report", "controller-draft-pr", "controller-draft-pr-preview", "controller-draft-pr-status", "controller-draft-pr-report", "codex-local-diff", "codex-local-diff-preview", "codex-local-diff-status", "codex-local-diff-report", "codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture", "codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file")]
   [string]$Mode = "local-safe",
   [switch]$UseTempDatabase,
   [string]$ApiBase = "http://127.0.0.1:8787",
@@ -11,7 +11,10 @@ param(
   [switch]$NoOpenBrowser,
   [switch]$OpenReport,
   [switch]$Apply,
-  [string]$ConfirmationText = ""
+  [string]$ConfirmationText = "",
+  [int]$CodexTimeoutSeconds = 900,
+  [string]$CodexSandbox = "workspace-write",
+  [bool]$KeepCodexWorktree = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,12 +36,12 @@ $ControllerBaselineCommit = "c69f97cf4a3eeda0999877b83884513fba4f3bdc"
 $ControllerDemoFile = "docs/product/MG372B_CONTROLLER_DRAFT_PR_DEMO_ARTIFACT.md"
 $ControllerCommitMessage = "docs(demo): add MG372B controller draft PR artifact"
 $ControllerPrTitle = "MG372B Demo: Controller-created Draft PR"
-$CodexDiffSchema = "skybridge.mvp_demo.codex_local_diff.v2"
+$CodexDiffSchema = "skybridge.mvp_demo.codex_local_diff.v3"
 $CodexDiffOutputDir = ".agent/tmp/skybridge-mvp-codex-diff"
-$CodexDiffGoalId = "mg372d1-codex-local-diff-rerun-gate"
-$CodexDiffTaskId = "mg372d1-codex-local-diff-task-001"
-$CodexDiffWorkerId = "mg372d1-codex-local-diff-worker"
-$CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D1_RERUN_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO"
+$CodexDiffGoalId = "mg372d2-codex-local-diff-timeout-gate"
+$CodexDiffTaskId = "mg372d-codex-local-diff-task-001"
+$CodexDiffWorkerId = "mg372d2-codex-local-diff-worker"
+$CodexDiffConfirmationText = "I_UNDERSTAND_AUTHORIZE_MG372D2_RERUN_CODEX_ONCE_FOR_LOCAL_ARTIFACT_PRODUCTION_DEMO"
 $CodexDiffDemoFile = "docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
 $Artifacts = @(
   "mvp-demo-report.json",
@@ -73,6 +76,8 @@ $CodexDiffArtifacts = @(
   "codex-local-diff-worker.json",
   "codex-local-diff-preflight.json",
   "codex-local-diff-prompt.md",
+  "codex-local-diff-stdout.log",
+  "codex-local-diff-stderr.log",
   "codex-local-diff-last-message.md",
   "codex-local-diff-changed-files.json",
   "codex-local-diff-allowlist-check.json",
@@ -80,6 +85,8 @@ $CodexDiffArtifacts = @(
   "codex-local-diff.patch",
   "codex-local-diff-safety.json",
   "codex-local-diff-collector-diagnostics.json",
+  "codex-local-diff-execution-diagnostics.json",
+  "codex-local-diff-failure-classification.json",
   "codex-local-diff-artifact-index.json"
 )
 
@@ -1456,12 +1463,16 @@ function Get-CodexDiffArtifactPaths {
     preflight = Join-Path $ResolvedOutputDir "codex-local-diff-preflight.json"
     prompt = Join-Path $ResolvedOutputDir "codex-local-diff-prompt.md"
     last_message = Join-Path $ResolvedOutputDir "codex-local-diff-last-message.md"
+    stdout_log = Join-Path $ResolvedOutputDir "codex-local-diff-stdout.log"
+    stderr_log = Join-Path $ResolvedOutputDir "codex-local-diff-stderr.log"
     changed_files = Join-Path $ResolvedOutputDir "codex-local-diff-changed-files.json"
     allowlist = Join-Path $ResolvedOutputDir "codex-local-diff-allowlist-check.json"
     review_summary = Join-Path $ResolvedOutputDir "codex-local-diff-review-summary.md"
     patch = Join-Path $ResolvedOutputDir "codex-local-diff.patch"
     safety = Join-Path $ResolvedOutputDir "codex-local-diff-safety.json"
     collector_diagnostics = Join-Path $ResolvedOutputDir "codex-local-diff-collector-diagnostics.json"
+    execution_diagnostics = Join-Path $ResolvedOutputDir "codex-local-diff-execution-diagnostics.json"
+    failure_classification = Join-Path $ResolvedOutputDir "codex-local-diff-failure-classification.json"
     index = Join-Path $ResolvedOutputDir "codex-local-diff-artifact-index.json"
     workspace = Join-Path $ResolvedOutputDir "worktree"
     codex_jsonl = Join-Path $ResolvedOutputDir "codex-local-diff-codex.jsonl"
@@ -1548,35 +1559,22 @@ function New-CodexDiffPrompt {
     [string]$TaskIdValue
   )
   @"
-You are running the SkyBridge MG372D1 local Codex diff rerun demo inside an isolated Git worktree.
-
-Create exactly one docs-only artifact file:
-
+Create exactly this file:
 $CodexDiffDemoFile
 
-The file content must include:
+Write 8 to 20 lines of Markdown.
+Include these exact fields:
+generated_by=Codex
+source_milestone=MG372D2
+baseline_commit=$BaselineCommit
+task_id=$TaskIdValue
+token_printed=false
 
-- generated_by=Codex
-- source milestone=MG372D1
-- baseline commit=$BaselineCommit
-- task_id=$TaskIdValue
-- what the demo proves
-- safety boundaries
-- token_printed=false
-
-Strict boundaries:
-
-- modify only $CodexDiffDemoFile
-- do not run git add
-- do not run git commit
-- do not run git push
-- do not run gh pr create
-- do not create or modify any PR
-- do not read or print secrets
-- do not modify app, server, workflow, package, Docker, runtime or production files
-- do not write tokens, environment dumps, raw stdout/stderr, raw prompts or secrets
-
-Finish after writing the file. Keep the response concise.
+Also include one short bullet for what the demo proves and one short bullet for safety boundaries.
+Do not modify any other file.
+Do not run tests, builds, git add, git commit, git push, or gh pr create.
+Do not inspect secrets or read .env files.
+Finish immediately after writing the file.
 "@
 }
 
@@ -1604,17 +1602,114 @@ function Resolve-CodexDiffCommand {
   }
 }
 
+function Get-CodexDiffVersion {
+  param($CommandSpec)
+  try {
+    $version = Invoke-DemoExternalQuiet -FilePath ([string]$CommandSpec.file_path) -Arguments (@($CommandSpec.argument_prefix) + @("--version")) -CaptureOutput -AllowFailure
+    if ([string]::IsNullOrWhiteSpace($version)) { return $null }
+    return (($version -replace "`r?`n", " ").Trim())
+  } catch {
+    return $null
+  }
+}
+
+function New-CodexDiffExecutionDiagnostics {
+  param(
+    [string]$GeneratedAt,
+    [string]$StdoutPath,
+    [string]$StderrPath,
+    [string]$LastMessagePath,
+    [int]$TimeoutSeconds,
+    [string]$Command = "codex exec"
+  )
+  [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.execution_diagnostics.v1"
+    generated_at = $GeneratedAt
+    codex_command = $Command
+    codex_version = $null
+    codex_available = $false
+    codex_timeout_seconds = [int]$TimeoutSeconds
+    codex_started_at = $null
+    codex_completed_at = $null
+    codex_duration_ms = $null
+    codex_exit_code = $null
+    codex_timed_out = $false
+    codex_stdout_path = $StdoutPath.Replace("\", "/")
+    codex_stderr_path = $StderrPath.Replace("\", "/")
+    codex_last_message_path = $LastMessagePath.Replace("\", "/")
+    codex_process_killed = $false
+    codex_artifact_created_before_timeout = $false
+    codex_artifact_size_bytes = 0
+    codex_transport_error_detected = $false
+    codex_auth_or_login_error_detected = $false
+    codex_rate_limit_or_usage_error_detected = $false
+    codex_network_error_detected = $false
+    token_printed = $false
+  }
+}
+
+function Get-CodexDiffFailureSignals {
+  param(
+    [string]$StdoutPath,
+    [string]$StderrPath,
+    [string]$LastMessagePath
+  )
+  $combined = ""
+  foreach ($path in @($StdoutPath, $StderrPath, $LastMessagePath)) {
+    if ($path -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+      $text = Get-Content -Raw -LiteralPath $path -ErrorAction SilentlyContinue
+      if ($text) { $combined = "$combined`n$text" }
+    }
+  }
+  [pscustomobject]@{
+    transport = [bool]($combined -match "(?i)\btransport\b|connection reset|stream error|protocol error")
+    auth = [bool]($combined -match "(?i)not logged in|login required|unauthorized|authentication|auth error|invalid api key")
+    usage = [bool]($combined -match "(?i)rate limit|quota|usage limit|insufficient quota|too many requests")
+    network = [bool]($combined -match "(?i)network|dns|timed out connecting|connection refused|tls|proxy")
+  }
+}
+
+function Get-CodexDiffFailureClass {
+  param(
+    [bool]$CodexAvailable,
+    [bool]$PreflightPassed,
+    [bool]$CodexCalled,
+    [bool]$TimedOut,
+    [int]$ExitCode,
+    [bool]$TargetExists,
+    [bool]$AllowlistPassed,
+    [bool]$PatchNonEmpty,
+    $Signals
+  )
+  if (-not $CodexAvailable) { return "codex_cli_unavailable" }
+  if (-not $PreflightPassed -and -not $CodexCalled) { return "codex_preflight_failed" }
+  if ($Signals -and $Signals.transport) { return "codex_transport_error" }
+  if ($Signals -and $Signals.auth) { return "codex_auth_or_login_error" }
+  if ($Signals -and $Signals.usage) { return "codex_usage_or_rate_limit_error" }
+  if ($Signals -and $Signals.network) { return "codex_network_error" }
+  if ($TimedOut -and -not $TargetExists) { return "codex_exec_timeout_no_artifact" }
+  if ($TimedOut -and $TargetExists) { return "codex_exec_timeout_with_artifact" }
+  if ($CodexCalled -and $ExitCode -ne 0 -and -not $TargetExists) { return "codex_exec_nonzero_no_artifact" }
+  if ($CodexCalled -and $ExitCode -ne 0 -and $TargetExists) { return "codex_exec_nonzero_with_artifact" }
+  if (-not $TargetExists) { return "codex_target_missing" }
+  if (-not $AllowlistPassed) { return "codex_modified_disallowed_files" }
+  if (-not $PatchNonEmpty) { return "codex_empty_patch" }
+  return "none"
+}
+
 function Invoke-CodexDiffProcess {
   param(
     [Parameter(Mandatory = $true)]$CommandSpec,
     [Parameter(Mandatory = $true)][string]$WorkspacePath,
     [Parameter(Mandatory = $true)][string]$PromptPath,
     [Parameter(Mandatory = $true)][string]$LastMessagePath,
-    [Parameter(Mandatory = $true)][string]$LogPath,
-    [int]$TimeoutMinutes = 15
+    [Parameter(Mandatory = $true)][string]$StdoutPath,
+    [Parameter(Mandatory = $true)][string]$StderrPath,
+    [Parameter(Mandatory = $true)][string]$TargetArtifactPath,
+    [int]$TimeoutSeconds = 900,
+    [string]$Sandbox = "workspace-write"
   )
-  $errPath = "$LogPath.err"
-  $arguments = @($CommandSpec.argument_prefix) + @("exec", "--sandbox", "workspace-write", "--json", "--output-last-message", $LastMessagePath, "-")
+  $arguments = @($CommandSpec.argument_prefix) + @("exec", "--sandbox", $Sandbox, "--color", "never", "--ephemeral", "--json", "--output-last-message", $LastMessagePath, "-")
   $startParams = @{
     FilePath = [string]$CommandSpec.file_path
     ArgumentList = $arguments
@@ -1622,16 +1717,50 @@ function Invoke-CodexDiffProcess {
     NoNewWindow = $true
     PassThru = $true
     RedirectStandardInput = $PromptPath
-    RedirectStandardOutput = $LogPath
-    RedirectStandardError = $errPath
+    RedirectStandardOutput = $StdoutPath
+    RedirectStandardError = $StderrPath
   }
+  $startedAt = Get-DemoUtcNow
+  $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
   $process = Start-Process @startParams
-  $timeoutMs = [Math]::Max(1, $TimeoutMinutes) * 60 * 1000
+  $timeoutMs = [Math]::Max(1, $TimeoutSeconds) * 1000
   if (-not $process.WaitForExit($timeoutMs)) {
     try { $process.Kill($true) } catch { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
-    return [pscustomobject]@{ ok = $false; exit_code = 124; timed_out = $true; log_path = $LogPath; error_log_path = $errPath; token_printed = $false }
+    $stopwatch.Stop()
+    $artifactExists = [bool](Test-Path -LiteralPath $TargetArtifactPath -PathType Leaf)
+    $artifactSize = if ($artifactExists) { (Get-Item -LiteralPath $TargetArtifactPath).Length } else { 0 }
+    return [pscustomobject]@{
+      ok = $false
+      exit_code = 124
+      timed_out = $true
+      stdout_path = $StdoutPath
+      stderr_path = $StderrPath
+      started_at = $startedAt
+      completed_at = Get-DemoUtcNow
+      duration_ms = [int64]$stopwatch.ElapsedMilliseconds
+      process_killed = $true
+      artifact_created_before_timeout = $artifactExists
+      artifact_size_bytes = $artifactSize
+      token_printed = $false
+    }
   }
-  [pscustomobject]@{ ok = ($process.ExitCode -eq 0); exit_code = $process.ExitCode; timed_out = $false; log_path = $LogPath; error_log_path = $errPath; token_printed = $false }
+  $stopwatch.Stop()
+  $artifactExists = [bool](Test-Path -LiteralPath $TargetArtifactPath -PathType Leaf)
+  $artifactSize = if ($artifactExists) { (Get-Item -LiteralPath $TargetArtifactPath).Length } else { 0 }
+  [pscustomobject]@{
+    ok = ($process.ExitCode -eq 0)
+    exit_code = $process.ExitCode
+    timed_out = $false
+    stdout_path = $StdoutPath
+    stderr_path = $StderrPath
+    started_at = $startedAt
+    completed_at = Get-DemoUtcNow
+    duration_ms = [int64]$stopwatch.ElapsedMilliseconds
+    process_killed = $false
+    artifact_created_before_timeout = $false
+    artifact_size_bytes = $artifactSize
+    token_printed = $false
+  }
 }
 
 function New-CodexDiffWorkspace {
@@ -1734,10 +1863,12 @@ function Write-CodexDiffArtifacts {
     $ChangedFiles,
     $Allowlist,
     $CollectorDiagnostics,
+    $ExecutionDiagnostics,
+    $FailureClassification,
     $Safety
   )
   $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $ResolvedOutputDir
-  foreach ($file in @($paths.prompt, $paths.last_message, $paths.review_summary, $paths.patch)) {
+  foreach ($file in @($paths.prompt, $paths.last_message, $paths.stdout_log, $paths.stderr_log, $paths.review_summary, $paths.patch)) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { "" | Set-Content -LiteralPath $file -Encoding UTF8 }
   }
   Write-DemoJsonFile -Path $paths.state -Value $State
@@ -1749,7 +1880,21 @@ function Write-CodexDiffArtifacts {
   if ($null -eq $CollectorDiagnostics) {
     $CollectorDiagnostics = New-CodexDiffCollectorDiagnostics -GeneratedAt $Report.generated_at -BaselineCommit $Report.baseline_commit -WorkspacePath $Report.workspace_path -PatchPath $paths.patch
   }
+  if ($null -eq $ExecutionDiagnostics) {
+    $ExecutionDiagnostics = New-CodexDiffExecutionDiagnostics -GeneratedAt $Report.generated_at -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message -TimeoutSeconds $CodexTimeoutSeconds
+  }
+  if ($null -eq $FailureClassification) {
+    $FailureClassification = [ordered]@{
+      schema = "skybridge.mvp_demo.codex_local_diff.failure_classification.v1"
+      generated_at = $Report.generated_at
+      codex_failure_class = $Report.codex_failure_class
+      blockers = @($Report.blockers)
+      token_printed = $false
+    }
+  }
   Write-DemoJsonFile -Path $paths.collector_diagnostics -Value $CollectorDiagnostics
+  Write-DemoJsonFile -Path $paths.execution_diagnostics -Value $ExecutionDiagnostics
+  Write-DemoJsonFile -Path $paths.failure_classification -Value $FailureClassification
   Write-DemoJsonFile -Path $paths.safety -Value $Safety
   Write-DemoJsonFile -Path $paths.report_json -Value $Report
   $relativeOutput = $OutputDir.Replace("\", "/")
@@ -1763,6 +1908,8 @@ function Write-CodexDiffArtifacts {
     diff_patch_path = $Report.diff_patch_path
     review_summary_path = $Report.review_summary_path
     collector_diagnostics_path = "$relativeOutput/codex-local-diff-collector-diagnostics.json"
+    execution_diagnostics_path = "$relativeOutput/codex-local-diff-execution-diagnostics.json"
+    failure_classification_path = "$relativeOutput/codex-local-diff-failure-classification.json"
     token_printed = $false
   }
   Write-DemoJsonFile -Path $paths.index -Value $index
@@ -1779,6 +1926,10 @@ function Write-CodexDiffArtifacts {
     "- codex_called: $($Report.codex_called)",
     "- codex_call_count: $($Report.codex_call_count)",
     "- codex_exit_code: $($Report.codex_exit_code)",
+    "- codex_timed_out: $($Report.codex_timed_out)",
+    "- codex_timeout_seconds: $($Report.codex_timeout_seconds)",
+    "- codex_duration_ms: $($Report.codex_duration_ms)",
+    "- codex_failure_class: $($Report.codex_failure_class)",
     "- isolated_workspace_used: $($Report.isolated_workspace_used)",
     "- workspace_setup_method: $($Report.workspace_setup_method)",
     "- workspace_clean_before_codex: $($Report.workspace_clean_before_codex)",
@@ -1792,6 +1943,7 @@ function Write-CodexDiffArtifacts {
     "- review_summary_path: $($Report.review_summary_path)",
     "- artifact_file_path: $($Report.artifact_file_path)",
     "- target_artifact_exists: $($Report.target_artifact_exists)",
+    "- target_artifact_size_bytes: $($Report.target_artifact_size_bytes)",
     "- main_worktree_clean_after: $($Report.main_worktree_clean_after)",
     "- task_created: $($Report.task_created)",
     "- worker_registered: $($Report.worker_registered)",
@@ -1833,7 +1985,7 @@ function New-CodexDiffReport {
     schema = $CodexDiffSchema
     generated_at = $GeneratedAt
     mode = "codex-local-diff"
-    rerun_milestone = "MG372D1"
+    rerun_milestone = "MG372D2"
     baseline_commit = $BaselineCommit
     implementation_commit = $ImplementationCommit
     project_id = $ProjectId
@@ -1853,9 +2005,18 @@ function New-CodexDiffReport {
     would_generate_diff = $true
     would_use_git_index_collector = $true
     would_generate_non_empty_patch = $true
+    would_run_codex_doctor = $true
+    codex_available = $false
     codex_called = $false
     codex_call_count = 0
     codex_exit_code = $null
+    codex_timed_out = $false
+    codex_timeout_seconds = [int]$CodexTimeoutSeconds
+    codex_duration_ms = $null
+    codex_failure_class = "none"
+    codex_stdout_path = "$relativeOutput/codex-local-diff-stdout.log"
+    codex_stderr_path = "$relativeOutput/codex-local-diff-stderr.log"
+    codex_last_message_path = "$relativeOutput/codex-local-diff-last-message.md"
     isolated_workspace_used = $false
     workspace_setup_method = "git_worktree"
     workspace_path = $WorkspacePath.Replace("\", "/")
@@ -1870,6 +2031,7 @@ function New-CodexDiffReport {
     review_summary_path = "$relativeOutput/codex-local-diff-review-summary.md"
     artifact_file_path = "$relativeOutput/worktree/$CodexDiffDemoFile"
     target_artifact_exists = $false
+    target_artifact_size_bytes = 0
     artifact_report_written = $true
     artifacts_written = $true
     report_markdown_path = "$relativeOutput/codex-local-diff-report.md"
@@ -1923,6 +2085,10 @@ function Invoke-CodexLocalDiffDemo {
   $finalTask = $null
   $finalWorker = $null
   $codexExitCode = $null
+  $codexTimedOut = $false
+  $codexDurationMs = $null
+  $codexFailureClass = "none"
+  $codexAvailable = $false
   $codexCalled = $false
   $codexCallCount = 0
   $workspaceUsed = $false
@@ -1946,6 +2112,13 @@ function Invoke-CodexLocalDiffDemo {
     apply = [bool]$Apply
     git_available = [bool](Get-Command git -ErrorAction SilentlyContinue)
     codex_available = [bool](Get-Command codex -ErrorAction SilentlyContinue)
+    codex_version = $null
+    codex_preflight_warning = $null
+    codex_preflight_blocker = $null
+    codex_timeout_seconds = [int]$CodexTimeoutSeconds
+    output_dir_writable = $false
+    worktree_writable = $false
+    target_docs_dir_ready = $false
     repo_clean = $false
     current_branch = ""
     current_branch_is_main = $false
@@ -2013,8 +2186,21 @@ function Invoke-CodexLocalDiffDemo {
     token_printed = $false
   }
   $collectorDiagnostics = New-CodexDiffCollectorDiagnostics -GeneratedAt $generatedAt -BaselineCommit $baselineCommit -WorkspacePath $workspacePath -PatchPath $paths.patch
+  $executionDiagnostics = New-CodexDiffExecutionDiagnostics -GeneratedAt $generatedAt -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message -TimeoutSeconds $CodexTimeoutSeconds
+  $failureClassification = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.failure_classification.v1"
+    generated_at = $generatedAt
+    codex_failure_class = "none"
+    blockers = @()
+    token_printed = $false
+  }
 
   try {
+    $outputProbe = Join-Path $resolvedOutputDir ".mg372d2-output-probe"
+    "probe" | Set-Content -LiteralPath $outputProbe -Encoding UTF8
+    Remove-Item -LiteralPath $outputProbe -Force
+    $preflight.output_dir_writable = $true
+
     $preflight.repo_clean = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
     $preflight.current_branch = Get-DemoGitText -Arguments @("branch", "--show-current") -AllowFailure
     $preflight.current_branch_is_main = ([string]$preflight.current_branch -eq "main")
@@ -2024,9 +2210,27 @@ function Invoke-CodexLocalDiffDemo {
     $mergeBaseExit = Invoke-DemoExternalQuiet -FilePath "git" -Arguments @("merge-base", "--is-ancestor", "d32b2d8ef63dc229b746e77e7f585938a84b7231", "HEAD") -AllowFailure
     $preflight.contains_mg372d_baseline = ([int]$mergeBaseExit -eq 0)
 
+    if ($preflight.codex_available) {
+      try {
+        $doctorCommand = Resolve-CodexDiffCommand
+        $executionDiagnostics.codex_available = $true
+        $executionDiagnostics.codex_version = Get-CodexDiffVersion -CommandSpec $doctorCommand
+        $preflight.codex_version = $executionDiagnostics.codex_version
+        if ([string]::IsNullOrWhiteSpace([string]$executionDiagnostics.codex_version)) {
+          $preflight.codex_preflight_warning = "codex_version_unavailable"
+          $warnings.Add("codex_preflight_warning_version_unavailable") | Out-Null
+        }
+      } catch {
+        $preflight.codex_preflight_warning = "codex_command_resolution_failed"
+        $warnings.Add("codex_preflight_warning_command_resolution_failed") | Out-Null
+      }
+    }
+    $codexAvailable = [bool]$preflight.codex_available
+
     if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
+    if (-not $preflight.output_dir_writable) { $blockers.Add("output_dir_not_writable") | Out-Null }
     if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed") | Out-Null }
-    if (-not $isPreview -and -not $preflight.codex_available) { $blockers.Add("codex_unavailable") | Out-Null }
+    if (-not $isPreview -and -not $preflight.codex_available) { $blockers.Add("codex_cli_unavailable") | Out-Null }
     if (-not $isPreview -and -not $preflight.confirmation_text_matched) { $blockers.Add("confirmation_text_mismatch") | Out-Null }
     if (-not $isPreview -and -not $preflight.repo_clean) { $blockers.Add("repo_not_clean") | Out-Null }
     if (-not $isPreview -and -not $preflight.current_branch_is_main) { $blockers.Add("not_on_main") | Out-Null }
@@ -2044,13 +2248,14 @@ function Invoke-CodexLocalDiffDemo {
       $demoResult = if ($validationStatus -eq "preview_passed") { "pass" } else { "blocked" }
       $report.validation_status = $validationStatus
       $report.demo_result = $demoResult
+      $report.codex_available = [bool]$preflight.codex_available
       $report.main_worktree_clean_after = $preflight.repo_clean
-      Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -Safety $safety
+      Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
       if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
       return
     }
 
-    Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -Safety $safety
+    Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
     if (-not $preflight.preflight_passed) { throw "MG372D Codex local diff preflight failed." }
 
     $script:ResolvedApiBase = $ApiBase
@@ -2101,6 +2306,15 @@ function Invoke-CodexLocalDiffDemo {
 
     New-CodexDiffWorkspace -WorkspacePath $workspacePath -CommitSha $implementationCommit
     $workspaceUsed = $true
+    $targetDir = Join-Path $workspacePath "docs/product"
+    if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) {
+      New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+    }
+    $writableProbe = Join-Path $targetDir ".mg372d2-write-probe"
+    "probe" | Set-Content -LiteralPath $writableProbe -Encoding UTF8
+    Remove-Item -LiteralPath $writableProbe -Force
+    $preflight.worktree_writable = $true
+    $preflight.target_docs_dir_ready = $true
     $collectorDiagnostics.pre_codex_status_porcelain = @(Get-CodexDiffStatusPorcelain -WorkspacePath $workspacePath)
     $collectorDiagnostics.workspace_clean_before_codex = (@($collectorDiagnostics.pre_codex_status_porcelain).Count -eq 0)
     if (-not $collectorDiagnostics.workspace_clean_before_codex) {
@@ -2108,12 +2322,33 @@ function Invoke-CodexLocalDiffDemo {
       throw "MG372D1 Codex local diff worktree was dirty before Codex."
     }
     $codexCommand = Resolve-CodexDiffCommand
+    $executionDiagnostics.codex_command = "$($codexCommand.display_command) exec --sandbox $CodexSandbox --json --output-last-message <last-message> -"
+    $executionDiagnostics.codex_available = $true
+    if ([string]::IsNullOrWhiteSpace([string]$executionDiagnostics.codex_version)) {
+      $executionDiagnostics.codex_version = Get-CodexDiffVersion -CommandSpec $codexCommand
+    }
     $codexCalled = $true
     $codexCallCount = 1
     $safety.safety_flags.codex_called = $true
     $safety.safety_flags.codex_call_count = 1
-    $codex = Invoke-CodexDiffProcess -CommandSpec $codexCommand -WorkspacePath $workspacePath -PromptPath $paths.prompt -LastMessagePath $paths.last_message -LogPath $paths.codex_jsonl
+    $artifactFile = Join-Path $workspacePath ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+    $codex = Invoke-CodexDiffProcess -CommandSpec $codexCommand -WorkspacePath $workspacePath -PromptPath $paths.prompt -LastMessagePath $paths.last_message -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -TargetArtifactPath $artifactFile -TimeoutSeconds $CodexTimeoutSeconds -Sandbox $CodexSandbox
     $codexExitCode = $codex.exit_code
+    $codexTimedOut = [bool]$codex.timed_out
+    $codexDurationMs = $codex.duration_ms
+    $executionDiagnostics.codex_started_at = $codex.started_at
+    $executionDiagnostics.codex_completed_at = $codex.completed_at
+    $executionDiagnostics.codex_duration_ms = $codex.duration_ms
+    $executionDiagnostics.codex_exit_code = $codex.exit_code
+    $executionDiagnostics.codex_timed_out = [bool]$codex.timed_out
+    $executionDiagnostics.codex_process_killed = [bool]$codex.process_killed
+    $executionDiagnostics.codex_artifact_created_before_timeout = [bool]$codex.artifact_created_before_timeout
+    $executionDiagnostics.codex_artifact_size_bytes = [int64]$codex.artifact_size_bytes
+    $signals = Get-CodexDiffFailureSignals -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message
+    $executionDiagnostics.codex_transport_error_detected = [bool]$signals.transport
+    $executionDiagnostics.codex_auth_or_login_error_detected = [bool]$signals.auth
+    $executionDiagnostics.codex_rate_limit_or_usage_error_detected = [bool]$signals.usage
+    $executionDiagnostics.codex_network_error_detected = [bool]$signals.network
 
     $collectorDiagnostics.post_codex_status_porcelain = @(Get-CodexDiffStatusPorcelain -WorkspacePath $workspacePath)
     $changedFiles = @(ConvertFrom-CodexDiffStatusPorcelain -StatusLines $collectorDiagnostics.post_codex_status_porcelain)
@@ -2127,7 +2362,6 @@ function Invoke-CodexLocalDiffDemo {
     Write-CodexDiffPatch -WorkspacePath $workspacePath -PatchPath $paths.patch
     $collectorDiagnostics.git_diff_name_only = @(Get-CodexDiffNameOnly -WorkspacePath $workspacePath)
     $collectorDiagnostics.patch_non_empty = ((Test-Path -LiteralPath $paths.patch -PathType Leaf) -and ((Get-Item -LiteralPath $paths.patch).Length -gt 0) -and [bool](Select-String -LiteralPath $paths.patch -Pattern ([regex]::Escape($CodexDiffDemoFile)) -Quiet))
-    $artifactFile = Join-Path $workspacePath ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
     $collectorDiagnostics.target_artifact_exists = [bool](Test-Path -LiteralPath $artifactFile -PathType Leaf)
     if ($collectorDiagnostics.target_artifact_exists) {
       $collectorDiagnostics.target_artifact_size_bytes = (Get-Item -LiteralPath $artifactFile).Length
@@ -2135,7 +2369,8 @@ function Invoke-CodexLocalDiffDemo {
     $workspaceHead = Get-DemoGitText -Arguments @("-C", $workspacePath, "rev-parse", "HEAD") -AllowFailure
     $commitCreated = (-not [string]::IsNullOrWhiteSpace($workspaceHead) -and $workspaceHead -ne $implementationCommit)
 
-    if (-not $codex.ok) { $blockers.Add("codex_exec_failed") | Out-Null }
+    $codexFailureClass = Get-CodexDiffFailureClass -CodexAvailable $codexAvailable -PreflightPassed $preflight.preflight_passed -CodexCalled $codexCalled -TimedOut $codexTimedOut -ExitCode ([int]$codexExitCode) -TargetExists ([bool]$collectorDiagnostics.target_artifact_exists) -AllowlistPassed ([bool]$allowlist.docs_only_allowlist_passed) -PatchNonEmpty ([bool]$collectorDiagnostics.patch_non_empty) -Signals $signals
+    if (-not $codex.ok) { $blockers.Add($codexFailureClass) | Out-Null }
     if (-not $collectorDiagnostics.target_artifact_exists) { $blockers.Add("target_artifact_missing_after_codex") | Out-Null }
     if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed_after_codex") | Out-Null }
     if (-not $collectorDiagnostics.patch_non_empty) { $blockers.Add("empty_diff_patch_after_codex") | Out-Null }
@@ -2149,6 +2384,9 @@ function Invoke-CodexLocalDiffDemo {
         "- codex_called: true",
         "- codex_call_count: 1",
         "- codex_exit_code: $codexExitCode",
+        "- codex_timed_out: $codexTimedOut",
+        "- codex_duration_ms: $codexDurationMs",
+        "- codex_failure_class: $codexFailureClass",
         "- changed_files: $(@($changedFiles) -join ', ')",
         "- docs_only_allowlist_passed: true",
         "- diff_patch_path: $($OutputDir.Replace('\', '/'))/codex-local-diff.patch",
@@ -2207,6 +2445,9 @@ function Invoke-CodexLocalDiffDemo {
         "- codex_called: $codexCalled",
         "- codex_call_count: $codexCallCount",
         "- codex_exit_code: $codexExitCode",
+        "- codex_timed_out: $codexTimedOut",
+        "- codex_duration_ms: $codexDurationMs",
+        "- codex_failure_class: $codexFailureClass",
         "- changed_files: $(@($changedFiles) -join ', ')",
         "- docs_only_allowlist_passed: $($allowlist.docs_only_allowlist_passed)",
         "- diff_patch_non_empty: $($collectorDiagnostics.patch_non_empty)",
@@ -2219,6 +2460,9 @@ function Invoke-CodexLocalDiffDemo {
     }
   } catch {
     if (@($blockers).Count -lt 1) { $blockers.Add("codex_local_diff_demo_failed") | Out-Null }
+    if ($codexFailureClass -eq "none") {
+      $codexFailureClass = Get-CodexDiffFailureClass -CodexAvailable $codexAvailable -PreflightPassed $preflight.preflight_passed -CodexCalled $codexCalled -TimedOut $codexTimedOut -ExitCode ([int]($codexExitCode ?? 0)) -TargetExists ([bool]$collectorDiagnostics.target_artifact_exists) -AllowlistPassed ([bool]$allowlist.docs_only_allowlist_passed) -PatchNonEmpty ([bool]$collectorDiagnostics.patch_non_empty) -Signals $null
+    }
     $validationStatus = "failed"
     $demoResult = if ($codexCalled -or $workspaceUsed) { "partial" } else { "blocked" }
     if ($taskStarted -and -not $taskCompleted) { $taskBlocked = $true }
@@ -2245,9 +2489,17 @@ function Invoke-CodexLocalDiffDemo {
   $report.task_failed = [bool]$taskFailed
   $report.task_blocked = [bool]$taskBlocked
   $report.validation_status = $validationStatus
+  $report.codex_available = [bool]$codexAvailable
   $report.codex_called = [bool]$codexCalled
   $report.codex_call_count = [int]$codexCallCount
   $report.codex_exit_code = $codexExitCode
+  $report.codex_timed_out = [bool]$codexTimedOut
+  $report.codex_timeout_seconds = [int]$CodexTimeoutSeconds
+  $report.codex_duration_ms = $codexDurationMs
+  $report.codex_failure_class = $codexFailureClass
+  $report.codex_stdout_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-stdout.log"
+  $report.codex_stderr_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-stderr.log"
+  $report.codex_last_message_path = "$($OutputDir.Replace('\', '/'))/codex-local-diff-last-message.md"
   $report.isolated_workspace_used = [bool]$workspaceUsed
   $report.workspace_setup_method = "git_worktree"
   $report.workspace_path = $workspacePath.Replace("\", "/")
@@ -2260,8 +2512,9 @@ function Invoke-CodexLocalDiffDemo {
   $report.diff_patch_non_empty = [bool]$collectorDiagnostics.patch_non_empty
   $report.artifact_file_path = "$($OutputDir.Replace('\', '/'))/worktree/$CodexDiffDemoFile"
   $report.target_artifact_exists = [bool]$collectorDiagnostics.target_artifact_exists
+  $report.target_artifact_size_bytes = [int64]$collectorDiagnostics.target_artifact_size_bytes
   $report.demo_result = $demoResult
-  $report.real_worker_execution = [bool]($taskClaimed -and $taskStarted -and $taskCompleted)
+  $report.real_worker_execution = [bool]($taskClaimed -and $taskStarted)
   $report.commit_created = [bool]$commitCreated
   $report.blockers = @($blockers)
   $report.warnings = @($warnings)
@@ -2270,6 +2523,8 @@ function Invoke-CodexLocalDiffDemo {
   $state.codex_called = [bool]$codexCalled
   $state.codex_call_count = [int]$codexCallCount
   $state.codex_exit_code = $codexExitCode
+  $state.codex_timed_out = [bool]$codexTimedOut
+  $state.codex_failure_class = $codexFailureClass
   $state.changed_files = @($changedFiles)
   $state.workspace_clean_before_codex = [bool]$collectorDiagnostics.workspace_clean_before_codex
   $state.git_index_collector_used = $true
@@ -2285,11 +2540,15 @@ function Invoke-CodexLocalDiffDemo {
   $workerArtifact.worker_registered = [bool]$workerRegistered
   $workerArtifact.final_worker = $finalWorker
   $preflight.blockers = @($blockers)
-  if (-not $isPreview) { $preflight.preflight_passed = (@($blockers | Where-Object { $_ -in @("git_unavailable", "codex_unavailable", "confirmation_text_mismatch", "repo_not_clean", "not_on_main", "main_not_synced_with_origin", "mg372d_baseline_missing", "existing_codex_diff_workspace") }).Count -eq 0) }
+  if (-not $isPreview) { $preflight.preflight_passed = (@($blockers | Where-Object { $_ -in @("git_unavailable", "output_dir_not_writable", "codex_cli_unavailable", "confirmation_text_mismatch", "repo_not_clean", "not_on_main", "main_not_synced_with_origin", "mg372d_baseline_missing", "existing_codex_diff_workspace") }).Count -eq 0) }
   $changedFilesArtifact.generated_at = $report.generated_at
   $changedFilesArtifact.changed_files = @($changedFiles)
   $collectorDiagnostics.generated_at = $report.generated_at
-  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -Safety $safety
+  $executionDiagnostics.generated_at = $report.generated_at
+  $failureClassification.generated_at = $report.generated_at
+  $failureClassification.codex_failure_class = $codexFailureClass
+  $failureClassification.blockers = @($blockers)
+  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
   if ($OpenReport) { Invoke-Item -LiteralPath $paths.report_md }
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
 }
@@ -2408,7 +2667,7 @@ function Invoke-CodexLocalDiffCollectorFixture {
         "# MG372D Codex Local Diff Artifact",
         "",
         "generated_by=synthetic-smoke",
-        "source milestone=MG372D1",
+        "source_milestone=MG372D2",
         "baseline commit=$implementationCommit",
         "task_id=$CodexDiffTaskId",
         "token_printed=false"
@@ -2480,7 +2739,7 @@ function Invoke-CodexLocalDiffCollectorFixture {
   $collectorDiagnostics.generated_at = $report.generated_at
 
   $review = @(
-    "# MG372D1 Codex Local Diff Collector Fixture",
+    "# MG372D2 Codex Local Diff Collector Fixture",
     "",
     "- mode: $Mode",
     "- fixture_kind: $fixtureKind",
@@ -2496,6 +2755,280 @@ function Invoke-CodexLocalDiffCollectorFixture {
   )
   $review | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
   Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -Safety $safety
+  if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
+}
+
+function New-CodexDiffMockExecutable {
+  param(
+    [string]$Path,
+    [ValidateSet("success", "timeout", "disallowed-file")][string]$Behavior
+  )
+  $content = @"
+param([Parameter(ValueFromRemainingArguments=`$true)][string[]]`$RemainingArgs)
+`$ErrorActionPreference = "Stop"
+`$lastMessagePath = ""
+for (`$i = 0; `$i -lt `$RemainingArgs.Count; `$i++) {
+  if (`$RemainingArgs[`$i] -eq "--output-last-message" -and `$i + 1 -lt `$RemainingArgs.Count) {
+    `$lastMessagePath = `$RemainingArgs[`$i + 1]
+  }
+}
+if ("$Behavior" -eq "timeout") {
+  Start-Sleep -Seconds 5
+  exit 0
+}
+`$target = Join-Path (Get-Location) "docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md"
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent `$target) | Out-Null
+@(
+  "# MG372D Codex Local Diff Artifact",
+  "",
+  "generated_by=Codex",
+  "source_milestone=MG372D2",
+  "task_id=mg372d-codex-local-diff-task-001",
+  "token_printed=false",
+  "- proves: mock Codex artifact production path",
+  "- safety: no PR, push or commit"
+) | Set-Content -LiteralPath `$target -Encoding UTF8
+if ("$Behavior" -eq "disallowed-file") {
+  `$bad = Join-Path (Get-Location) "docs/product/MG372D_NOT_ALLOWLISTED_LOCAL_DIFF_ARTIFACT.md"
+  "token_printed=false" | Set-Content -LiteralPath `$bad -Encoding UTF8
+}
+if (-not [string]::IsNullOrWhiteSpace(`$lastMessagePath)) {
+  "mock Codex completed token_printed=false" | Set-Content -LiteralPath `$lastMessagePath -Encoding UTF8
+}
+exit 0
+"@
+  Set-Content -LiteralPath $Path -Value $content -Encoding UTF8
+}
+
+function Invoke-CodexLocalDiffMockFixture {
+  $resolvedOutputDir = Resolve-DemoPath $OutputDir
+  New-Item -ItemType Directory -Force -Path $resolvedOutputDir | Out-Null
+  $paths = Get-CodexDiffArtifactPaths -ResolvedOutputDir $resolvedOutputDir
+  $generatedAt = Get-DemoUtcNow
+  $implementationCommit = Get-DemoGitText -Arguments @("rev-parse", "HEAD")
+  $workspacePath = $paths.workspace
+  $fixtureKind = switch ($Mode) {
+    "codex-local-diff-timeout-fixture" { "timeout" }
+    "codex-local-diff-mock-disallowed-file" { "disallowed-file" }
+    default { "success" }
+  }
+  $mockPath = Join-Path $resolvedOutputDir "mock-codex.ps1"
+  $blockers = [System.Collections.Generic.List[string]]::new()
+  $warnings = [System.Collections.Generic.List[string]]::new()
+  $changedFiles = @()
+  $codexExitCode = $null
+  $codexTimedOut = $false
+  $codexDurationMs = $null
+  $codexFailureClass = "none"
+  $report = New-CodexDiffReport -GeneratedAt $generatedAt -BaselineCommit $implementationCommit -ImplementationCommit $implementationCommit -WorkspacePath $workspacePath
+  $report.mode = $Mode
+  $report.fixture_mode = $true
+  $report.codex_available = $true
+  $report.isolated_workspace_used = $true
+  $report.workspace_setup_method = "git_worktree"
+  $report.git_index_collector_used = $true
+  $report.hash_comparison_used = $false
+
+  $prompt = New-CodexDiffPrompt -BaselineCommit $implementationCommit -TaskIdValue $CodexDiffTaskId
+  $prompt | Set-Content -LiteralPath $paths.prompt -Encoding UTF8
+  $allowlist = Test-CodexDiffAllowlist -ChangedFiles @()
+  $collectorDiagnostics = New-CodexDiffCollectorDiagnostics -GeneratedAt $generatedAt -BaselineCommit $implementationCommit -WorkspacePath $workspacePath -PatchPath $paths.patch
+  $executionDiagnostics = New-CodexDiffExecutionDiagnostics -GeneratedAt $generatedAt -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message -TimeoutSeconds $(if ($fixtureKind -eq "timeout") { 1 } else { 30 }) -Command "mock-codex exec"
+  $executionDiagnostics.codex_available = $true
+  $executionDiagnostics.codex_version = "mock-codex"
+  $preflight = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.preflight.v1"
+    generated_at = $generatedAt
+    mode = $Mode
+    preview = $true
+    apply = $false
+    git_available = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    codex_available = $true
+    codex_version = "mock-codex"
+    codex_timeout_seconds = [int]$executionDiagnostics.codex_timeout_seconds
+    output_dir_writable = $true
+    worktree_writable = $false
+    target_docs_dir_ready = $false
+    repo_clean = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
+    current_branch = Get-DemoGitText -Arguments @("branch", "--show-current") -AllowFailure
+    current_branch_is_main = $false
+    main_synced_with_origin = $false
+    contains_mg372d_baseline = $false
+    confirmation_text_matched = $false
+    workspace_path = $workspacePath.Replace("\", "/")
+    workspace_setup_method = "git_worktree"
+    git_index_collector_used = $true
+    hash_comparison_used = $false
+    no_existing_workspace = -not (Test-Path -LiteralPath $workspacePath)
+    preflight_passed = $false
+    blockers = @()
+    token_printed = $false
+  }
+  $state = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.state.v1"
+    generated_at = $generatedAt
+    mode = $Mode
+    fixture_kind = $fixtureKind
+    output_dir = $OutputDir.Replace("\", "/")
+    project_id = $ProjectId
+    goal_id = $CodexDiffGoalId
+    task_id = $CodexDiffTaskId
+    worker_id = $CodexDiffWorkerId
+    workspace_path = $workspacePath.Replace("\", "/")
+    workspace_kind = "git_worktree"
+    git_index_collector_used = $true
+    hash_comparison_used = $false
+    token_printed = $false
+  }
+  $taskArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.task.v1"
+    generated_at = $generatedAt
+    task_payload = New-CodexDiffTaskPayload
+    final_task = $null
+    task_created = $false
+    task_claimed = $false
+    task_started = $false
+    task_completed = $false
+    task_failed = $false
+    token_printed = $false
+  }
+  $workerArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.worker.v1"
+    generated_at = $generatedAt
+    worker_id = $CodexDiffWorkerId
+    worker_registered = $false
+    final_worker = $null
+    capabilities = @("powershell", "git", "mock-codex", "codex-local-diff-demo")
+    token_printed = $false
+  }
+  $safety = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.safety.v1"
+    generated_at = $generatedAt
+    mode = $Mode
+    safety_flags = New-CodexDiffSafetyFlags
+    token_printed = $false
+  }
+
+  try {
+    if (-not $preflight.git_available) { $blockers.Add("git_unavailable") | Out-Null }
+    if (-not $preflight.no_existing_workspace) { $blockers.Add("existing_codex_diff_workspace") | Out-Null }
+    if (@($blockers).Count -eq 0) {
+      New-CodexDiffWorkspace -WorkspacePath $workspacePath -CommitSha $implementationCommit
+      $targetDir = Join-Path $workspacePath "docs/product"
+      if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) {
+        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+      }
+      $preflight.worktree_writable = $true
+      $preflight.target_docs_dir_ready = $true
+      $collectorDiagnostics.pre_codex_status_porcelain = @(Get-CodexDiffStatusPorcelain -WorkspacePath $workspacePath)
+      $collectorDiagnostics.workspace_clean_before_codex = (@($collectorDiagnostics.pre_codex_status_porcelain).Count -eq 0)
+      if (-not $collectorDiagnostics.workspace_clean_before_codex) { $blockers.Add("workspace_dirty_before_codex") | Out-Null }
+    }
+    if (@($blockers).Count -eq 0) {
+      New-CodexDiffMockExecutable -Path $mockPath -Behavior $fixtureKind
+      $mockCommand = [pscustomobject]@{
+        file_path = "pwsh"
+        argument_prefix = @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $mockPath)
+        display_command = "mock-codex"
+        resolved_path = $mockPath
+        powershell_shim = $true
+        token_printed = $false
+      }
+      $artifactFile = Join-Path $workspacePath ($CodexDiffDemoFile -replace "/", [System.IO.Path]::DirectorySeparatorChar)
+      $codex = Invoke-CodexDiffProcess -CommandSpec $mockCommand -WorkspacePath $workspacePath -PromptPath $paths.prompt -LastMessagePath $paths.last_message -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -TargetArtifactPath $artifactFile -TimeoutSeconds ([int]$executionDiagnostics.codex_timeout_seconds) -Sandbox "workspace-write"
+      $codexExitCode = $codex.exit_code
+      $codexTimedOut = [bool]$codex.timed_out
+      $codexDurationMs = $codex.duration_ms
+      $executionDiagnostics.codex_started_at = $codex.started_at
+      $executionDiagnostics.codex_completed_at = $codex.completed_at
+      $executionDiagnostics.codex_duration_ms = $codex.duration_ms
+      $executionDiagnostics.codex_exit_code = $codex.exit_code
+      $executionDiagnostics.codex_timed_out = [bool]$codex.timed_out
+      $executionDiagnostics.codex_process_killed = [bool]$codex.process_killed
+      $executionDiagnostics.codex_artifact_created_before_timeout = [bool]$codex.artifact_created_before_timeout
+      $executionDiagnostics.codex_artifact_size_bytes = [int64]$codex.artifact_size_bytes
+
+      $collectorDiagnostics.post_codex_status_porcelain = @(Get-CodexDiffStatusPorcelain -WorkspacePath $workspacePath)
+      $changedFiles = @(ConvertFrom-CodexDiffStatusPorcelain -StatusLines $collectorDiagnostics.post_codex_status_porcelain)
+      $allowlist = Test-CodexDiffAllowlist -ChangedFiles $changedFiles
+      Write-CodexDiffPatch -WorkspacePath $workspacePath -PatchPath $paths.patch
+      $collectorDiagnostics.git_diff_name_only = @(Get-CodexDiffNameOnly -WorkspacePath $workspacePath)
+      $collectorDiagnostics.patch_non_empty = ((Test-Path -LiteralPath $paths.patch -PathType Leaf) -and ((Get-Item -LiteralPath $paths.patch).Length -gt 0) -and [bool](Select-String -LiteralPath $paths.patch -Pattern ([regex]::Escape($CodexDiffDemoFile)) -Quiet))
+      $collectorDiagnostics.target_artifact_exists = [bool](Test-Path -LiteralPath $artifactFile -PathType Leaf)
+      if ($collectorDiagnostics.target_artifact_exists) {
+        $collectorDiagnostics.target_artifact_size_bytes = (Get-Item -LiteralPath $artifactFile).Length
+      }
+      $signals = Get-CodexDiffFailureSignals -StdoutPath $paths.stdout_log -StderrPath $paths.stderr_log -LastMessagePath $paths.last_message
+      $codexFailureClass = Get-CodexDiffFailureClass -CodexAvailable $true -PreflightPassed $true -CodexCalled $true -TimedOut $codexTimedOut -ExitCode ([int]$codexExitCode) -TargetExists ([bool]$collectorDiagnostics.target_artifact_exists) -AllowlistPassed ([bool]$allowlist.docs_only_allowlist_passed) -PatchNonEmpty ([bool]$collectorDiagnostics.patch_non_empty) -Signals $signals
+      if (-not $codex.ok) { $blockers.Add($codexFailureClass) | Out-Null }
+      if (-not $collectorDiagnostics.target_artifact_exists) { $blockers.Add("target_artifact_missing_after_codex") | Out-Null }
+      if (-not $allowlist.docs_only_allowlist_passed) { $blockers.Add("docs_only_allowlist_failed_after_codex") | Out-Null }
+      if (-not $collectorDiagnostics.patch_non_empty) { $blockers.Add("empty_diff_patch_after_codex") | Out-Null }
+    }
+  } catch {
+    if (@($blockers).Count -lt 1) { $blockers.Add("codex_mock_fixture_failed") | Out-Null }
+    $warnings.Add(($_.Exception.Message -replace 'https?://\S+', "<redacted-url>")) | Out-Null
+  }
+
+  $changedFilesArtifact = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.changed_files.v1"
+    generated_at = Get-DemoUtcNow
+    changed_files = @($changedFiles)
+    token_printed = $false
+  }
+  $failureClassification = [ordered]@{
+    schema = "skybridge.mvp_demo.codex_local_diff.failure_classification.v1"
+    generated_at = Get-DemoUtcNow
+    codex_failure_class = $codexFailureClass
+    blockers = @($blockers)
+    token_printed = $false
+  }
+  $preflight.blockers = @($blockers)
+  $preflight.preflight_passed = (@($blockers | Where-Object { $_ -in @("git_unavailable", "existing_codex_diff_workspace", "workspace_dirty_before_codex", "codex_mock_fixture_failed") }).Count -eq 0)
+  $report.generated_at = Get-DemoUtcNow
+  $report.codex_called = $true
+  $report.codex_call_count = 1
+  $report.codex_exit_code = $codexExitCode
+  $report.codex_timed_out = [bool]$codexTimedOut
+  $report.codex_timeout_seconds = [int]$executionDiagnostics.codex_timeout_seconds
+  $report.codex_duration_ms = $codexDurationMs
+  $report.codex_failure_class = $codexFailureClass
+  $report.isolated_workspace_used = $true
+  $report.workspace_clean_before_codex = [bool]$collectorDiagnostics.workspace_clean_before_codex
+  $report.main_worktree_clean_after = [string]::IsNullOrWhiteSpace((Get-DemoGitText -Arguments @("status", "--porcelain") -AllowFailure))
+  $report.changed_files = @($changedFiles)
+  $report.docs_only_allowlist_passed = [bool]$allowlist.docs_only_allowlist_passed
+  $report.diff_patch_non_empty = [bool]$collectorDiagnostics.patch_non_empty
+  $report.target_artifact_exists = [bool]$collectorDiagnostics.target_artifact_exists
+  $report.target_artifact_size_bytes = [int64]$collectorDiagnostics.target_artifact_size_bytes
+  $report.demo_result = if (@($blockers).Count -eq 0) { "pass" } else { "blocked" }
+  $report.validation_status = if ($report.demo_result -eq "pass") { "passed" } else { "failed" }
+  $report.blockers = @($blockers)
+  $report.warnings = @($warnings)
+  $state.generated_at = $report.generated_at
+  $state.changed_files = @($changedFiles)
+  $state.codex_failure_class = $codexFailureClass
+  $collectorDiagnostics.generated_at = $report.generated_at
+  $executionDiagnostics.generated_at = $report.generated_at
+
+  $review = @(
+    "# MG372D2 Codex Local Diff Mock Fixture",
+    "",
+    "- mode: $Mode",
+    "- fixture_kind: $fixtureKind",
+    "- demo_result: $($report.demo_result)",
+    "- codex_timed_out: $($report.codex_timed_out)",
+    "- codex_failure_class: $codexFailureClass",
+    "- changed_files: $(@($changedFiles) -join ', ')",
+    "- docs_only_allowlist_passed: $($allowlist.docs_only_allowlist_passed)",
+    "- diff_patch_non_empty: $($collectorDiagnostics.patch_non_empty)",
+    "- pr_created: false",
+    "- branch_pushed: false",
+    "- commit_created: false",
+    "- token_printed: false"
+  )
+  $review | Set-Content -LiteralPath $paths.review_summary -Encoding UTF8
+  Write-CodexDiffArtifacts -ResolvedOutputDir $resolvedOutputDir -Report $report -State $state -TaskArtifact $taskArtifact -WorkerArtifact $workerArtifact -Preflight $preflight -ChangedFiles $changedFilesArtifact -Allowlist $allowlist -CollectorDiagnostics $collectorDiagnostics -ExecutionDiagnostics $executionDiagnostics -FailureClassification $failureClassification -Safety $safety
   if ($Json) { $report | ConvertTo-Json -Depth 30 -Compress } else { $report | Format-List }
 }
 
@@ -2605,6 +3138,8 @@ if ($Mode -eq "local-safe") {
   Show-CodexLocalDiffReport
 } elseif ($Mode -in @("codex-local-diff-worktree-clean", "codex-local-diff-synthetic-patch", "codex-local-diff-policy-fixture")) {
   Invoke-CodexLocalDiffCollectorFixture
+} elseif ($Mode -in @("codex-local-diff-timeout-fixture", "codex-local-diff-mock-success", "codex-local-diff-mock-disallowed-file")) {
+  Invoke-CodexLocalDiffMockFixture
 } elseif ($Mode -like "codex-local-diff*") {
   Invoke-CodexLocalDiffDemo
 } else {

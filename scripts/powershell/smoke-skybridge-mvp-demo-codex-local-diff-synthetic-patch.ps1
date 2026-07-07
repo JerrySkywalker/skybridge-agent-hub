@@ -23,7 +23,7 @@ $result = Invoke-JsonScript "skybridge-mvp-demo.ps1" @(
 )
 
 try {
-  if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v2") { throw "Unexpected schema." }
+  if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v3") { throw "Unexpected schema." }
   if ([string]$result.demo_result -ne "pass") { throw "Synthetic patch fixture did not pass." }
   Assert-True $result.isolated_workspace_used "isolated_workspace_used"
   if ([string]$result.workspace_setup_method -ne "git_worktree") { throw "workspace_setup_method must be git_worktree." }

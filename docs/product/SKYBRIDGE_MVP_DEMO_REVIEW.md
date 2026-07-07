@@ -188,9 +188,14 @@ push or PR creation. The first MG372D demo run blocked because the
 archive-copied workspace collector drifted from Git blob/index semantics and
 reported unrelated line-ending/hash differences.
 
-MG372D1 fixes that blocker by using a detached Git worktree, Git-index-based
-changed-file collection, collector diagnostics and a non-empty patch
-requirement. If MG372D1 passes, the next milestone should be:
+MG372D1 fixes that collector blocker by using a detached Git worktree,
+Git-index-based changed-file collection, collector diagnostics and a
+non-empty patch requirement. Its post-merge rerun then blocked on the next
+problem: Codex timed out and did not create the target artifact.
+
+MG372D2 adds Codex doctor checks, explicit timeout diagnostics, failure
+classification, mock success/timeout/disallowed-file smokes and a shorter
+deterministic prompt. If MG372D2 passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

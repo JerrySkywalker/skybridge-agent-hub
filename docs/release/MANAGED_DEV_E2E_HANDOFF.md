@@ -380,14 +380,18 @@ PR demo while keeping TUI-created PR behavior frozen.
    changes and wrote an empty patch.
 5. MG372D1 Codex Local Diff Collector Fix and Rerun Gate: use a detached Git
    worktree, Git-index-based changed-file collection, collector diagnostics
-   and a non-empty patch requirement before calling the local diff demo pass.
-6. MG372E2 Codex-generated Draft PR Demo: if MG372D1 passes, take the
+   and a non-empty patch requirement. The rerun blocked on Codex timeout/no
+   artifact production, not collector drift.
+6. MG372D2 Codex Local Diff Execution Timeout and Artifact Production Gate:
+   add Codex doctor checks, timeout diagnostics, failure classification, mock
+   success/timeout/disallowed-file smokes and a minimal deterministic prompt.
+7. MG372E2 Codex-generated Draft PR Demo: if MG372D2 passes, take the
    validated local docs-only diff and create one controller-created draft PR.
    Keep this controller-created, not TUI-created.
-7. MG371B / TUI-created real branch and PR work remains frozen until a future
+8. MG371B / TUI-created real branch and PR work remains frozen until a future
    explicit goal reopens it.
-8. Any real execution path still requires explicit human authorization.
-9. Operator TUI polish may continue only with all mutation disabled unless a
+9. Any real execution path still requires explicit human authorization.
+10. Operator TUI polish may continue only with all mutation disabled unless a
    future goal explicitly changes that boundary.
 
 `token_printed=false`
