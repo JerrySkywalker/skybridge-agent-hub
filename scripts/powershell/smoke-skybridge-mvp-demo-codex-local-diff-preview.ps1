@@ -4,7 +4,7 @@ param()
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\smoke-productization-common.ps1"
 
-$outputDir = ".agent/tmp/skybridge-mvp-codex-diff"
+$outputDir = ".agent/tmp/skybridge-mvp-codex-diff-preview-smoke"
 $result = Invoke-JsonScript "skybridge-mvp-demo.ps1" @(
   "-Mode", "codex-local-diff-preview",
   "-OutputDir", $outputDir
