@@ -10,11 +10,16 @@ $result = Invoke-JsonScript "skybridge-mvp-demo.ps1" @(
   "-OutputDir", $outputDir
 )
 
-if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v1") { throw "Unexpected Codex local diff schema." }
+if ([string]$result.schema -ne "skybridge.mvp_demo.codex_local_diff.v2") { throw "Unexpected Codex local diff schema." }
 if ([string]$result.validation_status -ne "preview_passed") { throw "Codex local diff preview did not pass." }
 Assert-True $result.would_call_codex "would_call_codex"
 Assert-True $result.would_create_isolated_workspace "would_create_isolated_workspace"
 Assert-True $result.would_generate_diff "would_generate_diff"
+Assert-True $result.would_use_git_index_collector "would_use_git_index_collector"
+Assert-True $result.would_generate_non_empty_patch "would_generate_non_empty_patch"
+if ([string]$result.workspace_setup_method -ne "git_worktree") { throw "workspace_setup_method must be git_worktree." }
+Assert-True $result.git_index_collector_used "git_index_collector_used"
+Assert-False $result.hash_comparison_used "hash_comparison_used"
 Assert-False $result.codex_called "codex_called"
 if ([int]$result.codex_call_count -ne 0) { throw "codex_call_count must be 0 in preview." }
 Assert-False $result.pr_created "pr_created"
@@ -38,6 +43,7 @@ foreach ($file in @(
   "codex-local-diff-review-summary.md",
   "codex-local-diff.patch",
   "codex-local-diff-safety.json",
+  "codex-local-diff-collector-diagnostics.json",
   "codex-local-diff-artifact-index.json"
 )) {
   Assert-FileExists "$outputDir/$file"

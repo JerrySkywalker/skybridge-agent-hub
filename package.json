@@ -64,6 +64,8 @@
     "smoke:skybridge-mvp-demo-codex-local-diff-no-pr": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-skybridge-mvp-demo-codex-local-diff-no-pr.ps1",
     "smoke:skybridge-mvp-demo-codex-local-diff-no-push": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-skybridge-mvp-demo-codex-local-diff-no-push.ps1",
     "smoke:skybridge-mvp-demo-codex-local-diff-no-codex-preview": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-skybridge-mvp-demo-codex-local-diff-no-codex-preview.ps1",
+    "smoke:skybridge-mvp-demo-codex-local-diff-worktree-clean": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-skybridge-mvp-demo-codex-local-diff-worktree-clean.ps1",
+    "smoke:skybridge-mvp-demo-codex-local-diff-synthetic-patch": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-skybridge-mvp-demo-codex-local-diff-synthetic-patch.ps1",
     "smoke:bootstrap-alpha-acceptance": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/skybridge-bootstrap-alpha-acceptance.ps1",
     "smoke:bootstrap-alpha-rc-gate": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-alpha-rc-gate.ps1",
     "smoke:bootstrap-alpha-rc-gate-local": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-bootstrap-alpha-rc-gate-local.ps1",

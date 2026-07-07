@@ -18,8 +18,8 @@ Assert-False $report.commit_created "commit_created"
 Assert-False $report.pr_created "pr_created"
 Assert-False $safety.safety_flags.branch_pushed "safety branch_pushed"
 Assert-False $safety.safety_flags.commit_created "safety commit_created"
-if (Test-Path -LiteralPath (Join-Path $RepoRoot "$outputDir/workspace/.git")) {
-  throw "Preview must not create a Git workspace."
+if (Test-Path -LiteralPath (Join-Path $RepoRoot "$outputDir/worktree/.git")) {
+  throw "Preview must not create a Git worktree."
 }
 Assert-TokenPrintedFalse $report
 

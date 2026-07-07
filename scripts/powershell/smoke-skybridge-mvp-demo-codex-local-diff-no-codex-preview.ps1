@@ -4,11 +4,17 @@ param()
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\smoke-productization-common.ps1"
 
-$outputDir = ".agent/tmp/skybridge-mvp-codex-diff"
-$reportPath = Join-Path $RepoRoot "$outputDir/codex-local-diff-report.json"
-if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
-  Invoke-JsonScript "skybridge-mvp-demo.ps1" @("-Mode", "codex-local-diff-preview", "-OutputDir", $outputDir) | Out-Null
+$outputDir = ".agent/tmp/skybridge-mvp-codex-diff-no-codex-preview"
+$resolvedOutputDir = Join-Path $RepoRoot $outputDir
+$tmpRoot = Join-Path $RepoRoot ".agent/tmp"
+if (-not ([System.IO.Path]::GetFullPath($resolvedOutputDir).StartsWith([System.IO.Path]::GetFullPath($tmpRoot)))) {
+  throw "Refusing to clean output outside .agent/tmp."
 }
+if (Test-Path -LiteralPath $resolvedOutputDir) {
+  Remove-Item -LiteralPath $resolvedOutputDir -Recurse -Force
+}
+$reportPath = Join-Path $RepoRoot "$outputDir/codex-local-diff-report.json"
+Invoke-JsonScript "skybridge-mvp-demo.ps1" @("-Mode", "codex-local-diff-preview", "-OutputDir", $outputDir) | Out-Null
 
 $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
 $task = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "$outputDir/codex-local-diff-task.json") | ConvertFrom-Json

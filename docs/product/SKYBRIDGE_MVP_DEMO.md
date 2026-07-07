@@ -58,13 +58,15 @@ PR is merged:
   `tui_created_pr=false`, `auto_merge_enabled=false` and
   `token_printed=false`.
 
-MG372D Codex local diff mode proves the next slice after the implementation PR
-is merged:
+MG372D Codex local diff mode added the next slice after the implementation PR
+merged, but the first post-merge demo run blocked. MG372D1 fixes the collector
+and reruns the demo:
 
 - The MVP spine can call Codex exactly once under exact confirmation.
-- Codex writes into an isolated copied workspace, not the main worktree.
-- The changed files can be captured and checked against a docs-only allowlist.
-- `codex-local-diff.patch` and a review summary are produced.
+- Codex writes into an isolated Git worktree, not the main worktree.
+- Changed files are captured with Git-index semantics, not raw file-hash
+  comparison against the Windows checkout.
+- `codex-local-diff.patch` must be non-empty and a review summary is produced.
 - The demo stops before commit, push or PR creation.
 - The safety boundary records `pr_created=false`, `branch_pushed=false`,
   `commit_created=false`, `demo_pr_311_modified=false` and
@@ -131,20 +133,21 @@ pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Json
 ```
 
-After MG372D is merged, run the authorized apply command exactly once:
+After MG372D1 is merged, run the authorized apply command exactly once:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Mode codex-local-diff `
   -UseTempDatabase `
   -Apply `
-  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D_CALL_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D1_RERUN_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO `
   -Json
 ```
 
-The apply command calls Codex once in an isolated copied workspace, allows only
+The apply command calls Codex once in an isolated Git worktree, allows only
 `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`, writes
-`codex-local-diff.patch` and stops before commit, push or PR creation.
+non-empty `codex-local-diff.patch` and stops before commit, push or PR
+creation. MG372D1 also writes `codex-local-diff-collector-diagnostics.json`.
 
 See [SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md](SKYBRIDGE_MVP_CODEX_LOCAL_DIFF_DEMO.md).
 
@@ -220,7 +223,7 @@ Phase 2:
 
 ## Next Step
 
-Recommended next milestone after MG372D passes:
+Recommended next milestone after MG372D1 passes:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo

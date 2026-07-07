@@ -8,7 +8,7 @@ controller-created draft PR proof into a Codex-generated local diff proof.
 It proves this flow:
 
 ```text
-local safe demo spine -> one Codex call -> isolated copied workspace ->
+local safe demo spine -> one Codex call -> isolated Git worktree ->
 docs-only file change -> changed-file capture -> diff.patch -> review summary
 ```
 
@@ -24,14 +24,22 @@ MG372D intentionally stops before GitHub mutation. The purpose is to prove
 that SkyBridge can ask Codex for a small, reviewable local diff and capture
 safe evidence before any branch, push or PR creation is introduced.
 
-The implementation uses an isolated archive-copied workspace under:
+MG372D implementation merged, but the first post-merge demo run blocked. The
+copied/archive workspace collector drifted from Git blob/index semantics on
+Windows, reported unrelated line-ending/hash differences as changed files and
+wrote an empty `diff.patch`.
+
+MG372D1 fixes the collector. The implementation now uses an isolated detached
+Git worktree under:
 
 ```text
-.agent/tmp/skybridge-mvp-codex-diff/workspace/
+.agent/tmp/skybridge-mvp-codex-diff/worktree/
 ```
 
-The copied workspace is not a Git repository, so the demo cannot commit or push
-from that workspace. The main worktree remains clean after a successful run.
+The collector uses `git status --porcelain=v1`, Git diff name-only output and
+a Git-generated patch. It does not compare raw file hashes against the Windows
+working tree. The demo still does not push or commit; `commit_created=false`
+means the isolated worktree HEAD remains at the baseline commit.
 
 ## Why It Does Not Create PR
 
@@ -67,21 +75,24 @@ Expected preview fields:
 - `codex_called=false`
 - `would_create_isolated_workspace=true`
 - `would_generate_diff=true`
+- `workspace_setup_method=git_worktree`
+- `would_use_git_index_collector=true`
+- `would_generate_non_empty_patch=true`
 - `pr_created=false`
 - `branch_pushed=false`
 - `token_printed=false`
 
 ## Apply
 
-After the MG372D implementation PR is merged and `main` is synced, run the
-authorized apply command exactly once:
+After the MG372D1 collector-fix implementation PR is merged and `main` is
+synced, run the authorized apply command exactly once:
 
 ```powershell
 pwsh -ExecutionPolicy Bypass -File .\scripts\powershell\skybridge-mvp-demo.ps1 `
   -Mode codex-local-diff `
   -UseTempDatabase `
   -Apply `
-  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D_CALL_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO `
+  -ConfirmationText I_UNDERSTAND_AUTHORIZE_MG372D1_RERUN_CODEX_ONCE_FOR_LOCAL_DOCS_ONLY_DIFF_DEMO `
   -Json
 ```
 
@@ -89,12 +100,28 @@ The apply command requires:
 
 - clean `main`
 - `main` synced with `origin/main`
-- MG372C baseline contained in `HEAD`
+- MG372D baseline contained in `HEAD`
 - Git available
 - Codex CLI available
 - exact confirmation text
-- no existing MG372D workspace
+- no existing MG372D1 worktree
 - docs-only allowlist pass
+
+MG372D1 pass criteria:
+
+- changed files exactly equal
+  `docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md`
+- `docs_only_allowlist_passed=true`
+- `diff.patch` exists, is non-empty and mentions the artifact path
+- `workspace_clean_before_codex=true`
+- `git_index_collector_used=true`
+- `hash_comparison_used=false`
+- `main_worktree_clean_after=true`
+- `pr_created=false`
+- `branch_pushed=false`
+- `commit_created=false`
+- `demo_pr_311_modified=false`
+- `token_printed=false`
 
 ## Artifacts
 
@@ -115,12 +142,13 @@ Important files:
 - `codex-local-diff-review-summary.md`
 - `codex-local-diff.patch`
 - `codex-local-diff-safety.json`
+- `codex-local-diff-collector-diagnostics.json`
 - `codex-local-diff-artifact-index.json`
 
 The JSON report schema is:
 
 ```text
-skybridge.mvp_demo.codex_local_diff.v1
+skybridge.mvp_demo.codex_local_diff.v2
 ```
 
 ## Inspect The Diff
@@ -130,7 +158,7 @@ After apply, inspect:
 ```text
 .agent/tmp/skybridge-mvp-codex-diff/codex-local-diff.patch
 .agent/tmp/skybridge-mvp-codex-diff/codex-local-diff-review-summary.md
-.agent/tmp/skybridge-mvp-codex-diff/workspace/docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md
+.agent/tmp/skybridge-mvp-codex-diff/worktree/docs/product/MG372D_CODEX_LOCAL_DIFF_ARTIFACT.md
 ```
 
 The patch is local evidence only. It is not committed, pushed or attached to a
@@ -170,7 +198,7 @@ the artifact directory and are not included in the JSON or Markdown report.
 
 ## Next Step Recommendation
 
-If MG372D passes, the next milestone should be:
+If MG372D1 passes, the next milestone should be:
 
 ```text
 MG372E2 Codex-generated Draft PR Demo
