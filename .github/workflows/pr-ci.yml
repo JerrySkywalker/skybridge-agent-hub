@@ -1,75 +1,95 @@
-name: PR CI
+name: Jerry CI
 
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: Gate to run
+        required: true
+        default: ci-local
+        type: choice
+        options:
+          - ci-local
+          - release-gate-local
 
 permissions:
   contents: read
 
 jobs:
-  project-check:
-    name: Project check
-    runs-on: ubuntu-latest
+  ci:
+    name: Local validation
+    runs-on: [self-hosted, Windows, X64, jerry-ci, jerry-ci-win, p1, skybridge]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+
     steps:
+      - name: Add Git to PATH
+        run: |
+          $gitDirs = @(
+            "$env:ProgramFiles\Git\cmd",
+            "$env:ProgramFiles\Git\bin",
+            "${env:ProgramFiles(x86)}\Git\cmd",
+            "${env:ProgramFiles(x86)}\Git\bin",
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd",
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd",
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd",
+            "$env:ProgramFiles\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd"
+          )
+          foreach ($dir in $gitDirs) {
+            if ($dir -and (Test-Path -LiteralPath (Join-Path $dir "git.exe"))) {
+              $env:PATH = "$dir;$env:PATH"
+              Add-Content -Path $env:GITHUB_PATH -Value $dir
+              git --version
+              exit 0
+            }
+          }
+          Write-Host "git_path_bootstrap=false"
+
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 10.12.1
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Show toolchain
+        run: |
+          if (Get-Command git -ErrorAction SilentlyContinue) { git --version } else { Write-Host "git_available=false" }
+          node --version
+          npm --version
+          corepack --version
+          corepack pnpm --version
+          pwsh --version
+
       - name: Install dependencies
-        run: corepack pnpm install --frozen-lockfile=false
-      - name: Lint, typecheck, test and build
-        run: corepack pnpm check
-      - name: Check diff whitespace
-        run: git diff --check
-      - name: Parse PowerShell scripts
-        shell: pwsh
-        run: ./scripts/powershell/validate-powershell.ps1
-      - name: Operator Console smoke
-        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force .agent/ci | Out-Null
-          corepack pnpm smoke:operator-console *>&1 | Tee-Object -FilePath .agent/ci/operator-console-smoke.log
-      - name: Browser visual QA optional smoke
-        shell: pwsh
+          corepack enable
+          corepack pnpm install --frozen-lockfile=false
+
+      - name: Run selected gate
         run: |
-          New-Item -ItemType Directory -Force .agent/ci | Out-Null
-          corepack pnpm smoke:browser-visual-qa *>&1 | Tee-Object -FilePath .agent/ci/browser-visual-qa.log
-      - name: Validate browser visual QA artifacts
-        if: hashFiles('.agent/tmp/browser-visual-qa/manifest.json') != ''
-        shell: pwsh
-        run: ./scripts/powershell/assert-browser-visual-qa-artifacts.ps1
-      - name: Codex hook fixture smoke
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force .agent/ci | Out-Null
-          ./scripts/powershell/test-codex-hook-event.ps1 -RequireSpool *>&1 | Tee-Object -FilePath .agent/ci/codex-hook-fixture-smoke.log
-      - name: Docker compose dev config
-        run: docker compose -f deploy/docker-compose.dev.yml config
-      - name: Docker compose test config
-        run: docker compose -f deploy/docker-compose.test.yml config
-      - name: Upload safe smoke logs
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: pr-ci-smoke-logs
-          path: .agent/ci/*.log
-          if-no-files-found: ignore
-          retention-days: 7
-          include-hidden-files: true
-      - name: Upload browser visual QA artifacts
-        if: always() && hashFiles('.agent/tmp/browser-visual-qa/manifest.json') != ''
-        uses: actions/upload-artifact@v6
-        with:
-          name: pr-ci-browser-visual-qa
-          path: .agent/tmp/browser-visual-qa/
-          if-no-files-found: error
-          retention-days: 7
-          include-hidden-files: true
+          $gate = "${{ github.event.inputs.gate }}"
+          if ([string]::IsNullOrWhiteSpace($gate)) {
+            $gate = "ci-local"
+          }
+
+          if ($gate -eq "ci-local") {
+            npm run ci:local
+          } elseif ($gate -eq "release-gate-local") {
+            npm run release:gate:local
+          } else {
+            throw "Unknown gate: $gate"
+          }
