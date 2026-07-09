@@ -11,6 +11,8 @@
     "typecheck": "corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test",
     "build": "corepack pnpm -r build",
+    "ci:local": "npm run lint && npm run typecheck && npm test && npm run build",
+    "release:gate:local": "npm run ci:local && npm run smoke:ci-guardian && npm run smoke:bootstrap-alpha-rc-gate-local && npm run smoke:review-gate",
     "format": "prettier --write .",
     "smoke:operator-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-operator-console.ps1 -UseTempDatabase",
     "smoke:product-console": "pwsh -ExecutionPolicy Bypass -File ./scripts/powershell/smoke-product-console.ps1",
