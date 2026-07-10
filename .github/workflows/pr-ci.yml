@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   ci:
-    name: Local validation
+    name: Project check
     runs-on: [self-hosted, Windows, X64, jerry-ci, jerry-ci-win, p1, skybridge]
     timeout-minutes: 60
     defaults:
